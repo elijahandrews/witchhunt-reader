@@ -150,6 +150,10 @@ void SettingsActivity::onEnter() {
                                            .withSubcategory(StrId::STR_MENU_SYS_TOOLS)));
   addToMoved(systemSettings, std::move(SettingInfo::Action(StrId::STR_WEATHER_SETTINGS, SettingAction::Weather)
                                            .withSubcategory(StrId::STR_MENU_SYS_TOOLS)));
+  // Every file on the card, images and sidecars included. Housekeeping rather than reading, so it
+  // lives here and not on Home, whose browser lists only books.
+  addToMoved(systemSettings, std::move(SettingInfo::Action(StrId::STR_ALL_FILES, SettingAction::AllFiles)
+                                           .withSubcategory(StrId::STR_MENU_SYS_TOOLS)));
   addToMoved(systemSettings, std::move(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache)
                                            .withSubcategory(StrId::STR_MENU_SYS_SYSTEM)));
   addToMoved(systemSettings, std::move(SettingInfo::Action(StrId::STR_SCREEN_REPAIR, SettingAction::ScreenRepair)

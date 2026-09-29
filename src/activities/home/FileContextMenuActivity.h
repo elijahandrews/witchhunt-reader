@@ -7,7 +7,8 @@
 // Context menu for file browser. Always shows display options (sort mode, sort
 // direction, show hidden files, show extensions). When a regular file is
 // selected, file-specific actions (Open, Info, Delete, ...) are appended below.
-// For directories and unsupported types, only the display options are shown.
+// A file the reader cannot open, which only All files lists, gets Remove and
+// Move to folder.
 //
 // Display options are cycled inline (DynamicEnum) and the resulting state is
 // returned to FileBrowserActivity when the menu closes. File actions finish the

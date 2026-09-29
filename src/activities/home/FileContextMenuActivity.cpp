@@ -128,6 +128,10 @@ void FileContextMenuActivity::buildMenuItems() {
     menuItems.push_back(SettingInfo::Action(StrId::STR_OPEN, SettingAction::None));
     menuItems.push_back(SettingInfo::Action(StrId::STR_MARK_AS_READ, SettingAction::None));
     menuItems.push_back(SettingInfo::Action(StrId::STR_REMOVE, SettingAction::None));
+  } else if (offerFileManagement) {
+    // Only All files lists a file the reader cannot open. Getting rid of it is most of what there
+    // is to do with one here.
+    menuItems.push_back(SettingInfo::Action(StrId::STR_REMOVE, SettingAction::None));
   }
 
   // Every file can be moved, whatever its type: this is a rename, and rename does not care what

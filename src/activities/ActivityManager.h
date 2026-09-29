@@ -22,7 +22,9 @@ enum class HomeMenuAction : uint8_t;  // activities/home/HomeMenu.h
 
 // Where a "child" activity (launched via one of the replaceWith* helpers) should route
 // control when it exits successfully. See ActivityManager::returnFromChild().
-enum class ReturnTo : uint8_t { Home, FileBrowser, RecentBooks, GlobalBookmarks };
+// AllFiles is the file browser opened from Settings on every file of the card: it comes back as
+// itself, so the images and other files it lists do not vanish on the way back from the viewer.
+enum class ReturnTo : uint8_t { Home, FileBrowser, AllFiles, RecentBooks, GlobalBookmarks };
 
 // Minimal state the returning parent needs to restore its previous view (directory,
 // focused item, list index, or bookmark selection). Kept as a plain struct stored by

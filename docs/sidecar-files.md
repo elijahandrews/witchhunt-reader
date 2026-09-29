@@ -114,6 +114,13 @@ Who does this today:
 - **Move to `/COMPLETED`** (the optional finished-book action) moves the book
   and every sidecar, resolving name collisions for each
   (`moveSidecarFilesToCompleted`).
+- **Move to folder / Remove in Browse Files.** That browser lists books only,
+  so a sidecar is never a row of its own there. Moving a book takes its
+  sidecars along, and the move is refused if one of them would land on an
+  existing file (`SidecarFiles::anyTargetTaken` / `moveAll`). Removing a book
+  removes them too (`SidecarFiles::removeAll`). **All Files**
+  (Settings → System) lists sidecars as ordinary files and moves or removes
+  exactly the file selected.
 - **The `organize-by-author` plugin** moves sidecars with the book — see
   [sd-plugins.md](sd-plugins.md).
 - **Manual moves** through the web File Manager or a script are your own

@@ -571,6 +571,11 @@ void ActivityManager::returnFromChild() {
     case ReturnTo::FileBrowser:
       goToFileBrowser(std::move(hint.path), std::move(hint.selectName));
       break;
+    case ReturnTo::AllFiles:
+      replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(hint.path),
+                                                            std::move(hint.selectName),
+                                                            FileBrowserActivity::Mode::AllFiles));
+      break;
     case ReturnTo::RecentBooks:
       goToRecentBooks(hint.selectIndex);
       break;
