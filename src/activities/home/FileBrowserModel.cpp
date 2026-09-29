@@ -251,6 +251,19 @@ std::string FileBrowserModel::entryFullPath(const size_t displayIndex) {
   return full;
 }
 
+uint32_t FileBrowserModel::entrySize(const size_t displayIndex) {
+  if (deepSearch) return 0;
+  size_t backendIndex = displayIndex;
+  if (isFiltered()) {
+    if (displayIndex >= matches.size()) return 0;
+    backendIndex = matches[displayIndex];
+  }
+  FileIndex::Entry e;
+  if (indexEntryAt(backendIndex, e)) return e.isDir ? 0 : e.size;
+  if (fileIndex || backendIndex >= fileSizes.size()) return 0;
+  return fileSizes[backendIndex];
+}
+
 std::string FileBrowserModel::resultFolder(const size_t displayIndex) {
   if (!deepSearch || displayIndex >= deepResults.size()) return "";
   const std::string& rel = deepResults[displayIndex];

@@ -298,6 +298,9 @@ class CrossPointSettings {
   // File browser sort direction (per-session, not persisted)
   enum FILE_SORT_DIRECTION { SORT_ASCENDING = 0, SORT_DESCENDING = 1, FILE_SORT_DIRECTION_COUNT };
 
+  // How Browse Files shows a book: its filename, or its title, author, series and progress.
+  enum FILE_BROWSER_VIEW { BROWSER_VIEW_FILES = 0, BROWSER_VIEW_DETAILS = 1, FILE_BROWSER_VIEW_COUNT };
+
   // Action mapped to each tilt gesture direction.
   enum TILT_GESTURE_ACTION {
     TILT_ACT_NONE = 0,
@@ -519,6 +522,8 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   // Show file extensions in the file browser (0 = hidden, 1 = show)
   uint8_t showFileExtensions = 0;
+  // Browse Files view (FILE_BROWSER_VIEW). Not All Files or the pickers, which list files.
+  uint8_t fileBrowserView = BROWSER_VIEW_FILES;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
   // Show a placeholder for large images (>800×600 source pixels) instead of decoding immediately.

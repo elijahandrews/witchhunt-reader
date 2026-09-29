@@ -129,6 +129,15 @@ The Browse Files screen is a full-featured browser for your books and the folder
   * For a book: **Open**, **Mark as read**, **Info**, **Delete Book Cache**, **Remove**, **Move to folder**, **New Folder**, **Search** and **Search all folders**.
   * For a folder: **Open**, the sort and visibility options, **Search**, **Search all folders**, **New Folder** and **Remove**, which deletes the folder and everything in it.
 
+#### Book view
+
+**Book view** in the options menu switches how books are shown:
+
+* **Filenames** (the default) lists each book by its filename.
+* **Details** shows each EPUB's title from its metadata, with the author and series underneath (for example "Thomas Mann · Werke #3"), and how far you have read on the right: a percentage, or **Finished**. An `.opf` metadata file beside the book overrides what is inside the book, as everywhere else. TXT, Markdown and XTC books keep their filename, with the percentage.
+
+The first time a folder shows an EPUB you have never opened, its row shows the filename for a moment while the book is read. The screen then redraws once with the details, and after that they come up at once. Sorting and **Search** still go by filename, and **Search all folders** lists its results by filename in either view.
+
 #### Sorting
 
 Files and folders can be sorted by **name**, **date**, **size**, or **type**, in either ascending or descending order. The sort order is set from the options menu.
@@ -317,6 +326,7 @@ The Settings screen allows you to configure the device's behavior.
   - On the keyboard, hold **Confirm** on a key (or long-press it on a touch screen) for its alternate letter, such as an accented one or Ukrainian ґ and the extra Kazakh letters, or for the other case. Holding **Confirm** on Delete clears the whole text. Shift applies to the next letter only, and `-`, `=`, `.` and `,` are on the symbols page (**?123**).
 - **Show Hidden Files**: Show files and folders whose names start with `.`. "ON" / "OFF"
 - **Show File Extensions**: Show file extensions in the file browser. "ON" / "OFF"
+- **Book view**: How [Browse Files](#33-browse-files-screen) shows books. "Filenames" / "Details"
 
 **Network**:
 - **WiFi Networks**: Add, remove, and connect to WiFi networks. If WiFi was switched on here, leaving the screen restarts the device quickly and returns to Settings. That frees the memory WiFi used; every screen that uses WiFi does the same.
