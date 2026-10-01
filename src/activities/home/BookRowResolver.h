@@ -47,6 +47,9 @@ class BookRowResolver {
   // that was the last one pending: the caller redraws once, rather than once per book.
   bool resolveOne(const GfxRenderer& renderer);
 
+  // Some row is still waiting for resolveOne().
+  bool hasPending() const { return pending; }
+
   // Forget every row -- after a file changed, or a display option that changes what rows say.
   void clear();
   // clear() and give the ring's memory back, for a screen being left.

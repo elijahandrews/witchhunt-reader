@@ -1,8 +1,10 @@
 #pragma once
 
+#include <BuildArena.h>
 #include <FileIndex.h>
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -14,6 +16,9 @@
 #include "RecentBooksStore.h"
 #include "components/CoverGridLayout.h"
 #include "components/themes/BaseTheme.h"
+
+// CoverThumbLoader.h needs ReaderActivity.h, which includes this file: hence a pointer to it.
+class CoverThumbLoader;
 
 class FileBrowserActivity final : public UiListActivity {
  public:
@@ -68,9 +73,23 @@ class FileBrowserActivity final : public UiListActivity {
   void drawCoverGrid();
   void drawCoverCell(int index, int x, int y, const CoverGridLayout::Layout& cells, bool selected,
                      const std::string& base);
-  bool drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th);
+  enum class CoverThumb : uint8_t { Drawn, NoCover, Missing };
+  CoverThumb drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th);
   void drawTitleCard(const std::string& title, int x, int y, int tw, int th);
   bool handleCoverTouch();
+
+  // Making the covers the page on screen lacks. The render task flags a cell drawn without its
+  // thumbnail; loop() then works through that page's books one at a time in short bursts, in the
+  // borrowed secondary framebuffer as the Home carousel does, and redraws as each cover lands.
+  std::unique_ptr<CoverThumbLoader> coverLoader;
+  std::atomic<bool> coverWork{false};
+  // Books whose cover failed during this visit: not retried until the browser is entered again.
+  std::vector<std::string> coverFailed;
+  uint8_t* lentRegion = nullptr;
+  std::unique_ptr<BuildArena> coverScratch;
+  void generateCovers();
+  bool lendForCovers();
+  void returnLentBuffer(bool callerHoldsRenderLock);
 
   [[nodiscard]] int listPageSize() const;
   [[nodiscard]] bool listPages() const;
@@ -91,13 +110,13 @@ class FileBrowserActivity final : public UiListActivity {
 
  public:
   explicit FileBrowserActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string initialPath = "/",
-                               std::string focusName = {}, Mode mode = Mode::Books)
-      : UiListActivity("FileBrowser", renderer, mappedInput), model(mode), focusName(std::move(focusName)) {
-    model.setPath(std::move(initialPath));
-  }
+                               std::string focusName = {}, Mode mode = Mode::Books);
+  ~FileBrowserActivity() override;
   void onEnter() override;
   void onExit() override;
   void loop() override;
+  // The borrowed framebuffer goes back before any other screen opens on top of this one.
+  void startActivityForResult(std::unique_ptr<Activity>&& activity, ActivityResultHandler resultHandler) override;
 
  private:
   int listCount() const override;

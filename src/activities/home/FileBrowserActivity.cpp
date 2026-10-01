@@ -8,6 +8,7 @@
 #include <HalDisplay.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <Memory.h>
 #include <SidecarFiles.h>
 #include <Txt.h>
 #include <Utf8.h>
@@ -27,6 +28,7 @@
 #include "../util/ConfirmationActivity.h"
 #include "../util/KeyboardEntryActivity.h"
 #include "BookInfoActivity.h"
+#include "CoverThumbLoader.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FileContextMenuActivity.h"
@@ -39,6 +41,18 @@
 #include "fontIds.h"
 
 namespace fui = freeink::ui;
+
+FileBrowserActivity::FileBrowserActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                         std::string initialPath, std::string focusName, const Mode mode)
+    : UiListActivity("FileBrowser", renderer, mappedInput),
+      model(mode),
+      focusName(std::move(focusName)),
+      coverLoader(std::make_unique<CoverThumbLoader>(RecentBooksActivity::GRID_THUMB_WIDTH,
+                                                     RecentBooksActivity::GRID_THUMB_HEIGHT)) {
+  model.setPath(std::move(initialPath));
+}
+
+FileBrowserActivity::~FileBrowserActivity() = default;
 
 // A row's display name (defined with materializeListWindow below).
 std::string getFileName(std::string filename);
@@ -64,11 +78,23 @@ void FileBrowserActivity::onExit() {
   UiListActivity::onExit();
   model.clear();
   bookRows.release();
+  // ActivityManager::exitActivity holds the render lock around onExit().
+  returnLentBuffer(/*callerHoldsRenderLock=*/true);
+  coverFailed.clear();
+  coverFailed.shrink_to_fit();
+}
+
+void FileBrowserActivity::startActivityForResult(std::unique_ptr<Activity>&& activity,
+                                                 ActivityResultHandler resultHandler) {
+  returnLentBuffer(/*callerHoldsRenderLock=*/false);
+  UiListActivity::startActivityForResult(std::move(activity), std::move(resultHandler));
 }
 
 void FileBrowserActivity::loop() {
   UiListActivity::loop();
   if (bookRows.resolveOne(renderer)) requestUpdate();
+  // Titles first: they are quick, and a title card wants its title.
+  if (!bookRows.hasPending()) generateCovers();
 }
 
 // Browse Files with Details chosen. A card-wide search keeps filenames: its rows are paths, and
@@ -146,7 +172,9 @@ void FileBrowserActivity::drawCoverCell(const int index, const int x, const int 
     title = row.title.empty() ? getFileName(entry) : row.title;
     subtitle = row.subtitle;
     const int percent = row.percent;  // copied before anything else can reuse the row's slot
-    if (!drawCoverThumb(base + entry, x, y, tw, th)) drawTitleCard(title, x, y, tw, th);
+    const CoverThumb thumb = drawCoverThumb(base + entry, x, y, tw, th);
+    if (thumb != CoverThumb::Drawn) drawTitleCard(title, x, y, tw, th);
+    if (thumb == CoverThumb::Missing) coverWork = true;
     BookProgressPresentation::drawIndicator(renderer, Rect{x, y, tw, th}, percent);
   }
 
@@ -160,33 +188,30 @@ void FileBrowserActivity::drawCoverCell(const int index, const int x, const int 
   }
 }
 
-// The book's cover, if the recent-books grid, the finished-book screen or an earlier visit here has
-// made its grid thumbnail. Nothing is generated here: a book without one gets a title card.
-bool FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x, const int y, const int tw,
-                                         const int th) {
-  const std::string thumbPath =
-      UITheme::getCoverThumbPath(ReaderActivity::coverThumbPlaceholder(bookPath), RecentBooksActivity::GRID_THUMB_WIDTH,
-                                 RecentBooksActivity::GRID_THUMB_HEIGHT);
+// The book's cover, from the grid thumbnail the recent-books grid, the finished-book screen or
+// generateCovers() made. NoCover is the 1x1 placeholder of a book that has none; Missing is a
+// thumbnail not made yet, or cut short.
+FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x,
+                                                                    const int y, const int tw, const int th) {
   FsFile file;
-  if (!Storage.openFileForRead("FBR", thumbPath, file)) return false;
-  bool drawn = false;
+  if (!Storage.openFileForRead("FBR", coverLoader->thumbPath(bookPath), file)) return CoverThumb::Missing;
   Bitmap bmp(file);
-  // Complete, and larger than the 1x1 placeholder a book with no cover at all is given.
-  if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.isComplete() && bmp.getWidth() > 1 && bmp.getHeight() > 1) {
-    const int innerW = tw - 2;
-    const int innerH = th - 2;
-    // Never upscaled; centred in the frame. Same arithmetic as RecentBooksActivity::renderGridCell.
-    const float scale = std::min(
-        1.0f, std::min(static_cast<float>(innerW) / bmp.getWidth(), static_cast<float>(innerH) / bmp.getHeight()));
-    const int rendW = static_cast<int>(bmp.getWidth() * scale);
-    const int rendH = static_cast<int>(bmp.getHeight() * scale);
-    const int offsetX = std::max(1, (tw - rendW) / 2);
-    const int offsetY = std::max(1, (th - rendH) / 2);
-    renderer.drawBitmap1Bit(bmp, x + offsetX, y + offsetY, rendW, rendH);
-    drawn = true;
+  CoverThumb result = CoverThumb::Missing;  // unreadable, or cut short by an interrupted write
+  if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.isComplete()) {
+    if (bmp.getWidth() <= 1 || bmp.getHeight() <= 1) {
+      result = CoverThumb::NoCover;
+    } else {
+      // Never upscaled; centred in the frame. Same arithmetic as RecentBooksActivity::renderGridCell.
+      const float scale = std::min(
+          1.0f, std::min(static_cast<float>(tw - 2) / bmp.getWidth(), static_cast<float>(th - 2) / bmp.getHeight()));
+      const int rendW = static_cast<int>(bmp.getWidth() * scale);
+      const int rendH = static_cast<int>(bmp.getHeight() * scale);
+      renderer.drawBitmap1Bit(bmp, x + std::max(1, (tw - rendW) / 2), y + std::max(1, (th - rendH) / 2), rendW, rendH);
+      result = CoverThumb::Drawn;
+    }
   }
   file.close();
-  return drawn;
+  return result;
 }
 
 // A book without a cover thumbnail: its title, set large inside the frame.
@@ -201,6 +226,139 @@ void FileBrowserActivity::drawTitleCard(const std::string& title, const int x, c
     const int lineW = renderer.getTextWidth(UI_12_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
     renderer.drawText(UI_12_FONT_ID, x + (tw - lineW) / 2, lineY, line.c_str(), true, EpdFontFamily::BOLD);
     lineY += lineH;
+  }
+}
+
+// One burst of cover making for the page on screen: carry on with the book in hand if it is still
+// on that page, else start on the first book there without a cover. A cover that lands is shown
+// at once -- one redraw per cover, not per decode slice -- and the next burst moves on.
+void FileBrowserActivity::generateCovers() {
+  if (!coversView()) {
+    returnLentBuffer(/*callerHoldsRenderLock=*/false);
+    return;
+  }
+  if (!coverWork && !coverLoader->busy()) return;
+  if (renderer.isComposingFrame() || mappedInput.hasPendingInput()) return;
+
+  if (!coverLoader->busy()) {
+    std::string next;
+    {
+      RenderLock lock(*this);  // the model's index file is the render task's too
+      const int total = listCount();
+      const int perPage = coverGrid().perPage;
+      const int start = (nav.selected / perPage) * perPage;
+      std::string base = model.path();
+      if (base.back() != '/') base += '/';
+      for (int i = start; i < std::min(total, start + perPage) && next.empty(); ++i) {
+        const std::string entry = model.entryName(static_cast<size_t>(i));
+        if (entry.empty() || entry.back() == '/') continue;
+        const std::string path = base + entry;
+        if (std::find(coverFailed.begin(), coverFailed.end(), path) != coverFailed.end()) continue;
+        if (!ReaderActivity::isCoverThumbComplete(coverLoader->thumbPath(path), RecentBooksActivity::GRID_THUMB_WIDTH,
+                                                  RecentBooksActivity::GRID_THUMB_HEIGHT)) {
+          next = path;
+        }
+      }
+    }
+    if (next.empty()) {
+      coverWork = false;
+      returnLentBuffer(/*callerHoldsRenderLock=*/false);
+      return;
+    }
+    // Without the lend the decoders fall back to the heap, as the Recent Books grid always does.
+    lendForCovers();
+    coverLoader->begin(next, coverScratch ? coverScratch.get() : nullptr);
+  } else {
+    // The selection may have moved off the page since the last burst: then this book can wait.
+    RenderLock lock(*this);
+    const int perPage = coverGrid().perPage;
+    const int start = (nav.selected / perPage) * perPage;
+    bool onPage = false;
+    std::string base = model.path();
+    if (base.back() != '/') base += '/';
+    for (int i = start; i < std::min(listCount(), start + perPage) && !onPage; ++i) {
+      onPage = (base + model.entryName(static_cast<size_t>(i))) == coverLoader->book();
+    }
+    if (!onPage) {
+      coverLoader->reset();
+      coverWork = true;  // look again at the page that is on screen now
+      return;
+    }
+  }
+
+  constexpr uint32_t COVER_SLICE_BUDGET_MS = 150;
+  const uint32_t deadline = millis() + COVER_SLICE_BUDGET_MS;
+  const std::string book = coverLoader->book();
+  while (true) {
+    const CoverThumbLoader::Step step = coverLoader->step();
+    if (step == CoverThumbLoader::Step::Done) {
+      requestUpdate();
+      return;
+    }
+    if (step == CoverThumbLoader::Step::Failed) {
+      constexpr size_t MAX_REMEMBERED_FAILURES = 32;
+      if (coverFailed.size() >= MAX_REMEMBERED_FAILURES) coverFailed.erase(coverFailed.begin());
+      coverFailed.push_back(book);
+      return;
+    }
+    if (mappedInput.hasPendingInput() || renderer.isComposingFrame() ||
+        static_cast<int32_t>(millis() - deadline) >= 0) {
+      return;  // resume where it stands on the next loop()
+    }
+  }
+}
+
+// Borrows the secondary framebuffer for the decoders, as HomeActivity::loadRecentCovers does and
+// for the same reasons it gives: decoding beside two full framebuffers has taken free heap to a few
+// KB. Before the lend: the write buffer is two frames old after the last swap, so it is brought up
+// to the frame on the panel, and on the X4 RED RAM is seeded with that frame, which single-buffer
+// fast diff requires.
+bool FileBrowserActivity::lendForCovers() {
+  if (lentRegion != nullptr) return true;
+  if (!renderer.hasSecondaryBuffer()) return false;
+  RenderLock lock(*this);
+  renderer.syncWriteBufferFromDisplayed();
+  if (!renderer.isX3()) renderer.syncRedRamFromFrameBuffer();
+  size_t size = 0;
+  uint8_t* region = renderer.borrowSecondaryBuffer(&size);
+  if (region == nullptr) return false;
+  coverScratch = makeUniqueNoThrow<BuildArena>(region, size);
+  if (!coverScratch || !coverScratch->valid()) {
+    coverScratch.reset();
+    renderer.returnSecondaryBuffer();  // cannot fail: the region never entered the heap
+    return false;
+  }
+  lentRegion = region;
+  renderer.setSingleBufferFastDiff(true);
+  LOG_INF("FBR", "Lent secondary framebuffer for covers (%u bytes, free=%lu)", static_cast<unsigned>(size),
+          static_cast<unsigned long>(esp_get_free_heap_size()));
+  return true;
+}
+
+// Everything holding a block of the region goes first, then the region goes back to the display.
+// onExit() calls this under the render lock ActivityManager already holds; taking it again would
+// deadlock, hence the flag.
+void FileBrowserActivity::returnLentBuffer(const bool callerHoldsRenderLock) {
+  // Nothing borrowed and nothing in hand is the common case, checked every loop() outside Covers:
+  // answer it without the lock.
+  if (lentRegion == nullptr && !coverLoader->busy()) return;
+  const auto doReturn = [this] {
+    coverLoader->reset();
+    if (lentRegion == nullptr) return;
+    coverScratch.reset();
+    renderer.returnSecondaryBuffer();  // cannot fail: the region never entered the heap
+    renderer.setSingleBufferFastDiff(false);
+    lentRegion = nullptr;
+    Epub::clearCoverMetadataMemo();
+    LOG_INF("FBR", "Returned secondary framebuffer after covers (free=%lu contig=%lu)",
+            static_cast<unsigned long>(esp_get_free_heap_size()),
+            static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT)));
+  };
+  if (callerHoldsRenderLock) {
+    doReturn();
+  } else {
+    RenderLock lock(*this);
+    doReturn();
   }
 }
 
