@@ -77,6 +77,16 @@ class ChapterHtmlSlimParser final : public Print {
   // synthetic zero-height spacer <p>, and elements whose text is transparent (color /
   // -webkit-text-fill-color: transparent, alpha-zero colours). Single slot, shallowest wins.
   int skipTextUntilDepth = INT_MAX;
+  // Open elements with a background picture, innermost last (see noteBackgroundImage). A block
+  // that carries one often ends in a run of <br/> that only made room for the picture behind
+  // the text -- Alice's rabbit-hole table ends its cell with 22 -- so inside such a scope a run
+  // of line breaks is cut to two; brRunInBackground_ counts the current run.
+  struct BackgroundImageScope {
+    int depth;
+    std::string path;
+  };
+  std::vector<BackgroundImageScope> backgroundImageScopes_;
+  uint8_t brRunInBackground_ = 0;
   int boldUntilDepth = INT_MAX;
   int italicUntilDepth = INT_MAX;
   int underlineUntilDepth = INT_MAX;
@@ -616,6 +626,18 @@ class ChapterHtmlSlimParser final : public Print {
   // cannot be resolved. The cache path is derived from the archive entry, not from parse order.
   std::unique_ptr<ImageBlock> buildCellImage(const std::string& src, const std::string& alt, uint16_t maxWidth,
                                              uint16_t maxHeight);
+  // buildCellImage for a path already resolved inside the EPUB. `nativeWidth`/`nativeHeight`, when
+  // given, receive the picture's own size.
+  std::unique_ptr<ImageBlock> buildImageFromEpubPath(const std::string& resolvedPath, const std::string& alt,
+                                                     uint16_t maxWidth, uint16_t maxHeight,
+                                                     uint16_t* nativeWidth = nullptr, uint16_t* nativeHeight = nullptr);
+  // Background pictures (CssParser::backgroundImageFor). The renderer cannot draw text over a
+  // picture, so a block's background picture becomes a picture of its own, placed after the
+  // block's content: noteBackgroundImage opens the scope on the element, endElement places the
+  // picture when the element closes. See BackgroundImageScope.
+  void noteBackgroundImage(const char* name, const std::string& classAttr, const std::string& idAttr,
+                           const std::string& styleAttr);
+  void placeBackgroundImage(const std::string& resolvedPath);
   // Place an already-built ImageBlock as a centered, full-width block element, page-breaking if needed.
   void placeImageBlockAsBlock(std::unique_ptr<ImageBlock> image);
   // Emit currentPage to the consumer while keeping paragraphLutPerPage and completedPageCount
@@ -638,6 +660,7 @@ class ChapterHtmlSlimParser final : public Print {
   static void characterData(void* userData, const char* s, int len);
   static void defaultHandlerExpand(void* userData, const char* s, int len);
   static void endElement(void* userData, const char* name);
+  static void endElementBody(ChapterHtmlSlimParser* self, const char* name);
   std::string abbreviateInlineFootnote(const char* text) const;
 
  public:
