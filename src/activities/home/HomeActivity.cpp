@@ -185,8 +185,8 @@ void HomeActivity::giveUpCover(RecentBook& book, ThumbResult res, const std::vec
   }
 
   // Permanent give-up = structurally absent, or transient failures past this session's budget
-  // (e.g. an embedded cover the decoder rejects every time — oversize PNG, corrupt image). Mirror
-  // RecentBooksActivity: write a valid placeholder BMP at each thumb slot so isCoverThumbComplete()
+  // (e.g. an embedded cover the decoder rejects every time — oversize PNG, corrupt image). As
+  // CoverThumbLoader does: write a valid placeholder BMP at each thumb slot so isCoverThumbComplete()
   // treats the book as resolved on disk and it is never re-decoded on the next boot. A still-retryable
   // transient failure records an empty cover instead, so it gets a fresh attempt next session.
   const bool permanent = (res == ThumbResult::StructurallyAbsent) || coverAttemptsExhausted(book.path);
@@ -325,8 +325,8 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   // Time budget for a single loadRecentCovers() call. Rather than advancing a session by
   // one small slice per loop() tick (a 1200x1848 PNG cover needs ~940 ZIP-inflate chunks +
   // ~308 decode-row batches ≈ 1250 ticks — minutes of wall-clock), we drain slices in a
-  // burst until this budget elapses or button input arrives. Mirrors RecentBooksActivity's
-  // COVER_SLICE_BUDGET_MS burst driver. A slice only writes SD files (no screen change), so
+  // burst until this budget elapses or button input arrives. Browse Files' cover pass
+  // bursts the same way. A slice only writes SD files (no screen change), so
   // bursting costs nothing visually; we still yield promptly to keep input responsive.
   constexpr uint32_t COVER_SLICE_BUDGET_MS = 150;
   // The pass's thumbnails: the carousel's two boxes, cropped, or the single-height form the other

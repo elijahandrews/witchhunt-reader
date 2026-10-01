@@ -6,6 +6,7 @@
 #include "../ActivityResult.h"
 #include "../settings/SettingInfo.h"
 #include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
 #include "components/UITheme.h"
 
@@ -15,7 +16,7 @@ FileContextMenuActivity::FileContextMenuActivity(GfxRenderer& renderer, MappedIn
                                                  CrossPointSettings::FILE_SORT_DIRECTION sortDirection,
                                                  const bool offerDirectoryActions, const bool searchActive,
                                                  const bool offerGoToFolder, const bool offerFileManagement,
-                                                 const bool offerViewChoice)
+                                                 const bool offerViewChoice, const bool recentsList)
     : MenuListActivity("FileContextMenu", renderer, mappedInput),
       filePath(filePath),
       isBrowserMode(filePath.empty()),
@@ -24,11 +25,12 @@ FileContextMenuActivity::FileContextMenuActivity(GfxRenderer& renderer, MappedIn
       offerGoToFolder(offerGoToFolder),
       offerFileManagement(offerFileManagement),
       offerViewChoice(offerViewChoice),
+      recentsList(recentsList),
       sortMode(static_cast<uint8_t>(sortMode)),
       sortDirection(static_cast<uint8_t>(sortDirection)),
       showHiddenFiles(SETTINGS.showHiddenFiles),
       showFileExtensions(SETTINGS.showFileExtensions),
-      browserView(SETTINGS.fileBrowserView) {
+      browserView(recentsList ? APP_STATE.recentBooksView : SETTINGS.fileBrowserView) {
   buildMenuItems();
 }
 
@@ -41,28 +43,32 @@ void FileContextMenuActivity::buildMenuItems() {
   }
 
   // --- Display options (always shown: files, directories, unsupported types) ---
-  menuItems.push_back(SettingInfo::Separator(StrId::STR_SORT_BY));
+  if (!recentsList) {
+    menuItems.push_back(SettingInfo::Separator(StrId::STR_SORT_BY));
 
-  // Sort mode: single cycling item Name -> Date -> Size -> Type
-  menuItems.push_back(SettingInfo::DynamicEnumCtx(
-      StrId::STR_SORT_BY, {StrId::STR_SORT_NAME, StrId::STR_SORT_DATE, StrId::STR_SORT_SIZE, StrId::STR_SORT_TYPE},
-      self, [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->sortMode; },
-      [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->sortMode = v; }));
+    // Sort mode: single cycling item Name -> Date -> Size -> Type
+    menuItems.push_back(SettingInfo::DynamicEnumCtx(
+        StrId::STR_SORT_BY, {StrId::STR_SORT_NAME, StrId::STR_SORT_DATE, StrId::STR_SORT_SIZE, StrId::STR_SORT_TYPE},
+        self, [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->sortMode; },
+        [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->sortMode = v; }));
 
-  // Sort direction: single cycling item Ascending -> Descending
-  menuItems.push_back(SettingInfo::DynamicEnumCtx(
-      StrId::STR_SORT_DIR, {StrId::STR_SORT_ASC, StrId::STR_SORT_DESC}, self,
-      [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->sortDirection; },
-      [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->sortDirection = v; }));
+    // Sort direction: single cycling item Ascending -> Descending
+    menuItems.push_back(SettingInfo::DynamicEnumCtx(
+        StrId::STR_SORT_DIR, {StrId::STR_SORT_ASC, StrId::STR_SORT_DESC}, self,
+        [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->sortDirection; },
+        [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->sortDirection = v; }));
+  }
 
   menuItems.push_back(SettingInfo::Separator(StrId::STR_SHOW_FILES));
   // Visibility: show hidden files (OFF/ON)
-  menuItems.push_back(SettingInfo::DynamicEnumCtx(
-      StrId::STR_SHOW_HIDDEN_FILES, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
-      [](const void* ctx) -> uint8_t {
-        return static_cast<const FileContextMenuActivity*>(ctx)->showHiddenFiles ? 1 : 0;
-      },
-      [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->showHiddenFiles = (v != 0) ? 1 : 0; }));
+  if (!recentsList) {
+    menuItems.push_back(SettingInfo::DynamicEnumCtx(
+        StrId::STR_SHOW_HIDDEN_FILES, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
+        [](const void* ctx) -> uint8_t {
+          return static_cast<const FileContextMenuActivity*>(ctx)->showHiddenFiles ? 1 : 0;
+        },
+        [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->showHiddenFiles = (v != 0) ? 1 : 0; }));
+  }
 
   // Visibility: show file extensions (OFF/ON)
   menuItems.push_back(SettingInfo::DynamicEnumCtx(
@@ -83,6 +89,7 @@ void FileContextMenuActivity::buildMenuItems() {
   // folder you are standing in rather than to any row: making one, and (for a directory)
   // deleting the one selected.
   if (isBrowserMode) {
+    if (recentsList) return;  // nothing in the list is selected: there is nothing else to offer
     menuItems.push_back(SettingInfo::Separator(StrId::STR_TOOL_UTILITIES));
     // Search narrows the folder you are standing in, so it sits with the folder actions rather
     // than the row actions. Clearing only appears when there is something to clear.
@@ -142,6 +149,15 @@ void FileContextMenuActivity::buildMenuItems() {
     // Only All files lists a file the reader cannot open. Getting rid of it is most of what there
     // is to do with one here.
     menuItems.push_back(SettingInfo::Action(StrId::STR_REMOVE, SettingAction::None));
+  }
+
+  if (recentsList) {
+    // Off the list, not off the card: swap the file's own Remove for that.
+    for (auto& item : menuItems) {
+      if (item.nameId == StrId::STR_REMOVE) item.nameId = StrId::STR_REMOVE_FROM_RECENTS;
+    }
+    if (offerGoToFolder) menuItems.push_back(SettingInfo::Action(StrId::STR_GO_TO_FOLDER, SettingAction::None));
+    return;
   }
 
   // Every file can be moved, whatever its type: this is a rename, and rename does not care what
@@ -210,6 +226,8 @@ void FileContextMenuActivity::onActionSelected(int index) {
     action = Action::NewFolder;
   } else if (nameId == StrId::STR_REMOVE) {
     action = Action::Remove;
+  } else if (nameId == StrId::STR_REMOVE_FROM_RECENTS) {
+    action = Action::RemoveFromRecents;
   }
 
   if (action == Action::None) return;
@@ -234,10 +252,11 @@ void FileContextMenuActivity::render(RenderLock&&) {
   const Rect contentRect = UITheme::getContentRect(renderer, true, true);
 
   // Header: bare filename when a file is selected, otherwise a generic title
-  const std::string header = isBrowserMode ? std::string(tr(STR_SORT_BY)) : [&] {
-    const auto slashPos = filePath.rfind('/');
-    return (slashPos == std::string::npos) ? filePath : filePath.substr(slashPos + 1);
-  }();
+  const std::string header =
+      isBrowserMode ? std::string(recentsList ? tr(STR_MENU_RECENT_BOOKS) : tr(STR_SORT_BY)) : [&] {
+        const auto slashPos = filePath.rfind('/');
+        return (slashPos == std::string::npos) ? filePath : filePath.substr(slashPos + 1);
+      }();
   GUI.drawHeader(renderer, UITheme::getHeaderRect(renderer), header.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;

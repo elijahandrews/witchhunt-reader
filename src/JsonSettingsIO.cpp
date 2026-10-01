@@ -36,7 +36,7 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["lastSleepImage"] = s.lastSleepImage;
   doc["readerActivityLoadCount"] = s.readerActivityLoadCount;
   doc["lastSleepFromReader"] = s.lastSleepFromReader;
-  doc["recentBooksGridView"] = s.recentBooksGridView;
+  doc["recentBooksView"] = s.recentBooksView;
   doc["showBootScreen"] = s.showBootScreen;
   // Information about a pending KOReader sync session
   JsonObject sync = doc["koReaderSyncSession"].to<JsonObject>();
@@ -97,7 +97,12 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   s.lastSleepImage = doc["lastSleepImage"] | SIZE_MAX;
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | (uint8_t)0;
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
-  s.recentBooksGridView = doc["recentBooksGridView"] | false;
+  // Before Recent Books became a Browse Files list it had a grid/list switch: the grid is now
+  // the Covers view, the list the Details view.
+  const uint8_t fallbackView = (doc["recentBooksGridView"] | true) ? CrossPointSettings::BROWSER_VIEW_COVERS
+                                                                   : CrossPointSettings::BROWSER_VIEW_DETAILS;
+  s.recentBooksView = doc["recentBooksView"] | fallbackView;
+  if (s.recentBooksView >= CrossPointSettings::FILE_BROWSER_VIEW_COUNT) s.recentBooksView = fallbackView;
   s.showBootScreen = doc["showBootScreen"] | true;
   JsonObject sync = doc["koReaderSyncSession"].as<JsonObject>();
   s.koReaderSyncSession.active = sync["active"] | false;

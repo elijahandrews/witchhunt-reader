@@ -22,6 +22,23 @@ inline constexpr int kMargin = 10;
 inline constexpr int kLabelHeight = 36;
 inline constexpr int kMinCellHeight = 96;
 
+// The full-size grid thumbnail's box. The cover is FITTED inside it (kThumbCrop false), whole: a
+// 2:3 cover comes out about 160x240, a square one 196x196. Filling the box and cropping, as the
+// carousel does, cut a third off the top and bottom of every ordinary cover.
+//
+// A grid makes its thumbnail at the size its cells come out at (Layout::thumbWidth x thumbHeight),
+// never larger than this: a dithered 1-bit image must never be resampled. On the X3 and X4 that is
+// this box exactly, so the finished-book screen, which always uses this box, shares the grid's file
+// there. Both numbers are in the cache filename, so changing either regenerates every grid cover.
+inline constexpr int kThumbWidth = 196;
+inline constexpr int kThumbHeight = 240;
+inline constexpr bool kThumbCrop = false;
+// Largest cover box the grid draws: the full-size thumbnail plus its 1 px frame on each side.
+// Raising the height means raising kThumbHeight (every cover regenerates), and is bounded by what
+// the label block leaves free.
+inline constexpr int kMaxCellHeight = kThumbHeight + 2;
+inline constexpr int kMaxCellWidth = kThumbWidth + 2;
+
 struct Input {
   int contentWidth = 0;   // width available to the grid
   int contentHeight = 0;  // height available below the header

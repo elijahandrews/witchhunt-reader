@@ -37,6 +37,7 @@ class FileContextMenuActivity final : public MenuListActivity {
     SearchAll,
     ClearSearch,
     GoToFolder,
+    RemoveFromRecents,
   };
 
   explicit FileContextMenuActivity(
@@ -44,7 +45,7 @@ class FileContextMenuActivity final : public MenuListActivity {
       CrossPointSettings::FILE_SORT_MODE sortMode = CrossPointSettings::SORT_BY_NAME,
       CrossPointSettings::FILE_SORT_DIRECTION sortDirection = CrossPointSettings::SORT_ASCENDING,
       bool offerDirectoryActions = false, bool searchActive = false, bool offerGoToFolder = false,
-      bool offerFileManagement = true, bool offerViewChoice = false);
+      bool offerFileManagement = true, bool offerViewChoice = false, bool recentsList = false);
 
   void render(RenderLock&&) override;
 
@@ -60,8 +61,13 @@ class FileContextMenuActivity final : public MenuListActivity {
   bool offerGoToFolder;
   // New folder, Move to folder and Remove on a directory. Off in the firmware picker.
   bool offerFileManagement;
-  // Filenames / Details. Browse Files only: the other browsers list files, not books.
+  // Filenames / Details / Covers. Browse Files and Recent Books: the other browsers list files, not
+  // books.
   bool offerViewChoice;
+  // Recent Books: the list is ordered by when each book was read, so it has no sort; it lists books
+  // from all over the card, so no hidden-files toggle and no search; and Remove takes a book off the
+  // list rather than off the card -- what the screen's long Left press did before it was a list.
+  bool recentsList;
 
   // Display option state, edited inline via DynamicEnum and returned on close.
   // Sort state is per-session (held by FileBrowserActivity); visibility toggles

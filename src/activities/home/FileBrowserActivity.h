@@ -55,13 +55,15 @@ class FileBrowserActivity final : public UiListActivity {
   // What a book row says instead of its filename, in the Details list and the Covers grid alike.
   BookRowResolver bookRows;
 
+  uint8_t chosenView() const;
   bool detailsView() const;
   bool coversView() const;
+  bool offersViewChoice() const;
+  std::string rowName(const std::string& entry) const;
 
-  // Covers view: the same rows as a grid of covers, laid out by CoverGridLayout exactly as the
-  // recent-books grid is, so the two share a thumbnail size and every cover either one has made.
-  // Navigation stays the list's -- next/previous cell, a page per Left/Right -- and the page on
-  // screen is the one holding the selection.
+  // Covers view: the same rows as a grid of covers, laid out by CoverGridLayout -- one layout for
+  // Browse Files and Recent Books, so a book has one grid thumbnail. Up/Down move a row and
+  // Left/Right a cover (moveInCoverGrid), and the page on screen is the one holding the selection.
   struct CoverGrid {
     Rect content{};
     int top = 0;  // y of the first row, below the header
@@ -71,8 +73,7 @@ class FileBrowserActivity final : public UiListActivity {
   CoverGrid coverGrid() const;
   void afterUiRender() override;
   void drawCoverGrid();
-  void drawCoverCell(int index, int x, int y, const CoverGridLayout::Layout& cells, bool selected,
-                     const std::string& base);
+  void drawCoverCell(int index, int x, int y, const CoverGridLayout::Layout& cells, bool selected);
   enum class CoverThumb : uint8_t { Drawn, NoCover, Missing };
   CoverThumb drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th, Rect& drawn);
   void drawTitleCard(const std::string& title, const Rect& card);
@@ -101,6 +102,7 @@ class FileBrowserActivity final : public UiListActivity {
   bool confirmOpensOptions() const;
   bool managesFiles() const;
   ReturnTo returnTarget() const;
+  void removeFromRecents(const std::string& bookPath);
   void showBrowserOptionsMenu(const std::string& dirEntry = {});
   void activateSelected(bool longPress);
   void resetNavigation(int selected = 0);

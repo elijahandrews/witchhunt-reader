@@ -13,6 +13,7 @@
 #include <mutex>
 
 #include "FolderCountMemo.h"
+#include "RecentBooksStore.h"
 
 namespace {
 
@@ -49,6 +50,10 @@ void FileBrowserModel::load() {
   files.clear();
   fileSizes.clear();
   fileDateTimes.clear();
+  if (mode == Mode::Recents) {
+    loadRecents();
+    return;
+  }
 
   auto root = Storage.open(basepath.c_str());
   if (!root || !root.isDirectory()) {
@@ -228,6 +233,7 @@ bool FileBrowserModel::acceptEntry(const char* name, const bool isDir) const {
     case Mode::AllFiles:
       return acceptForAllFiles(name, isDir);
     case Mode::Books:
+    case Mode::Recents:
       break;
   }
   return acceptForBooks(name, isDir);
@@ -242,6 +248,7 @@ FileIndex::AcceptFn FileBrowserModel::indexFilter() const {
     case Mode::AllFiles:
       return &acceptForAllFiles;
     case Mode::Books:
+    case Mode::Recents:
       break;
   }
   return &acceptForBooks;
@@ -265,7 +272,7 @@ void FileBrowserModel::openIndexIfLarge() {
 size_t FileBrowserModel::unfilteredEntryCount() const { return fileIndex ? fileIndex->totalCount() : files.size(); }
 
 size_t FileBrowserModel::entryCount() const {
-  if (deepSearch) return deepResults.size();
+  if (listsPaths()) return deepResults.size();
   return isFiltered() ? matches.size() : unfilteredEntryCount();
 }
 
@@ -279,7 +286,7 @@ bool FileBrowserModel::indexEntryAt(const size_t displayIndex, FileIndex::Entry&
 // directory. For the in-RAM backend `files` already stores this form; for the SD
 // index we reconstruct it from the Entry. Out-of-range / index-read failure → "".
 std::string FileBrowserModel::entryName(const size_t displayIndex) {
-  if (deepSearch) {
+  if (listsPaths()) {
     return displayIndex < deepResults.size() ? deepResults[displayIndex] : "";
   }
   if (isFiltered()) {
@@ -301,6 +308,11 @@ std::string FileBrowserModel::backendEntryName(const size_t displayIndex) {
 }
 
 size_t FileBrowserModel::findEntry(const std::string& name) {
+  if (listsPaths()) {
+    for (size_t i = 0; i < deepResults.size(); i++)
+      if (deepResults[i] == name) return i;
+    return deepResults.size();
+  }
   if (isFiltered()) {
     for (size_t i = 0; i < matches.size(); i++)
       if (backendEntryName(matches[i]) == name) return i;
@@ -352,7 +364,7 @@ void FileBrowserModel::rebuildMatches() {
 std::string FileBrowserModel::entryFullPath(const size_t displayIndex) {
   const std::string name = entryName(displayIndex);
   if (name.empty()) return "";
-  const std::string& base = deepSearch ? deepRoot : basepath;
+  const std::string& base = listsPaths() ? deepRoot : basepath;
   std::string full = base;
   if (full.empty() || full.back() != '/') full += '/';
   full += name;
@@ -361,7 +373,7 @@ std::string FileBrowserModel::entryFullPath(const size_t displayIndex) {
 }
 
 uint32_t FileBrowserModel::entrySize(const size_t displayIndex) {
-  if (deepSearch) return 0;
+  if (listsPaths()) return 0;
   size_t backendIndex = displayIndex;
   if (isFiltered()) {
     if (displayIndex >= matches.size()) return 0;
@@ -374,7 +386,7 @@ uint32_t FileBrowserModel::entrySize(const size_t displayIndex) {
 }
 
 std::string FileBrowserModel::resultFolder(const size_t displayIndex) {
-  if (!deepSearch || displayIndex >= deepResults.size()) return "";
+  if (!listsPaths() || displayIndex >= deepResults.size()) return "";
   const std::string& rel = deepResults[displayIndex];
   const size_t slash = rel.rfind('/');
   if (slash == std::string::npos) return deepRoot;  // it sat in the search root
@@ -444,7 +456,7 @@ void FileBrowserModel::searchEverywhere(const std::string& query) {
 }
 
 void FileBrowserModel::resort() {
-  if (fileIndex) return;  // the index is ordered at build time; see the header.
+  if (fileIndex || mode == Mode::Recents) return;  // ordered at build time / by recency
   // Whatever happens below renumbers the rows, so the match list is rebuilt at the end.
   // Create index array to preserve metadata array alignment
   std::vector<size_t> indices(files.size());
@@ -537,6 +549,20 @@ void FileBrowserModel::resort() {
   fileSizes = std::move(sorted_sizes);
   fileDateTimes = std::move(sorted_dateTimes);
   rebuildMatches();  // the rows were just renumbered
+}
+
+// The recent-books list, newest first, as paths relative to "/" -- the shape a card-wide search's
+// results already have, so every row accessor serves both. Books no longer on the card are dropped
+// from the list for good, as the Recent Books screen always did on the way in.
+void FileBrowserModel::loadRecents() {
+  clearDeepSearch();
+  if (RECENT_BOOKS.pruneMissing()) RECENT_BOOKS.saveToFile();
+  deepRoot = "/";
+  const auto& books = RECENT_BOOKS.getBooks();
+  deepResults.reserve(books.size());
+  for (const auto& book : books) {
+    if (book.path.size() > 1 && book.path.front() == '/') deepResults.push_back(book.path.substr(1));
+  }
 }
 
 void FileBrowserModel::clear() {

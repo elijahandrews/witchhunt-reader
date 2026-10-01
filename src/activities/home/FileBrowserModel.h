@@ -29,7 +29,9 @@ class FileBrowserModel {
   // AllFiles = every file on the card, for housekeeping;
   // PickFirmware = .bin only;
   // PickFolder = directories only, for choosing a destination to move a file into.
-  enum class Mode { Books, AllFiles, PickFirmware, PickFolder };
+  // Recents lists the books lately opened, newest first, from wherever they are on the card --
+  // the Recent Books screen. Its rows are paths, as a card-wide search's are.
+  enum class Mode { Books, AllFiles, PickFirmware, PickFolder, Recents };
 
   // Whether the reader can open this file: a book, or an image for the viewer. Listing is the
   // mode's business; this is what selecting a row can do with it.
@@ -67,7 +69,8 @@ class FileBrowserModel {
     clearDeepSearch();
   }
 
-  // Re-read the directory: filter, then either build the SD index or sort in RAM.
+  // Re-read the directory: filter, then either build the SD index or sort in RAM. In Recents,
+  // re-read the recent-books list instead.
   void load();
   // Release both backends. Called on the way out so a browser sitting on the activity stack
   // is not holding a folder's worth of names, or an open index file.
@@ -109,6 +112,9 @@ class FileBrowserModel {
   // folders can be told apart. Capped: a reader wants to find one book, not enumerate the card.
   void searchEverywhere(const std::string& query);
   [[nodiscard]] bool isDeepSearch() const { return deepSearch; }
+  // The rows are paths from all over the card -- a card-wide search, or Recents -- rather than
+  // one folder's entries.
+  [[nodiscard]] bool listsPaths() const { return deepSearch || mode == Mode::Recents; }
   // True when the walk stopped at MAX_DEEP_RESULTS with more still out there.
   [[nodiscard]] bool deepResultsTruncated() const { return deepTruncated; }
   // Absolute path for a row, whichever mode is live. The caller no longer composes it.
@@ -145,8 +151,9 @@ class FileBrowserModel {
   std::string filterQuery;
   std::vector<uint32_t> matches;
 
-  // Card-wide search results: paths relative to the search root. Held only while one is on
-  // screen; cleared with everything else in clear() and on any directory change.
+  // Card-wide search results, or the Recents list: paths relative to deepRoot ("/" for Recents).
+  // Held only while one is on screen; cleared with everything else in clear() and on any
+  // directory change.
   static constexpr size_t MAX_DEEP_RESULTS = 64;
   bool deepSearch = false;
   bool deepTruncated = false;
@@ -177,6 +184,7 @@ class FileBrowserModel {
   [[nodiscard]] FileIndex::AcceptFn indexFilter() const;
 
   void openIndexIfLarge();
+  void loadRecents();
   bool indexEntryAt(size_t displayIndex, FileIndex::Entry& out);
 
   Mode mode = Mode::Books;
