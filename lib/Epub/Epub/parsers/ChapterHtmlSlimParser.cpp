@@ -1033,11 +1033,15 @@ void ChapterHtmlSlimParser::recordPageBreakLabel(const std::string& label) {
 
 void ChapterHtmlSlimParser::wireTextBlock() {
   if (!currentTextBlock) return;
-  currentTextBlock->setLineArena(buildArena_);
+  wireParagraphLines(*currentTextBlock);
+}
+
+void ChapterHtmlSlimParser::wireParagraphLines(ParsedText& text) {
+  text.setLineArena(buildArena_);
   if (buildArena_) {
-    currentTextBlock->setBeforeLineHook([this](const uint8_t maxSizePct) { beforeLineHook(maxSizePct); });
+    text.setBeforeLineHook([this](const uint8_t maxSizePct) { beforeLineHook(maxSizePct); });
   } else {
-    currentTextBlock->setBeforeLineHook(nullptr);
+    text.setBeforeLineHook(nullptr);
   }
 }
 
@@ -4474,6 +4478,15 @@ bool ChapterHtmlSlimParser::emitCellAsParagraph(BufferedTableCell& cell, const b
                                    : static_cast<CssTextAlign>(paragraphAlignment);
     // Re-use the existing paragraph pipeline by moving the cell text into currentTextBlock
     startNewTextBlock(cellBlockStyle);
+    // Laid out as page paragraphs now, so wired as page paragraphs. layoutTableRow left this text
+    // wired for a grid row: lines in the arena with NO page-fit hook, the row being placed whole
+    // inside a block of its own. Kept like that here, a line that did not fit was materialised in
+    // the current page's block BEFORE addLineToPage emitted that page -- and the emit rewound the
+    // block under it. The line went on to the next page pointing at reclaimed bytes, the lines
+    // after it overwrote them, and the page was written with a corrupt TextBlock ("corrupt word
+    // offset", the page unreadable even after a rebuild). Seen on an X3 in Alice's chapter 2,
+    // where a cell holding a tall picture fell back to paragraphs. Arena builds only.
+    wireParagraphLines(*text);
     // Transfer words from the buffered cell text into the new currentTextBlock
     // by re-running layout directly
     text->layoutAndExtractLines(renderer, fontId, viewportWidth,

@@ -804,8 +804,10 @@ class ChapterHtmlSlimParser final : public Print {
   // or the body-font scale path. Centralizes the layout-time sizing. Defined in the .cpp
   // because it dereferences GfxRenderer, which is only forward-declared here.
   int effectiveLineHeight(const BlockStyle& bs) const;
-  // See pageBlock_. wireTextBlock hands currentTextBlock the arena and the hook.
+  // See pageBlock_. wireTextBlock hands currentTextBlock the arena and the hook;
+  // wireParagraphLines does the same for any text laid out as a paragraph of the page.
   void wireTextBlock();
+  void wireParagraphLines(ParsedText& text);
   void beforeLineHook(uint8_t maxSizePct);
   void ensurePageBlock();
   void releasePageBlock();
