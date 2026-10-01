@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,9 @@ class RecentBooksActivity final : public Activity {
   int initialFocusIndex = -1;  // applied once in onEnter(), then cleared
 
   std::vector<RecentBook> recentBooks;
+  // The store stays loaded while this screen is open: it prunes and refreshes on entry and writes
+  // covers and removals back (see HomeActivity::recentsHold).
+  std::optional<RecentBooksStore::Hold> recentsHold;
   // Reading-progress percent per recent book (parallel to recentBooks), cached so
   // the grid badge doesn't re-read progress.bin from SD on every cell repaint.
   // -1 = not started / unknown. Refreshed whenever recentBooks is (re)loaded.

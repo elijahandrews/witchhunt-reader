@@ -491,6 +491,7 @@ void HomeActivity::restoreSecondaryBuffer(bool callerHoldsRenderLock) {
 
 void HomeActivity::onEnter() {
   Activity::onEnter();
+  recentsHold.emplace();
 
   // A finished-book "sync to KOReader, then search OPDS for this author" request that just
   // rebooted (the sync reboots to reclaim WiFi-session heap fragmentation, see
@@ -569,6 +570,7 @@ void HomeActivity::onExit() {
   Epub::clearCoverMetadataMemo();
   Activity::onExit();
   freeCoverBuffer();
+  recentsHold.reset();
   UITheme::getInstance().getMutableTheme().invalidateFrameCache();
   // Never hand the next activity a degraded display: if we exit mid-load (e.g. the
   // user opened a book before covers finished), put the secondary framebuffer back.

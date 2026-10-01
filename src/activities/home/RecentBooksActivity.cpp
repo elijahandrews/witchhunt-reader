@@ -152,6 +152,7 @@ bool RecentBooksActivity::loadNextCover() {
 
 void RecentBooksActivity::onEnter() {
   Activity::onEnter();
+  recentsHold.emplace();
 
   if (RECENT_BOOKS.pruneMissing()) {
     RECENT_BOOKS.saveToFile();
@@ -189,6 +190,7 @@ void RecentBooksActivity::onExit() {
   Activity::onExit();
   recentBooks.clear();
   bookProgress.clear();
+  recentsHold.reset();
 }
 
 void RecentBooksActivity::switchViewMode(bool grid) {
