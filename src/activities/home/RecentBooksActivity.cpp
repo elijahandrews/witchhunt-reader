@@ -78,17 +78,25 @@ GridLayout computeGridLayout(const GfxRenderer& renderer) {
   l.content = UITheme::getContentRect(renderer, true, true);
   l.contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   l.contentHeight = l.content.height - l.contentTop - metrics.verticalSpacing;
-
-  // Reserve the strip the gesture-hint line occupies, on the boards that draw one; the
-  // scroll arrows share it either way, hence the 12 px floor. Same predicate as the draw,
-  // so the two cannot drift apart.
-  l.cells = CoverGridLayout::compute({.contentWidth = l.content.width,
-                                      .contentHeight = l.contentHeight,
-                                      .bottomReserve = gridShowsGestureHint() ? 24 : 12,
-                                      .maxCellHeight = RecentBooksActivity::GRID_MAX_CELL_HEIGHT});
+  l.cells = CoverGridLayout::compute(RecentBooksActivity::gridInput(renderer));
   return l;
 }
 }  // namespace
+
+CoverGridLayout::Input RecentBooksActivity::gridInput(const GfxRenderer& renderer) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect content = UITheme::getContentRect(renderer, true, true);
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  // Reserve the strip the gesture-hint line occupies, on the boards that draw one; the scroll
+  // arrows share it either way, hence the 12 px floor. Same predicate as the draw, so the two
+  // cannot drift apart. Browse Files reserves the same strip without drawing the hint: its grid
+  // must come out exactly like this one, or the two would make different thumbnails.
+  return {.contentWidth = content.width,
+          .contentHeight = content.height - contentTop - metrics.verticalSpacing,
+          .bottomReserve = gridShowsGestureHint() ? 24 : 12,
+          .maxCellHeight = GRID_MAX_CELL_HEIGHT,
+          .maxCellWidth = GRID_MAX_CELL_WIDTH};
+}
 
 void RecentBooksActivity::loadRecentBooks() {
   recentBooks = RECENT_BOOKS.getBooks();
@@ -164,7 +172,10 @@ void RecentBooksActivity::onEnter() {
   prevSelectorIndex = -1;
   fullRedrawNeeded = true;
   openingBook = false;
-  const std::pair<int, int> gridThumb{GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT};
+  // The thumbnail the grid's cells take on this panel. The UI is always portrait and the theme only
+  // changes in Settings, so it holds for as long as this screen is open.
+  const CoverGridLayout::Layout cells = computeGridLayout(renderer).cells;
+  const std::pair<int, int> gridThumb{cells.thumbWidth, cells.thumbHeight};
   coverLoader.configure(&gridThumb, 1, GRID_THUMB_CROP);
 
   requestUpdate();
@@ -334,12 +345,12 @@ void RecentBooksActivity::loop() {
       return;
     }
 
-    // Up short: navigate (row up in grid, previous in list)
+    // Up short: navigate (row up in grid, previous in list), wrapping at the top as Browse Files does
     if (MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Up) &&
         ev.type == ButtonEventManager::PressType::Short) {
       if (!recentBooks.empty()) {
         if (gridView) {
-          selectorIndex = std::max(0, selectorIndex - gridColumns());
+          selectorIndex = CoverGridLayout::rowAbove(selectorIndex, listSize, gridColumns());
         } else {
           selectorIndex = ButtonNavigator::previousIndex(selectorIndex, listSize);
         }
@@ -348,12 +359,12 @@ void RecentBooksActivity::loop() {
       continue;
     }
 
-    // Down short: navigate (row down in grid, next in list)
+    // Down short: navigate (row down in grid, next in list), wrapping at the bottom
     if (MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Down) &&
         ev.type == ButtonEventManager::PressType::Short) {
       if (!recentBooks.empty()) {
         if (gridView) {
-          selectorIndex = std::min(listSize - 1, selectorIndex + gridColumns());
+          selectorIndex = CoverGridLayout::rowBelow(selectorIndex, listSize, gridColumns());
         } else {
           selectorIndex = ButtonNavigator::nextIndex(selectorIndex, listSize);
         }
@@ -537,24 +548,39 @@ void RecentBooksActivity::renderListView(RenderLock&&) {
         [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); });
   }
 
-  if (gridShowsGestureHint()) {
-    const int hintY = contentRect.y + contentRect.height - metrics.verticalSpacing - 14;
-    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST) +
-                             "   " + tr(STR_DIR_LEFT) + "+L: " + tr(STR_REMOVE) + "   " + tr(STR_DIR_RIGHT) +
-                             "+L: " + tr(STR_INFO);
-    renderer.drawText(SMALL_FONT_ID, contentRect.x + metrics.contentSidePadding, hintY, hint.c_str());
-  }
-
-  const bool hasBooks = !recentBooks.empty();
-  const auto hints =
-      mappedInput.mapHints(tr(STR_HOME), hasBooks ? tr(STR_OPEN) : "", "", "", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
-  GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
-
+  drawHints(contentRect, !recentBooks.empty());
   renderer.displayBuffer();
 }
 
-void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, int cellY, int tw, int th, int labelW) {
+// Left and Right each do two things, so their hints name both, short press first and long press
+// after the slash ("Left / Remove") -- as Browse Files writes "» / Options", and in the words the
+// side hints already use for Up and Down. Info is named on every book: a selection move within the
+// grid repaints only two cells, so a label that followed the book under it would go stale. A long
+// Right on a book without details (TXT, Markdown) does nothing.
+//
+// The gesture line keeps what the strip cannot show, the view toggle on a long Up; it is drawn on
+// the boards that reserve room for it (gridShowsGestureHint).
+void RecentBooksActivity::drawHints(const Rect& contentRect, const bool hasBooks) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  if (gridShowsGestureHint()) {
+    const int hintY = contentRect.y + contentRect.height - metrics.verticalSpacing - 14;
+    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST);
+    renderer.drawText(SMALL_FONT_ID, contentRect.x + metrics.contentSidePadding, hintY, hint.c_str());
+  }
+
+  const std::string left = hasBooks ? std::string(tr(STR_DIR_LEFT)) + " / " + tr(STR_REMOVE) : std::string();
+  const std::string right = hasBooks ? std::string(tr(STR_DIR_RIGHT)) + " / " + tr(STR_INFO) : std::string();
+  const auto hints = mappedInput.mapHints(tr(STR_HOME), hasBooks ? tr(STR_OPEN) : "", left.c_str(), right.c_str(),
+                                          tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
+  GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
+}
+
+void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, int cellY,
+                                         const CoverGridLayout::Layout& cells) {
+  const int tw = cells.cellWidth;
+  const int th = cells.cellHeight;
+  const int labelW = cells.labelWidth;
   const auto& book = recentBooks[index];
   const int labelY = cellY + th + 3;
   const int cellFillHeight = th + CoverGridLayout::kLabelHeight + 3;
@@ -570,7 +596,7 @@ void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, in
   Rect frame{cellX, cellY, tw, th};
 
   if (!book.coverBmpPath.empty()) {
-    const std::string thumbPath = gridThumbPath(book.coverBmpPath, GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT);
+    const std::string thumbPath = gridThumbPath(book.coverBmpPath, cells.thumbWidth, cells.thumbHeight);
     FsFile file;
     bool thumbDrawn = false;
     if (Storage.openFileForRead("RBA", thumbPath, file)) {
@@ -647,14 +673,12 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
   const int margin = CoverGridLayout::kMargin;
   const int cols = layout.cells.cols;
   const int tw = layout.cells.cellWidth;
-  const int th = layout.cells.cellHeight;
   const int cellHeight = layout.cells.rowStride;
   const int visibleRows = layout.cells.rows;
   const int totalRows = (static_cast<int>(recentBooks.size()) + cols - 1) / cols;
   const int selectedRow = selectorIndex / cols;
   const int pageStartRow = (selectedRow / visibleRows) * visibleRows;
   const int startIndex = pageStartRow * cols;
-  const int labelW = layout.cells.labelWidth;
 
   auto cellPos = [&](int i, int& cx, int& cy) {
     const int row = (i / cols) - pageStartRow;
@@ -676,9 +700,9 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
     renderer.syncWriteBufferFromDisplayed();
     int cx, cy;
     cellPos(prevSelectorIndex, cx, cy);
-    renderGridCell(prevSelectorIndex, false, cx, cy, tw, th, labelW);
+    renderGridCell(prevSelectorIndex, false, cx, cy, layout.cells);
     cellPos(selectorIndex, cx, cy);
-    renderGridCell(selectorIndex, true, cx, cy, tw, th, labelW);
+    renderGridCell(selectorIndex, true, cx, cy, layout.cells);
     prevSelectorIndex = selectorIndex;
     renderer.displayBuffer();
     return;
@@ -706,7 +730,7 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
   for (int i = startIndex; i < endIndex; i++) {
     int cx, cy;
     cellPos(i, cx, cy);
-    renderGridCell(i, i == selectorIndex, cx, cy, tw, th, labelW);
+    renderGridCell(i, i == selectorIndex, cx, cy, layout.cells);
   }
 
   // Scroll arrows when content spans multiple pages
@@ -728,17 +752,6 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
     }
   }
 
-  if (gridShowsGestureHint()) {
-    const int hintY = contentRect.y + contentRect.height - metrics.verticalSpacing - 14;
-    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST) +
-                             "   " + tr(STR_DIR_LEFT) + "+L: " + tr(STR_REMOVE) + "   " + tr(STR_DIR_RIGHT) +
-                             "+L: " + tr(STR_INFO);
-    renderer.drawText(SMALL_FONT_ID, contentRect.x + metrics.contentSidePadding, hintY, hint.c_str());
-  }
-
-  const auto hints = mappedInput.mapHints(tr(STR_HOME), tr(STR_OPEN), "", "", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
-  GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
-
+  drawHints(contentRect, /*hasBooks=*/true);
   renderer.displayBuffer();
 }

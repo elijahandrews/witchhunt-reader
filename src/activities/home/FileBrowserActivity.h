@@ -95,6 +95,7 @@ class FileBrowserActivity final : public UiListActivity {
   [[nodiscard]] int listPageSize() const;
   [[nodiscard]] bool listPages() const;
   void pageSelection(int direction);
+  bool moveInCoverGrid(MappedInputManager::Button button);
   void createFolderHere();
   void moveToFolder(const std::string& fullPath, const std::string& entry);
   bool confirmOpensOptions() const;

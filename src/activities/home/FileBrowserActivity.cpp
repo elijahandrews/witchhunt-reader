@@ -50,8 +50,6 @@ FileBrowserActivity::FileBrowserActivity(GfxRenderer& renderer, MappedInputManag
       focusName(std::move(focusName)),
       coverLoader(std::make_unique<CoverThumbLoader>()) {
   model.setPath(std::move(initialPath));
-  const std::pair<int, int> gridThumb{RecentBooksActivity::GRID_THUMB_WIDTH, RecentBooksActivity::GRID_THUMB_HEIGHT};
-  coverLoader->configure(&gridThumb, 1, RecentBooksActivity::GRID_THUMB_CROP);
 }
 
 FileBrowserActivity::~FileBrowserActivity() = default;
@@ -70,6 +68,12 @@ void FileBrowserActivity::onEnter() {
     }
     focusName.clear();
   }
+
+  // The thumbnail the grid's cells take on this panel -- the Recent Books grid's, cell for cell.
+  // The UI is always portrait and the theme only changes in Settings, so it holds while this is open.
+  const CoverGridLayout::Layout cells = coverGrid().cells;
+  const std::pair<int, int> gridThumb{cells.thumbWidth, cells.thumbHeight};
+  coverLoader->configure(&gridThumb, 1, RecentBooksActivity::GRID_THUMB_CROP);
 
   RenderLock lock(*this);
   UiListActivity::onEnter();
@@ -123,18 +127,15 @@ bool FileBrowserActivity::coversView() const {
          !model.isDeepSearch();
 }
 
-// The recent-books grid's own computation (see computeGridLayout there): same content rect, same
-// first-row offset, same ceiling on the cover box -- the stored thumbnail's height -- so a cover
-// is drawn 1:1 and never resampled, which would alias its dither into a visible grid.
+// The recent-books grid's own layout (RecentBooksActivity::gridInput): same content rect, same
+// first-row offset, same cells -- so both make the same thumbnail, and it draws 1:1, never
+// resampled, which would alias its dither into a visible grid.
 FileBrowserActivity::CoverGrid FileBrowserActivity::coverGrid() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   CoverGrid g;
   g.content = UITheme::getContentRect(renderer, true, true);
   g.top = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  g.cells = CoverGridLayout::compute({.contentWidth = g.content.width,
-                                      .contentHeight = g.content.height - g.top - metrics.verticalSpacing,
-                                      .bottomReserve = 12,
-                                      .maxCellHeight = RecentBooksActivity::GRID_MAX_CELL_HEIGHT});
+  g.cells = CoverGridLayout::compute(RecentBooksActivity::gridInput(renderer));
   g.perPage = std::max(1, g.cells.cols * g.cells.rows);
   return g;
 }
@@ -205,9 +206,9 @@ void FileBrowserActivity::drawCoverCell(const int index, const int x, const int 
   }
 }
 
-// The book's cover, from the grid thumbnail the recent-books grid, the finished-book screen or
-// generateCovers() made, centred in the cell; `drawn` is where it landed. NoCover is the 1x1
-// placeholder of a book that has none; Missing is a thumbnail not made yet, or cut short.
+// The book's cover, from the grid thumbnail the recent-books grid or generateCovers() made (on a
+// panel whose cells take the full-size box, the finished-book screen's too), centred in the cell; `drawn` is where it
+// landed. NoCover is the 1x1 placeholder of a book that has none; Missing is a thumbnail not made yet, or cut short.
 FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x,
                                                                     const int y, const int tw, const int th,
                                                                     Rect& drawn) {
@@ -310,10 +311,7 @@ void FileBrowserActivity::generateCovers() {
         if (entry.empty() || entry.back() == '/') continue;
         const std::string path = base + entry;
         if (std::find(coverFailed.begin(), coverFailed.end(), path) != coverFailed.end()) continue;
-        if (!ReaderActivity::isCoverThumbComplete(coverLoader->thumbPath(path), RecentBooksActivity::GRID_THUMB_WIDTH,
-                                                  RecentBooksActivity::GRID_THUMB_HEIGHT)) {
-          next = path;
-        }
+        if (!coverLoader->complete(path)) next = path;
       }
     }
     if (next.empty()) {
@@ -617,6 +615,14 @@ bool FileBrowserActivity::handleCustomInput() {
       }
     }
 
+    // The cover grid moves as the Recent Books grid does: Up/Down a row, Left/Right a cover, all
+    // wrapping at the ends, and the page follows the selection. Left and Right are needed here even
+    // on a board without those keys -- on the T5S3 they are the hint strip's boxes -- and a press
+    // that paged would skip the covers beside the selection. Options stays on a long Right.
+    if (coversView() && ev.type == ButtonEventManager::PressType::Short && moveInCoverGrid(ev.button)) {
+      return true;
+    }
+
     // Logical Left/Right page through the list, one screenful per press — the same thing they do in
     // the chapter selector, and the reason the context menu moved to a long press on Right. Paging
     // is driven from the event stream rather than ButtonNavigator: the navigator acts on the press
@@ -637,7 +643,7 @@ bool FileBrowserActivity::handleCustomInput() {
     // one screen and there is nothing to page. Either way the button hint says which one it is —
     // and it rides the same logical button, so rotating the device never separates the two.
     const bool optionsPress = (ev.type == ButtonEventManager::PressType::Long) ||
-                              (ev.type == ButtonEventManager::PressType::Short && !listPages());
+                              (ev.type == ButtonEventManager::PressType::Short && !listPages() && !coversView());
     if (model.getMode() != Mode::PickFolder &&
         MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Right) && optionsPress) {
       // Open the context menu for any selection. openContextMenu() shows
@@ -651,6 +657,7 @@ bool FileBrowserActivity::handleCustomInput() {
 }
 
 void FileBrowserActivity::navigateButtons() {
+  if (coversView()) return;  // the grid moves by rows and covers, from handleCustomInput()
   bool changed = false;
   {
     RenderLock lock(*this);
@@ -764,6 +771,29 @@ void FileBrowserActivity::pageSelection(const int direction) {
   nav.top = nav.selected;
   nav.followPending = false;
   requestUpdate();
+}
+
+// One step in the cover grid for a short press on a direction key, wrapping at the ends; false for
+// any other key. Up/Down take a whole row (CoverGridLayout::rowAbove/rowBelow), Left/Right one cover.
+bool FileBrowserActivity::moveInCoverGrid(const MappedInputManager::Button button) {
+  const int total = listCount();
+  using Direction = MappedInputManager::Direction;
+  const bool up = MappedInputManager::isDirection(button, Direction::Up);
+  const bool down = MappedInputManager::isDirection(button, Direction::Down);
+  const bool left = MappedInputManager::isDirection(button, Direction::Left);
+  const bool right = MappedInputManager::isDirection(button, Direction::Right);
+  if (!up && !down && !left && !right) return false;
+  if (total <= 0) return true;
+  {
+    RenderLock lock(*this);
+    const int cols = coverGrid().cells.cols;
+    if (up) nav.selected = CoverGridLayout::rowAbove(nav.selected, total, cols);
+    if (down) nav.selected = CoverGridLayout::rowBelow(nav.selected, total, cols);
+    if (left) nav.selected = ButtonNavigator::previousIndex(nav.selected, total);
+    if (right) nav.selected = ButtonNavigator::nextIndex(nav.selected, total);
+  }
+  requestUpdate();
+  return true;
 }
 
 // Display copy only. FileBrowserModel's entry names, and every path built from them, keep the
@@ -909,13 +939,22 @@ void FileBrowserActivity::drawFooter() {
   // In a folder small enough not to page, this slot carries Options. Where Confirm already
   // carries it that would draw the same word twice on one strip, and the second copy would sit on
   // a slot such a board has no key for.
-  // Where it pages, the same key still opens Options on a hold, and in the cover grid -- four to a
-  // page -- it nearly always pages, so the label says both rather than hiding the menu.
+  // Where it pages, the same key still opens Options on a hold, so the label says both rather
+  // than hiding the menu.
   const bool optionsOnRight = showOptionsHint && !confirmOpensOptions();
   const char* nextLabel = (model.getMode() == Mode::PickFolder) ? tr(STR_MOVE_HERE)
                           : pages ? (optionsOnRight ? tr(STR_LIST_PAGE_NEXT_OR_OPTIONS) : tr(STR_LIST_PAGE_NEXT))
                           : optionsOnRight ? tr(STR_OPTIONS)
                                            : "";
+  // The cover grid steps a cover on Left and Right (moveInCoverGrid), short press first and the
+  // long one after the slash, as the Recent Books grid names them. Always labelled: on the T5S3 the
+  // boxes are the only Left and Right there are, and an unlabelled box is not tappable.
+  std::string gridRight;
+  if (coversView() && hasEntries) {
+    prevLabel = tr(STR_DIR_LEFT);
+    gridRight = optionsOnRight ? std::string(tr(STR_DIR_RIGHT)) + " / " + tr(STR_OPTIONS) : tr(STR_DIR_RIGHT);
+    nextLabel = gridRight.c_str();
+  }
   // Paging is bound to logical Left/Right and stepping to logical Up/Down, so which physical pair
   // carries which — and therefore which hint strip each label belongs on — is the orientation's
   // business, not this screen's.

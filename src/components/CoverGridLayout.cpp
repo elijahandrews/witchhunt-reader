@@ -7,27 +7,51 @@ namespace CoverGridLayout {
 Layout compute(const Input& in) {
   Layout l;
 
-  // Widest grid whose cells still clear kMinCellWidth: cols cells plus (cols + 1) margins have to
-  // fit. A panel too narrow for even one full-size cell still gets one column (a squeezed cover
-  // beats an empty screen).
-  const int usableWidth = std::max(0, in.contentWidth);
-  l.cols = std::max(1, (usableWidth - kMargin) / (kMinCellWidth + kMargin));
-  l.cellWidth = std::max(1, (usableWidth - (l.cols + 1) * kMargin) / l.cols);
-  l.labelWidth = std::max(0, l.cellWidth - 4);
-
   const int maxCellHeight = std::max(kMinCellHeight, in.maxCellHeight);
   const int usableHeight = std::max(0, in.contentHeight - std::max(0, in.bottomReserve));
 
-  // Rows are counted at full cell size, so a page never trades cover size for density.
+  // Rows are counted at full cell size -- unless that leaves at least half a row empty: then one
+  // more row, and every cell shrinks to fit. At the full-size 242 px cell that shrink is bounded:
+  // to no less than 170 px when one row becomes two, 194 px for two becoming three, closer after.
   const int fullStride = maxCellHeight + kLabelHeight + kMargin;
-  l.rows = std::max(1, usableHeight / fullStride);
+  l.rows = usableHeight / fullStride;
+  if (usableHeight - l.rows * fullStride >= fullStride / 2) ++l.rows;
+  l.rows = std::max(1, l.rows);
 
-  // Whatever height is left over goes into taller cells, up to the ceiling. The lower clamp only
-  // bites on a panel too short to hold even one full-size row.
+  // The height left over goes into taller cells, up to the ceiling. The lower clamp only bites on
+  // a panel too short to hold even one shrunk row.
   const int fitted = usableHeight / l.rows - kLabelHeight - kMargin;
   l.cellHeight = std::max(kMinCellHeight, std::min(maxCellHeight, fitted));
   l.rowStride = l.cellHeight + kLabelHeight + kMargin;
+
+  // As many columns as hold a 2:3 cover at that height -- the usual shape, and what a fitted cover
+  // of it fills -- each with its margin. A panel too narrow for even one still gets one column (a
+  // squeezed cover beats an empty screen).
+  const int coverWidth = (l.cellHeight - 2) * 2 / 3 + 2;
+  const int usableWidth = std::max(0, in.contentWidth);
+  l.cols = std::max(1, (usableWidth - kMargin) / (coverWidth + kMargin));
+  l.cellWidth = std::max(1, (usableWidth - (l.cols + 1) * kMargin) / l.cols);
+  l.labelWidth = std::max(0, l.cellWidth - 4);
+
+  const int thumbCellWidth = in.maxCellWidth > 0 ? std::min(in.maxCellWidth, l.cellWidth) : l.cellWidth;
+  l.thumbWidth = std::max(1, thumbCellWidth - 2);
+  l.thumbHeight = std::max(1, l.cellHeight - 2);
   return l;
+}
+
+int rowBelow(const int index, const int count, const int cols) {
+  if (count <= 0 || cols <= 0) return 0;
+  if (index + cols < count) return index + cols;
+  const int lastRowStart = (count - 1) / cols * cols;
+  if (index < lastRowStart) return count - 1;  // the partial last row has no cell in this column
+  return index % cols;                         // from the last row: back to the first
+}
+
+int rowAbove(const int index, const int count, const int cols) {
+  if (count <= 0 || cols <= 0) return 0;
+  if (index - cols >= 0) return index - cols;
+  const int col = index % cols;
+  return col + (count - 1 - col) / cols * cols;  // the same column, on the last row that has it
 }
 
 int hitTest(const Layout& l, const int originX, const int originY, const int pageStartRow, const int itemCount,
