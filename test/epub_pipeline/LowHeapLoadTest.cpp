@@ -2,7 +2,7 @@
 //
 // The device is built with -fno-exceptions: a std::vector or std::string that cannot grow does not
 // throw, it aborts and reboots the reader. Where the size of an allocation comes from the cache
-// file -- a page's footnote count, a chapter's page count -- the loaders ask
+// file -- a page's footnote count, a chapter's page count, a stored alt text -- the loaders ask
 // for the block first (HeapFit.h) and carry on without it. These tests put the loaders under a
 // heap whose largest block is too small and check what comes out still reads.
 #include <Arduino.h>
@@ -18,6 +18,7 @@
 #include "Epub.h"
 #include "Epub/Page.h"
 #include "Epub/Section.h"
+#include "Epub/blocks/ImageBlock.h"
 #include "GfxRenderer.h"
 
 namespace fs = std::filesystem;
@@ -123,4 +124,47 @@ TEST(LowHeapLoad, ChapterWithoutABlockForItsPageTableReadsOffsetsFromTheFile) {
   }
   section.currentPage = section.pageCount;
   EXPECT_FALSE(section.loadPageFromSectionFile()) << "the range check still applies";
+}
+
+TEST(LowHeapLoad, AltTextIsCutToOneLineAtACharacterBoundary) {
+  // 127 ASCII bytes, then a two-byte character straddling the 128-byte cut.
+  const std::string alt = std::string(127, 'a') + "\xC3\xA9" + std::string(50, 'b');
+  const ImageBlock block("/img.pxc", 10, 10, alt);
+  EXPECT_EQ(std::string(127, 'a'), block.getAltText());
+
+  const ImageBlock shortAlt("/img.pxc", 10, 10, "A map");
+  EXPECT_EQ("A map", shortAlt.getAltText());
+}
+
+// A cache written before the cap can hold an alt text of up to 4 KB. Loading it keeps only what
+// the placeholder can show, and the fields after it still line up.
+TEST(LowHeapLoad, LongStoredAltTextIsCutOnLoad) {
+  const std::string path = freshDir("alt") + "/image.bin";
+  const std::string alt = std::string(1000, 'x');
+  {
+    FsFile out;
+    ASSERT_TRUE(Storage.openFileForWrite("TST", path, out));
+    serialization::writeString(out, std::string("/cache/img_1.pxc"));
+    serialization::writePod(out, static_cast<int16_t>(320));
+    serialization::writePod(out, static_cast<int16_t>(200));
+    serialization::writeString(out, alt);
+    serialization::writeString(out, std::string("/books/a.epub"));
+    serialization::writeString(out, std::string("OEBPS/img/1.jpg"));
+    serialization::writePod(out, static_cast<int16_t>(0));
+    serialization::writePod(out, static_cast<int16_t>(120));
+    serialization::writePod(out, static_cast<uint32_t>(0xC0FFEE));  // whatever follows the block
+    out.close();
+  }
+  FsFile in;
+  ASSERT_TRUE(Storage.openFileForRead("TST", path, in));
+  const auto block = ImageBlock::deserialize(in);
+  ASSERT_TRUE(block);
+  EXPECT_EQ(std::string(ImageBlock::MAX_ALT_TEXT_BYTES, 'x'), block->getAltText());
+  EXPECT_EQ("/cache/img_1.pxc", block->getImagePath());
+  EXPECT_EQ(320, block->getWidth());
+  EXPECT_EQ(120, block->getRenderedHeight());
+  uint32_t next = 0;
+  serialization::readPod(in, next);
+  EXPECT_EQ(0xC0FFEEu, next);
+  in.close();
 }

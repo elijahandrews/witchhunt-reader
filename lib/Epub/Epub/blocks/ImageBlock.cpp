@@ -21,17 +21,50 @@
 // - uint16_t height
 // - uint8_t pixels[...] - 2 bits per pixel, packed (4 pixels per byte), row-major order
 
-ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t height, const std::string& altText)
-    : imagePath(imagePath), altText(altText), width(width), height(height) {}
+namespace {
+// Cut to MAX_ALT_TEXT_BYTES, never inside a UTF-8 sequence: a character the cut would split goes
+// whole.
+void capAltText(std::string& alt) {
+  if (alt.size() <= ImageBlock::MAX_ALT_TEXT_BYTES) return;
+  size_t cut = ImageBlock::MAX_ALT_TEXT_BYTES;
+  while (cut > 0 && (static_cast<uint8_t>(alt[cut]) & 0xC0) == 0x80) cut--;
+  alt.resize(cut);
+}
 
-ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t height, const std::string& altText,
-                       const std::string& epubFilePath, const std::string& epubEntryPath)
-    : imagePath(imagePath),
-      altText(altText),
+// serialization::readString, except that it never holds more than the capped alt text: a cache
+// written before the cap may carry up to MAX_STRING_LENGTH. One byte past the cap is read so the
+// cut can see whether it falls inside a character; the rest is skipped.
+bool readAltText(FsFile& file, std::string& alt) {
+  uint32_t len = 0;
+  if (file.read(reinterpret_cast<uint8_t*>(&len), sizeof(len)) != sizeof(len)) return false;
+  if (len > serialization::MAX_STRING_LENGTH) {
+    file.seekCur(static_cast<int64_t>(len));
+    return false;
+  }
+  const uint32_t keep = std::min<uint32_t>(len, ImageBlock::MAX_ALT_TEXT_BYTES + 1);
+  alt.resize(keep);
+  if (keep > 0 && file.read(reinterpret_cast<uint8_t*>(&alt[0]), keep) != static_cast<int>(keep)) return false;
+  if (len > keep && !file.seekCur(static_cast<int64_t>(len - keep))) return false;
+  capAltText(alt);
+  return true;
+}
+}  // namespace
+
+ImageBlock::ImageBlock(std::string imagePath, int16_t width, int16_t height, std::string altText)
+    : imagePath(std::move(imagePath)), altText(std::move(altText)), width(width), height(height) {
+  capAltText(this->altText);
+}
+
+ImageBlock::ImageBlock(std::string imagePath, int16_t width, int16_t height, std::string altText,
+                       std::string epubFilePath, std::string epubEntryPath)
+    : imagePath(std::move(imagePath)),
+      altText(std::move(altText)),
       width(width),
       height(height),
-      epubFilePath_(epubFilePath),
-      epubEntryPath_(epubEntryPath) {}
+      epubFilePath_(std::move(epubFilePath)),
+      epubEntryPath_(std::move(epubEntryPath)) {
+  capAltText(this->altText);
+}
 
 bool ImageBlock::ensureExtracted() const {
   if (Storage.exists(imagePath.c_str())) return true;
@@ -526,13 +559,14 @@ std::unique_ptr<ImageBlock> ImageBlock::deserialize(FsFile& file) {
   serialization::readPod(file, w);
   serialization::readPod(file, h);
   std::string alt, epubFile, epubEntry;
-  serialization::readString(file, alt);
+  readAltText(file, alt);
   serialization::readString(file, epubFile);
   serialization::readString(file, epubEntry);
   int16_t srcYOffset = 0, srcHeight = 0;
   serialization::readPod(file, srcYOffset);
   serialization::readPod(file, srcHeight);
-  auto block = std::unique_ptr<ImageBlock>(new ImageBlock(path, w, h, alt, epubFile, epubEntry));
+  auto block = std::unique_ptr<ImageBlock>(
+      new ImageBlock(std::move(path), w, h, std::move(alt), std::move(epubFile), std::move(epubEntry)));
   block->srcYOffset_ = srcYOffset;
   block->srcHeight_ = srcHeight;
   return block;
