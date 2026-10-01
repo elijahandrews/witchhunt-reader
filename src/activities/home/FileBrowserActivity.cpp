@@ -6,6 +6,7 @@
 #include <GfxRenderer.h>
 #include <HalCapabilities.h>
 #include <HalDisplay.h>
+#include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Memory.h>
@@ -48,7 +49,8 @@ FileBrowserActivity::FileBrowserActivity(GfxRenderer& renderer, MappedInputManag
       model(mode),
       focusName(std::move(focusName)),
       coverLoader(std::make_unique<CoverThumbLoader>(RecentBooksActivity::GRID_THUMB_WIDTH,
-                                                     RecentBooksActivity::GRID_THUMB_HEIGHT)) {
+                                                     RecentBooksActivity::GRID_THUMB_HEIGHT,
+                                                     RecentBooksActivity::GRID_THUMB_CROP)) {
   model.setPath(std::move(initialPath));
 }
 
@@ -147,35 +149,39 @@ void FileBrowserActivity::drawCoverGrid() {
   }
 }
 
-// One cell: the cover box, then two lines under it. Selection is the recent-books grid's: the
-// whole cell inverted, the cover itself left as it is.
+// One cell: the cover slot, then two lines under it. The slot is a 2:3 card centred in the cell --
+// the shape of the usual cover, so fitted covers, title cards and folders line up. Selection is
+// the recent-books grid's: the whole cell inverted, the cover itself left as it is.
 void FileBrowserActivity::drawCoverCell(const int index, const int x, const int y, const CoverGridLayout::Layout& cells,
                                         const bool selected, const std::string& base) {
   const int tw = cells.cellWidth;
   const int th = cells.cellHeight;
-  if (selected) {
-    renderer.fillRect(x, y, tw, th + CoverGridLayout::kLabelHeight + 3);
-  }
-  renderer.fillRect(x + 1, y + 1, tw - 2, th - 2, false);
-  renderer.drawRect(x, y, tw, th, !selected);
+  if (selected) renderer.fillRect(x, y, tw, th + CoverGridLayout::kLabelHeight + 3);
+  const int cardH = th - 2;
+  const int cardW = std::min(tw - 2, cardH * 2 / 3);
+  const Rect card{x + (tw - cardW) / 2, y + 1, cardW, cardH};
 
   const std::string entry = model.entryName(static_cast<size_t>(index));
   if (entry.empty()) return;
   std::string title;
   std::string subtitle;
   if (entry.back() == '/') {
-    // A folder: its icon where a cover would be, its name under it.
     title = utf8NfcNorm(entry.substr(0, entry.size() - 1));
-    renderer.drawIcon(FolderIcon, x + (tw - 32) / 2, y + (th - 32) / 2, 32, 32);
+    const int books = bookRows.folder(base + entry.substr(0, entry.size() - 1)).bookCount;
+    drawFolderCard(card, books);
   } else {
     const BookRowResolver::Row& row = bookRows.row(base + entry, model.entrySize(static_cast<size_t>(index)));
     title = row.title.empty() ? getFileName(entry) : row.title;
     subtitle = row.subtitle;
     const int percent = row.percent;  // copied before anything else can reuse the row's slot
-    const CoverThumb thumb = drawCoverThumb(base + entry, x, y, tw, th);
-    if (thumb != CoverThumb::Drawn) drawTitleCard(title, x, y, tw, th);
+    Rect cover = card;
+    const CoverThumb thumb = drawCoverThumb(base + entry, x, y, tw, th, cover);
+    if (thumb != CoverThumb::Drawn) drawTitleCard(title, card);
     if (thumb == CoverThumb::Missing) coverWork = true;
-    BookProgressPresentation::drawIndicator(renderer, Rect{x, y, tw, th}, percent);
+    // Framed tight round what is drawn: a fitted cover is narrower than the cell.
+    renderer.drawRect(cover.x - 1, cover.y - 1, cover.width + 2, cover.height + 2, !selected);
+    BookProgressPresentation::drawIndicator(renderer, Rect{cover.x - 1, cover.y - 1, cover.width + 2, cover.height + 2},
+                                            percent);
   }
 
   const int labelY = y + th + 3;
@@ -189,10 +195,11 @@ void FileBrowserActivity::drawCoverCell(const int index, const int x, const int 
 }
 
 // The book's cover, from the grid thumbnail the recent-books grid, the finished-book screen or
-// generateCovers() made. NoCover is the 1x1 placeholder of a book that has none; Missing is a
-// thumbnail not made yet, or cut short.
+// generateCovers() made, centred in the cell; `drawn` is where it landed. NoCover is the 1x1
+// placeholder of a book that has none; Missing is a thumbnail not made yet, or cut short.
 FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x,
-                                                                    const int y, const int tw, const int th) {
+                                                                    const int y, const int tw, const int th,
+                                                                    Rect& drawn) {
   FsFile file;
   if (!Storage.openFileForRead("FBR", coverLoader->thumbPath(bookPath), file)) return CoverThumb::Missing;
   Bitmap bmp(file);
@@ -201,12 +208,15 @@ FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::s
     if (bmp.getWidth() <= 1 || bmp.getHeight() <= 1) {
       result = CoverThumb::NoCover;
     } else {
-      // Never upscaled; centred in the frame. Same arithmetic as RecentBooksActivity::renderGridCell.
+      // Never upscaled -- and a current thumbnail always fits, so never scaled at all.
       const float scale = std::min(
           1.0f, std::min(static_cast<float>(tw - 2) / bmp.getWidth(), static_cast<float>(th - 2) / bmp.getHeight()));
-      const int rendW = static_cast<int>(bmp.getWidth() * scale);
-      const int rendH = static_cast<int>(bmp.getHeight() * scale);
-      renderer.drawBitmap1Bit(bmp, x + std::max(1, (tw - rendW) / 2), y + std::max(1, (th - rendH) / 2), rendW, rendH);
+      drawn.width = static_cast<int>(bmp.getWidth() * scale);
+      drawn.height = static_cast<int>(bmp.getHeight() * scale);
+      drawn.x = x + std::max(1, (tw - drawn.width) / 2);
+      drawn.y = y + std::max(1, (th - drawn.height) / 2);
+      renderer.fillRect(drawn.x, drawn.y, drawn.width, drawn.height, false);  // white under it, on a selection
+      renderer.drawBitmap1Bit(bmp, drawn.x, drawn.y, drawn.width, drawn.height);
       result = CoverThumb::Drawn;
     }
   }
@@ -214,18 +224,53 @@ FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::s
   return result;
 }
 
-// A book without a cover thumbnail: its title, set large inside the frame.
-void FileBrowserActivity::drawTitleCard(const std::string& title, const int x, const int y, const int tw,
-                                        const int th) {
+// A book without a cover thumbnail: its title, set large on a blank card.
+void FileBrowserActivity::drawTitleCard(const std::string& title, const Rect& card) {
+  renderer.fillRect(card.x, card.y, card.width, card.height, false);
   constexpr int pad = 10;
   const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
-  const int maxLines = std::max(1, std::min(6, (th - 2 * pad) / lineH));
-  const auto lines = renderer.wrappedText(UI_12_FONT_ID, title.c_str(), tw - 2 * pad, maxLines, EpdFontFamily::BOLD);
-  int lineY = y + (th - static_cast<int>(lines.size()) * lineH) / 2;
+  const int maxLines = std::max(1, std::min(6, (card.height - 2 * pad) / lineH));
+  const auto lines =
+      renderer.wrappedText(UI_12_FONT_ID, title.c_str(), card.width - 2 * pad, maxLines, EpdFontFamily::BOLD);
+  int lineY = card.y + (card.height - static_cast<int>(lines.size()) * lineH) / 2;
   for (const auto& line : lines) {
     const int lineW = renderer.getTextWidth(UI_12_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, x + (tw - lineW) / 2, lineY, line.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, card.x + (card.width - lineW) / 2, lineY, line.c_str(), true, EpdFontFamily::BOLD);
     lineY += lineH;
+  }
+}
+
+// A folder at the size of a cover: a tab over a body, drawn in outline, and in the body how many
+// books are in it and below it -- "..." until BookRowResolver has counted them.
+void FileBrowserActivity::drawFolderCard(const Rect& card, const int books) {
+  constexpr int line = 3;
+  const int tabW = card.width * 2 / 5;
+  const int tabH = std::max(12, card.height / 14);
+  const int bodyTop = card.y + card.height / 8;  // a folder is wider than tall; a cover is not
+  const int bodyH = card.height - (bodyTop - card.y) - card.height / 8;
+  renderer.fillRect(card.x, bodyTop - tabH, tabW, tabH + line, false);
+  renderer.fillRect(card.x, bodyTop, card.width, bodyH, false);
+  for (int i = 0; i < line; ++i) {
+    renderer.drawRect(card.x + i, bodyTop - tabH + i, tabW - 2 * i, tabH + line);
+    renderer.drawRect(card.x + i, bodyTop + i, card.width - 2 * i, bodyH - 2 * i);
+  }
+
+  std::string number = "...";
+  if (books > FileBrowserModel::MAX_COUNTED_BOOKS) {
+    number = std::to_string(FileBrowserModel::MAX_COUNTED_BOOKS) + "+";
+  } else if (books >= 0) {
+    number = std::to_string(books);
+  }
+  const char* noun = books == 1 ? tr(STR_BOOK_SINGULAR) : tr(STR_BOOK_PLURAL);
+  const int numberH = renderer.getLineHeight(UI_12_FONT_ID);
+  const int nounH = renderer.getLineHeight(SMALL_FONT_ID);
+  const int textY = bodyTop + (bodyH - numberH - nounH) / 2;
+  const int numberW = renderer.getTextWidth(UI_12_FONT_ID, number.c_str(), EpdFontFamily::BOLD);
+  renderer.drawText(UI_12_FONT_ID, card.x + (card.width - numberW) / 2, textY, number.c_str(), true,
+                    EpdFontFamily::BOLD);
+  if (books >= 0) {
+    const int nounW = renderer.getTextWidth(SMALL_FONT_ID, noun);
+    renderer.drawText(SMALL_FONT_ID, card.x + (card.width - nounW) / 2, textY + numberH, noun, true);
   }
 }
 
@@ -287,6 +332,9 @@ void FileBrowserActivity::generateCovers() {
   }
 
   constexpr uint32_t COVER_SLICE_BUDGET_MS = 150;
+  // Full speed for the burst: this runs between presses, which is when the governor has the clock
+  // down at 10 MHz.
+  HalPowerManager::Lock fullSpeed;
   const uint32_t deadline = millis() + COVER_SLICE_BUDGET_MS;
   const std::string book = coverLoader->book();
   while (true) {
@@ -850,10 +898,13 @@ void FileBrowserActivity::drawFooter() {
   // In a folder small enough not to page, this slot carries Options. Where Confirm already
   // carries it that would draw the same word twice on one strip, and the second copy would sit on
   // a slot such a board has no key for.
-  const char* nextLabel = (model.getMode() == Mode::PickFolder)         ? tr(STR_MOVE_HERE)
-                          : pages                                       ? tr(STR_LIST_PAGE_NEXT)
-                          : (showOptionsHint && !confirmOpensOptions()) ? tr(STR_OPTIONS)
-                                                                        : "";
+  // Where it pages, the same key still opens Options on a hold, and in the cover grid -- four to a
+  // page -- it nearly always pages, so the label says both rather than hiding the menu.
+  const bool optionsOnRight = showOptionsHint && !confirmOpensOptions();
+  const char* nextLabel = (model.getMode() == Mode::PickFolder) ? tr(STR_MOVE_HERE)
+                          : pages ? (optionsOnRight ? tr(STR_LIST_PAGE_NEXT_OR_OPTIONS) : tr(STR_LIST_PAGE_NEXT))
+                          : optionsOnRight ? tr(STR_OPTIONS)
+                                           : "";
   // Paging is bound to logical Left/Right and stepping to logical Up/Down, so which physical pair
   // carries which — and therefore which hint strip each label belongs on — is the orientation's
   // business, not this screen's.

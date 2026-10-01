@@ -35,6 +35,16 @@ class FileBrowserModel {
   // mode's business; this is what selecting a row can do with it.
   [[nodiscard]] static bool isOpenable(std::string_view filename);
 
+  // Books in `dirPath` and every folder below it, by the same rules Browse Files lists them: the
+  // reader's book types, hidden entries only when they are shown. A folder card's number.
+  //
+  // Walks the tree, so it is for the loop task, not a frame being drawn. Stops at
+  // MAX_COUNTED_BOOKS (the card then says "999+"), and gives up -- returning -1 -- when the reader
+  // presses a button (CooperativeAbort), so a deep tree never holds up the screen; the caller asks
+  // again later.
+  static constexpr int MAX_COUNTED_BOOKS = 999;
+  [[nodiscard]] static int countBooksBelow(const std::string& dirPath);
+
   explicit FileBrowserModel(const Mode mode = Mode::Books) : mode(mode) {}
 
   [[nodiscard]] Mode getMode() const { return mode; }

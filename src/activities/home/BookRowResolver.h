@@ -30,11 +30,13 @@ class BookRowResolver {
   struct Row {
     std::string path;
     uint32_t size = 0;
-    std::string title;     // "" = the screen keeps the filename
-    std::string subtitle;  // "Author · Series #3", or whichever part the book has
-    std::string value;     // "42%", Finished, or ""
-    int8_t percent = -1;   // -1 unread / unknown, else 0..100
+    std::string title;       // "" = the screen keeps the filename
+    std::string subtitle;    // "Author · Series #3", or whichever part the book has
+    std::string value;       // "42%", Finished, or ""
+    int8_t percent = -1;     // -1 unread / unknown, else 0..100
+    int16_t bookCount = -1;  // a folder's books, all levels down; -1 not counted yet
     bool needsParse = false;
+    bool needsCount = false;
   };
 
   static constexpr size_t CAPACITY = 16;
@@ -42,9 +44,12 @@ class BookRowResolver {
   // The row for a book on screen. Call with the render lock held. The reference stays valid until
   // the next row() call, which may reuse its slot: copy what is needed before asking for another.
   const Row& row(const std::string& path, uint32_t size);
+  // The same for a folder on screen: its book count, counted by resolveOne() like a parse.
+  const Row& folder(const std::string& path);
 
-  // Parses one book still marked needsParse, if any, and if no frame is being composed. True when
-  // that was the last one pending: the caller redraws once, rather than once per book.
+  // Parses one book still marked needsParse -- or, with none left, counts one folder marked
+  // needsCount -- if no frame is being composed. True when that was the last one pending: the
+  // caller redraws once, rather than once per row.
   bool resolveOne(const GfxRenderer& renderer);
 
   // Some row is still waiting for resolveOne().
@@ -56,6 +61,8 @@ class BookRowResolver {
   void release();
 
  private:
+  Row& store(Row&& fresh);
+
   std::vector<Row> rows;
   size_t next = 0;
   bool pending = false;  // some row is still waiting for its OPF parse

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <GfxRenderer.h>
+#include <HalPowerManager.h>
 #include <I18n.h>
 #include <Logging.h>
 
@@ -9,6 +10,7 @@
 
 #include "../RenderLock.h"
 #include "BookDetails.h"
+#include "FileBrowserModel.h"
 #include "components/BookProgressPresentation.h"
 
 namespace {
@@ -49,6 +51,21 @@ const BookRowResolver::Row& BookRowResolver::row(const std::string& path, const 
   fresh.percent = static_cast<int8_t>(std::max(-1, std::min(100, percent)));
   fresh.value = progressLabel(percent);
 
+  return store(std::move(fresh));
+}
+
+const BookRowResolver::Row& BookRowResolver::folder(const std::string& path) {
+  for (const auto& existing : rows) {
+    if (existing.path == path) return existing;
+  }
+  Row fresh;
+  fresh.path = path;
+  fresh.needsCount = true;
+  pending = true;
+  return store(std::move(fresh));
+}
+
+BookRowResolver::Row& BookRowResolver::store(Row&& fresh) {
   if (rows.capacity() < CAPACITY) rows.reserve(CAPACITY);
   if (rows.size() < CAPACITY) {
     rows.push_back(std::move(fresh));
@@ -66,9 +83,14 @@ bool BookRowResolver::resolveOne(const GfxRenderer& renderer) {
   if (!pending || renderer.isComposingFrame()) return false;
   std::string path;
   uint32_t size = 0;
+  bool count = false;
   {
     RenderLock lock;
-    const auto it = std::find_if(rows.begin(), rows.end(), [](const Row& r) { return r.needsParse; });
+    auto it = std::find_if(rows.begin(), rows.end(), [](const Row& r) { return r.needsParse; });
+    if (it == rows.end()) {
+      it = std::find_if(rows.begin(), rows.end(), [](const Row& r) { return r.needsCount; });
+      count = true;
+    }
     if (it == rows.end()) {
       pending = false;
       return false;
@@ -76,29 +98,44 @@ bool BookRowResolver::resolveOne(const GfxRenderer& renderer) {
     path = it->path;
     size = it->size;
   }
+  // Idle, the governor drops the clock to 10 MHz between presses -- and this is exactly the work
+  // that runs between presses: a 200 ms parse took 2 s there.
+  HalPowerManager::Lock fullSpeed;
 
-  // Logged until the occasional first-visit reboot in Details is understood: what the heap held
-  // going into a parse and coming out of it, and how long the parse took.
-  const auto heapFree = [] { return static_cast<unsigned long>(esp_get_free_heap_size()); };
-  const auto heapContig = [] {
-    return static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
-  };
-  LOG_INF("BRR", "details parse %s: free=%lu contig=%lu minFree=%lu", path.c_str(), heapFree(), heapContig(),
-          static_cast<unsigned long>(esp_get_minimum_free_heap_size()));
-  const unsigned long parseStart = millis();
-  BookDetails details;
-  BookDetailsLookup::parse(path, size, details);
-  LOG_INF("BRR", "details parse done in %lu ms (%s): free=%lu contig=%lu", millis() - parseStart,
-          details.title.empty() ? "no title" : "ok", heapFree(), heapContig());
+  if (count) {
+    const int books = FileBrowserModel::countBooksBelow(path);
+    if (books < 0) return false;  // a button press: count again once it has been served
+    RenderLock lock;
+    for (auto& r : rows) {
+      if (r.path != path || !r.needsCount) continue;
+      r.bookCount = static_cast<int16_t>(books);
+      r.needsCount = false;
+    }
+  } else {
+    // Logged until the occasional first-visit reboot in Details is understood: what the heap held
+    // going into a parse and coming out of it, and how long the parse took.
+    const auto heapFree = [] { return static_cast<unsigned long>(esp_get_free_heap_size()); };
+    const auto heapContig = [] {
+      return static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
+    };
+    LOG_INF("BRR", "details parse %s: free=%lu contig=%lu minFree=%lu", path.c_str(), heapFree(), heapContig(),
+            static_cast<unsigned long>(esp_get_minimum_free_heap_size()));
+    const unsigned long parseStart = millis();
+    BookDetails details;
+    BookDetailsLookup::parse(path, size, details);
+    LOG_INF("BRR", "details parse done in %lu ms (%s): free=%lu contig=%lu", millis() - parseStart,
+            details.title.empty() ? "no title" : "ok", heapFree(), heapContig());
+    RenderLock lock;
+    for (auto& r : rows) {
+      if (r.path != path || !r.needsParse) continue;
+      r.title = std::move(details.title);
+      r.subtitle = subtitleOf(details);
+      r.needsParse = false;
+    }
+  }
 
   RenderLock lock;
-  for (auto& r : rows) {
-    if (r.path != path || !r.needsParse) continue;
-    r.title = std::move(details.title);
-    r.subtitle = subtitleOf(details);
-    r.needsParse = false;
-  }
-  if (std::any_of(rows.begin(), rows.end(), [](const Row& r) { return r.needsParse; })) return false;
+  if (std::any_of(rows.begin(), rows.end(), [](const Row& r) { return r.needsParse || r.needsCount; })) return false;
   pending = false;
   return true;
 }

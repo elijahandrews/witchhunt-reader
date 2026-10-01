@@ -1,9 +1,8 @@
 #include "CoverThumbLoader.h"
 
+#include <CooperativeAbort.h>
 #include <HalStorage.h>
 #include <Logging.h>
-
-#include <utility>
 
 #include "components/UITheme.h"
 
@@ -21,7 +20,6 @@ void CoverThumbLoader::begin(const std::string& bookPath, BuildArena* scratch) {
 
 void CoverThumbLoader::reset() {
   // Sessions first: each may hold blocks of the scratch region and open files.
-  jpeg_.reset();
   extract_.reset();
   png_.reset();
   pngFiles_.close();
@@ -29,7 +27,6 @@ void CoverThumbLoader::reset() {
   scratch_ = nullptr;
   phase_ = Phase::Start;
   afterSessionFailure_ = false;
-  jpegSessionFailed_ = false;
 }
 
 CoverThumbLoader::Step CoverThumbLoader::finish(const Step result) {
@@ -41,23 +38,11 @@ CoverThumbLoader::Step CoverThumbLoader::step() {
   if (book_.empty()) return Step::Failed;
 
   switch (phase_) {
-    case Phase::Jpeg: {
-      const auto status = jpeg_->continueSteps(1);
-      if (status == CoverThumbSession::Status::Running) return Step::Working;
-      jpeg_.reset();
-      if (status == CoverThumbSession::Status::Done) return finish(Step::Done);
-      // The session removed its partial output. One more go as the one-shot conversion.
-      LOG_ERR("CTL", "Sliced JPEG cover failed for %s - retrying one-shot", book_.c_str());
-      jpegSessionFailed_ = true;
-      phase_ = Phase::Start;
-      return Step::Working;
-    }
-
     case Phase::Extract: {
       const auto status = extract_->continueStep(4096);
       if (status == ReaderActivity::CoverExtractSession::Status::Running) return Step::Working;
       extract_.reset();
-      // Done: cover.img is cached now, so the next attempt can start the PNG decode on it.
+      // Done: cover.img is cached now, so the next attempt can convert it.
       if (status == ReaderActivity::CoverExtractSession::Status::Error) {
         LOG_ERR("CTL", "Cover extract failed for %s", book_.c_str());
         afterSessionFailure_ = true;
@@ -85,22 +70,18 @@ CoverThumbLoader::Step CoverThumbLoader::step() {
   const std::string thumb = thumbPath(book_);
   if (ReaderActivity::isCoverThumbComplete(thumb, width_, height_)) return finish(Step::Done);
 
-  const std::pair<int, int> size{width_, height_};
-  std::unique_ptr<CoverThumbSession> sliced;
-  const ThumbResult res =
-      ReaderActivity::ensureCoverThumbs(book_, &size, 1, scratch_, jpegSessionFailed_ ? nullptr : &sliced);
-  if (sliced) {
-    jpeg_ = std::move(sliced);
-    phase_ = Phase::Jpeg;
-    return Step::Working;
-  }
+  // A one-shot conversion gives way to a button press mid-decode (CooperativeAbort) and reports
+  // that as a transient failure. It is neither: the same attempt simply runs again next time.
+  CooperativeAbort::clearAborted();
+  const ThumbResult res = ReaderActivity::ensureCoverThumb(book_, width_, height_, scratch_, crop_);
+  if (CooperativeAbort::consumeAborted()) return Step::Working;
   if (res == ThumbResult::Ok) return finish(Step::Done);
 
   // Only a TRANSIENT failure may walk the session ladder. A structural absence is permanent --
   // re-extracting the same entry yields the same undecodable bytes (RecentBooksActivity has the
   // livelock this avoids on an EPUB whose "cover.png" is really an AVIF).
   if (res == ThumbResult::TransientFail && !afterSessionFailure_) {
-    png_ = ReaderActivity::beginPngThumbSession(book_, width_, height_, pngFiles_, scratch_);
+    png_ = ReaderActivity::beginPngThumbSession(book_, width_, height_, pngFiles_, scratch_, crop_);
     if (png_) {
       phase_ = Phase::Png;
       return Step::Working;
@@ -112,11 +93,14 @@ CoverThumbLoader::Step CoverThumbLoader::step() {
     }
   }
 
-  // Nothing more to try. A book with no extractable cover gets the placeholder, so no screen opens
-  // it again to rediscover that -- but not one with a sidecar image, which is a real source that
-  // only failed this time (a tight heap, say).
-  const bool permanent = res == ThumbResult::StructurallyAbsent || !afterSessionFailure_;
-  if (permanent && ReaderActivity::sidecarCoverPath(book_).empty() && ReaderActivity::writeCoverPlaceholderBmp(thumb)) {
+  // Nothing more to try. Only a book that has no cover (a structural absence) gets the placeholder,
+  // so no screen opens it again to rediscover that -- and not one with a sidecar image, a real
+  // source that only failed this time. RecentBooksActivity::loadNextCover also placeholders a
+  // TRANSIENT failure when no session can start, which records a book with a perfectly good JPEG
+  // cover as coverless for good after one bad attempt. Here a transient failure is retried on the
+  // next visit instead.
+  if (res == ThumbResult::StructurallyAbsent && ReaderActivity::sidecarCoverPath(book_).empty() &&
+      ReaderActivity::writeCoverPlaceholderBmp(thumb)) {
     LOG_DBG("CTL", "No extractable cover for %s - wrote placeholder", book_.c_str());
     return finish(Step::Done);
   }

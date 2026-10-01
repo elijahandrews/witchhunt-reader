@@ -1,7 +1,9 @@
 #include "FileBrowserModel.h"
 
+#include <CooperativeAbort.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <HalSystem.h>
 #include <Logging.h>
 
 #include <algorithm>
@@ -95,6 +97,40 @@ bool FileBrowserModel::acceptForBooks(const char* name, const bool isDir) {
 
 bool FileBrowserModel::isOpenable(const std::string_view filename) {
   return isReadableBook(filename) || isViewableImage(filename);
+}
+
+int FileBrowserModel::countBooksBelow(const std::string& dirPath) {
+  constexpr int MAX_DEPTH = 8;  // as deep as anyone files books; a cycle-proof bound besides
+  std::vector<std::pair<std::string, int>> pending;
+  pending.reserve(16);
+  pending.emplace_back(dirPath, 0);
+  int count = 0;
+  char name[500];
+  while (!pending.empty() && count <= MAX_COUNTED_BOOKS) {
+    if (CooperativeAbort::shouldAbortLongTask()) return -1;
+    const auto [folder, depth] = std::move(pending.back());
+    pending.pop_back();
+    auto dir = Storage.open(folder.c_str());
+    if (!dir || !dir.isDirectory()) {
+      if (dir) dir.close();
+      continue;
+    }
+    dir.rewindDirectory();
+    for (auto entry = dir.openNextFile(); entry && count <= MAX_COUNTED_BOOKS; entry = dir.openNextFile()) {
+      entry.getName(name, sizeof(name));
+      const bool isDir = entry.isDirectory();
+      entry.close();
+      if (!isListableName(name)) continue;
+      if (isDir) {
+        if (depth < MAX_DEPTH) pending.emplace_back(folder + "/" + name, depth + 1);
+      } else if (isReadableBook(std::string_view{name})) {
+        ++count;
+      }
+    }
+    dir.close();
+    HalSystem::feedWatchdog();
+  }
+  return std::min(count, MAX_COUNTED_BOOKS + 1);
 }
 
 bool FileBrowserModel::acceptForAllFiles(const char* name, const bool /*isDir*/) { return isListableName(name); }

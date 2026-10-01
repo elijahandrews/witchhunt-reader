@@ -74,8 +74,9 @@ class FileBrowserActivity final : public UiListActivity {
   void drawCoverCell(int index, int x, int y, const CoverGridLayout::Layout& cells, bool selected,
                      const std::string& base);
   enum class CoverThumb : uint8_t { Drawn, NoCover, Missing };
-  CoverThumb drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th);
-  void drawTitleCard(const std::string& title, int x, int y, int tw, int th);
+  CoverThumb drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th, Rect& drawn);
+  void drawTitleCard(const std::string& title, const Rect& card);
+  void drawFolderCard(const Rect& card, int books);
   bool handleCoverTouch();
 
   // Making the covers the page on screen lacks. The render task flags a cell drawn without its
