@@ -1575,8 +1575,22 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
   if (backgroundBuildBaseSpine_ != currentSpineIndex) {
     resetBackgroundBuild();
     backgroundPausedForChapter_ = false;  // a new chapter: B may try again
+    backgroundAbandonedSpine_ = -1;
     backgroundBuildBaseSpine_ = currentSpineIndex;
     backgroundBuildSpineIndex_ = currentSpineIndex + 1;
+    backgroundWindowPagesBuilt_ = 0;
+  }
+  // The next chapter lost its build to page turns mid-chapter and was left to the foreground. On
+  // the last pages a page turn no longer discards a build of it (BG_BUILD_THROUGH_PAGES), so it
+  // gets one more try there. The window restarts with it: the chapters after it are cached and
+  // settle for free, and their pages count against the budget again.
+  if (backgroundAbandonedSpine_ == currentSpineIndex + 1 && backgroundBuildState_ != BackgroundBuildState::Building &&
+      nearChapterEndForBuildThrough()) {
+    LOG_INF("ERS", "Background-B: retrying spine %d on the last pages, after it was abandoned mid-chapter",
+            backgroundAbandonedSpine_);
+    resetBackgroundBuild();
+    backgroundBuildSpineIndex_ = backgroundAbandonedSpine_;
+    backgroundAbandonedSpine_ = -1;
     backgroundWindowPagesBuilt_ = 0;
   }
   // Walk forward from currentSpineIndex+1 to the book end. The cursor advances as each target
@@ -1659,6 +1673,9 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
       if (backgroundPreemptCount_ >= BG_BUILD_MAX_PREEMPTIONS) {
         LOG_INF("ERS", "Background build spine=%d abandoned after %u preemptions; leaving it to foreground",
                 targetSpine, static_cast<unsigned>(backgroundPreemptCount_));
+        if (targetSpine == currentSpineIndex + 1 && !nearChapterEndForBuildThrough()) {
+          backgroundAbandonedSpine_ = targetSpine;  // retried on the last pages, see above
+        }
         backgroundSection_.reset();
         backgroundBuildState_ = BackgroundBuildState::Settled;
         return;

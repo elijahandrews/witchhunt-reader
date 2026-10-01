@@ -485,6 +485,10 @@ class EpubReaderActivity final : public Activity {
   // BG_BUILD_THROUGH_PAGES). Those pages draw in BW with no pre-render. Cleared when the buffer
   // goes back or the build passes to the foreground.
   bool backgroundBuildThrough_ = false;
+  // The next chapter, abandoned to BG_BUILD_MAX_PREEMPTIONS while the reader was mid-chapter. It
+  // gets one more try once the reader is on its last pages, in build-through mode, instead of
+  // being left to the foreground "Indexing". -1 when none; cleared when the reader moves on.
+  int backgroundAbandonedSpine_ = -1;
   // One-shot Background-A re-arm latch (see serviceBackgroundWork): the (spine, page)
   // whose pre-render was already retried after the deferred AA released its memory.
   // Bounds retries to one per displayed page so an image-only next page (which can
