@@ -42,8 +42,15 @@ class FileBrowserModel {
   // MAX_COUNTED_BOOKS (the card then says "999+"), and gives up -- returning -1 -- when the reader
   // presses a button (CooperativeAbort), so a deep tree never holds up the screen; the caller asks
   // again later.
+  //
+  // Every folder it finishes is remembered for the session (FolderCountMemo, 64 of them), and
+  // forgotten when the card changes (HalStorage::contentGeneration) or hidden entries are shown
+  // or hidden: a folder seen again is not walked again, and a count interrupted by a press picks
+  // up past the folders it finished.
   static constexpr int MAX_COUNTED_BOOKS = 999;
   [[nodiscard]] static int countBooksBelow(const std::string& dirPath);
+  // The remembered count for `dirPath`, without walking anything; -1 when there is none.
+  [[nodiscard]] static int knownBooksBelow(const std::string& dirPath);
 
   explicit FileBrowserModel(const Mode mode = Mode::Books) : mode(mode) {}
 

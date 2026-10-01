@@ -60,8 +60,15 @@ const BookRowResolver::Row& BookRowResolver::folder(const std::string& path) {
   }
   Row fresh;
   fresh.path = path;
-  fresh.needsCount = true;
-  pending = true;
+  // Counted earlier this session, and nothing on the card has changed since: the number is there
+  // at once, with no "..." and no walk.
+  const int known = FileBrowserModel::knownBooksBelow(path);
+  if (known >= 0) {
+    fresh.bookCount = static_cast<int16_t>(known);
+  } else {
+    fresh.needsCount = true;
+    pending = true;
+  }
   return store(std::move(fresh));
 }
 

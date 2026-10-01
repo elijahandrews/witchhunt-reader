@@ -14,6 +14,7 @@
 #endif
 
 #include <cassert>
+#include <cstring>
 #include <ctime>
 #include <new>
 #include <optional>
@@ -179,6 +180,7 @@ void HalStorage::endUsbDrive() {
 #if FREEINK_CAP_USB_MSC
   StorageLock lock;
   usbMassStorage.end();
+  noteContentChange(nullptr);  // the host may have changed anything
 #endif
 }
 
@@ -238,6 +240,28 @@ bool HalStorage::usbDriveExternalPower(bool& known) const {
   HalStorage::StorageLock lock;               \
   return SDCard.method(__VA_ARGS__);
 
+namespace {
+
+// The firmware's own cache: written on every page turn, and never anything a folder count counts.
+bool isCachePath(const char* path) {
+  constexpr char kCacheRoot[] = "/.crosspoint";
+  constexpr size_t kLength = sizeof(kCacheRoot) - 1;
+  return strncmp(path, kCacheRoot, kLength) == 0 && (path[kLength] == '\0' || path[kLength] == '/');
+}
+
+bool opensForWriting(const oflag_t oflag) {
+  return (oflag & O_ACCMODE) != O_RDONLY || (oflag & (O_CREAT | O_TRUNC | O_APPEND)) != 0;
+}
+
+}  // namespace
+
+// `path` null: the change is somewhere unknown (a file renamed through its handle, a USB Drive
+// session), which counts as a change.
+void HalStorage::noteContentChange(const char* path) {
+  if (path != nullptr && isCachePath(path)) return;
+  contentGeneration_.fetch_add(1, std::memory_order_relaxed);
+}
+
 std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
   HAL_STORAGE_WRAPPED_CALL(listFiles, path, maxFiles);
 }
@@ -269,10 +293,14 @@ bool HalStorage::readFileToString(const char* moduleName, const std::string& pat
 }
 
 bool HalStorage::writeFile(const char* path, const String& content) {
+  noteContentChange(path);
   HAL_STORAGE_WRAPPED_CALL(writeFile, path, content);
 }
 
-bool HalStorage::ensureDirectoryExists(const char* path) { HAL_STORAGE_WRAPPED_CALL(ensureDirectoryExists, path); }
+bool HalStorage::ensureDirectoryExists(const char* path) {
+  noteContentChange(path);
+  HAL_STORAGE_WRAPPED_CALL(ensureDirectoryExists, path);
+}
 
 uint64_t HalStorage::sdTotalBytes() const {
   StorageLock lock;
@@ -318,19 +346,31 @@ HalFile& HalFile::operator=(HalFile&& other) {
 
 HalFile HalStorage::open(const char* path, const oflag_t oflag) {
   StorageLock lock;  // ensure thread safety for the duration of this function
+  if (opensForWriting(oflag)) noteContentChange(path);
   return HalFile(std::make_unique<HalFile::Impl>(SDCard.open(path, oflag)));
 }
 
-bool HalStorage::mkdir(const char* path, const bool pFlag) { HAL_STORAGE_WRAPPED_CALL(mkdir, path, pFlag); }
+bool HalStorage::mkdir(const char* path, const bool pFlag) {
+  noteContentChange(path);
+  HAL_STORAGE_WRAPPED_CALL(mkdir, path, pFlag);
+}
 
 bool HalStorage::exists(const char* path) { HAL_STORAGE_WRAPPED_CALL(exists, path); }
 
-bool HalStorage::remove(const char* path) { HAL_STORAGE_WRAPPED_CALL(remove, path); }
+bool HalStorage::remove(const char* path) {
+  noteContentChange(path);
+  HAL_STORAGE_WRAPPED_CALL(remove, path);
+}
 bool HalStorage::rename(const char* oldPath, const char* newPath) {
+  noteContentChange(oldPath);
+  noteContentChange(newPath);
   HAL_STORAGE_WRAPPED_CALL(rename, oldPath, newPath);
 }
 
-bool HalStorage::rmdir(const char* path) { HAL_STORAGE_WRAPPED_CALL(rmdir, path); }
+bool HalStorage::rmdir(const char* path) {
+  noteContentChange(path);
+  HAL_STORAGE_WRAPPED_CALL(rmdir, path);
+}
 
 bool HalStorage::openFileForRead(const char* moduleName, const char* path, HalFile& file) {
   StorageLock lock;  // ensure thread safety for the duration of this function
@@ -350,6 +390,7 @@ bool HalStorage::openFileForRead(const char* moduleName, const String& path, Hal
 
 bool HalStorage::openFileForWrite(const char* moduleName, const char* path, HalFile& file) {
   StorageLock lock;  // ensure thread safety for the duration of this function
+  noteContentChange(path);
   FsFile fsFile;
   bool ok = SDCard.openFileForWrite(moduleName, path, fsFile);
   file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
@@ -379,7 +420,10 @@ bool HalStorage::openFileForUpdate(const char* moduleName, const std::string& pa
   return openFileForUpdate(moduleName, path.c_str(), file);
 }
 
-bool HalStorage::removeDir(const char* path) { HAL_STORAGE_WRAPPED_CALL(removeDir, path); }
+bool HalStorage::removeDir(const char* path) {
+  noteContentChange(path);
+  HAL_STORAGE_WRAPPED_CALL(removeDir, path);
+}
 
 bool HalStorage::copyFile(const char* moduleName, const std::string& srcPath, const char* dstPath) {
   HalFile src, dst;
@@ -445,7 +489,10 @@ int HalFile::read(void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(read, buf, co
 int HalFile::read() { HAL_FILE_WRAPPED_CALL(read, ); }
 size_t HalFile::write(const void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(write, buf, count); }
 size_t HalFile::write(uint8_t b) { HAL_FILE_WRAPPED_CALL(write, b); }
-bool HalFile::rename(const char* newPath) { HAL_FILE_WRAPPED_CALL(rename, newPath); }
+bool HalFile::rename(const char* newPath) {
+  Storage.noteContentChange(nullptr);  // the old path is not known here
+  HAL_FILE_WRAPPED_CALL(rename, newPath);
+}
 bool HalFile::getModifyDateTime(uint16_t* pdate, uint16_t* ptime) {
   HAL_FILE_WRAPPED_CALL(getModifyDateTime, pdate, ptime);
 }
