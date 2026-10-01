@@ -29,7 +29,7 @@
 #include "ReadingSessionTracker.h"
 #include "RecentBooksStore.h"
 #include "activities/ActivityManager.h"
-#include "activities/home/RecentBooksActivity.h"
+#include "components/CoverGridLayout.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -50,8 +50,8 @@ std::string getFilename(const std::string& filePath) {
   return filePath.substr(lastSlash + 1);
 }
 
-static constexpr int kFinishedBookCoverHeight = RecentBooksActivity::GRID_THUMB_HEIGHT;
-static constexpr int kFinishedBookCoverMaxWidth = RecentBooksActivity::GRID_THUMB_WIDTH;
+static constexpr int kFinishedBookCoverHeight = CoverGridLayout::kThumbHeight;
+static constexpr int kFinishedBookCoverMaxWidth = CoverGridLayout::kThumbWidth;
 
 std::string findUniquePathWithSuffix(const std::string& basePath) {
   if (!Storage.exists(basePath.c_str())) {
@@ -95,10 +95,9 @@ std::string convertSidecarToBmp(const std::string& cacheDir, const std::string& 
   bool ok = false;
   if (FsHelpers::hasJpgExtension(sidecarPath)) {
     ok = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(src, dst, width, height, nullptr,
-                                                             RecentBooksActivity::GRID_THUMB_CROP);
+                                                             CoverGridLayout::kThumbCrop);
   } else if (FsHelpers::hasPngExtension(sidecarPath)) {
-    ok = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(src, dst, width, height,
-                                                           RecentBooksActivity::GRID_THUMB_CROP);
+    ok = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(src, dst, width, height, CoverGridLayout::kThumbCrop);
   } else if (FsHelpers::hasBmpExtension(sidecarPath)) {
     uint8_t buffer[1024];
     while (src.available()) {
@@ -190,7 +189,7 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
         metadata.series += " #" + epub.getSeriesIndex();
       }
       if (epub.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, /*allowExtract=*/true, nullptr,
-                                RecentBooksActivity::GRID_THUMB_CROP) == ThumbResult::Ok) {
+                                CoverGridLayout::kThumbCrop) == ThumbResult::Ok) {
         metadata.coverPath = epub.getThumbBmpPath(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
       } else {
         metadata.coverPath = getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);

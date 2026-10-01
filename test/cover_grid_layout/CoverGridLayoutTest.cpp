@@ -8,11 +8,12 @@
 
 namespace {
 
-// Cover box ceilings used by RecentBooksActivity: the full-size 196x240 thumbnail plus its 1 px frame.
+// Cover box ceilings (CoverGridLayout::kMaxCellHeight/Width): the full-size 196x240 thumbnail plus its
+// 1 px frame.
 constexpr int kMaxCell = 242;
 constexpr int kMaxCellWidth = 198;
 
-// Content area left to the grid, computed the way RecentBooksActivity does it:
+// Content area left to the grid, computed the way FileBrowserActivity::coverGrid does it:
 //   width  = panel width - side button hints
 //   height = panel height - button hints - (topPadding + header + spacing) - spacing
 struct Theme {
@@ -28,7 +29,7 @@ CoverGridLayout::Input portrait(int panelW, int panelH, const Theme& t, bool isX
   const int contentWidth = panelW - (isX3 ? 2 * t.sideHints : t.sideHints);
   const int contentTop = t.topPadding + t.header + t.spacing;
   const int contentHeight = (panelH - t.buttonHints) - contentTop - t.spacing;
-  return {contentWidth, contentHeight, isX3 ? 12 : 24, kMaxCell, kMaxCellWidth};
+  return {contentWidth, contentHeight, 12, kMaxCell, kMaxCellWidth};
 }
 
 }  // namespace
@@ -64,19 +65,19 @@ TEST(CoverGridLayout, T5S3PortraitIsThreeByThreeWithShrunkCells) {
   EXPECT_EQ(l.cols, 3);
   EXPECT_EQ(l.rows, 3);
   EXPECT_EQ(l.cellWidth, 156);
-  EXPECT_EQ(l.cellHeight, 212);
+  EXPECT_EQ(l.cellHeight, 216);
   EXPECT_EQ(l.thumbWidth, 154);  // the thumbnail is made at the cell's size, so it still draws 1:1
-  EXPECT_EQ(l.thumbHeight, 210);
+  EXPECT_EQ(l.thumbHeight, 214);
 }
 
 // The Large UI font takes 12 px from the grid; on a panel whose cells are already shrunk, that is
-// a smaller thumbnail (device log, T5S3, 2026-10-01: thumb_154x206.bmp).
+// a smaller thumbnail.
 TEST(CoverGridLayout, T5S3AtTheLargeUiFontShrinksTheCellsAgain) {
   const auto l = CoverGridLayout::compute(portrait(540, 960, kLyraLarge, /*isX3=*/false));
   EXPECT_EQ(l.cols, 3);
   EXPECT_EQ(l.rows, 3);
   EXPECT_EQ(l.thumbWidth, 154);
-  EXPECT_EQ(l.thumbHeight, 206);
+  EXPECT_EQ(l.thumbHeight, 210);
 }
 
 TEST(CoverGridLayout, LessThanHalfARowLeftKeepsFullSizeCells) {
@@ -168,7 +169,7 @@ TEST(CoverGridLayout, DegenerateInputsDoNotProduceNonsense) {
 
 // --- hitTest ------------------------------------------------------------------------------
 //
-// The inverse of the cell placement RecentBooksActivity::renderGridView does:
+// The inverse of the cell placement FileBrowserActivity::drawCoverGrid does:
 //   cx = originX + kMargin + col * (cellWidth + kMargin)
 //   cy = originY + (row - pageStartRow) * rowStride
 // Restated here so a change to either side fails loudly rather than silently mis-aiming taps.

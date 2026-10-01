@@ -106,7 +106,7 @@ class HomeActivity final : public Activity {
   };
   // Give up on a book's cover for this pass. Bumps the session retry counter for a transient
   // failure. When the failure is permanent — structurally absent, or transient but past the
-  // session retry budget — writes a valid placeholder BMP at each slot (like RecentBooksActivity)
+  // session retry budget — writes a valid placeholder BMP at each slot (as CoverThumbLoader does)
   // so the book reads as resolved on disk and is not re-decoded on the next boot; otherwise just
   // records an empty cover so it retries next session. Shared by both cover paths.
   void giveUpCover(RecentBook& book, ThumbResult res, const std::vector<ThumbSlot>& slots);
