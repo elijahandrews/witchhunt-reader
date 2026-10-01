@@ -27,6 +27,9 @@ class Section {
   std::string filePath;
   FsFile file;
   std::vector<uint32_t> lut;  // Cached page byte-offsets; loaded once, avoids per-page LUT seek
+  // Where the LUT sits in the cache file when `lut` could not be held (no heap block for it on a
+  // long single-file book): page loads then read their offset from the file. 0 otherwise.
+  uint32_t lutFileOffset_ = 0;
   bool truncatedCache = false;
   bool embeddedStyleFallback = false;
   // Set by the last build when CssParser hit its own low-heap mode mid-parse
