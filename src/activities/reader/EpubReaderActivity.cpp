@@ -3277,8 +3277,8 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
       isForwardTurn && section && preRenderedPage.ready && preRenderedPage.spineIndex == currentSpineIndex;
   const int expectedNextPage = (section ? section->currentPage + 1 : -1);
 
-  if (isForwardTurn && section && preRenderedPage.ready && preRenderedPage.spineIndex == currentSpineIndex &&
-      preRenderedPage.pageIndex == section->currentPage + 1) {
+  if (isForwardTurn && section && preRenderedPage.ready && !preRenderedPage.incomplete &&
+      preRenderedPage.spineIndex == currentSpineIndex && preRenderedPage.pageIndex == section->currentPage + 1) {
     // Fast path: the frame buffer already holds the next page content. Advance state here on the
     // loop task, then hand off to render() via usePreRenderedBuffer — all display work (status
     // bar, flush, AA pass) stays on the render task where it belongs.
@@ -3714,24 +3714,50 @@ void EpubReaderActivity::renderPreRenderPass(const RenderLayout& layout) {
   // The Page dies with `p` at the end of this function, so `end` also shows what is retained
   // (nothing but the pixels in the framebuffer).
   logReaderMemSnapshot("prerender_begin");
+  // What the pass really costs: the heap's low point between here and the end of the draw, the
+  // number the floor above has to be derived from. The allocator tracks it from here, the same
+  // way endBackgroundBorrow() reads Background B's. B is never live here (render() returns its
+  // buffer first), but if the monitor is somehow already running it is left alone.
+  const bool trackLow = heap_caps_monitor_local_minimum_free_size_start() == ESP_OK;
   const int savedPage = section->currentPage;
   section->currentPage = nextPage;
   auto p = buildActive ? section->loadPageFromActiveBuild(static_cast<uint16_t>(nextPage))
                        : section->loadPageFromSectionFile();
   section->currentPage = savedPage;
   logReaderMemSnapshot("prerender_after_load");
-  if (p && !p->hasImages()) {
-    const unsigned long preRenderStart = millis();
+  uint16_t glyphsDropped = 0;
+  const bool drawn = p && !p->hasImages();
+  const unsigned long preRenderStart = millis();
+  if (drawn) {
     section->currentPage = nextPage;
-    renderPageContentOnly(*p, layout.marginTop, layout.marginRight, layout.marginBottom, layout.marginLeft);
+    glyphsDropped =
+        renderPageContentOnly(*p, layout.marginTop, layout.marginRight, layout.marginBottom, layout.marginLeft);
     section->currentPage = savedPage;
     logReaderMemSnapshot("prerender_end");
-    const unsigned long preRenderDuration = millis() - preRenderStart;
-    preRenderedPage = {true, currentSpineIndex, nextPage, preRenderDuration, millis()};
+  }
+  const unsigned long preRenderDuration = millis() - preRenderStart;
+  p.reset();  // inside the tracked window: the page is part of the pass's cost
+  uint32_t lowest = 0;
+  if (trackLow) {
+    lowest = static_cast<uint32_t>(esp_get_minimum_free_heap_size());
+    heap_caps_monitor_local_minimum_free_size_stop();
+  }
+  if (drawn) {
+    // An incomplete draw keeps `ready` (the framebuffer does hold that page now; the sleep
+    // overlay and screenshots restore the current one from it) but is never shown: the turn
+    // renders afresh, without this pass's Page in the heap.
+    preRenderedPage = {true, currentSpineIndex, nextPage, preRenderDuration, millis(), glyphsDropped > 0};
 #if DEBUG_BACKGROUND_WORK
-    bgCounters_.aCompletes++;
+    if (glyphsDropped == 0) bgCounters_.aCompletes++;
 #endif
-    LOG_DBG("ERS", "Pre-rendered page %d/%d in %lums", nextPage, section->pageCount - 1, preRenderDuration);
+    LOG_DBG("ERS", "Pre-rendered page %d/%d in %lums (heap %lu at start, %lu lowest, cost %lu)%s", nextPage,
+            section->pageCount - 1, preRenderDuration, static_cast<unsigned long>(freeHeap),
+            static_cast<unsigned long>(lowest),
+            static_cast<unsigned long>(lowest && freeHeap > lowest ? freeHeap - lowest : 0),
+            glyphsDropped > 0 ? "; incomplete, will not be shown" : "");
+    if (glyphsDropped > 0) {
+      LOG_ERR("ERS", "Pre-render of page %d dropped %u glyphs for lack of memory", nextPage, glyphsDropped);
+    }
   }
   checkHeapIntegrity("after_prerender");
 }
@@ -5585,9 +5611,9 @@ void EpubReaderActivity::displayBuildPage(RenderLock& lock, const Page& page, co
   WakeTrace::logSummary();
 }
 
-void EpubReaderActivity::renderPageContentOnly(const Page& page, const int orientedMarginTop,
-                                               const int orientedMarginRight, const int orientedMarginBottom,
-                                               const int orientedMarginLeft) {
+uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int orientedMarginTop,
+                                                   const int orientedMarginRight, const int orientedMarginBottom,
+                                                   const int orientedMarginLeft) {
   auto* fcm = renderer.getFontCacheManager();
   fcm->resetStats();
 
@@ -5639,6 +5665,8 @@ void EpubReaderActivity::renderPageContentOnly(const Page& page, const int orien
   // Status bar intentionally omitted — superimposed at display time with live
   // values, and so outside the capture. It carries no anti-aliasing either way:
   // UI chrome is 1-bit and produces no AA pixels at all.
+  const FontDecompressor* fdc = fcm->getDecompressor();
+  return fdc ? fdc->getStats().fallbackOomGlyphs : 0;
 }
 
 bool EpubReaderActivity::usesDeferredAa() const {

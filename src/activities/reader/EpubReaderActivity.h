@@ -390,6 +390,10 @@ class EpubReaderActivity final : public Activity {
     int pageIndex = -1;
     unsigned long renderDurationMs = 0UL;
     unsigned long completedAtMs = 0UL;
+    // The draw ran short of memory and dropped glyphs. The framebuffer still holds this page
+    // (so `ready` stays true for restoreCurrentPageToBufferIfPreRendered), but the page turn
+    // must not show it: it renders the page afresh, by when the pass's own Page is gone.
+    bool incomplete = false;
   };
   PreRenderedPage preRenderedPage;
   // The pre-render staged this page's grayscale planes, so displaying it can go
@@ -839,9 +843,10 @@ class EpubReaderActivity final : public Activity {
                       int orientedMarginBottom, int orientedMarginLeft);
   // Renders page content into the frame buffer (prewarm + BW pass) without drawing the status bar
   // or flushing to the display. Used by the pre-render pass so the status bar can be superimposed
-  // at display time with live values (clock, battery).
-  void renderPageContentOnly(const Page& page, int orientedMarginTop, int orientedMarginRight, int orientedMarginBottom,
-                             int orientedMarginLeft);
+  // at display time with live values (clock, battery). Returns the number of glyphs the font
+  // decompressor could not find memory for -- they drew nothing, so the page is incomplete.
+  uint16_t renderPageContentOnly(const Page& page, int orientedMarginTop, int orientedMarginRight,
+                                 int orientedMarginBottom, int orientedMarginLeft);
   // Draws a single text-only page from an in-progress Background-C build (no AA, no pre-render
   // arming). Releases the lock before the waveform wait (like renderContents) so a C build
   // slice can run on the loop task during the refresh.
