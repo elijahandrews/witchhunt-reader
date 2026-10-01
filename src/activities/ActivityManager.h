@@ -34,7 +34,7 @@ struct ReturnHint {
   ReturnTo target = ReturnTo::Home;
   std::string path;              // FileBrowser directory to restore
   std::string selectName;        // item to re-focus in a list (file name, book title)
-  int selectIndex = -1;          // e.g. Recents index
+  int selectIndex = -1;          // e.g. the Home carousel's index
   std::string selectionContext;  // optional activity-specific restore key
   int selectBookmarkIndex = -1;  // optional bookmark index for GlobalBookmarks
 };
@@ -148,7 +148,7 @@ class ActivityManager {
   void goToClockSettings();
   void goToKOReaderSettings();
   void goToFileBrowser(std::string path = {}, std::string focusName = {});
-  void goToRecentBooks(int focusIndex = -1);
+  void goToRecentBooks(std::string focusName = {});
   void goToGlobalBookmarks();
   void goToGlobalBookmarks(ReturnHint hint);
   void goToBrowser();
@@ -171,7 +171,6 @@ class ActivityManager {
   // exits. Consumed by returnFromChild().
   void replaceWithReader(std::string path, ReturnHint hint);
   void replaceWithFileBrowser(std::string path, ReturnHint hint, std::string focusName = {});
-  void replaceWithRecentBooks(ReturnHint hint);
 
   // Called by a "child" activity on successful exit. Consults the stored ReturnHint,
   // clears it, and dispatches to the corresponding parent with restoration args. If
