@@ -23,14 +23,12 @@
 #include "../util/BmpViewerActivity.h"
 #include "../util/ConfirmationActivity.h"
 #include "../util/KeyboardEntryActivity.h"
-#include "BookDetails.h"
 #include "BookInfoActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FileContextMenuActivity.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
-#include "components/BookProgressPresentation.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -56,13 +54,12 @@ void FileBrowserActivity::onEnter() {
 void FileBrowserActivity::onExit() {
   UiListActivity::onExit();
   model.clear();
-  clearDetails();
-  detailsCache.shrink_to_fit();
+  bookRows.release();
 }
 
 void FileBrowserActivity::loop() {
   UiListActivity::loop();
-  resolvePendingDetails();
+  if (bookRows.resolveOne(renderer)) requestUpdate();
 }
 
 // Browse Files with Details chosen. A card-wide search keeps filenames: its rows are paths, and
@@ -70,110 +67,6 @@ void FileBrowserActivity::loop() {
 bool FileBrowserActivity::detailsView() const {
   return model.getMode() == Mode::Books && SETTINGS.fileBrowserView == CrossPointSettings::BROWSER_VIEW_DETAILS &&
          !model.isDeepSearch();
-}
-
-void FileBrowserActivity::clearDetails() {
-  detailsCache.clear();
-  detailsNext = 0;
-  detailsPending = false;
-}
-
-namespace {
-
-std::string progressLabel(const int percent) {
-  if (percent >= 100) return tr(STR_BOOK_FINISHED);
-  if (percent > 0) return std::to_string(percent) + "%";
-  return {};  // unread, or never opened
-}
-
-// "Author · Series #3", leaving out whichever part the book does not have.
-std::string detailsSubtitle(const BookDetails& d) {
-  std::string series = d.series;
-  if (!series.empty() && !d.seriesIndex.empty()) series += " #" + d.seriesIndex;
-  if (d.author.empty()) return series;
-  if (series.empty()) return d.author;
-  return d.author + " · " + series;
-}
-
-}  // namespace
-
-// The row's details from memory, or else from the card without parsing anything. A never-opened
-// EPUB comes back marked needsParse, titled by its filename until loop() has parsed it.
-FileBrowserActivity::RowDetails& FileBrowserActivity::rowDetails(const std::string& path, const uint32_t size) {
-  for (auto& row : detailsCache) {
-    if (row.path == path) return row;
-  }
-  RowDetails row;
-  row.path = path;
-  row.size = size;
-  BookDetails details;
-  if (BookDetailsLookup::cached(path, size, details)) {
-    row.title = std::move(details.title);
-    row.subtitle = detailsSubtitle(details);
-  } else {
-    row.needsParse = true;
-    detailsPending = true;
-  }
-  row.value = progressLabel(BookProgressPresentation::readPercent(path));
-
-  if (detailsCache.capacity() < DETAILS_CACHE_CAPACITY) detailsCache.reserve(DETAILS_CACHE_CAPACITY);
-  if (detailsCache.size() < DETAILS_CACHE_CAPACITY) {
-    detailsCache.push_back(std::move(row));
-    return detailsCache.back();
-  }
-  RowDetails& slot = detailsCache[detailsNext];
-  detailsNext = (detailsNext + 1) % DETAILS_CACHE_CAPACITY;
-  slot = std::move(row);
-  return slot;
-}
-
-// Parses one never-opened EPUB per loop() pass -- ~300 ms each -- so input is read between them,
-// and redraws once when the last one is done rather than once per book: every redraw is a panel
-// refresh. The parse runs outside the render lock, and not beside a frame being composed, which
-// shares the core and the card with it.
-void FileBrowserActivity::resolvePendingDetails() {
-  if (!detailsPending || renderer.isComposingFrame()) return;
-  std::string path;
-  uint32_t size = 0;
-  {
-    RenderLock lock(*this);
-    const auto it =
-        std::find_if(detailsCache.begin(), detailsCache.end(), [](const RowDetails& row) { return row.needsParse; });
-    if (it == detailsCache.end()) {
-      detailsPending = false;
-      return;
-    }
-    path = it->path;
-    size = it->size;
-  }
-
-  // Logged until the occasional first-visit reboot in Details is understood: what the heap held
-  // going into a parse and coming out of it, and how long the parse took.
-  const auto heapFree = [] { return static_cast<unsigned long>(esp_get_free_heap_size()); };
-  const auto heapContig = [] {
-    return static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
-  };
-  LOG_INF("FBR", "details parse %s: free=%lu contig=%lu minFree=%lu", path.c_str(), heapFree(), heapContig(),
-          static_cast<unsigned long>(esp_get_minimum_free_heap_size()));
-  const unsigned long parseStart = millis();
-  BookDetails details;
-  BookDetailsLookup::parse(path, size, details);
-  LOG_INF("FBR", "details parse done in %lu ms (%s): free=%lu contig=%lu", millis() - parseStart,
-          details.title.empty() ? "no title" : "ok", heapFree(), heapContig());
-
-  bool done = false;
-  {
-    RenderLock lock(*this);
-    for (auto& row : detailsCache) {
-      if (row.path != path || !row.needsParse) continue;
-      row.title = std::move(details.title);
-      row.subtitle = detailsSubtitle(details);
-      row.needsParse = false;
-    }
-    done = std::none_of(detailsCache.begin(), detailsCache.end(), [](const RowDetails& row) { return row.needsParse; });
-    if (done) detailsPending = false;
-  }
-  if (done) requestUpdate();
 }
 
 void FileBrowserActivity::clearFileMetadata(const std::string& fullPath) {
@@ -525,7 +418,7 @@ void FileBrowserActivity::materializeListWindow() {
     windowSubtitles[offset].clear();
     windowValues[offset].clear();
     if (details && !entry.empty() && entry.back() != '/' && index < drawnEnd) {
-      const RowDetails& row = rowDetails(base + entry, model.entrySize(index));
+      const BookRowResolver::Row& row = bookRows.row(base + entry, model.entrySize(index));
       if (!row.title.empty()) windowLabels[offset] = row.title;
       windowSubtitles[offset] = row.subtitle;
       windowValues[offset] = row.value;
@@ -753,7 +646,7 @@ void FileBrowserActivity::moveToFolder(const std::string& fullPath, const std::s
           GUI.drawPopup(renderer, message);
         } else {
           clearFileMetadata(fullPath);
-          clearDetails();
+          bookRows.clear();
           model.load();
           resetNavigation(nav.selected);
         }
@@ -939,7 +832,7 @@ void FileBrowserActivity::handleContextMenuAction(int action, const std::string&
     SETTINGS.saveToFile();
     // A row with no title of its own is titled by its filename, whose extension just may have
     // changed.
-    clearDetails();
+    bookRows.clear();
 
     // Re-apply ordering. The SD index is built for a specific sort mode, so when it's
     // active any sort change must re-open it (open() rebuilds on a mode mismatch);
@@ -1084,7 +977,7 @@ void FileBrowserActivity::doMarkAsRead(const std::string& fullPath) {
                            if (SETTINGS.removeFinishedBooksFromRecents) {
                              RECENT_BOOKS.removeBook(fullPath);
                            }
-                           clearDetails();  // its row now says Finished
+                           bookRows.clear();  // its row now says Finished
                            model.load();
                            resetNavigation(nav.selected);
                            requestUpdate(true);
@@ -1119,7 +1012,7 @@ void FileBrowserActivity::doDeleteCache(const std::string& fullPath, const std::
                          [this, fullPath](const ActivityResult& res) {
                            if (!res.isCancelled) {
                              clearFileMetadata(fullPath);
-                             clearDetails();  // its progress went with the cache
+                             bookRows.clear();  // its progress went with the cache
                              LOG_INF("FBR", "Cache deleted for: %s", fullPath.c_str());
                            }
                            requestUpdate();
@@ -1147,7 +1040,7 @@ void FileBrowserActivity::doRemove(const std::string& fullPath, const std::strin
                              }
                              if (deleted) {
                                LOG_DBG("FBR", "Deleted successfully");
-                               clearDetails();
+                               bookRows.clear();
                                model.load();
                                resetNavigation(nav.selected);
                                requestUpdate(true);
