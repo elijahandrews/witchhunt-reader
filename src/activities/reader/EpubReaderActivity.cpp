@@ -166,8 +166,19 @@ constexpr uint32_t PRE_RENDER_MIN_FREE_HEAP_BYTES = 44 * 1024;
 // 35 KB keeps the worst chapter's low at ~12.4 KB, 3 KB clear of the abort, and is met in most
 // quiet moments. A render never overlaps B's heap: it takes the buffer back and the live build
 // is discarded first (recoverSecondaryBufferIfNeeded).
+//
+// Now 14 KB (2026-10-01): a floor that predicts a whole build's cost will always be a guess, and a
+// cautious one keeps B from running at all -- on the X3 it read 31-36 KB and stayed in WaitHeap for
+// every chapter of a book. A build already protects itself while it runs, as the foreground build
+// does at whatever heap the reader has: the parser stops below MIN_FREE_HEAP_FOR_TEXT_LAYOUT_HARD
+// (9 KB) and leaves a truncated section, CSS lookups degrade instead of failing, an image header
+// that does not fit is refused -- and B discards every such result, skips that chapter and pauses
+// until the next one (backgroundPausedForChapter_). So the floor only has to get a build STARTED
+// before those checks take over: 9 KB of cushion, the ~2 KB a build's setup takes (X3, Venus in
+// Copper: start 49 276 -> setup done ~47 490, extraction another ~0.2 KB) and ~3 KB of margin.
+// What a build really cost is logged when it hands the buffer back (endBackgroundBorrow).
 #ifndef BG_BUILD_BORROW_MIN_FREE_HEAP_BYTES
-#define BG_BUILD_BORROW_MIN_FREE_HEAP_BYTES (35 * 1024)
+#define BG_BUILD_BORROW_MIN_FREE_HEAP_BYTES (14 * 1024)
 #endif
 #ifndef BG_BUILD_BORROW_MIN_CONTIG_HEAP_BYTES
 #define BG_BUILD_BORROW_MIN_CONTIG_HEAP_BYTES (12 * 1024)
@@ -253,19 +264,6 @@ constexpr uint32_t BG_BUILD_BUDGET_MS = 40;
 // rather than a per-section count.
 #ifndef BG_BUILD_LOOKAHEAD_PAGES
 #define BG_BUILD_LOOKAHEAD_PAGES 50
-#endif
-
-// Consecutive background builds discarded for want of heap before B stops pre-building this
-// book. Some books simply do not fit a background build: B works with the secondary framebuffer
-// borrowed, which is exactly when the largest free block is smallest, so every spine truncates
-// and is thrown away. Measured on a 154-page PDF conversion (~60 KB of XHTML per spine plus a
-// full-page scan): runs=132, completes=8 — each failure costing ~600 ms of parse and a 55-62 KB
-// partial section file streamed to SD and then deleted. Nothing is lost by stopping: those
-// builds were all discarded anyway, and the foreground path rebuilds each section cleanly with
-// the buffer released. Re-armed by anything that rebuilds the activity (reopening the book) or
-// by the next background build that does complete.
-#ifndef BG_BUILD_MAX_DISCARDED_RUNS
-#define BG_BUILD_MAX_DISCARDED_RUNS 3
 #endif
 
 // Foreground in-place section build (the "keep the secondary buffer" path). When heap is
@@ -1425,6 +1423,11 @@ bool EpubReaderActivity::beginBackgroundBorrow() {
   //    RED RAM from that makes the next page turn diff against the frame it is about to draw
   //    and leaves the page visibly unchanged.
   secondaryBufferDegraded_ = true;
+  // What this build will really cost: the heap's low point while it holds the buffer, read back
+  // in endBackgroundBorrow(). The allocator tracks it from here (it is a global setting, so the
+  // [MEM] ticks' "Min Free" shows the same local low until the buffer goes back).
+  backgroundBorrowFreeAtStart_ = static_cast<uint32_t>(esp_get_free_heap_size());
+  backgroundHeapLowTracked_ = heap_caps_monitor_local_minimum_free_size_start() == ESP_OK;
   LOG_INF("ERS", "Background-B: borrowed secondary buffer for spine %d build (%u bytes, free=%lu contig=%lu)",
           backgroundBuildSpineIndex_, static_cast<uint32_t>(borrowedSize),
           static_cast<unsigned long>(esp_get_free_heap_size()),
@@ -1465,8 +1468,17 @@ void EpubReaderActivity::endBackgroundBorrow() {
     backgroundBuildState_ = BackgroundBuildState::Probe;
     backgroundBuildGateCheckMs_ = 0;
   }
-  LOG_INF("ERS", "Background-B: returned secondary buffer (spine %d, %s, preemptions=%u)", backgroundBuildSpineIndex_,
-          buildWasLive ? "build discarded" : "no build live", static_cast<unsigned>(backgroundPreemptCount_));
+  uint32_t lowWhileLent = 0;
+  if (backgroundHeapLowTracked_) {
+    lowWhileLent = static_cast<uint32_t>(esp_get_minimum_free_heap_size());
+    heap_caps_monitor_local_minimum_free_size_stop();
+    backgroundHeapLowTracked_ = false;
+  }
+  LOG_INF("ERS",
+          "Background-B: returned secondary buffer (spine %d, %s, preemptions=%u; heap %lu at start, %lu lowest)",
+          backgroundBuildSpineIndex_, buildWasLive ? "build discarded" : "no build live",
+          static_cast<unsigned>(backgroundPreemptCount_), static_cast<unsigned long>(backgroundBorrowFreeAtStart_),
+          static_cast<unsigned long>(lowWhileLent));
   // A status refresh (clock minute, battery step) was held back while the buffer was lent; the
   // buffer is home, so draw it now. Not when a render is what took the buffer back: render()
   // clears the flag before it gets here, since it redraws the status bar anyway.
@@ -1542,6 +1554,7 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
   // the per-target state held below is then stale, and the cursor restarts at the new +1.
   if (backgroundBuildBaseSpine_ != currentSpineIndex) {
     resetBackgroundBuild();
+    backgroundPausedForChapter_ = false;  // a new chapter: B may try again
     backgroundBuildBaseSpine_ = currentSpineIndex;
     backgroundBuildSpineIndex_ = currentSpineIndex + 1;
     backgroundWindowPagesBuilt_ = 0;
@@ -1556,10 +1569,11 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
   // Only gate at a section boundary (state==Probe, no build in flight) so a section in progress is
   // never abandoned mid-build; the runway shrinks as the reader advances, re-opening the window.
   if (backgroundBuildState_ == BackgroundBuildState::Probe) {
-    // This book has proved it cannot be pre-built in the background. Gated here, at a section
-    // boundary with no build in flight, for the same reason as the page budget below: a section
-    // already in progress must never be abandoned holding the borrowed buffer.
-    if (backgroundDiscardedRuns_ >= BG_BUILD_MAX_DISCARDED_RUNS) {
+    // The last background build ran short of memory and was skipped: wait for the reader to
+    // enter the next chapter before trying another (see backgroundPausedForChapter_). Gated here,
+    // at a section boundary with no build in flight, for the same reason as the page budget
+    // below: a section already in progress must never be abandoned holding the borrowed buffer.
+    if (backgroundPausedForChapter_) {
       return;
     }
     const int currentTailPages = (section && section->pageCount > 0)
@@ -1739,16 +1753,14 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
                                : backgroundSection_->isFootnotePreviewsUnresolved() ? "footnotes unresolved"
                                : backgroundSection_->isImageHeaderDegraded()        ? "image degraded"
                                                                                     : "table row demoted";
-          LOG_INF("ERS", "Background build spine=%d %s; discarding for foreground rebuild", targetSpine, reason);
+          LOG_INF("ERS",
+                  "Background build spine=%d %s; discarding for foreground rebuild, look-ahead paused until the "
+                  "next chapter",
+                  targetSpine, reason);
           backgroundSection_->clearCache();
           backgroundSection_.reset();
-          if (backgroundDiscardedRuns_ < BG_BUILD_MAX_DISCARDED_RUNS) ++backgroundDiscardedRuns_;
-          if (backgroundDiscardedRuns_ >= BG_BUILD_MAX_DISCARDED_RUNS) {
-            LOG_INF("ERS", "Background pre-build off for this book: %u builds discarded in a row (foreground rebuilds)",
-                    backgroundDiscardedRuns_);
-          }
+          backgroundPausedForChapter_ = true;
         } else {
-          backgroundDiscardedRuns_ = 0;
 #if DEBUG_BACKGROUND_WORK
           bgCounters_.bCompletes++;
 #endif
@@ -1769,8 +1781,9 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
           imageWarmCleanSpine_ = -1;
         }
       } else {
-        LOG_ERR("ERS", "Background build spine=%d failed", targetSpine);
+        LOG_ERR("ERS", "Background build spine=%d failed; look-ahead paused until the next chapter", targetSpine);
         backgroundSection_.reset();
+        backgroundPausedForChapter_ = true;
       }
       // Terminal for this target: the build state is torn down either way, so give the borrowed
       // framebuffer back at once rather than holding it across the Settled tick — AA is off for
