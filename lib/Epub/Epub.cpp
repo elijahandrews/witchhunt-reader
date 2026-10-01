@@ -1485,7 +1485,8 @@ ThumbResult Epub::generateThumbBmp(int height, bool allowExtract, BuildArena* sc
   return ThumbResult::Ok;
 }
 
-ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, BuildArena* scratch) const {
+ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, BuildArena* scratch,
+                                   const bool crop) const {
   {
     FsFile existing;
     if (Storage.openFileForRead("EBP", getThumbBmpPath(width, height), existing)) {
@@ -1553,10 +1554,10 @@ ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, Bui
   bool success = false;
   if (detectedFormat == ImageFormatDetector::Format::Jpeg) {
     LOG_DBG("EBP", "Generating %dx%d thumb BMP from JPEG cover image", width, height);
-    success = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, scratch);
+    success = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, scratch, crop);
   } else {
     LOG_DBG("EBP", "Generating %dx%d thumb BMP from PNG cover image", width, height);
-    success = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height);
+    success = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, crop);
   }
 
   coverImage.close();

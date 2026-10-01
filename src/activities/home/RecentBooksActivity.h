@@ -14,10 +14,17 @@
 
 class RecentBooksActivity final : public Activity {
  public:
-  // Stored BMP dimensions — shared with FinishedBookActivity so one file serves both.
-  // The grid scales this BMP down to the runtime cell size for display (never up).
-  static constexpr int GRID_THUMB_WIDTH = 220;
+  // The stored thumbnail's box -- shared with FinishedBookActivity and Browse Files' Covers view, so
+  // one file serves all three. The cover is FITTED inside it (GRID_THUMB_CROP false), whole: a 2:3
+  // cover comes out about 160x240, a square one 196x196. Filling the box and cropping, as the
+  // carousel does, cut a third off the top and bottom of every ordinary cover.
+  //
+  // 196 is the widest the narrowest cell takes without a rescale (CoverGridLayout::kMinCellWidth
+  // less the frame): a dithered 1-bit image must never be resampled. Both numbers are in the cache
+  // filename, so changing either regenerates every grid cover.
+  static constexpr int GRID_THUMB_WIDTH = 196;
   static constexpr int GRID_THUMB_HEIGHT = 240;
+  static constexpr bool GRID_THUMB_CROP = false;
   // Largest cover box the grid will draw: the stored BMP height plus the 1 px frame on each side.
   // A height-bound cover (the usual ~2:3 shape fills the slot's height, not its width) then draws
   // 1:1 instead of being resampled — rescaling a dithered 1-bit image aliases its dither into a

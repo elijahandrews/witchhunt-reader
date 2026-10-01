@@ -225,7 +225,10 @@ class Epub {
   // owns a session-scoped counter that promotes a repeatedly-transient book to a sentinel.
   // `scratch`: a lent region for the JPEG decoder's working memory (see JpegToBmpConverter).
   ThumbResult generateThumbBmp(int height, bool allowExtract = true, BuildArena* scratch = nullptr) const;
-  ThumbResult generateThumbBmp(int width, int height, bool allowExtract = true, BuildArena* scratch = nullptr) const;
+  // crop=false fits the whole cover inside width x height instead of filling the box and cropping
+  // (the cover grids' thumbnail; the carousel's stays cropped).
+  ThumbResult generateThumbBmp(int width, int height, bool allowExtract = true, BuildArena* scratch = nullptr,
+                               bool crop = true) const;
   // Every size in `sizes` (width, height) that is not already a complete thumbnail, from ONE decode
   // of a JPEG cover (a PNG cover is converted once per size). Same sentinel / transient contract as
   // the single-size overload, answered for the cover as a whole: Ok when every size is complete.
