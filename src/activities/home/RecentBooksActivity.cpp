@@ -176,7 +176,7 @@ bool RecentBooksActivity::loadNextCover() {
     // resolved cover — no re-opening the EPUB three times per scan to rediscover it has no cover.
     const bool valid = ReaderActivity::isCoverThumbComplete(thumbPath, tw, th);
     if (!valid) {
-      const ThumbResult res = ReaderActivity::ensureCoverThumb(book.path, tw, th);
+      const ThumbResult res = ReaderActivity::ensureCoverThumb(book.path, tw, th, nullptr, GRID_THUMB_CROP);
       const bool ok = (res == ThumbResult::Ok);
       const bool wasPostFailure = pngSessionFailed;
       pngSessionFailed = false;  // consumed
@@ -187,7 +187,7 @@ bool RecentBooksActivity::loadNextCover() {
       // nextCoverIndex never advanced, and the cover was re-inflated from the ZIP every ~1.3 s
       // forever (observed on an EPUB whose "cover.png" is really an AVIF). Mirrors HomeActivity.
       if (res == ThumbResult::TransientFail && !wasPostFailure) {
-        pngSession = ReaderActivity::beginPngThumbSession(book.path, tw, th, pngSessionFiles);
+        pngSession = ReaderActivity::beginPngThumbSession(book.path, tw, th, pngSessionFiles, nullptr, GRID_THUMB_CROP);
         if (pngSession) {
           LOG_DBG("RBA", "Started PNG session for %s (%u rows)", book.path.c_str(), pngSession->totalRows());
           return false;
@@ -612,12 +612,13 @@ void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, in
 
   if (selected) {
     renderer.fillRect(cellX, cellY, tw, cellFillHeight);
-    renderer.drawRect(cellX, cellY, tw, th, false);
   } else {
     // Clear to white before redrawing (needed when deselecting)
     renderer.fillRect(cellX, cellY, tw, cellFillHeight, false);
-    renderer.drawRect(cellX, cellY, tw, th);
   }
+  // The frame goes round what the cell shows: the whole cell for the loading text or a coverless
+  // book, but tight round a cover -- a fitted cover (GRID_THUMB_CROP) is narrower than the cell.
+  Rect frame{cellX, cellY, tw, th};
 
   if (!book.coverBmpPath.empty()) {
     const std::string thumbPath = gridThumbPath(book.coverBmpPath, GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT);
@@ -648,6 +649,8 @@ void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, in
           renderer.fillRect(cellX + offsetX, cellY + offsetY, rendW, rendH, false);
           renderer.drawBitmap1Bit(bmp, cellX + offsetX, cellY + offsetY, rendW, rendH);
           thumbDrawn = true;
+          // Not round the 1x1 placeholder of a book with no cover: that cell stays an empty box.
+          if (imgW > 1 && imgH > 1) frame = Rect{cellX + offsetX - 1, cellY + offsetY - 1, rendW + 2, rendH + 2};
         }
       }
       file.close();
@@ -665,10 +668,12 @@ void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, in
     renderer.fillRect(cellX + 1, cellY + 1, tw - 2, th - 2, false);
   }
 
+  renderer.drawRect(frame.x, frame.y, frame.width, frame.height, !selected);
+
   // Reading-progress overlay on the cover: bottom-edge bar while in progress,
   // folded corner when finished, nothing for unread books.
   const int progressPercent = (index >= 0 && index < static_cast<int>(bookProgress.size())) ? bookProgress[index] : -1;
-  BookProgressPresentation::drawIndicator(renderer, Rect{cellX, cellY, tw, th}, progressPercent);
+  BookProgressPresentation::drawIndicator(renderer, frame, progressPercent);
 
   // Label: title line 1, author line 2; white text on black for selected, black on white otherwise
   const bool black = !selected;

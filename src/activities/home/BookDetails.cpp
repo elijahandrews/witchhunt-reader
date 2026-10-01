@@ -26,19 +26,19 @@ bool cached(const std::string& bookPath, const uint32_t bookSize, BookDetails& o
   return BookDetailsCache::read(path, bookSize, SidecarFiles::metadataStamp(bookPath), out);
 }
 
-void parse(const std::string& bookPath, const uint32_t bookSize, BookDetails& out) {
+bool parse(const std::string& bookPath, const uint32_t bookSize, BookDetails& out, BuildArena* scratch) {
   out = {};
   Epub epub(bookPath, "/.crosspoint");
   // Fast when the book has been opened (book.bin), an OPF parse when not; the .opf sidecar is
   // applied either way.
-  if (epub.loadForMetadata()) {
-    out.title = epub.getTitle();
-    out.author = epub.getAuthor();
-    out.series = epub.getSeries();
-    out.seriesIndex = epub.getSeriesIndex();
-  }
+  if (!epub.loadForMetadata(scratch)) return false;
+  out.title = epub.getTitle();
+  out.author = epub.getAuthor();
+  out.series = epub.getSeries();
+  out.seriesIndex = epub.getSeriesIndex();
   epub.setupCacheDir();
   BookDetailsCache::write(detailsPath(epub), bookSize, SidecarFiles::metadataStamp(bookPath), out);
+  return true;
 }
 
 }  // namespace BookDetailsLookup

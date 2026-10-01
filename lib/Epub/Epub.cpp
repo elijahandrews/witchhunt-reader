@@ -905,6 +905,7 @@ uint32_t coverMemoKeySize(const std::string& path) {
 void Epub::clearCoverMetadataMemo() { g_coverMemo = CoverMetadataMemo{}; }
 
 bool Epub::loadForCover(BuildArena* scratch) {
+  coverKnownAbsent_ = false;
   struct ScratchScope {
     BuildArena*& slot;
     ~ScratchScope() { slot = nullptr; }
@@ -926,7 +927,10 @@ bool Epub::loadForCover(BuildArena* scratch) {
   const uint32_t memoKey = coverMemoKeySize(filepath);
   if (memoKey != 0 && g_coverMemo.valid && g_coverMemo.size == memoKey && g_coverMemo.path == filepath) {
     bookMetadataCache->coreMetadata = g_coverMemo.meta;
-    if (bookMetadataCache->coreMetadata.coverItemHref.empty()) return false;
+    if (bookMetadataCache->coreMetadata.coverItemHref.empty()) {
+      coverKnownAbsent_ = true;
+      return false;
+    }
     bookMetadataCache->markCoverMetadataLoaded();
     applyMetadataSidecar();
     return true;
@@ -942,12 +946,18 @@ bool Epub::loadForCover(BuildArena* scratch) {
   // Memoized even when there is no cover: "this book has none" is exactly the answer the next
   // three calls would otherwise re-parse the OPF to rediscover.
   if (memoKey != 0) {
+    // A fresh entry, not the old one edited: the stored-cover answer (stored / storedOffset /
+    // storedSize) belongs to the book it was asked for. Keeping it handed this book the previous
+    // book's cover location -- decoded at that offset in THIS file, rejected as an unsupported
+    // image, and recorded as a book without a cover for good.
+    g_coverMemo = CoverMetadataMemo{};
     g_coverMemo.path = filepath;
     g_coverMemo.size = memoKey;
     g_coverMemo.meta = bookMetadataCache->coreMetadata;
     g_coverMemo.valid = true;
   }
   if (bookMetadataCache->coreMetadata.coverItemHref.empty()) {
+    coverKnownAbsent_ = true;
     return false;  // no discoverable cover — caller shows a placeholder
   }
   // Mark loaded so ensureCoverImageCached()'s isLoaded() gate passes. Spine/TOC stay empty — the
@@ -957,10 +967,15 @@ bool Epub::loadForCover(BuildArena* scratch) {
   return true;
 }
 
-bool Epub::loadForMetadata() {
+bool Epub::loadForMetadata(BuildArena* scratch) {
   // Metadata-only load: see the header for why this exists (issue #104 — the series-sequel scan used
   // to full-load every EPUB in the folder). Structured exactly like loadForCover(); the only
   // difference is which field the caller goes on to read, so neither marks the other's data valid.
+  struct ScratchScope {
+    BuildArena*& slot;
+    ~ScratchScope() { slot = nullptr; }
+  } scratchScope{loadScratch_};
+  loadScratch_ = (scratch != nullptr && scratch->valid()) ? scratch : nullptr;
   bookMetadataCache.reset(new BookMetadataCache(cachePath));
   cssParser.reset(new CssParser(cachePath));  // constructed for API symmetry; not parsed here
 
@@ -1485,7 +1500,8 @@ ThumbResult Epub::generateThumbBmp(int height, bool allowExtract, BuildArena* sc
   return ThumbResult::Ok;
 }
 
-ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, BuildArena* scratch) const {
+ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, BuildArena* scratch,
+                                   const bool crop) const {
   {
     FsFile existing;
     if (Storage.openFileForRead("EBP", getThumbBmpPath(width, height), existing)) {
@@ -1553,10 +1569,10 @@ ThumbResult Epub::generateThumbBmp(int width, int height, bool allowExtract, Bui
   bool success = false;
   if (detectedFormat == ImageFormatDetector::Format::Jpeg) {
     LOG_DBG("EBP", "Generating %dx%d thumb BMP from JPEG cover image", width, height);
-    success = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, scratch);
+    success = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, scratch, crop);
   } else {
     LOG_DBG("EBP", "Generating %dx%d thumb BMP from PNG cover image", width, height);
-    success = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height);
+    success = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(coverImage, thumbBmp, width, height, crop);
   }
 
   coverImage.close();

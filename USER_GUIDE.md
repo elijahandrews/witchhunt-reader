@@ -136,7 +136,10 @@ The Browse Files screen is a full-featured browser for your books and the folder
 * **Filenames** (the default) lists each book by its filename.
 * **Details** shows each EPUB's title from its metadata, with the author and series underneath (for example "Thomas Mann · Werke #3"), and how far you have read on the right: a percentage, or **Finished**. An `.opf` metadata file beside the book overrides what is inside the book, as everywhere else. TXT, Markdown and XTC books keep their filename, with the percentage.
 
-The first time a folder shows an EPUB you have never opened, its row shows the filename for a moment while the book is read. The screen then redraws once with the details, and after that they come up at once. Sorting and **Search** still go by filename, and **Search all folders** lists its results by filename in either view.
+* **Covers** shows the folder as a grid of covers, with the title and author under each. Each cover is shown whole, scaled to fit, never cropped. A finished book has a folded corner and one you are reading a bar along the bottom. A folder appears as a folder the size of a cover, with the number of books in it and in all the folders below it (up to "999+"; "..." while they are being counted). **Up**/**Down** move from cover to cover, **Left**/**Right** turn the page, and on a touch screen a tap selects a cover, a second tap opens it, and a swipe turns the page. Hold the page-forward button for the options menu: its hint reads **» / Options** whenever the folder runs to more than one page.
+  * A book whose cover has not been made yet shows a card with its title at first. The covers of the page on screen are then made one at a time, and each appears as soon as it is ready. Pressing a button pauses this, so the screen stays responsive. A large cover can take several seconds. A cover is made once and kept, and the Recent Books grid and the "book finished" screen use the same ones. A book with no cover at all keeps its title card; if making a cover fails, it is tried again the next time you open the folder.
+
+The first time a folder shows an EPUB you have never opened, its row or card shows the filename for a moment while the book is read. The screen then redraws once with the details, and after that they come up at once. Sorting and **Search** still go by filename, and **Search all folders** lists its results by filename in every view.
 
 #### Sorting
 
@@ -326,7 +329,7 @@ The Settings screen allows you to configure the device's behavior.
   - On the keyboard, hold **Confirm** on a key (or long-press it on a touch screen) for its alternate letter, such as an accented one or Ukrainian ґ and the extra Kazakh letters, or for the other case. Holding **Confirm** on Delete clears the whole text. Shift applies to the next letter only, and `-`, `=`, `.` and `,` are on the symbols page (**?123**).
 - **Show Hidden Files**: Show files and folders whose names start with `.`. "ON" / "OFF"
 - **Show File Extensions**: Show file extensions in the file browser. "ON" / "OFF"
-- **Book view**: How [Browse Files](#33-browse-files-screen) shows books. "Filenames" / "Details"
+- **Book view**: How [Browse Files](#33-browse-files-screen) shows books. "Filenames" / "Details" / "Covers"
 
 **Network**:
 - **WiFi Networks**: Add, remove, and connect to WiFi networks. If WiFi was switched on here, leaving the screen restarts the device quickly and returns to Settings. That frees the memory WiFi used; every screen that uses WiFi does the same.

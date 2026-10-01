@@ -94,9 +94,11 @@ std::string convertSidecarToBmp(const std::string& cacheDir, const std::string& 
 
   bool ok = false;
   if (FsHelpers::hasJpgExtension(sidecarPath)) {
-    ok = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(src, dst, width, height);
+    ok = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(src, dst, width, height, nullptr,
+                                                             RecentBooksActivity::GRID_THUMB_CROP);
   } else if (FsHelpers::hasPngExtension(sidecarPath)) {
-    ok = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(src, dst, width, height);
+    ok = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(src, dst, width, height,
+                                                           RecentBooksActivity::GRID_THUMB_CROP);
   } else if (FsHelpers::hasBmpExtension(sidecarPath)) {
     uint8_t buffer[1024];
     while (src.available()) {
@@ -187,7 +189,8 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
       if (!metadata.series.empty() && !epub.getSeriesIndex().empty()) {
         metadata.series += " #" + epub.getSeriesIndex();
       }
-      if (epub.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight) == ThumbResult::Ok) {
+      if (epub.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, /*allowExtract=*/true, nullptr,
+                                RecentBooksActivity::GRID_THUMB_CROP) == ThumbResult::Ok) {
         metadata.coverPath = epub.getThumbBmpPath(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
       } else {
         metadata.coverPath = getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);

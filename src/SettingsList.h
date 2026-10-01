@@ -603,8 +603,8 @@ inline std::vector<SettingInfo> buildSettingsList() {
                                          "showFileExtensions", StrId::STR_CAT_SYSTEM)
                          .withSubmenu(StrId::STR_SHOW_FILES));
   settings.push_back(SettingInfo::Enum(StrId::STR_BROWSER_VIEW, &CrossPointSettings::fileBrowserView,
-                                       {StrId::STR_VIEW_FILENAMES, StrId::STR_VIEW_DETAILS}, "fileBrowserView",
-                                       StrId::STR_CAT_SYSTEM)
+                                       {StrId::STR_VIEW_FILENAMES, StrId::STR_VIEW_DETAILS, StrId::STR_VIEW_COVERS},
+                                       "fileBrowserView", StrId::STR_CAT_SYSTEM)
                          .withSubmenu(StrId::STR_SHOW_FILES));
   settings.push_back(SettingInfo::Toggle(StrId::STR_INCLUDE_BETA_UPDATES, &CrossPointSettings::includeBetaUpdates,
                                          "includeRcUpdates", StrId::STR_CAT_SYSTEM));
