@@ -150,12 +150,22 @@ static inline uint32_t floatBits(const float f) {
 // stable point puts it next to the other permanent allocations instead.
 //
 // Idempotent, and failure is non-fatal: scaled text renders uncached, exactly as before.
-bool GfxRenderer::ensureScaledGlyphCache() const {
-  if (scaledGlyphArena_) return true;
-  if (scaledGlyphOom_) return false;  // already failed once; don't thrash the heap
-  // Larger when a synthesised body size exists, because then the arena holds a whole page's
+bool GfxRenderer::ensureScaledGlyphCache(const int bodyFontId) const {
+  // Larger when the body text is a synthesised size, because then the arena holds a whole page's
   // glyphs at up to 26 pt rather than a few CSS-scaled words. See SCALED_GLYPH_ARENA_BYTES_SYNTH.
-  scaledGlyphArenaBytes_ = fontBaseScales.empty() ? SCALED_GLYPH_ARENA_BYTES : SCALED_GLYPH_ARENA_BYTES_SYNTH;
+  const uint16_t wanted = (bodyFontId != 0 && fontBaseScales.count(bodyFontId) != 0) ? SCALED_GLYPH_ARENA_BYTES_SYNTH
+                                                                                     : SCALED_GLYPH_ARENA_BYTES;
+  if (scaledGlyphArena_) {
+    if (bodyFontId == 0 || scaledGlyphArenaBytes_ == wanted) return true;
+    // The last book was read at the other kind of size. Replaced here, at the same stable point
+    // the first one was taken at; the entries go with it, as the masks they point at do.
+    scaledGlyphArena_.reset();
+    scaledGlyphEntries_.reset();
+    scaledGlyphCount_ = 0;
+    scaledGlyphUsed_ = 0;
+  }
+  if (scaledGlyphOom_) return false;  // already failed once; don't thrash the heap
+  scaledGlyphArenaBytes_ = wanted;
   auto entries = makeUniqueNoThrow<ScaledGlyphEntry[]>(SCALED_GLYPH_MAX_ENTRIES);
   auto arena = makeUniqueNoThrow<uint8_t[]>(scaledGlyphArenaBytes_);
   if (!entries || !arena) {

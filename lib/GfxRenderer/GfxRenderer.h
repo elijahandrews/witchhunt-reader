@@ -145,8 +145,10 @@ class GfxRenderer {
   // times per page instead of once, and at ~1 ms per glyph at these sizes that is 60-120 ms a
   // page turn on exactly the sizes added for readers who need them most.
   //
-  // Chosen only when a scaled font is registered, so a build that ships every size for real
-  // keeps the smaller block. +4,608 B, permanent, taken at reader entry like the rest of it.
+  // Chosen only when the body text itself is a synthesised size (ensureScaledGlyphCache's
+  // bodyFontId), so a reader at a real size keeps the smaller block. It used to follow "is any
+  // scaled font registered" -- which main.cpp always does for 22/24/26 pt, so every reader paid
+  // the +4,608 B, permanently, whatever size they read at.
   static constexpr uint16_t SCALED_GLYPH_ARENA_BYTES_SYNTH = 8192;
   mutable uint16_t scaledGlyphArenaBytes_ = SCALED_GLYPH_ARENA_BYTES;  // actual size once allocated
   // One outsized glyph (a large heading) must not evict a page's whole body-text
@@ -161,7 +163,10 @@ class GfxRenderer {
  public:
   // Allocate the scaled-glyph cache now rather than on first scaled glyph. Call at a stable
   // point (reader entry); see the definition for why the timing matters more than the size.
-  bool ensureScaledGlyphCache() const;
+  // `bodyFontId` is the font the reader is about to lay its text out in: the larger arena only
+  // when that size is synthesised (insertScaledFont), and a cache of the other size from the last
+  // book is replaced here. 0 (unknown) keeps whatever is there, or takes the smaller one.
+  bool ensureScaledGlyphCache(int bodyFontId = 0) const;
 
  private:
   mutable std::atomic<unsigned int> refreshOverride = REFRESH_OVERRIDE_NONE;

@@ -630,11 +630,6 @@ void EpubReaderActivity::onEnter() {
   // reader rather than from millis()==0. Otherwise B's quiet check is satisfied before the book
   // has drawn anything, which is the worst possible moment to take the display buffer.
   lastPageOnScreenMs_ = millis();
-  // Take the scaled-glyph cache now, while the heap is still whole. It is ~4.9 KB that is never
-  // released, and allocating it on first use meant a permanent block landed wherever the first
-  // heading happened to be drawn — measured on X3 as 5120 of contig lost inside a mid-build page
-  // draw, for the rest of the session. Here it sits with the other permanent allocations.
-  renderer.ensureScaledGlyphCache();
   secondaryBufferDegraded_ = !renderer.hasSecondaryBuffer();
   // Cold open: arm the dramatic-transition HALF for the first section entry only (cleared by any
   // non-incremental entry in buildSection). Also clear any stale post-popup HALF left armed if the
@@ -736,9 +731,15 @@ void EpubReaderActivity::onEnter() {
   if (!series.empty() && !epub->getSeriesIndex().empty()) {
     series += " #" + epub->getSeriesIndex();
   }
-  RECENT_BOOKS.addBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), series,
-                       ReaderActivity::coverThumbPlaceholder(epub->getPath()));
-  const RecentBook currentBook = RECENT_BOOKS.getBookByPath(epub->getPath());
+  RecentBook currentBook;
+  {
+    // One load of the list for both: the add and the read of this book's overrides. Released
+    // again before the reader allocates anything of its own.
+    const RecentBooksStore::Hold recents;
+    RECENT_BOOKS.addBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), series,
+                         ReaderActivity::coverThumbPlaceholder(epub->getPath()));
+    currentBook = RECENT_BOOKS.getBookByPath(epub->getPath());
+  }
   bookEmbeddedStyleOverride = currentBook.embeddedStyleOverride;
   bookImageRenderingOverride = currentBook.imageRenderingOverride;
   bookFontFamilyOverride = currentBook.fontFamilyOverride;
@@ -752,6 +753,16 @@ void EpubReaderActivity::onEnter() {
   bookGuideDotsOverride = currentBook.guideDotsOverride;
   bookInlineFootnotePreviewsOverride = currentBook.inlineFootnotePreviewsOverride;
   logReaderMemSnapshot("onEnter_after_recent_books");
+
+  // Take the scaled-glyph cache now, before any page is laid out. It is never released, and
+  // allocating it on first use meant a permanent block landed wherever the first heading happened
+  // to be drawn -- measured on X3 as 5120 of contig lost inside a mid-build page draw, for the
+  // rest of the session. Here it sits with the other permanent allocations. Sized for the body
+  // font this book reads in, now that its overrides are known: ~4.9 KB at a real size, ~9.5 KB
+  // when the size is synthesised. A size changed mid-book keeps the cache it has until the next
+  // book opens -- more resampling there, never a wrong glyph.
+  renderer.ensureScaledGlyphCache(getEffectiveReaderFontId());
+  logReaderMemSnapshot("onEnter_after_glyph_cache");
 
   // Start a reading-stats session. We use the cheap filename-based hash here:
   // computing the content hash would re-read the file on every reader open,
