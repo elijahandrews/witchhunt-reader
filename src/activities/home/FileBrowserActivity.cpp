@@ -147,8 +147,19 @@ void FileBrowserActivity::resolvePendingDetails() {
     size = it->size;
   }
 
+  // Logged until the occasional first-visit reboot in Details is understood: what the heap held
+  // going into a parse and coming out of it, and how long the parse took.
+  const auto heapFree = [] { return static_cast<unsigned long>(esp_get_free_heap_size()); };
+  const auto heapContig = [] {
+    return static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
+  };
+  LOG_INF("FBR", "details parse %s: free=%lu contig=%lu minFree=%lu", path.c_str(), heapFree(), heapContig(),
+          static_cast<unsigned long>(esp_get_minimum_free_heap_size()));
+  const unsigned long parseStart = millis();
   BookDetails details;
   BookDetailsLookup::parse(path, size, details);
+  LOG_INF("FBR", "details parse done in %lu ms (%s): free=%lu contig=%lu", millis() - parseStart,
+          details.title.empty() ? "no title" : "ok", heapFree(), heapContig());
 
   bool done = false;
   {
