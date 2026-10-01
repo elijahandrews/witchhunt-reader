@@ -48,10 +48,10 @@ FileBrowserActivity::FileBrowserActivity(GfxRenderer& renderer, MappedInputManag
     : UiListActivity("FileBrowser", renderer, mappedInput),
       model(mode),
       focusName(std::move(focusName)),
-      coverLoader(std::make_unique<CoverThumbLoader>(RecentBooksActivity::GRID_THUMB_WIDTH,
-                                                     RecentBooksActivity::GRID_THUMB_HEIGHT,
-                                                     RecentBooksActivity::GRID_THUMB_CROP)) {
+      coverLoader(std::make_unique<CoverThumbLoader>()) {
   model.setPath(std::move(initialPath));
+  const std::pair<int, int> gridThumb{RecentBooksActivity::GRID_THUMB_WIDTH, RecentBooksActivity::GRID_THUMB_HEIGHT};
+  coverLoader->configure(&gridThumb, 1, RecentBooksActivity::GRID_THUMB_CROP);
 }
 
 FileBrowserActivity::~FileBrowserActivity() = default;
