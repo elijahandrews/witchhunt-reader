@@ -480,6 +480,11 @@ class EpubReaderActivity final : public Activity {
   // since (heap_caps_monitor_local_minimum_free_size_start): logged when the buffer goes back.
   uint32_t backgroundBorrowFreeAtStart_ = 0;
   bool backgroundHeapLowTracked_ = false;
+  // B is building the next chapter while the reader is on the last few pages of this one, so its
+  // borrow survives page turns instead of being taken back by every render (see
+  // BG_BUILD_THROUGH_PAGES). Those pages draw in BW with no pre-render. Cleared when the buffer
+  // goes back or the build passes to the foreground.
+  bool backgroundBuildThrough_ = false;
   // One-shot Background-A re-arm latch (see serviceBackgroundWork): the (spine, page)
   // whose pre-render was already retried after the deferred AA released its memory.
   // Bounds retries to one per displayed page so an image-only next page (which can
@@ -700,6 +705,9 @@ class EpubReaderActivity final : public Activity {
   // --- render() pass dispatch (see RenderPass) ---
   // Opportunistically restore the secondary display buffer if a prior OOM degraded it.
   void recoverSecondaryBufferIfNeeded();
+  // The reader is within BG_BUILD_THROUGH_PAGES of the end of the chapter on screen, on a panel
+  // that can show pages while Background-B holds the secondary buffer (X3).
+  bool nearChapterEndForBuildThrough() const;
   // Realloc the secondary buffer, evicting rebuildable caches (FDC page slots, CSS
   // resolve caches) that a released build may have planted inside the freed hole and
   // retrying once before reporting failure. Shared by the post-build and opportunistic

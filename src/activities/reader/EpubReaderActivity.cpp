@@ -233,6 +233,25 @@ constexpr uint32_t LARGEST_FREE_BLOCK_SLACK = 16;
 #define BG_BUILD_BORROW_QUIET_MS 1500UL
 #endif
 
+// Build-through: on the last pages of a chapter, B's build of the NEXT chapter keeps the borrowed
+// buffer across page turns instead of being discarded by each one, and it starts without waiting
+// for BG_BUILD_BORROW_QUIET_MS. A reader moving fast enough never leaves a quiet window -- X3,
+// 2026-10-01: turns 1-2 s apart through a 26-page chapter, B waited 10 s without starting and the
+// next chapter opened on "Indexing". A text chapter builds in 0.4-1 s of slices, which fits into
+// the waveforms of the few turns left.
+//
+// The price is paid on those pages only, and only while the build runs: they draw in BW with the
+// normal refresh, without anti-aliasing or a pre-render of the page after. At that pace the AA was
+// already being lost ("AA replay skipped: page preempted by navigation"). If the reader reaches
+// the next chapter first, Background-C adopts the live build (see buildSection).
+//
+// X3 only: its controller keeps the displayed frame as the diff baseline, so a FAST refresh needs
+// no host-side copy of the previous frame. The X4 would first need its RED RAM seeded from the
+// frame on screen, which the buffer B borrows may no longer hold.
+#ifndef BG_BUILD_THROUGH_PAGES
+#define BG_BUILD_THROUGH_PAGES 3
+#endif
+
 // The image lane's settle after a page turn, a draw or a preempted decode (see
 // stepImageWarmLocked). Short on purpose: the lane also waits for any gesture in flight and for
 // the deferred AA pass, which are the real hazards; this only keeps a fast flipper from being
@@ -1456,6 +1475,7 @@ void EpubReaderActivity::endBackgroundBorrow() {
   buildScratch_.reset();
   renderer.returnSecondaryBuffer();  // cannot fail: the region never entered the heap
   backgroundBorrowActive_ = false;
+  backgroundBuildThrough_ = false;
   secondaryBorrowed_ = false;
   secondaryBufferDegraded_ = false;
   backgroundBuildPercent_ = -1;
@@ -1528,7 +1548,7 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
   // nice-to-have (page-turn latency), not correctness — but a floor that rejects it constantly is
   // still evidence the floors are mistuned.
   const bool preRenderWanted =
-      !preRenderedPage.ready && section->currentPage + 1 < section->pageCount &&
+      !preRenderedPage.ready && !backgroundBuildThrough_ && section->currentPage + 1 < section->pageCount &&
       lastRenderedSpineIndex_ == currentSpineIndex && lastRenderedPageIndex_ == section->currentPage &&
       (preRenderRearmSpine_ != currentSpineIndex || preRenderRearmPage_ != section->currentPage);
   if (preRenderWanted && preRenderFree < PRE_RENDER_MIN_FREE_HEAP_BYTES) {
@@ -1668,11 +1688,19 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
       // when everything else it does lives in the borrowed arena, so it needs the margin on top.
       const uint32_t borrowFreeFloor =
           BG_BUILD_BORROW_MIN_FREE_HEAP_BYTES + (backgroundBuildNeedsResolve_ ? BG_BUILD_RESOLVE_EXTRA_HEAP_BYTES : 0);
-      if (!inputQueued && (now - lastActivityMs) >= BG_BUILD_BORROW_QUIET_MS &&
+      // The next chapter, a few pages away, does not wait for a quiet window: page turns no longer
+      // discard its build (see BG_BUILD_THROUGH_PAGES).
+      const bool buildThrough = targetSpine == currentSpineIndex + 1 && nearChapterEndForBuildThrough();
+      if (!inputQueued && (buildThrough || (now - lastActivityMs) >= BG_BUILD_BORROW_QUIET_MS) &&
           esp_get_free_heap_size() >= borrowFreeFloor &&
           heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT) >=
               BG_BUILD_BORROW_MIN_CONTIG_HEAP_BYTES - LARGEST_FREE_BLOCK_SLACK &&
           beginBackgroundBorrow()) {
+        backgroundBuildThrough_ = buildThrough;
+        if (buildThrough) {
+          LOG_INF("ERS", "Background-B: building spine %d through page turns (page %d of %u)", targetSpine,
+                  section->currentPage + 1, section->pageCount);
+        }
         backgroundBuildState_ = BackgroundBuildState::Building;
         return;
       }
@@ -3450,7 +3478,28 @@ EpubReaderActivity::PageLinkInfo EpubReaderActivity::pageLinkInfoForCurrentPage(
   return info;
 }
 
+bool EpubReaderActivity::nearChapterEndForBuildThrough() const {
+  if (!renderer.isX3() || !section || section->hasActiveBuild() || section->pageCount == 0) return false;
+  return static_cast<int>(section->pageCount) - 1 - section->currentPage <= BG_BUILD_THROUGH_PAGES;
+}
+
 void EpubReaderActivity::recoverSecondaryBufferIfNeeded() {
+  // Build-through (BG_BUILD_THROUGH_PAGES): B is building the next chapter and the reader is
+  // finishing this one, so the build keeps the buffer and this page draws without it. Engaged by
+  // the first render that finds the reader that close, when B did not already start in that mode.
+  // Also kept when the reader has just turned INTO that chapter, so buildSection() adopts the
+  // live build instead of starting it over. Any other move takes the buffer back as below.
+  if (backgroundBorrowActive_ && backgroundSection_ && backgroundSection_->hasActiveBuild()) {
+    const bool nextChapter = backgroundBuildSpineIndex_ == currentSpineIndex + 1;
+    if (!backgroundBuildThrough_ && nextChapter && nearChapterEndForBuildThrough()) {
+      backgroundBuildThrough_ = true;
+      LOG_INF("ERS", "Background-B: page %d of %u reached mid-build; building spine %d through page turns",
+              section->currentPage + 1, section->pageCount, backgroundBuildSpineIndex_);
+    }
+    if (backgroundBuildThrough_ && (nextChapter || backgroundBuildSpineIndex_ == currentSpineIndex)) {
+      return;
+    }
+  }
   // A render is about to draw page content, and AA is gated on a RESIDENT secondary buffer
   // (see renderContents). If Background-B is building inside the borrowed one, take it back
   // first — otherwise this frame silently renders BW. No-op unless B holds it, which is the
@@ -3666,7 +3715,9 @@ bool EpubReaderActivity::renderBufferDisplayPass(const RenderLayout& layout) {
   pendingProgressSave.pageCount = section->pageCount;
   pendingProgressSave.pending.store(true, std::memory_order_release);
 
-  if (section->currentPage + 1 < section->pageCount) {
+  // Not during a build-through: the X3's frame buffer is the only one, and it must keep the page
+  // on screen until the buffer goes back (see BG_BUILD_THROUGH_PAGES).
+  if (!backgroundBuildThrough_ && section->currentPage + 1 < section->pageCount) {
     pendingPreRender = true;
     markStagedForCurrentPage();
     requestUpdate();
@@ -3679,7 +3730,7 @@ bool EpubReaderActivity::renderBufferDisplayPass(const RenderLayout& layout) {
 
 void EpubReaderActivity::renderPreRenderPass(const RenderLayout& layout) {
   // Pre-render pass: render next page content into the frame buffer (no status bar, no flush).
-  if (!section || preRenderedPage.ready || backgroundWorkSuspended_) {
+  if (!section || preRenderedPage.ready || backgroundWorkSuspended_ || backgroundBuildThrough_) {
     return;
   }
   const int nextPage = section->currentPage + 1;
@@ -4194,7 +4245,18 @@ bool EpubReaderActivity::buildSection(const RenderLayout& layout) {
     // endBackgroundBorrow() and yank the arena out from under the build we just adopted.
     if (backgroundBorrowActive_) {
       backgroundBorrowActive_ = false;
-      LOG_INF("ERS", "Background-B borrow transferred to Background-C for spine %d", currentSpineIndex);
+      backgroundBuildThrough_ = false;
+      // B's part of the build ends here: read its heap low now, or the monitor stays on for good
+      // (endBackgroundBorrow() never runs for a transferred borrow).
+      uint32_t lowWhileLent = 0;
+      if (backgroundHeapLowTracked_) {
+        lowWhileLent = static_cast<uint32_t>(esp_get_minimum_free_heap_size());
+        heap_caps_monitor_local_minimum_free_size_stop();
+        backgroundHeapLowTracked_ = false;
+      }
+      LOG_INF("ERS", "Background-B borrow transferred to Background-C for spine %d (heap %lu at start, %lu lowest)",
+              currentSpineIndex, static_cast<unsigned long>(backgroundBorrowFreeAtStart_),
+              static_cast<unsigned long>(lowWhileLent));
     }
     LOG_INF("ERS", "Adopting background section for spine %d (%s)", currentSpineIndex, adoptKind);
   } else {
@@ -5256,7 +5318,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // can render during the waveform (inline AA below); everywhere else the
   // trigger blocks through the waveform exactly as before.
   HalDisplay::RefreshMode pageRefreshMode;
-  if (secondaryBufferDegraded_) {
+  // A buffer lent for a build-through is not a degraded one: the X3 diffs against its own copy of
+  // the frame on screen, so it keeps the normal cadence (see BG_BUILD_THROUGH_PAGES).
+  if (secondaryBufferDegraded_ && !backgroundBuildThrough_) {
     // FULL_REFRESH already gives a clean baseline, same goal as forceHalfRefreshAfterPopup_;
     // consume it here too so it doesn't carry over and force an unrelated later page to HALF.
     forceHalfRefreshAfterPopup_ = false;
@@ -5461,7 +5525,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // display controller scans the old one. If a page turn fires during the
   // waveform it will clear preRenderedPage.ready and the stale pre-render
   // result is discarded — no correctness issue.
-  if (!preRenderedPage.ready && section && section->currentPage + 1 < section->pageCount) {
+  // Not during a build-through: on the X3 the post-waveform frame sync reads this very buffer
+  // when there is no second one (see BG_BUILD_THROUGH_PAGES).
+  if (!preRenderedPage.ready && !backgroundBuildThrough_ && section && section->currentPage + 1 < section->pageCount) {
     pendingPreRender = true;
     markStagedForCurrentPage();
     // Do NOT request the update while a deferred AA is owed: isUpdateSuperseded()
@@ -5729,7 +5795,9 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // falls through to the B/W display plus the two-push AA replay below.
   const bool singlePushThisPage = preRenderedPlanesStaged_ && !secondaryBufferDegraded_;
   preRenderedPlanesStaged_ = false;
-  if (secondaryBufferDegraded_) {
+  // Lent for a build-through rather than lost to an OOM: the X3 diffs against its own copy of
+  // the frame on screen, so the normal cadence stays correct (and AA stays off below).
+  if (secondaryBufferDegraded_ && !backgroundBuildThrough_) {
     renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else if (singlePushThisPage) {
