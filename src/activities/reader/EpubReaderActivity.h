@@ -465,11 +465,17 @@ class EpubReaderActivity final : public Activity {
   // writes and battery for a cache it never finishes. After BG_BUILD_MAX_PREEMPTIONS the
   // target is abandoned to Background-C and the cursor moves on. Reset per target.
   uint8_t backgroundPreemptCount_ = 0;
-  // Consecutive completed background builds thrown away because heap forced them to degrade.
-  // Unlike backgroundPreemptCount_ this is NOT reset per target: it is counting evidence that
-  // this book cannot be pre-built at all, so it has to survive the cursor moving on. Cleared by
-  // the first background build that completes cleanly. See BG_BUILD_MAX_DISCARDED_RUNS.
-  uint8_t backgroundDiscardedRuns_ = 0;
+  // The last background build ran short of memory -- degraded, truncated or failed -- and was
+  // skipped (the foreground builds that chapter when the reader gets there). B then waits for the
+  // reader to enter the next chapter before it tries another, so a book that never fits costs
+  // one wasted attempt per chapter entered, not one per target: it used to switch B off for the
+  // book after three in a row (a 154-page PDF conversion had run 132 builds, 8 kept, each ~600 ms
+  // and a 55-62 KB partial file written and deleted). Cleared when the reading position moves.
+  bool backgroundPausedForChapter_ = false;
+  // The free heap when B took the buffer, and whether the allocator is tracking the low point
+  // since (heap_caps_monitor_local_minimum_free_size_start): logged when the buffer goes back.
+  uint32_t backgroundBorrowFreeAtStart_ = 0;
+  bool backgroundHeapLowTracked_ = false;
   // One-shot Background-A re-arm latch (see serviceBackgroundWork): the (spine, page)
   // whose pre-render was already retried after the deferred AA released its memory.
   // Bounds retries to one per displayed page so an image-only next page (which can
