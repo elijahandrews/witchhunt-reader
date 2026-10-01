@@ -548,21 +548,32 @@ void RecentBooksActivity::renderListView(RenderLock&&) {
         [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); });
   }
 
+  drawHints(contentRect, !recentBooks.empty());
+  renderer.displayBuffer();
+}
+
+// Left and Right each do two things, so their hints name both, short press first and long press
+// after the slash ("Left / Remove") -- as Browse Files writes "» / Options", and in the words the
+// side hints already use for Up and Down. Info is named on every book: a selection move within the
+// grid repaints only two cells, so a label that followed the book under it would go stale. A long
+// Right on a book without details (TXT, Markdown) does nothing.
+//
+// The gesture line keeps what the strip cannot show, the view toggle on a long Up; it is drawn on
+// the boards that reserve room for it (gridShowsGestureHint).
+void RecentBooksActivity::drawHints(const Rect& contentRect, const bool hasBooks) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
   if (gridShowsGestureHint()) {
     const int hintY = contentRect.y + contentRect.height - metrics.verticalSpacing - 14;
-    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST) +
-                             "   " + tr(STR_DIR_LEFT) + "+L: " + tr(STR_REMOVE) + "   " + tr(STR_DIR_RIGHT) +
-                             "+L: " + tr(STR_INFO);
+    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST);
     renderer.drawText(SMALL_FONT_ID, contentRect.x + metrics.contentSidePadding, hintY, hint.c_str());
   }
 
-  const bool hasBooks = !recentBooks.empty();
-  const auto hints =
-      mappedInput.mapHints(tr(STR_HOME), hasBooks ? tr(STR_OPEN) : "", "", "", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const std::string left = hasBooks ? std::string(tr(STR_DIR_LEFT)) + " / " + tr(STR_REMOVE) : std::string();
+  const std::string right = hasBooks ? std::string(tr(STR_DIR_RIGHT)) + " / " + tr(STR_INFO) : std::string();
+  const auto hints = mappedInput.mapHints(tr(STR_HOME), hasBooks ? tr(STR_OPEN) : "", left.c_str(), right.c_str(),
+                                          tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
   GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
-
-  renderer.displayBuffer();
 }
 
 void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, int cellY,
@@ -741,17 +752,6 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
     }
   }
 
-  if (gridShowsGestureHint()) {
-    const int hintY = contentRect.y + contentRect.height - metrics.verticalSpacing - 14;
-    const std::string hint = std::string(tr(STR_DIR_UP)) + "+L: " + tr(STR_VIEW_GRID) + "/" + tr(STR_VIEW_LIST) +
-                             "   " + tr(STR_DIR_LEFT) + "+L: " + tr(STR_REMOVE) + "   " + tr(STR_DIR_RIGHT) +
-                             "+L: " + tr(STR_INFO);
-    renderer.drawText(SMALL_FONT_ID, contentRect.x + metrics.contentSidePadding, hintY, hint.c_str());
-  }
-
-  const auto hints = mappedInput.mapHints(tr(STR_HOME), tr(STR_OPEN), "", "", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
-  GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
-
+  drawHints(contentRect, /*hasBooks=*/true);
   renderer.displayBuffer();
 }

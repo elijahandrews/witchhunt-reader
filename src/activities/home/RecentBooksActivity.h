@@ -15,6 +15,8 @@
 #include "activities/reader/ReaderActivity.h"
 #include "components/CoverGridLayout.h"
 
+struct Rect;
+
 class RecentBooksActivity final : public Activity {
  public:
   // The full-size thumbnail's box. The cover is FITTED inside it (GRID_THUMB_CROP false), whole: a
@@ -90,6 +92,8 @@ class RecentBooksActivity final : public Activity {
 
   void renderListView(RenderLock&&);
   void renderGridView(RenderLock&&);
+  // The button hints and the gesture line both views end with.
+  void drawHints(const Rect& contentRect, bool hasBooks);
   // Columns currently on screen — derived from the panel size and theme metrics, not a constant.
   int gridColumns() const;
   // Open the book under the selection. Shared by Confirm and by a tap, so the two agree.
