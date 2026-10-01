@@ -536,7 +536,8 @@ ThumbResult ReaderActivity::ensureCoverThumb(const std::string& bookPath, int wi
     // thumbnail must never trigger a full-book parse (a 1732-spine book's index build is slow and was
     // a crash site). allowExtract=false: decode only an already-cached cover.img; the sliced
     // beginCoverExtractSession owns the (potentially multi-second) ZIP inflate.
-    if (!epub.loadForCover(scratch)) return ThumbResult::TransientFail;
+    if (!epub.loadForCover(scratch))
+      return epub.coverKnownAbsent() ? ThumbResult::StructurallyAbsent : ThumbResult::TransientFail;
     return epub.generateThumbBmp(width, height, /*allowExtract=*/false, scratch, crop);
   }
   if (FsHelpers::hasXtcExtension(bookPath)) {
@@ -583,7 +584,8 @@ ThumbResult ReaderActivity::ensureCoverThumbs(const std::string& bookPath, const
   Epub epub(bookPath, "/.crosspoint");
   // loadForCover(): the cover reference without building book.bin; allowExtract=false: decode only
   // an already-cached (or stored) cover -- the sliced beginCoverExtractSession owns the inflate.
-  if (!epub.loadForCover(scratch)) return ThumbResult::TransientFail;
+  if (!epub.loadForCover(scratch))
+    return epub.coverKnownAbsent() ? ThumbResult::StructurallyAbsent : ThumbResult::TransientFail;
   if (sliced != nullptr) {
     *sliced = epub.beginThumbSession(sizes, count, scratch);
     if (*sliced) return ThumbResult::TransientFail;  // started, nothing written yet: the caller drives it
@@ -622,7 +624,8 @@ ThumbResult ReaderActivity::ensureCoverThumb(const std::string& bookPath, int he
     // loadForCover(): cover reference only, no full book.bin build (see the width/height overload).
     // allowExtract=false: decode only an already-cached cover.img; the sliced
     // beginCoverExtractSession owns the (potentially multi-second) ZIP inflate.
-    if (!epub.loadForCover(scratch)) return ThumbResult::TransientFail;
+    if (!epub.loadForCover(scratch))
+      return epub.coverKnownAbsent() ? ThumbResult::StructurallyAbsent : ThumbResult::TransientFail;
     return epub.generateThumbBmp(height, /*allowExtract=*/false, scratch);
   }
   if (FsHelpers::hasXtcExtension(bookPath)) {

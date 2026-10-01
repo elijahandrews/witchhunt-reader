@@ -136,6 +136,10 @@ class Epub {
   // — the spine/TOC accessors are NOT populated. Returns false if the cover reference can't be found.
   // `scratch`: as for load(); the content.opf read takes its inflate ring from it.
   bool loadForCover(BuildArena* scratch = nullptr);
+  // Why loadForCover() last returned false: true when the book simply has no cover -- its OPF was
+  // read and names none (nor did the archive scan find one) -- and false when the OPF could not be
+  // read at all, a failure worth retrying. The first is a structural absence, the second transient.
+  bool coverKnownAbsent() const { return coverKnownAbsent_; }
 
   // Lightweight load for CATALOGUE METADATA only (title/author/series/seriesIndex/language), WITHOUT
   // building the spine/TOC book.bin. Same rationale and mechanism as loadForCover(): uses book.bin if
@@ -148,7 +152,10 @@ class Epub {
   // inside the reader with its heap still committed — the finished-book reboot on a large series folder
   // (issue #104). Cheap enough to call in a loop; still not free (one OPF parse per call), so callers
   // scanning many books should bound the candidate set first.
-  bool loadForMetadata();
+  // `scratch`: as for loadForCover(). The OPF inflate ring is up to 32 KB of contiguous memory, which
+  // a screen holding both framebuffers may not have -- seen as "Failed to init inflate reader" on an
+  // X3 with 39 KB contiguous and a 350 KB OPF.
+  bool loadForMetadata(BuildArena* scratch = nullptr);
 
   // True when opening the book will trigger the (multi-second) first-open index
   // build inside load(): the spine/TOC cache (book.bin) or the compiled CSS rules
@@ -363,6 +370,7 @@ class Epub {
   // Set for the duration of load() / a cover session: readItemContentsToStream takes its inflate
   // ring from here when the region has room, else from the heap as before. Not owned.
   BuildArena* loadScratch_ = nullptr;
+  bool coverKnownAbsent_ = false;  // see coverKnownAbsent()
 
   // Streams pagelist.bin at path into visit(href, anchor, label) per entry; visit returns false to
   // stop early. The single place that knows the on-disk format, so no caller reserves the whole
