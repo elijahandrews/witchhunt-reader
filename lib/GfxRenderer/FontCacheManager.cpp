@@ -4,6 +4,7 @@
 #include <FontDecompressor.h>
 #include <Logging.h>
 #include <SdCardFont.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <cstring>
@@ -99,7 +100,19 @@ void FontCacheManager::recordText(const char* text, int fontId, EpdFontFamily::S
   constexpr size_t SCAN_BYTES_PER_STYLE = 4096;
   std::string& scan = scanByFont_[fontId].textByStyle[static_cast<uint8_t>(style) & 0x03];
   if (scan.size() >= SCAN_BYTES_PER_STYLE) return;
-  if (scan.capacity() < SCAN_BYTES_PER_STYLE) scan.reserve(SCAN_BYTES_PER_STYLE);
+  if (scan.capacity() < SCAN_BYTES_PER_STYLE) {
+    // std::string growth cannot fail gracefully (no exceptions): a reserve the heap cannot meet
+    // aborts the device. X3, 2026-10-01: a page draw at 14.7 KB free with a 4.3 KB largest block
+    // ended in abort() here (operator new -> __terminate). The scan only feeds the prewarm, which is
+    // an optimisation, so ask the allocator first; when it cannot spare the block, this style goes
+    // unscanned and its glyphs load on demand as they are drawn.
+    constexpr size_t ALLOCATOR_SLACK = 64;  // the block header, and the string's terminator
+    if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT) <
+        SCAN_BYTES_PER_STYLE + ALLOCATOR_SLACK) {
+      return;
+    }
+    scan.reserve(SCAN_BYTES_PER_STYLE);
+  }
   scan.append(text, std::min(strlen(text), SCAN_BYTES_PER_STYLE - scan.size()));
 }
 
