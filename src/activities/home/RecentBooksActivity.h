@@ -1,4 +1,5 @@
 #pragma once
+#include <BuildArena.h>
 #include <I18n.h>
 #include <PngToBmpConverter.h>
 
@@ -50,12 +51,14 @@ class RecentBooksActivity final : public Activity {
 
   // Lazy cover loading state for grid view
   bool coversLoaded = false;
-  bool coversLoading = false;
   bool firstRenderDone = false;
   size_t nextCoverIndex = 0;
 
-  // Makes the grid thumbnail of the book at nextCoverIndex, one step per loadNextCover() call.
-  CoverThumbLoader coverLoader;
+  // Makes the grid thumbnail of the book at nextCoverIndex, one step per loadNextCover() call, in
+  // the borrowed secondary framebuffer (coverScratch_) while covers are being made.
+  uint8_t* lentRegion_ = nullptr;
+  std::unique_ptr<BuildArena> coverScratch_;
+  CoverThumbLoader coverLoader;  // after coverScratch_, so its sessions go first
 
   // Partial selection repaint: track previous index so we only redraw two cells
   int prevSelectorIndex = -1;
@@ -69,6 +72,9 @@ class RecentBooksActivity final : public Activity {
   void loadRecentBooks();
   // One unit of cover making (one CoverThumbLoader step) per call. True once every cover is resolved.
   bool loadNextCover();
+  void generateCovers();
+  bool lendForCovers();
+  void returnLentBuffer(bool callerHoldsRenderLock);
 
   void switchViewMode(bool grid);
   void removeSelectedBook();
@@ -94,4 +100,6 @@ class RecentBooksActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  // The borrowed framebuffer goes back before any other screen opens on top of this one.
+  void startActivityForResult(std::unique_ptr<Activity>&& activity, ActivityResultHandler resultHandler) override;
 };
