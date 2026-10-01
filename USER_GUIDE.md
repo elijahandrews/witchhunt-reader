@@ -136,7 +136,7 @@ The Browse Files screen is a full-featured browser for your books and the folder
 * **Filenames** (the default) lists each book by its filename.
 * **Details** shows each EPUB's title from its metadata, with the author and series underneath (for example "Thomas Mann · Werke #3"), and how far you have read on the right: a percentage, or **Finished**. An `.opf` metadata file beside the book overrides what is inside the book, as everywhere else. TXT, Markdown and XTC books keep their filename, with the percentage.
 
-* **Covers** shows the folder as a grid of covers, with the title and author under each. Each cover is shown whole, scaled to fit, never cropped. A finished book has a folded corner and one you are reading a bar along the bottom. A folder appears as a folder the size of a cover, with the number of books in it and in all the folders below it (up to "999+"; "..." while they are being counted). **Up**/**Down** move from cover to cover, **Left**/**Right** turn the page, and on a touch screen a tap selects a cover, a second tap opens it, and a swipe turns the page. Hold the page-forward button for the options menu: its hint reads **» / Options** whenever the folder runs to more than one page.
+* **Covers** shows the folder as a grid of covers, with the title and author under each. Each cover is shown whole, scaled to fit, never cropped. A finished book has a folded corner and one you are reading a bar along the bottom. A folder appears as a folder the size of a cover, with the number of books in it and in all the folders below it (up to "999+"; "..." while they are being counted). The grid holds as many covers as the screen has room for: two rows of two on the X3 and X4, three of three on the LilyGo T5S3. **Up**/**Down** move a row and **Left**/**Right** one cover, wrapping round at the ends, and the page follows the selection. On a touch screen a tap selects a cover, a second tap opens it, and a swipe turns the page. Hold **Right** for the options menu: its hint reads **Right / Options**.
   * A book whose cover has not been made yet shows a card with its title at first. The covers of the page on screen are then made one at a time, and each appears as soon as it is ready. Pressing a button pauses this, so the screen stays responsive. A large cover can take several seconds. A cover is made once and kept, and the Recent Books grid and the "book finished" screen use the same ones. A book with no cover at all keeps its title card; if making a cover fails, it is tried again the next time you open the folder.
 
 The first time a folder shows an EPUB you have never opened, its row or card shows the filename for a moment while the book is read. The screen then redraws once with the details, and after that they come up at once. Sorting and **Search** still go by filename, and **Search all folders** lists its results by filename in every view.
@@ -167,6 +167,8 @@ Folders with many entries are handled via an SD-card-backed index so memory use 
 ### 3.4 Recent Books Screen
 
 The Recent Books screen shows recently opened books as a **cover grid**, displaying cover art, title, and author. Selecting a book opens it at the last read position.
+
+In the grid, **Up**/**Down** move a row and **Left**/**Right** one book, wrapping round at the ends. Hold **Left** to remove the book from the list and **Right** for its details (EPUB and XTC books); the hints read **Left / Remove** and **Right / Info**. Hold **Up** to switch between the grid and a list.
 
 ### 3.5 Book Info Screen
 

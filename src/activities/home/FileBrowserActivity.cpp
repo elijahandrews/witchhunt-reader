@@ -615,6 +615,14 @@ bool FileBrowserActivity::handleCustomInput() {
       }
     }
 
+    // The cover grid moves as the Recent Books grid does: Up/Down a row, Left/Right a cover, all
+    // wrapping at the ends, and the page follows the selection. Left and Right are needed here even
+    // on a board without those keys -- on the T5S3 they are the hint strip's boxes -- and a press
+    // that paged would skip the covers beside the selection. Options stays on a long Right.
+    if (coversView() && ev.type == ButtonEventManager::PressType::Short && moveInCoverGrid(ev.button)) {
+      return true;
+    }
+
     // Logical Left/Right page through the list, one screenful per press — the same thing they do in
     // the chapter selector, and the reason the context menu moved to a long press on Right. Paging
     // is driven from the event stream rather than ButtonNavigator: the navigator acts on the press
@@ -635,7 +643,7 @@ bool FileBrowserActivity::handleCustomInput() {
     // one screen and there is nothing to page. Either way the button hint says which one it is —
     // and it rides the same logical button, so rotating the device never separates the two.
     const bool optionsPress = (ev.type == ButtonEventManager::PressType::Long) ||
-                              (ev.type == ButtonEventManager::PressType::Short && !listPages());
+                              (ev.type == ButtonEventManager::PressType::Short && !listPages() && !coversView());
     if (model.getMode() != Mode::PickFolder &&
         MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Right) && optionsPress) {
       // Open the context menu for any selection. openContextMenu() shows
@@ -649,6 +657,7 @@ bool FileBrowserActivity::handleCustomInput() {
 }
 
 void FileBrowserActivity::navigateButtons() {
+  if (coversView()) return;  // the grid moves by rows and covers, from handleCustomInput()
   bool changed = false;
   {
     RenderLock lock(*this);
@@ -762,6 +771,29 @@ void FileBrowserActivity::pageSelection(const int direction) {
   nav.top = nav.selected;
   nav.followPending = false;
   requestUpdate();
+}
+
+// One step in the cover grid for a short press on a direction key, wrapping at the ends; false for
+// any other key. Up/Down take a whole row (CoverGridLayout::rowAbove/rowBelow), Left/Right one cover.
+bool FileBrowserActivity::moveInCoverGrid(const MappedInputManager::Button button) {
+  const int total = listCount();
+  using Direction = MappedInputManager::Direction;
+  const bool up = MappedInputManager::isDirection(button, Direction::Up);
+  const bool down = MappedInputManager::isDirection(button, Direction::Down);
+  const bool left = MappedInputManager::isDirection(button, Direction::Left);
+  const bool right = MappedInputManager::isDirection(button, Direction::Right);
+  if (!up && !down && !left && !right) return false;
+  if (total <= 0) return true;
+  {
+    RenderLock lock(*this);
+    const int cols = coverGrid().cells.cols;
+    if (up) nav.selected = CoverGridLayout::rowAbove(nav.selected, total, cols);
+    if (down) nav.selected = CoverGridLayout::rowBelow(nav.selected, total, cols);
+    if (left) nav.selected = ButtonNavigator::previousIndex(nav.selected, total);
+    if (right) nav.selected = ButtonNavigator::nextIndex(nav.selected, total);
+  }
+  requestUpdate();
+  return true;
 }
 
 // Display copy only. FileBrowserModel's entry names, and every path built from them, keep the
@@ -907,13 +939,22 @@ void FileBrowserActivity::drawFooter() {
   // In a folder small enough not to page, this slot carries Options. Where Confirm already
   // carries it that would draw the same word twice on one strip, and the second copy would sit on
   // a slot such a board has no key for.
-  // Where it pages, the same key still opens Options on a hold, and in the cover grid -- four to a
-  // page -- it nearly always pages, so the label says both rather than hiding the menu.
+  // Where it pages, the same key still opens Options on a hold, so the label says both rather
+  // than hiding the menu.
   const bool optionsOnRight = showOptionsHint && !confirmOpensOptions();
   const char* nextLabel = (model.getMode() == Mode::PickFolder) ? tr(STR_MOVE_HERE)
                           : pages ? (optionsOnRight ? tr(STR_LIST_PAGE_NEXT_OR_OPTIONS) : tr(STR_LIST_PAGE_NEXT))
                           : optionsOnRight ? tr(STR_OPTIONS)
                                            : "";
+  // The cover grid steps a cover on Left and Right (moveInCoverGrid), short press first and the
+  // long one after the slash, as the Recent Books grid names them. Always labelled: on the T5S3 the
+  // boxes are the only Left and Right there are, and an unlabelled box is not tappable.
+  std::string gridRight;
+  if (coversView() && hasEntries) {
+    prevLabel = tr(STR_DIR_LEFT);
+    gridRight = optionsOnRight ? std::string(tr(STR_DIR_RIGHT)) + " / " + tr(STR_OPTIONS) : tr(STR_DIR_RIGHT);
+    nextLabel = gridRight.c_str();
+  }
   // Paging is bound to logical Left/Right and stepping to logical Up/Down, so which physical pair
   // carries which — and therefore which hint strip each label belongs on — is the orientation's
   // business, not this screen's.
