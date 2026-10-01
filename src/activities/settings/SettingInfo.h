@@ -71,6 +71,7 @@ enum class SettingAction {
   ScreenRepair,
   CheckForUpdates,
   SdFirmwareUpdate,
+  AllFiles,
   Language,
   KeyboardLayouts,
   SystemInfo,

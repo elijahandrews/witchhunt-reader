@@ -121,12 +121,12 @@ See [Reading Mode](#4-reading-mode) below for more information.
 
 ### 3.3 Browse Files Screen
 
-The Browse Files screen is a full-featured file and folder browser.
+The Browse Files screen is a full-featured browser for your books and the folders they are in. It lists the books the reader can open (EPUB, XTC/XTCH, TXT and Markdown) and nothing else: a cover image or `.opf` file saved beside a book (see [sidecar files](docs/sidecar-files.md)) is not listed on its own, so a book downloaded from an OPDS catalogue shows up once. Images and every other file are in **Settings → System → Tools → All Files**.
 
 * **Navigate List:** Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to move the selection cursor up and down through folders and books. Long-pressing these buttons scrolls a full page at a time.
 * **Open Selection:** Press **Confirm** to open a folder or read a selected book.
 * **Options menu:** Hold **Right** (the page-forward button) to open the menu for the selected item. In a folder short enough to fit on one screen, a short press of Right opens it too. On a device without a Confirm key, such as the X4 Pro, **Confirm** opens the menu instead, and a tap on a row opens the item. The button hints always show which button does what.
-  * For a book or file: **Open**, **Mark as read**, **Info**, **Delete Book Cache**, **Remove**, **Set as sleep screen** (images), **Move to folder**, **New Folder**, **Search** and **Search all folders**.
+  * For a book: **Open**, **Mark as read**, **Info**, **Delete Book Cache**, **Remove**, **Move to folder**, **New Folder**, **Search** and **Search all folders**.
   * For a folder: **Open**, the sort and visibility options, **Search**, **Search all folders**, **New Folder** and **Remove**, which deletes the folder and everything in it.
 
 #### Sorting
@@ -138,6 +138,7 @@ Files and folders can be sorted by **name**, **date**, **size**, or **type**, in
 * **New Folder** makes a folder inside the one you are browsing. A name the SD card cannot hold is corrected rather than refused.
 * **Move to folder** opens a folder picker that shows folders only. Browse to where the file should go: the move puts it in the folder you are *browsing*, which the header names in full, not in the row under the highlight. Press **Right** (the page-forward button; labelled **Move**) to move it there, or **Left** (the page-back button; labelled **New**) to make a new folder first. **Back** cancels.
 * A move is instant whatever the size of the file, because nothing is copied. It never overwrites anything: if a file of the same name is already there, or the file is already in that folder, the move is refused and the reason shown.
+* A book's cover image and `.opf` file go with it when you move or remove the book here, since this screen does not list them. In **All Files** each file is moved or removed on its own.
 * **Remove** on a folder deletes it and everything in it. It sits last in the menu because it cannot be undone.
 
 #### Searching
@@ -332,6 +333,7 @@ The Settings screen allows you to configure the device's behavior.
   - **Detect Timezone**: Auto-detect timezone via IP geolocation (requires WiFi).
   - **Sync Time**: Sync the clock via NTP (requires WiFi). Afterwards the device restarts quickly and returns to Clock Settings, like every other screen that uses WiFi.
 - **Weather Settings**: Configure the Open-Meteo weather panel shown on the Home Screen.
+- **All Files**: Browse every file on the SD card, not just books: images, cover and `.opf` files, firmware images and anything else. It works like [Browse Files](#33-browse-files-screen): **Confirm** opens a book or image, and on any other file it opens the menu, where you can **Move to folder** or **Remove** it. Images offer **Set as sleep screen**. Moving or removing a book here moves or removes that file only, not the cover and `.opf` beside it. **Back** at the top folder returns to Settings.
 
 **System**:
 - **Clear Reading Cache**: Clear the internal SD card cache.

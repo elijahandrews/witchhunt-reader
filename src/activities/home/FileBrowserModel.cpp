@@ -18,11 +18,15 @@ bool isListableName(const char* name) {
   return strcmp(name, "System Volume Information") != 0;
 }
 
-// The file types the reader can open.
+// The books the reader can open. Images are not books: the viewer opens them, but in the book
+// browser they are mostly covers saved beside the book they belong to, listed a second time.
 bool isReadableBook(const std::string_view filename) {
   return FsHelpers::hasEpubExtension(filename) || FsHelpers::hasXtcExtension(filename) ||
-         FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename) ||
-         FsHelpers::hasBmpExtension(filename) || FsHelpers::hasJpgExtension(filename) ||
+         FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename);
+}
+
+bool isViewableImage(const std::string_view filename) {
+  return FsHelpers::hasBmpExtension(filename) || FsHelpers::hasJpgExtension(filename) ||
          FsHelpers::hasPngExtension(filename);
 }
 
@@ -89,6 +93,12 @@ bool FileBrowserModel::acceptForBooks(const char* name, const bool isDir) {
   return isReadableBook(std::string_view{name});
 }
 
+bool FileBrowserModel::isOpenable(const std::string_view filename) {
+  return isReadableBook(filename) || isViewableImage(filename);
+}
+
+bool FileBrowserModel::acceptForAllFiles(const char* name, const bool /*isDir*/) { return isListableName(name); }
+
 bool FileBrowserModel::acceptForFirmware(const char* name, const bool isDir) {
   if (!isListableName(name)) return false;
   if (isDir) return true;
@@ -106,6 +116,8 @@ bool FileBrowserModel::acceptEntry(const char* name, const bool isDir) const {
       return acceptForFirmware(name, isDir);
     case Mode::PickFolder:
       return acceptForFolders(name, isDir);
+    case Mode::AllFiles:
+      return acceptForAllFiles(name, isDir);
     case Mode::Books:
       break;
   }
@@ -118,6 +130,8 @@ FileIndex::AcceptFn FileBrowserModel::indexFilter() const {
       return &acceptForFirmware;
     case Mode::PickFolder:
       return &acceptForFolders;
+    case Mode::AllFiles:
+      return &acceptForAllFiles;
     case Mode::Books:
       break;
   }

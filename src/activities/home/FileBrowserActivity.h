@@ -14,9 +14,9 @@
 
 class FileBrowserActivity final : public UiListActivity {
  public:
-  // Books = standard reader browser; PickFirmware = filter to .bin only and return path via
-  // ActivityResult. Owned by the model, which needs it to filter; aliased here so callers keep
-  // naming it FileBrowserActivity::Mode.
+  // Books = the book browser opened from Home; AllFiles = every file, opened from Settings;
+  // PickFirmware / PickFolder = pickers that return a path via ActivityResult. Owned by the model,
+  // which needs it to filter; aliased here so callers keep naming it FileBrowserActivity::Mode.
   using Mode = FileBrowserModel::Mode;
 
  private:
@@ -48,6 +48,8 @@ class FileBrowserActivity final : public UiListActivity {
   void createFolderHere();
   void moveToFolder(const std::string& fullPath, const std::string& entry);
   bool confirmOpensOptions() const;
+  bool managesFiles() const;
+  ReturnTo returnTarget() const;
   void showBrowserOptionsMenu(const std::string& dirEntry = {});
   void activateSelected(bool longPress);
   void resetNavigation(int selected = 0);

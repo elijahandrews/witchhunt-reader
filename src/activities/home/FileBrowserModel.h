@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -23,10 +24,16 @@
 // navigation stays with the screen.
 class FileBrowserModel {
  public:
-  // Books = the file types the reader can open; PickFirmware = .bin only.
-  // Books = the file types the reader can open; PickFirmware = .bin only;
+  // Books = the books the reader can open, and nothing else: images and the sidecars beside a
+  // book (its cover, its .opf) are left out, which is what keeps an OPDS download to one row;
+  // AllFiles = every file on the card, for housekeeping;
+  // PickFirmware = .bin only;
   // PickFolder = directories only, for choosing a destination to move a file into.
-  enum class Mode { Books, PickFirmware, PickFolder };
+  enum class Mode { Books, AllFiles, PickFirmware, PickFolder };
+
+  // Whether the reader can open this file: a book, or an image for the viewer. Listing is the
+  // mode's business; this is what selecting a row can do with it.
+  [[nodiscard]] static bool isOpenable(std::string_view filename);
 
   explicit FileBrowserModel(const Mode mode = Mode::Books) : mode(mode) {}
 
@@ -143,6 +150,7 @@ class FileBrowserModel {
   // One function per mode rather than one taking a Mode, because FileIndex::AcceptFn is a bare
   // function pointer with no user data: indexFilter() hands over the one that matches.
   static bool acceptForBooks(const char* name, bool isDir);
+  static bool acceptForAllFiles(const char* name, bool isDir);
   static bool acceptForFirmware(const char* name, bool isDir);
   static bool acceptForFolders(const char* name, bool isDir);
   [[nodiscard]] bool acceptEntry(const char* name, bool isDir) const;

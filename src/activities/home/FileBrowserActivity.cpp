@@ -7,6 +7,7 @@
 #include <HalDisplay.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <SidecarFiles.h>
 #include <Txt.h>
 #include <Utf8.h>
 #include <Xtc.h>
@@ -297,6 +298,12 @@ void FileBrowserActivity::activateSelected(const bool longPress) {
     finish();
     return;
   }
+  // All files lists what the reader cannot open too. Selecting one of those offers what can be
+  // done with it -- move it, remove it -- instead of handing the reader a file it would reject.
+  if (model.getMode() == Mode::AllFiles && !FileBrowserModel::isOpenable(entry)) {
+    openContextMenu();
+    return;
+  }
 
   std::string fullPath = model.entryFullPath(static_cast<size_t>(nav.selected));
   if (longPress && KOREADER_STORE.hasCredentials() && FsHelpers::hasEpubExtension(fullPath)) {
@@ -306,7 +313,7 @@ void FileBrowserActivity::activateSelected(const bool longPress) {
     APP_STATE.saveToFile();
   }
   ReturnHint hint;
-  hint.target = ReturnTo::FileBrowser;
+  hint.target = returnTarget();
   hint.path = model.path();
   hint.selectName = entry;
   activityManager.replaceWithReader(std::move(fullPath), std::move(hint));
@@ -437,7 +444,10 @@ void FileBrowserActivity::drawChrome() {
           // Names the DESTINATION in full: "Move here" means the folder being browsed, never the
           // row under the highlight, and the first reading of it is the other way round.
           ? std::string(tr(STR_MOVE_TO_FOLDER)) + ": " + destination
-          : ((model.path() == "/") ? std::string(tr(STR_SD_CARD)) : model.path().substr(model.path().rfind('/') + 1));
+          : (model.path() != "/") ? model.path().substr(model.path().rfind('/') + 1)
+            // At the root, All files says which browser this is: the rows alone look like the book one.
+            : (model.getMode() == Mode::AllFiles) ? std::string(tr(STR_ALL_FILES))
+                                                  : std::string(tr(STR_SD_CARD));
   // A narrowed folder is indistinguishable from a small one unless the header says otherwise.
   if (model.isFiltered()) {
     folderName += ": \"" + model.filter() + "\"";
@@ -446,8 +456,9 @@ void FileBrowserActivity::drawChrome() {
 }
 
 void FileBrowserActivity::drawFooter() {
+  // Only the book browser leaves to Home; the others were opened from somewhere and go back there.
   const char* backLabel =
-      (model.path() == "/") ? (model.getMode() == Mode::PickFirmware ? tr(STR_BACK) : tr(STR_HOME)) : tr(STR_BACK);
+      (model.path() == "/") ? (model.getMode() == Mode::Books ? tr(STR_HOME) : tr(STR_BACK)) : tr(STR_BACK);
   const bool hasEntries = listCount() > 0;
   bool selectingFirmwareFile = false;
   if (model.getMode() == Mode::PickFirmware && hasEntries) {
@@ -506,7 +517,7 @@ void FileBrowserActivity::openContextMenu() {
                              renderer, mappedInput, fullPath, model.getSortMode(), model.getSortDirection(),
                              /*offerDirectoryActions=*/false, model.isFiltered() || model.isDeepSearch(),
                              /*offerGoToFolder=*/model.isDeepSearch(),
-                             /*offerFileManagement=*/model.getMode() == Mode::Books),
+                             /*offerFileManagement=*/managesFiles()),
                          [this, fullPath, entry](const ActivityResult& res) {
                            if (res.isCancelled) {
                              requestUpdate();
@@ -563,10 +574,15 @@ void FileBrowserActivity::createFolderHere() {
 // A move on a FAT volume is a rename: the bytes never move, so this is instant whatever the size
 // of the book and cannot leave half a file behind if power is lost. The cost is that it works
 // within the one volume, which is all there is here.
+//
+// The book browser does not list a book's sidecars, so a book moved from there takes them along:
+// left behind, its cover and metadata corrections would be lost to it and invisible where they
+// stayed. All files lists them as files of their own, and moves exactly the one selected.
 void FileBrowserActivity::moveToFolder(const std::string& fullPath, const std::string& entry) {
+  const bool withSidecars = model.getMode() == Mode::Books;
   startActivityForResult(
       std::make_unique<FileBrowserActivity>(renderer, mappedInput, "/", std::string{}, Mode::PickFolder),
-      [this, fullPath, entry](const ActivityResult& res) {
+      [this, fullPath, entry, withSidecars](const ActivityResult& res) {
         const auto* picked = res.isCancelled ? nullptr : std::get_if<FilePathResult>(&res.data);
         if (picked == nullptr) {
           requestUpdate();
@@ -580,12 +596,15 @@ void FileBrowserActivity::moveToFolder(const std::string& fullPath, const std::s
         const char* message = nullptr;
         if (target == fullPath) {
           message = tr(STR_MOVE_SAME_FOLDER);
-        } else if (Storage.exists(target.c_str())) {
+        } else if (Storage.exists(target.c_str()) || (withSidecars && SidecarFiles::anyTargetTaken(fullPath, target))) {
           // Renaming onto an existing name is not ours to resolve silently, and FAT would not
           // report which of the two survived.
           message = tr(STR_MOVE_NAME_TAKEN);
         } else if (!Storage.rename(fullPath.c_str(), target.c_str())) {
           message = tr(STR_MOVE_FAILED);
+        } else if (withSidecars && !SidecarFiles::moveAll(fullPath, target)) {
+          // The book is already in its new folder; saying the move failed would be wrong.
+          LOG_ERR("FBR", "Moved %s but not all of its sidecars", fullPath.c_str());
         }
 
         if (message != nullptr) {
@@ -612,7 +631,18 @@ void FileBrowserActivity::moveToFolder(const std::string& fullPath, const std::s
 //
 // A board with the keys keeps Confirm as Open, and its menu one hold of Right away.
 bool FileBrowserActivity::confirmOpensOptions() const {
-  return model.getMode() == Mode::Books && !HalCapabilities::hasBackAndConfirmButtons();
+  return managesFiles() && !HalCapabilities::hasBackAndConfirmButtons();
+}
+
+// The two browsers a reader organises the card from, rather than picks something in. Both get
+// New folder, Move to folder and Remove; the pickers keep to what their pick needs.
+bool FileBrowserActivity::managesFiles() const {
+  return model.getMode() == Mode::Books || model.getMode() == Mode::AllFiles;
+}
+
+// Where the reader comes back to: the browser it was opened from, in the mode it was in.
+ReturnTo FileBrowserActivity::returnTarget() const {
+  return model.getMode() == Mode::AllFiles ? ReturnTo::AllFiles : ReturnTo::FileBrowser;
 }
 
 // Asks for a query, then either narrows this folder or walks the whole card for it.
@@ -691,7 +721,7 @@ void FileBrowserActivity::showBrowserOptionsMenu(const std::string& dirEntry) {
   startActivityForResult(std::make_unique<FileContextMenuActivity>(
                              renderer, mappedInput, "", model.getSortMode(), model.getSortDirection(), isDir,
                              model.isFiltered() || model.isDeepSearch(), /*offerGoToFolder=*/false,
-                             /*offerFileManagement=*/model.getMode() == Mode::Books),
+                             /*offerFileManagement=*/managesFiles()),
                          [this, isDir, dirPath, dirEntry](const ActivityResult& res) {
                            if (res.isCancelled) {
                              requestUpdate();
@@ -783,7 +813,7 @@ void FileBrowserActivity::handleContextMenuAction(int action, const std::string&
   switch (actionEnum) {
     case Action::Open: {
       ReturnHint hint;
-      hint.target = ReturnTo::FileBrowser;
+      hint.target = returnTarget();
       hint.path = model.path();
       hint.selectName = entry;
       activityManager.replaceWithReader(std::string(fullPath), std::move(hint));
@@ -797,7 +827,7 @@ void FileBrowserActivity::handleContextMenuAction(int action, const std::string&
         APP_STATE.saveToFile();
       }
       ReturnHint hint;
-      hint.target = ReturnTo::FileBrowser;
+      hint.target = returnTarget();
       hint.path = model.path();
       hint.selectName = entry;
       activityManager.replaceWithReader(std::string(fullPath), std::move(hint));
@@ -894,7 +924,7 @@ void FileBrowserActivity::doMarkAsRead(const std::string& fullPath) {
                                RECENT_BOOKS.removeBook(fullPath);
                              }
                              ReturnHint hint;
-                             hint.target = ReturnTo::FileBrowser;
+                             hint.target = returnTarget();
                              hint.path = model.path();
                              activityManager.replaceWithReader(nextBookPath, std::move(hint));
                              return;
@@ -928,7 +958,7 @@ void FileBrowserActivity::doSetAsSleepCover(const std::string& fullPath) {
   } else {
     // JPG/PNG: must render to framebuffer — open the image viewer so the user can use its Set Sleep button.
     ReturnHint hint;
-    hint.target = ReturnTo::FileBrowser;
+    hint.target = returnTarget();
     hint.path = model.path();
     hint.selectName = model.entryName(static_cast<size_t>(nav.selected));
     activityManager.replaceWithReader(std::string(fullPath), std::move(hint));
@@ -947,10 +977,13 @@ void FileBrowserActivity::doDeleteCache(const std::string& fullPath, const std::
                          });
 }
 
+// As with a move: deleting a book from the book browser deletes the sidecars that browser never
+// showed, and deleting a file from All files deletes that file alone.
 void FileBrowserActivity::doRemove(const std::string& fullPath, const std::string& entry, bool isDirectory) {
+  const bool withSidecars = !isDirectory && model.getMode() == Mode::Books;
   startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
                                                                 tr(STR_DELETE) + std::string("? "), utf8NfcNorm(entry)),
-                         [this, fullPath, isDirectory](const ActivityResult& res) {
+                         [this, fullPath, isDirectory, withSidecars](const ActivityResult& res) {
                            if (!res.isCancelled) {
                              LOG_DBG("FBR", "Attempting to delete: %s", fullPath.c_str());
                              bool deleted;
@@ -959,6 +992,9 @@ void FileBrowserActivity::doRemove(const std::string& fullPath, const std::strin
                              } else {
                                clearFileMetadata(fullPath);
                                deleted = Storage.remove(fullPath.c_str());
+                               if (deleted && withSidecars && !SidecarFiles::removeAll(fullPath)) {
+                                 LOG_ERR("FBR", "Deleted %s but not all of its sidecars", fullPath.c_str());
+                               }
                              }
                              if (deleted) {
                                LOG_DBG("FBR", "Deleted successfully");
