@@ -13,6 +13,7 @@
 
 #include "../Activity.h"
 #include "./FileBrowserActivity.h"
+#include "CoverThumbLoader.h"
 #include "Epub/CoverThumbSession.h"
 #include "HomeMenu.h"
 #include "ReadingStats.h"
@@ -49,24 +50,13 @@ class HomeActivity final : public Activity {
   bool frameCacheInRegion_ = false;
   std::unique_ptr<BuildArena> coverScratch_;
   size_t nextRecentCoverIndex = 0;
-  size_t nextThumbSizeIndex = 0;  // which thumb size within the current book is next
 
-  // Phase 0: a JPEG cover's missing carousel sizes, from one decode run in slices (memory audit
-  // 2026-09, R9 item 3). A press pauses it where it stands; it resumes on the next pass instead of
-  // starting over. Holds its decoder state in coverScratch_ between slices (declared after it, so
-  // it goes first) and removes its partial thumbnails if it goes unfinished.
-  std::unique_ptr<CoverThumbSession> thumbSession;
-  size_t thumbSessionSizeIndex = 0;  // the first size it writes (nextThumbSizeIndex when it began)
-  int thumbSessionCovered = 0;       // how many sizes it writes
-  bool thumbSessionFailed = false;   // set on error: the retry for that book runs one-shot
-
-  // Phase 1: sliced ZIP extraction of cover.img (only needed for large embedded PNG covers)
-  std::unique_ptr<ReaderActivity::CoverExtractSession> extractSession;
-
-  // Phase 2: sliced PNG decode session (non-null while a PNG cover is being decoded row-by-row)
-  std::unique_ptr<PngDecodeSession> pngSession;
-  ReaderActivity::PngThumbFiles pngSessionFiles;  // open FsFiles borrowed by pngSession
-  bool pngSessionFailed = false;                  // set on error; triggers empty-path store same as sync failure
+  // Makes the covers of the book at nextRecentCoverIndex -- every carousel size from one decode
+  // where the cover allows, sliced so a press pauses it (memory audit 2026-09, R9 items 2 and 3).
+  // Its sessions hold their state in coverScratch_ between slices (declared after it, so it goes
+  // first), and it removes partial thumbnails of work it does not finish.
+  CoverThumbLoader coverLoader;
+  int coverLoaderHeight_ = -1;  // the cover height the loader is configured for
 
   // Session-scoped transient-failure counter, keyed by book path. A cover can fail to load for
   // transient reasons (OOM under heap pressure, an interrupted write, an extraction that could not
@@ -142,8 +132,5 @@ class HomeActivity final : public Activity {
   // skipLoopDelay went false in that window, the main loop's inactivity governor could drop
   // the CPU to 10 MHz mid-burst and the next decode tick would crawl (observed: a ~1.5 s
   // cover decode taking ~25 s). Hold full speed until every recent cover is resolved.
-  bool skipLoopDelay() override {
-    return (firstRenderDone && !recentsLoaded) || recentsLoading || extractSession != nullptr ||
-           pngSession != nullptr || thumbSession != nullptr;
-  }
+  bool skipLoopDelay() override { return (firstRenderDone && !recentsLoaded) || recentsLoading || coverLoader.busy(); }
 };
