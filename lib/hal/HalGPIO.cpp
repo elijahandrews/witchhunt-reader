@@ -383,7 +383,7 @@ void HalGPIO::sampleOnce() {
   // rather than as a bare edge-queue push. The firmware has two input paths and
   // a key that drives only one of them is half-dead:
   //   - the edge queue, which ButtonEventManager turns into press types
-  //     (RecentBooksActivity, SliderPickerActivity, BmpViewerActivity, ...)
+  //     (FileBrowserActivity, SliderPickerActivity, BmpViewerActivity, ...)
   //   - the wasPressed()/isPressed() bitmask, polled directly by ~15 activities
   //     including MenuListActivity, i.e. the entire settings tree
   // Setting the bits here feeds both: the loop below derives the edges from
