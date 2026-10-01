@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstring>
 #include <limits>
+#include <optional>
 
 #include "../ActivityManager.h"
 #include "../ActivityResult.h"
@@ -60,9 +61,15 @@ std::string getFileName(std::string filename);
 void FileBrowserActivity::onEnter() {
   // Recent Books keeps the home screen's snapshot of each book's details current, as the screen
   // it replaced did on the way in: a metadata sidecar may have changed since the book was read.
-  if (model.getMode() == Mode::Recents)
+  // One load of the recent-books list for both the refresh and the rows (loadRecents copies the
+  // paths out), let go again before the screen draws: the list is not kept while browsing.
+  std::optional<RecentBooksStore::Hold> recents;
+  if (model.getMode() == Mode::Recents) {
+    recents.emplace();
     RECENT_BOOKS.refreshSidecarMetadata(static_cast<size_t>(RECENT_BOOKS.getCount()));
+  }
   model.load();
+  recents.reset();
   int selectedIndex = 0;
 
   if (!focusName.empty()) {

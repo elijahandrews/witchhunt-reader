@@ -45,15 +45,37 @@ namespace JsonSettingsIO {
 bool loadRecentBooks(RecentBooksStore& store, const char* json);
 }  // namespace JsonSettingsIO
 
+// The list of books lately opened, newest first, with each book's per-book reader overrides.
+//
+// Kept in RAM only while something holds it (Hold), not for the whole session: loaded at boot it
+// cost ~4.5 KB for good and, worse, split the heap's largest free block (61 KB -> 45 KB, X3), which
+// is what the reader then opened every book with. The screens that show the list hold it while
+// they are open; one-off calls (the reader adding its book, a per-book override saved, a book
+// removed) hold it for the length of the call. Holds nest, so a call inside a held stretch reads
+// the list already there.
 class RecentBooksStore {
   // Static instance
   static RecentBooksStore instance;
 
-  std::vector<RecentBook> recentBooks;
+  mutable std::vector<RecentBook> recentBooks;
+  mutable bool loaded = false;
+  uint8_t holds = 0;
 
   friend bool JsonSettingsIO::loadRecentBooks(RecentBooksStore&, const char*);
 
+  void ensureLoaded() const;
+
  public:
+  // Keeps the list in RAM for as long as it lives: the first Hold loads it from the card, the last
+  // one to go lets it go. Hold one across anything that keeps a reference from getBooks().
+  class Hold {
+   public:
+    Hold();
+    ~Hold();
+    Hold(const Hold&) = delete;
+    Hold& operator=(const Hold&) = delete;
+  };
+
   ~RecentBooksStore() = default;
 
   // Get singleton instance
@@ -77,11 +99,18 @@ class RecentBooksStore {
   // Remove a book from the recent list by path
   void removeBook(const std::string& path);
 
-  // Get the list of recent books (most recent first)
-  const std::vector<RecentBook>& getBooks() const { return recentBooks; }
+  // Get the list of recent books (most recent first). The reference is good while a Hold lives.
+  // Called without one, the list is loaded and stays until the next Hold to end lets it go.
+  const std::vector<RecentBook>& getBooks() const {
+    ensureLoaded();
+    return recentBooks;
+  }
 
   // Get the count of recent books
-  int getCount() const { return static_cast<int>(recentBooks.size()); }
+  int getCount() const {
+    ensureLoaded();
+    return static_cast<int>(recentBooks.size());
+  }
 
   // Returns true if the book's file is missing from storage
   static bool isMissing(const RecentBook& book);
@@ -90,6 +119,7 @@ class RecentBooksStore {
   // Returns true if any entry was removed. Does not persist — caller decides.
   bool pruneMissing();
 
+  // Refuses while the list is not loaded: saving then would write an empty list over the file.
   bool saveToFile() const;
 
   bool loadFromFile();

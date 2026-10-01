@@ -1431,7 +1431,9 @@ void setup() {
   // what decides whether a big chapter's section build finishes or aborts, so it needs to be
   // attributable to one of these three stores rather than inferred across boots.
   logStartupMemory("before_stores");
-  RECENT_BOOKS.loadFromFile();
+  // The recent-books list is no longer loaded here: it is held only while a screen or a call
+  // needs it (RecentBooksStore::Hold). Loaded at boot it split the largest free block for the
+  // session -- the reader opened every book with 45 KB of it instead of 61 KB (X3).
   logStartupMemory("after_recent_books");
   GLOBAL_BOOKMARKS.load();
   logStartupMemory("after_bookmarks");

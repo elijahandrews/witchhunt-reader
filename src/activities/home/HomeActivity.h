@@ -17,6 +17,7 @@
 #include "Epub/CoverThumbSession.h"
 #include "HomeMenu.h"
 #include "ReadingStats.h"
+#include "RecentBooksStore.h"
 #include "activities/reader/ReaderActivity.h"
 #include "components/UITheme.h"
 #include "util/ButtonNavigator.h"
@@ -77,6 +78,11 @@ class HomeActivity final : public Activity {
   int coverRectH = 0;
 
   std::vector<RecentBook> recentBooks;
+  // The recent-books store stays loaded while Home is open: it refreshes the list on entry and
+  // writes each cover it makes back into it (updateBook), and reloading the file for each of
+  // those would cost far more than the ~4.5 KB it holds here. Released on exit, so the reader
+  // does not carry it.
+  std::optional<RecentBooksStore::Hold> recentsHold;
   std::vector<HomeMenuEntry> menuEntries;
   bool menuEntriesDirty = true;
 

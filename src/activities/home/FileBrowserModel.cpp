@@ -556,6 +556,9 @@ void FileBrowserModel::resort() {
 // from the list for good, as the Recent Books screen always did on the way in.
 void FileBrowserModel::loadRecents() {
   clearDeepSearch();
+  // One load of the list for the prune, its save and the read below; the paths are copied out, so
+  // nothing here outlives the hold (RecentBooksStore::Hold).
+  const RecentBooksStore::Hold recents;
   if (RECENT_BOOKS.pruneMissing()) RECENT_BOOKS.saveToFile();
   deepRoot = "/";
   const auto& books = RECENT_BOOKS.getBooks();

@@ -25,6 +25,9 @@ void LineReaderActivity::onEnter() {
     return;
   }
 
+  // The scaled-glyph cache, sized for this text's font (see EpubReaderActivity::onEnter).
+  renderer.ensureScaledGlyphCache(SETTINGS.getTxtReaderFontId());
+
   {
     RenderLock lock(*this);
     ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
