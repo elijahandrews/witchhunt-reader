@@ -4,6 +4,7 @@
 #include <common/FsApiConstants.h>  // for oflag_t
 #include <freertos/semphr.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -107,15 +108,28 @@ class HalStorage {
   uint64_t sdUsedBytes();
   uint64_t sdFreeBytes();
 
+  // Goes up whenever the firmware creates, removes, renames or opens for writing anything on the
+  // card outside its own cache folder (/.crosspoint), and when a USB Drive session ends: whatever
+  // was worked out from the card's contents before -- a folder's book count -- may no longer
+  // hold. It errs towards going up: a write that changed nothing costs a recount, never a wrong
+  // answer. Kept in RAM, so it means "since boot"; a card edited elsewhere while the device was
+  // off or asleep (a wake is a boot) is not something it can see.
+  uint32_t contentGeneration() const { return contentGeneration_.load(std::memory_order_relaxed); }
+
   static HalStorage& getInstance() { return instance; }
 
   class StorageLock;  // private class, used internally
 
  private:
+  friend class HalFile;  // HalFile::rename() changes the card too
+
+  void noteContentChange(const char* path);
+
   static HalStorage instance;
 
   bool initialized = false;
   SemaphoreHandle_t storageMutex = nullptr;
+  std::atomic<uint32_t> contentGeneration_{0};
 };
 
 #define Storage HalStorage::getInstance()

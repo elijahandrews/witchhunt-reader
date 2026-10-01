@@ -10,6 +10,9 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+
+#include "FolderCountMemo.h"
 
 namespace {
 
@@ -99,38 +102,108 @@ bool FileBrowserModel::isOpenable(const std::string_view filename) {
   return isReadableBook(filename) || isViewableImage(filename);
 }
 
+namespace {
+
+// Folder counts already worked out this session (see FolderCountMemo). One table for every
+// browser, so leaving Browse Files and coming back keeps them; 512 bytes, whatever the library.
+// The render task reads it (a folder card being drawn) while the loop task's walk writes it.
+FolderCountMemo folderCounts;
+std::mutex folderCountsMutex;
+
+int rememberedCount(const std::string& folder, const uint32_t stamp) {
+  std::lock_guard<std::mutex> guard(folderCountsMutex);
+  return folderCounts.find(folder, stamp);
+}
+
+void rememberCount(const std::string& folder, const int books, const uint32_t stamp) {
+  std::lock_guard<std::mutex> guard(folderCountsMutex);
+  folderCounts.store(folder, books, stamp);
+}
+
+// What a count depends on besides the folder: what is on the card, and whether hidden entries
+// are counted (isListableName).
+uint32_t countStamp() { return (Storage.contentGeneration() << 1) | (SETTINGS.showHiddenFiles ? 1u : 0u); }
+
+}  // namespace
+
+int FileBrowserModel::knownBooksBelow(const std::string& dirPath) { return rememberedCount(dirPath, countStamp()); }
+
+// Depth first, one open directory per level -- at most MAX_DEPTH + 1 of them, however wide the
+// tree -- so a folder's total is complete when its directory runs out, and is recorded then.
+// A folder already in the table is added without being entered, so a count interrupted by a
+// button press resumes past everything it finished, and counting a parent after a child (or the
+// other way round) walks each folder once.
 int FileBrowserModel::countBooksBelow(const std::string& dirPath) {
   constexpr int MAX_DEPTH = 8;  // as deep as anyone files books; a cycle-proof bound besides
-  std::vector<std::pair<std::string, int>> pending;
-  pending.reserve(16);
-  pending.emplace_back(dirPath, 0);
-  int count = 0;
+  const uint32_t stamp = countStamp();
+  if (const int known = rememberedCount(dirPath, stamp); known >= 0) return known;
+
+  struct Level {
+    HalFile dir;
+    std::string path;
+    int books = 0;
+    bool complete = true;  // nothing below was cut off by MAX_DEPTH
+  };
+  std::vector<Level> levels;
+  levels.reserve(MAX_DEPTH + 1);  // references into it stay valid while it grows
+  {
+    auto root = Storage.open(dirPath.c_str());
+    if (!root || !root.isDirectory()) return 0;
+    root.rewindDirectory();
+    levels.push_back(Level{std::move(root), dirPath});
+  }
+  int counted = 0;  // every book found so far, for the cap
   char name[500];
-  while (!pending.empty() && count <= MAX_COUNTED_BOOKS) {
-    if (CooperativeAbort::shouldAbortLongTask()) return -1;
-    const auto [folder, depth] = std::move(pending.back());
-    pending.pop_back();
-    auto dir = Storage.open(folder.c_str());
-    if (!dir || !dir.isDirectory()) {
-      if (dir) dir.close();
+  while (true) {
+    if (CooperativeAbort::shouldAbortLongTask()) return -1;  // the levels close their directories
+    if (counted > MAX_COUNTED_BOOKS) {
+      // More than the card can say. The folder asked about is recorded as such; the ones still
+      // open below it are not finished, so they are not recorded at all.
+      rememberCount(dirPath, MAX_COUNTED_BOOKS + 1, stamp);
+      return MAX_COUNTED_BOOKS + 1;
+    }
+    Level& level = levels.back();
+    auto entry = level.dir.openNextFile();
+    if (!entry) {
+      // This folder is done. Its total is recorded when nothing in it was cut off by depth, and
+      // always for the folder asked about -- that is the number on its card.
+      level.dir.close();
+      const int books = level.books;
+      const bool complete = level.complete;
+      if (complete || levels.size() == 1) rememberCount(level.path, books, stamp);
+      levels.pop_back();
+      if (levels.empty()) return std::min(books, MAX_COUNTED_BOOKS + 1);
+      levels.back().books += books;
+      levels.back().complete = levels.back().complete && complete;
+      HalSystem::feedWatchdog();
       continue;
     }
-    dir.rewindDirectory();
-    for (auto entry = dir.openNextFile(); entry && count <= MAX_COUNTED_BOOKS; entry = dir.openNextFile()) {
-      entry.getName(name, sizeof(name));
-      const bool isDir = entry.isDirectory();
-      entry.close();
-      if (!isListableName(name)) continue;
-      if (isDir) {
-        if (depth < MAX_DEPTH) pending.emplace_back(folder + "/" + name, depth + 1);
-      } else if (isReadableBook(std::string_view{name})) {
-        ++count;
+    entry.getName(name, sizeof(name));
+    const bool isDir = entry.isDirectory();
+    entry.close();
+    if (!isListableName(name)) continue;
+    if (!isDir) {
+      if (isReadableBook(std::string_view{name})) {
+        ++level.books;
+        ++counted;
       }
+      continue;
     }
-    dir.close();
-    HalSystem::feedWatchdog();
+    std::string child = level.path + "/" + name;
+    if (const int known = rememberedCount(child, stamp); known >= 0) {
+      level.books += known;
+      counted += known;
+      continue;
+    }
+    if (levels.size() > MAX_DEPTH) {
+      level.complete = false;  // deeper than we look: this total is a lower bound
+      continue;
+    }
+    auto sub = Storage.open(child.c_str());
+    if (!sub || !sub.isDirectory()) continue;
+    sub.rewindDirectory();
+    levels.push_back(Level{std::move(sub), std::move(child)});
   }
-  return std::min(count, MAX_COUNTED_BOOKS + 1);
 }
 
 bool FileBrowserModel::acceptForAllFiles(const char* name, const bool /*isDir*/) { return isListableName(name); }
