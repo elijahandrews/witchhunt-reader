@@ -94,9 +94,20 @@ void FileBrowserActivity::startActivityForResult(std::unique_ptr<Activity>&& act
 
 void FileBrowserActivity::loop() {
   UiListActivity::loop();
-  if (bookRows.resolveOne(renderer)) requestUpdate();
-  // Titles first: they are quick, and a title card wants its title.
-  if (!bookRows.hasPending()) generateCovers();
+  if (bookRows.hasPending()) {
+    // Titles first: they are quick, and a title card wants its title. An OPF parse's inflate ring
+    // is up to 32 KB of contiguous memory, more than an X3 holding both framebuffers can spare
+    // ("Failed to init inflate reader" on a 350 KB OPF), so it runs in the borrowed framebuffer as
+    // the covers do. A cover in progress holds blocks of that region: it is dropped, and started
+    // again once the titles are done.
+    if (!renderer.isComposingFrame()) {
+      coverLoader->reset();
+      lendForBackgroundWork();
+    }
+    if (bookRows.resolveOne(renderer, coverScratch.get())) requestUpdate();
+    return;
+  }
+  generateCovers();
 }
 
 // Browse Files with Details chosen. A card-wide search keeps filenames: its rows are paths, and
@@ -311,7 +322,7 @@ void FileBrowserActivity::generateCovers() {
       return;
     }
     // Without the lend the decoders fall back to the heap, as the Recent Books grid always does.
-    lendForCovers();
+    lendForBackgroundWork();
     coverLoader->begin(next, coverScratch ? coverScratch.get() : nullptr);
   } else {
     // The selection may have moved off the page since the last burst: then this book can wait.
@@ -356,12 +367,12 @@ void FileBrowserActivity::generateCovers() {
   }
 }
 
-// Borrows the secondary framebuffer for the decoders, as HomeActivity::loadRecentCovers does and
-// for the same reasons it gives: decoding beside two full framebuffers has taken free heap to a few
-// KB. Before the lend: the write buffer is two frames old after the last swap, so it is brought up
-// to the frame on the panel, and on the X4 RED RAM is seeded with that frame, which single-buffer
-// fast diff requires.
-bool FileBrowserActivity::lendForCovers() {
+// Borrows the secondary framebuffer for the title parses and the cover decoders, as
+// HomeActivity::loadRecentCovers does and for the same reasons it gives: decoding beside two full
+// framebuffers has taken free heap to a few KB. Before the lend: the write buffer is two frames old after the last
+// swap, so it is brought up to the frame on the panel, and on the X4 RED RAM is seeded with that frame, which
+// single-buffer fast diff requires.
+bool FileBrowserActivity::lendForBackgroundWork() {
   if (lentRegion != nullptr) return true;
   if (!renderer.hasSecondaryBuffer()) return false;
   RenderLock lock(*this);
@@ -378,7 +389,7 @@ bool FileBrowserActivity::lendForCovers() {
   }
   lentRegion = region;
   renderer.setSingleBufferFastDiff(true);
-  LOG_INF("FBR", "Lent secondary framebuffer for covers (%u bytes, free=%lu)", static_cast<unsigned>(size),
+  LOG_INF("FBR", "Lent secondary framebuffer for titles and covers (%u bytes, free=%lu)", static_cast<unsigned>(size),
           static_cast<unsigned long>(esp_get_free_heap_size()));
   return true;
 }
@@ -398,7 +409,7 @@ void FileBrowserActivity::returnLentBuffer(const bool callerHoldsRenderLock) {
     renderer.setSingleBufferFastDiff(false);
     lentRegion = nullptr;
     Epub::clearCoverMetadataMemo();
-    LOG_INF("FBR", "Returned secondary framebuffer after covers (free=%lu contig=%lu)",
+    LOG_INF("FBR", "Returned secondary framebuffer after titles and covers (free=%lu contig=%lu)",
             static_cast<unsigned long>(esp_get_free_heap_size()),
             static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT)));
   };

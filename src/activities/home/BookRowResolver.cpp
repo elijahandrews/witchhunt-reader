@@ -79,7 +79,7 @@ BookRowResolver::Row& BookRowResolver::store(Row&& fresh) {
 
 // One never-opened EPUB per call -- ~300 ms each -- so the caller's input is read between them.
 // Not beside a frame being composed, which shares the core and the card with the parse.
-bool BookRowResolver::resolveOne(const GfxRenderer& renderer) {
+bool BookRowResolver::resolveOne(const GfxRenderer& renderer, BuildArena* scratch) {
   if (!pending || renderer.isComposingFrame()) return false;
   std::string path;
   uint32_t size = 0;
@@ -122,7 +122,7 @@ bool BookRowResolver::resolveOne(const GfxRenderer& renderer) {
             static_cast<unsigned long>(esp_get_minimum_free_heap_size()));
     const unsigned long parseStart = millis();
     BookDetails details;
-    BookDetailsLookup::parse(path, size, details);
+    BookDetailsLookup::parse(path, size, details, scratch);
     LOG_INF("BRR", "details parse done in %lu ms (%s): free=%lu contig=%lu", millis() - parseStart,
             details.title.empty() ? "no title" : "ok", heapFree(), heapContig());
     RenderLock lock;

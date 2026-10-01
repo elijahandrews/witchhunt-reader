@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+class BuildArena;
+
 // What the book browser's Details view shows for a book: its title, author and series, as the
 // book's own metadata (or its .opf sidecar) gives them rather than as the filename spells them.
 //
@@ -23,8 +25,8 @@ namespace BookDetailsCache {
 // over the same name is not shown under the old one's title, and the stamp of its .opf sidecar
 // (SidecarFiles::metadataStamp), so an edited sidecar is read again.
 //
-// An EPUB whose metadata cannot be parsed is recorded with empty fields rather than not at all:
-// otherwise every visit to its folder would pay the failed parse again.
+// Only a parse that succeeded is recorded. One that failed may have failed for want of memory, and
+// recording it would show the book by its filename for good.
 bool write(const std::string& path, uint32_t bookSize, uint32_t sidecarStamp, const BookDetails& details);
 // False when the file is missing, from another format version, or recorded for a different book
 // size or sidecar stamp. A bookSize of 0 means "not known" and skips that check.
@@ -34,13 +36,15 @@ bool read(const std::string& path, uint32_t bookSize, uint32_t sidecarStamp, Boo
 
 namespace BookDetailsLookup {
 
-// The answer without parsing anything: from book.bin, from details.bin, or -- for a TXT, Markdown
-// or XTC book, which the view titles by filename -- from nothing at all. False only for an EPUB
-// that needs parse() first.
+// The answer without parsing anything: from details.bin, or -- for a TXT, Markdown or XTC book,
+// which the view titles by filename -- from nothing at all. False only for an EPUB that needs
+// parse() first.
 bool cached(const std::string& bookPath, uint32_t bookSize, BookDetails& out);
 
 // The slow path for an EPUB cached() could not answer: parse its OPF metadata and record the
-// result in details.bin for next time. Always fills `out`, with empty fields when parsing failed.
-void parse(const std::string& bookPath, uint32_t bookSize, BookDetails& out);
+// result in details.bin for next time. Always fills `out` -- with empty fields when parsing failed,
+// which is then not recorded, so the next visit tries again. `scratch` holds the OPF inflate ring
+// instead of the heap when given. True when the parse succeeded.
+bool parse(const std::string& bookPath, uint32_t bookSize, BookDetails& out, BuildArena* scratch = nullptr);
 
 }  // namespace BookDetailsLookup

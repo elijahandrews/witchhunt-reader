@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+class BuildArena;
 class GfxRenderer;
 
 // What a book list shows for the books on screen, worked out from their paths.
@@ -50,7 +51,8 @@ class BookRowResolver {
   // Parses one book still marked needsParse -- or, with none left, counts one folder marked
   // needsCount -- if no frame is being composed. True when that was the last one pending: the
   // caller redraws once, rather than once per row.
-  bool resolveOne(const GfxRenderer& renderer);
+  // `scratch`: lent memory for the OPF parse's inflate ring (see BookDetailsLookup::parse).
+  bool resolveOne(const GfxRenderer& renderer, BuildArena* scratch = nullptr);
 
   // Some row is still waiting for resolveOne().
   bool hasPending() const { return pending; }

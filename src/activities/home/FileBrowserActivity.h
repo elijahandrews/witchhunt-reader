@@ -89,7 +89,7 @@ class FileBrowserActivity final : public UiListActivity {
   uint8_t* lentRegion = nullptr;
   std::unique_ptr<BuildArena> coverScratch;
   void generateCovers();
-  bool lendForCovers();
+  bool lendForBackgroundWork();
   void returnLentBuffer(bool callerHoldsRenderLock);
 
   [[nodiscard]] int listPageSize() const;
