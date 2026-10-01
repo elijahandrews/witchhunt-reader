@@ -93,29 +93,34 @@ void HalPowerManager::setPowerSaving(bool enabled) {
     enabled = false;
   }
 
-  // Relaxed atomic read: a slightly stale value is acceptable (the lock holder
-  // that just won the race will re-call setPowerSaving anyway), but we want
-  // defined semantics rather than relying on compiler behavior for a plain int.
+  // Under modeMutex, as Lock acquisition is. This used to read the lock state relaxed and change the
+  // clock after it, on the theory that a Lock which won the race would call setPowerSaving() again.
+  // It does not: a Lock calls it once, on acquisition. So a downclock decided on "no lock held" and
+  // completed AFTER a Lock's restore stranded that holder at 10 MHz until the next button press --
+  // a 190 ms render took 3.2 s, and the loop task waiting on it 4 s (X3, Covers view). With the
+  // check and the change under the mutex, a Lock either comes first and is seen, or comes after and
+  // finds isLowPower set and restores it.
+  if (modeMutex == nullptr) return;
+  xSemaphoreTake(modeMutex, portMAX_DELAY);
   const LockMode mode = currentLockMode.load(std::memory_order_relaxed);
 
   if (mode == None && enabled && !isLowPower) {
     LOG_DBG("PWR", "Going to low-power mode");
-    if (!setCpuFrequencyMhz(LOW_POWER_FREQ)) {
+    if (setCpuFrequencyMhz(LOW_POWER_FREQ)) {
+      isLowPower = true;
+    } else {
       LOG_DBG("PWR", "Failed to set CPU frequency = %d MHz", LOW_POWER_FREQ);
-      return;
     }
-    isLowPower = true;
-
   } else if ((!enabled || mode != None) && isLowPower) {
     LOG_DBG("PWR", "Restoring normal CPU frequency");
-    if (!setCpuFrequencyMhz(normalFreq)) {
+    if (setCpuFrequencyMhz(normalFreq)) {
+      isLowPower = false;
+    } else {
       LOG_DBG("PWR", "Failed to set CPU frequency = %d MHz", normalFreq);
-      return;
     }
-    isLowPower = false;
   }
-
   // Otherwise, no change needed
+  xSemaphoreGive(modeMutex);
 }
 
 void HalPowerManager::ensureFullSpeedForRadio() {
