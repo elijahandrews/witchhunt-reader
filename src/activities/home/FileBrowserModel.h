@@ -96,6 +96,9 @@ class FileBrowserModel {
   [[nodiscard]] bool deepResultsTruncated() const { return deepTruncated; }
   // Absolute path for a row, whichever mode is live. The caller no longer composes it.
   [[nodiscard]] std::string entryFullPath(size_t displayIndex);
+  // The row's file size in bytes, or 0 when not known: a directory, a card-wide search result
+  // (the walk keeps paths only), or an index read failure.
+  [[nodiscard]] uint32_t entrySize(size_t displayIndex);
   // Ends a card-wide search and returns the browser to the folder it was started from.
   void clearSearch() { clearDeepSearch(); }
   // Folder holding a result row, relative to the search root ("" when it sat at the root).

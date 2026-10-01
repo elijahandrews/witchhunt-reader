@@ -32,6 +32,8 @@ class FileBrowserActivity final : public UiListActivity {
 
   static constexpr size_t LIST_WINDOW_CAPACITY = 24;
   std::array<std::string, LIST_WINDOW_CAPACITY> windowLabels;
+  std::array<std::string, LIST_WINDOW_CAPACITY> windowSubtitles;
+  std::array<std::string, LIST_WINDOW_CAPACITY> windowValues;
   std::array<freeink::ui::ListItem, LIST_WINDOW_CAPACITY> windowItems;
   uint16_t windowFirst = 0;
   uint16_t windowCount = 0;
@@ -41,6 +43,29 @@ class FileBrowserActivity final : public UiListActivity {
   FileBrowserModel model;
 
   std::string focusName;  // entry to select on first load (e.g. the file just returned from)
+
+  // Details view: what a book row says instead of its filename, for the rows drawn lately. Keyed
+  // by full path; a ring of DETAILS_CACHE_CAPACITY entries, reserved once and overwritten oldest
+  // first, so moving the selection redraws from memory and a long folder costs no more than a
+  // short one. Written by the render task (materializeListWindow) and by loop(), under the
+  // render lock both times.
+  struct RowDetails {
+    std::string path;
+    uint32_t size = 0;
+    std::string title;     // "" = keep the filename
+    std::string subtitle;  // "Author · Series #3"
+    std::string value;     // "42%", Finished, or ""
+    bool needsParse = false;
+  };
+  static constexpr size_t DETAILS_CACHE_CAPACITY = 16;
+  std::vector<RowDetails> detailsCache;
+  size_t detailsNext = 0;
+  bool detailsPending = false;  // some cached row is still waiting for its OPF parse
+
+  bool detailsView() const;
+  RowDetails& rowDetails(const std::string& path, uint32_t size);
+  void resolvePendingDetails();
+  void clearDetails();
 
   [[nodiscard]] int listPageSize() const;
   [[nodiscard]] bool listPages() const;
@@ -67,6 +92,7 @@ class FileBrowserActivity final : public UiListActivity {
   }
   void onEnter() override;
   void onExit() override;
+  void loop() override;
 
  private:
   int listCount() const override;

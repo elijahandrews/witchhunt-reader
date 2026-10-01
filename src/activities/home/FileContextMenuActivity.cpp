@@ -14,7 +14,8 @@ FileContextMenuActivity::FileContextMenuActivity(GfxRenderer& renderer, MappedIn
                                                  CrossPointSettings::FILE_SORT_MODE sortMode,
                                                  CrossPointSettings::FILE_SORT_DIRECTION sortDirection,
                                                  const bool offerDirectoryActions, const bool searchActive,
-                                                 const bool offerGoToFolder, const bool offerFileManagement)
+                                                 const bool offerGoToFolder, const bool offerFileManagement,
+                                                 const bool offerViewChoice)
     : MenuListActivity("FileContextMenu", renderer, mappedInput),
       filePath(filePath),
       isBrowserMode(filePath.empty()),
@@ -22,10 +23,12 @@ FileContextMenuActivity::FileContextMenuActivity(GfxRenderer& renderer, MappedIn
       searchActive(searchActive),
       offerGoToFolder(offerGoToFolder),
       offerFileManagement(offerFileManagement),
+      offerViewChoice(offerViewChoice),
       sortMode(static_cast<uint8_t>(sortMode)),
       sortDirection(static_cast<uint8_t>(sortDirection)),
       showHiddenFiles(SETTINGS.showHiddenFiles),
-      showFileExtensions(SETTINGS.showFileExtensions) {
+      showFileExtensions(SETTINGS.showFileExtensions),
+      browserView(SETTINGS.fileBrowserView) {
   buildMenuItems();
 }
 
@@ -68,6 +71,13 @@ void FileContextMenuActivity::buildMenuItems() {
         return static_cast<const FileContextMenuActivity*>(ctx)->showFileExtensions ? 1 : 0;
       },
       [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->showFileExtensions = (v != 0) ? 1 : 0; }));
+
+  if (offerViewChoice) {
+    menuItems.push_back(SettingInfo::DynamicEnumCtx(
+        StrId::STR_BROWSER_VIEW, {StrId::STR_VIEW_FILENAMES, StrId::STR_VIEW_DETAILS}, self,
+        [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->browserView; },
+        [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->browserView = v; }));
+  }
 
   // Browser mode stops after the display options, except for the two things that belong to the
   // folder you are standing in rather than to any row: making one, and (for a directory)
@@ -159,6 +169,7 @@ void FileContextMenuActivity::finishWithDisplayOptions(Action action) {
   res.sortDirection = sortDirection;
   res.showHiddenFiles = showHiddenFiles;
   res.showFileExtensions = showFileExtensions;
+  res.browserView = browserView;
   ActivityResult result{std::move(res)};
   result.isCancelled = false;
   setResult(std::move(result));

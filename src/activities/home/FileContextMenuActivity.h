@@ -44,7 +44,7 @@ class FileContextMenuActivity final : public MenuListActivity {
       CrossPointSettings::FILE_SORT_MODE sortMode = CrossPointSettings::SORT_BY_NAME,
       CrossPointSettings::FILE_SORT_DIRECTION sortDirection = CrossPointSettings::SORT_ASCENDING,
       bool offerDirectoryActions = false, bool searchActive = false, bool offerGoToFolder = false,
-      bool offerFileManagement = true);
+      bool offerFileManagement = true, bool offerViewChoice = false);
 
   void render(RenderLock&&) override;
 
@@ -60,6 +60,8 @@ class FileContextMenuActivity final : public MenuListActivity {
   bool offerGoToFolder;
   // New folder, Move to folder and Remove on a directory. Off in the firmware picker.
   bool offerFileManagement;
+  // Filenames / Details. Browse Files only: the other browsers list files, not books.
+  bool offerViewChoice;
 
   // Display option state, edited inline via DynamicEnum and returned on close.
   // Sort state is per-session (held by FileBrowserActivity); visibility toggles
@@ -68,6 +70,7 @@ class FileContextMenuActivity final : public MenuListActivity {
   uint8_t sortDirection;
   uint8_t showHiddenFiles;
   uint8_t showFileExtensions;
+  uint8_t browserView;
 
   void buildMenuItems();
   void onActionSelected(int index) override;
