@@ -345,12 +345,12 @@ void RecentBooksActivity::loop() {
       return;
     }
 
-    // Up short: navigate (row up in grid, previous in list)
+    // Up short: navigate (row up in grid, previous in list), wrapping at the top as Browse Files does
     if (MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Up) &&
         ev.type == ButtonEventManager::PressType::Short) {
       if (!recentBooks.empty()) {
         if (gridView) {
-          selectorIndex = std::max(0, selectorIndex - gridColumns());
+          selectorIndex = CoverGridLayout::rowAbove(selectorIndex, listSize, gridColumns());
         } else {
           selectorIndex = ButtonNavigator::previousIndex(selectorIndex, listSize);
         }
@@ -359,12 +359,12 @@ void RecentBooksActivity::loop() {
       continue;
     }
 
-    // Down short: navigate (row down in grid, next in list)
+    // Down short: navigate (row down in grid, next in list), wrapping at the bottom
     if (MappedInputManager::isDirection(ev.button, MappedInputManager::Direction::Down) &&
         ev.type == ButtonEventManager::PressType::Short) {
       if (!recentBooks.empty()) {
         if (gridView) {
-          selectorIndex = std::min(listSize - 1, selectorIndex + gridColumns());
+          selectorIndex = CoverGridLayout::rowBelow(selectorIndex, listSize, gridColumns());
         } else {
           selectorIndex = ButtonNavigator::nextIndex(selectorIndex, listSize);
         }

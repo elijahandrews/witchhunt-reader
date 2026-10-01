@@ -262,3 +262,38 @@ TEST(CoverGridLayoutHitTest, MissesAboveTheGridAndBelowTheLastRow) {
   EXPECT_EQ(-1, CoverGridLayout::hitTest(l, kOriginX, kOriginY, 0, count, x, kOriginY - 1));
   EXPECT_EQ(-1, CoverGridLayout::hitTest(l, kOriginX, kOriginY, 0, count, x, kOriginY + l.rows * l.rowStride));
 }
+
+// Row steps in the Recent Books grid wrap like every list does (it used to stop dead at both ends).
+TEST(CoverGridLayout, RowStepsMoveByAWholeRow) {
+  EXPECT_EQ(CoverGridLayout::rowBelow(1, 10, 2), 3);
+  EXPECT_EQ(CoverGridLayout::rowAbove(5, 10, 3), 2);
+}
+
+TEST(CoverGridLayout, DownFromTheLastRowWrapsToTheSameColumnOfTheFirst) {
+  EXPECT_EQ(CoverGridLayout::rowBelow(8, 10, 2), 0);
+  EXPECT_EQ(CoverGridLayout::rowBelow(9, 10, 2), 1);
+  EXPECT_EQ(CoverGridLayout::rowBelow(7, 8, 3), 1);  // partial last row: its own column, from the top
+}
+
+TEST(CoverGridLayout, UpFromTheFirstRowWrapsToTheLastRowThatHasTheColumn) {
+  EXPECT_EQ(CoverGridLayout::rowAbove(0, 10, 2), 8);
+  EXPECT_EQ(CoverGridLayout::rowAbove(1, 10, 2), 9);
+  // 8 items in rows of 3: the last row holds 6 and 7, so column 2 ends a row higher, on 5.
+  EXPECT_EQ(CoverGridLayout::rowAbove(2, 8, 3), 5);
+  EXPECT_EQ(CoverGridLayout::rowAbove(1, 8, 3), 7);
+}
+
+TEST(CoverGridLayout, DownIntoAPartialLastRowLandsOnItsLastCell) {
+  // 8 items in rows of 3: from 5 (column 2) there is nothing directly below.
+  EXPECT_EQ(CoverGridLayout::rowBelow(5, 8, 3), 7);
+}
+
+TEST(CoverGridLayout, RowStepsInASingleRowStayPut) {
+  EXPECT_EQ(CoverGridLayout::rowBelow(1, 2, 3), 1);
+  EXPECT_EQ(CoverGridLayout::rowAbove(1, 2, 3), 1);
+}
+
+TEST(CoverGridLayout, RowStepsOnAnEmptyGridAreHarmless) {
+  EXPECT_EQ(CoverGridLayout::rowBelow(0, 0, 3), 0);
+  EXPECT_EQ(CoverGridLayout::rowAbove(0, 0, 0), 0);
+}

@@ -43,6 +43,13 @@ struct Layout {
 
 Layout compute(const Input& in);
 
+// The cell a row step lands on, wrapping at both ends like the lists do: Down from the last row goes
+// to the same column of the first, Up from the first row to the same column of the last row that
+// has one. A step down into a partial last row from a column it does not reach lands on its last
+// cell. `count` items, `cols` per row; pure arithmetic, exercised on the host.
+int rowBelow(int index, int count, int cols);
+int rowAbove(int index, int count, int cols);
+
 // Which cell a point falls in, as an absolute item index, or -1 for a miss.
 //
 // The inverse of the caller's cell placement, and deliberately expressed in the same terms so

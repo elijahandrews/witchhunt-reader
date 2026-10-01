@@ -39,6 +39,21 @@ Layout compute(const Input& in) {
   return l;
 }
 
+int rowBelow(const int index, const int count, const int cols) {
+  if (count <= 0 || cols <= 0) return 0;
+  if (index + cols < count) return index + cols;
+  const int lastRowStart = (count - 1) / cols * cols;
+  if (index < lastRowStart) return count - 1;  // the partial last row has no cell in this column
+  return index % cols;                         // from the last row: back to the first
+}
+
+int rowAbove(const int index, const int count, const int cols) {
+  if (count <= 0 || cols <= 0) return 0;
+  if (index - cols >= 0) return index - cols;
+  const int col = index % cols;
+  return col + (count - 1 - col) / cols * cols;  // the same column, on the last row that has it
+}
+
 int hitTest(const Layout& l, const int originX, const int originY, const int pageStartRow, const int itemCount,
             const int px, const int py) {
   if (l.cols <= 0 || l.rows <= 0 || l.cellWidth <= 0 || l.rowStride <= 0) return -1;
