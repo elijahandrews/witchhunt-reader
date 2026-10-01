@@ -78,17 +78,25 @@ GridLayout computeGridLayout(const GfxRenderer& renderer) {
   l.content = UITheme::getContentRect(renderer, true, true);
   l.contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   l.contentHeight = l.content.height - l.contentTop - metrics.verticalSpacing;
-
-  // Reserve the strip the gesture-hint line occupies, on the boards that draw one; the
-  // scroll arrows share it either way, hence the 12 px floor. Same predicate as the draw,
-  // so the two cannot drift apart.
-  l.cells = CoverGridLayout::compute({.contentWidth = l.content.width,
-                                      .contentHeight = l.contentHeight,
-                                      .bottomReserve = gridShowsGestureHint() ? 24 : 12,
-                                      .maxCellHeight = RecentBooksActivity::GRID_MAX_CELL_HEIGHT});
+  l.cells = CoverGridLayout::compute(RecentBooksActivity::gridInput(renderer));
   return l;
 }
 }  // namespace
+
+CoverGridLayout::Input RecentBooksActivity::gridInput(const GfxRenderer& renderer) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect content = UITheme::getContentRect(renderer, true, true);
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  // Reserve the strip the gesture-hint line occupies, on the boards that draw one; the scroll
+  // arrows share it either way, hence the 12 px floor. Same predicate as the draw, so the two
+  // cannot drift apart. Browse Files reserves the same strip without drawing the hint: its grid
+  // must come out exactly like this one, or the two would make different thumbnails.
+  return {.contentWidth = content.width,
+          .contentHeight = content.height - contentTop - metrics.verticalSpacing,
+          .bottomReserve = gridShowsGestureHint() ? 24 : 12,
+          .maxCellHeight = GRID_MAX_CELL_HEIGHT,
+          .maxCellWidth = GRID_MAX_CELL_WIDTH};
+}
 
 void RecentBooksActivity::loadRecentBooks() {
   recentBooks = RECENT_BOOKS.getBooks();
@@ -164,7 +172,10 @@ void RecentBooksActivity::onEnter() {
   prevSelectorIndex = -1;
   fullRedrawNeeded = true;
   openingBook = false;
-  const std::pair<int, int> gridThumb{GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT};
+  // The thumbnail the grid's cells take on this panel. The UI is always portrait and the theme only
+  // changes in Settings, so it holds for as long as this screen is open.
+  const CoverGridLayout::Layout cells = computeGridLayout(renderer).cells;
+  const std::pair<int, int> gridThumb{cells.thumbWidth, cells.thumbHeight};
   coverLoader.configure(&gridThumb, 1, GRID_THUMB_CROP);
 
   requestUpdate();
@@ -554,7 +565,11 @@ void RecentBooksActivity::renderListView(RenderLock&&) {
   renderer.displayBuffer();
 }
 
-void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, int cellY, int tw, int th, int labelW) {
+void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, int cellY,
+                                         const CoverGridLayout::Layout& cells) {
+  const int tw = cells.cellWidth;
+  const int th = cells.cellHeight;
+  const int labelW = cells.labelWidth;
   const auto& book = recentBooks[index];
   const int labelY = cellY + th + 3;
   const int cellFillHeight = th + CoverGridLayout::kLabelHeight + 3;
@@ -570,7 +585,7 @@ void RecentBooksActivity::renderGridCell(int index, bool selected, int cellX, in
   Rect frame{cellX, cellY, tw, th};
 
   if (!book.coverBmpPath.empty()) {
-    const std::string thumbPath = gridThumbPath(book.coverBmpPath, GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT);
+    const std::string thumbPath = gridThumbPath(book.coverBmpPath, cells.thumbWidth, cells.thumbHeight);
     FsFile file;
     bool thumbDrawn = false;
     if (Storage.openFileForRead("RBA", thumbPath, file)) {
@@ -647,14 +662,12 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
   const int margin = CoverGridLayout::kMargin;
   const int cols = layout.cells.cols;
   const int tw = layout.cells.cellWidth;
-  const int th = layout.cells.cellHeight;
   const int cellHeight = layout.cells.rowStride;
   const int visibleRows = layout.cells.rows;
   const int totalRows = (static_cast<int>(recentBooks.size()) + cols - 1) / cols;
   const int selectedRow = selectorIndex / cols;
   const int pageStartRow = (selectedRow / visibleRows) * visibleRows;
   const int startIndex = pageStartRow * cols;
-  const int labelW = layout.cells.labelWidth;
 
   auto cellPos = [&](int i, int& cx, int& cy) {
     const int row = (i / cols) - pageStartRow;
@@ -676,9 +689,9 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
     renderer.syncWriteBufferFromDisplayed();
     int cx, cy;
     cellPos(prevSelectorIndex, cx, cy);
-    renderGridCell(prevSelectorIndex, false, cx, cy, tw, th, labelW);
+    renderGridCell(prevSelectorIndex, false, cx, cy, layout.cells);
     cellPos(selectorIndex, cx, cy);
-    renderGridCell(selectorIndex, true, cx, cy, tw, th, labelW);
+    renderGridCell(selectorIndex, true, cx, cy, layout.cells);
     prevSelectorIndex = selectorIndex;
     renderer.displayBuffer();
     return;
@@ -706,7 +719,7 @@ void RecentBooksActivity::renderGridView(RenderLock&&) {
   for (int i = startIndex; i < endIndex; i++) {
     int cx, cy;
     cellPos(i, cx, cy);
-    renderGridCell(i, i == selectorIndex, cx, cy, tw, th, labelW);
+    renderGridCell(i, i == selectorIndex, cx, cy, layout.cells);
   }
 
   // Scroll arrows when content spans multiple pages

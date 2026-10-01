@@ -50,8 +50,6 @@ FileBrowserActivity::FileBrowserActivity(GfxRenderer& renderer, MappedInputManag
       focusName(std::move(focusName)),
       coverLoader(std::make_unique<CoverThumbLoader>()) {
   model.setPath(std::move(initialPath));
-  const std::pair<int, int> gridThumb{RecentBooksActivity::GRID_THUMB_WIDTH, RecentBooksActivity::GRID_THUMB_HEIGHT};
-  coverLoader->configure(&gridThumb, 1, RecentBooksActivity::GRID_THUMB_CROP);
 }
 
 FileBrowserActivity::~FileBrowserActivity() = default;
@@ -70,6 +68,12 @@ void FileBrowserActivity::onEnter() {
     }
     focusName.clear();
   }
+
+  // The thumbnail the grid's cells take on this panel -- the Recent Books grid's, cell for cell.
+  // The UI is always portrait and the theme only changes in Settings, so it holds while this is open.
+  const CoverGridLayout::Layout cells = coverGrid().cells;
+  const std::pair<int, int> gridThumb{cells.thumbWidth, cells.thumbHeight};
+  coverLoader->configure(&gridThumb, 1, RecentBooksActivity::GRID_THUMB_CROP);
 
   RenderLock lock(*this);
   UiListActivity::onEnter();
@@ -123,18 +127,15 @@ bool FileBrowserActivity::coversView() const {
          !model.isDeepSearch();
 }
 
-// The recent-books grid's own computation (see computeGridLayout there): same content rect, same
-// first-row offset, same ceiling on the cover box -- the stored thumbnail's height -- so a cover
-// is drawn 1:1 and never resampled, which would alias its dither into a visible grid.
+// The recent-books grid's own layout (RecentBooksActivity::gridInput): same content rect, same
+// first-row offset, same cells -- so both make the same thumbnail, and it draws 1:1, never
+// resampled, which would alias its dither into a visible grid.
 FileBrowserActivity::CoverGrid FileBrowserActivity::coverGrid() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   CoverGrid g;
   g.content = UITheme::getContentRect(renderer, true, true);
   g.top = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  g.cells = CoverGridLayout::compute({.contentWidth = g.content.width,
-                                      .contentHeight = g.content.height - g.top - metrics.verticalSpacing,
-                                      .bottomReserve = 12,
-                                      .maxCellHeight = RecentBooksActivity::GRID_MAX_CELL_HEIGHT});
+  g.cells = CoverGridLayout::compute(RecentBooksActivity::gridInput(renderer));
   g.perPage = std::max(1, g.cells.cols * g.cells.rows);
   return g;
 }
@@ -205,9 +206,9 @@ void FileBrowserActivity::drawCoverCell(const int index, const int x, const int 
   }
 }
 
-// The book's cover, from the grid thumbnail the recent-books grid, the finished-book screen or
-// generateCovers() made, centred in the cell; `drawn` is where it landed. NoCover is the 1x1
-// placeholder of a book that has none; Missing is a thumbnail not made yet, or cut short.
+// The book's cover, from the grid thumbnail the recent-books grid or generateCovers() made (on a
+// panel whose cells take the full-size box, the finished-book screen's too), centred in the cell; `drawn` is where it
+// landed. NoCover is the 1x1 placeholder of a book that has none; Missing is a thumbnail not made yet, or cut short.
 FileBrowserActivity::CoverThumb FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x,
                                                                     const int y, const int tw, const int th,
                                                                     Rect& drawn) {
@@ -310,10 +311,7 @@ void FileBrowserActivity::generateCovers() {
         if (entry.empty() || entry.back() == '/') continue;
         const std::string path = base + entry;
         if (std::find(coverFailed.begin(), coverFailed.end(), path) != coverFailed.end()) continue;
-        if (!ReaderActivity::isCoverThumbComplete(coverLoader->thumbPath(path), RecentBooksActivity::GRID_THUMB_WIDTH,
-                                                  RecentBooksActivity::GRID_THUMB_HEIGHT)) {
-          next = path;
-        }
+        if (!coverLoader->complete(path)) next = path;
       }
     }
     if (next.empty()) {

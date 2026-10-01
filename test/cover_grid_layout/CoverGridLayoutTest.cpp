@@ -8,8 +8,9 @@
 
 namespace {
 
-// Cover box ceiling used by RecentBooksActivity: the stored 220x240 thumbnail plus its 1 px frame.
+// Cover box ceilings used by RecentBooksActivity: the full-size 196x240 thumbnail plus its 1 px frame.
 constexpr int kMaxCell = 242;
+constexpr int kMaxCellWidth = 198;
 
 // Content area left to the grid, computed the way RecentBooksActivity does it:
 //   width  = panel width - side button hints
@@ -24,7 +25,7 @@ CoverGridLayout::Input portrait(int panelW, int panelH, const Theme& t, bool isX
   const int contentWidth = panelW - (isX3 ? 2 * t.sideHints : t.sideHints);
   const int contentTop = t.topPadding + t.header + t.spacing;
   const int contentHeight = (panelH - t.buttonHints) - contentTop - t.spacing;
-  return {contentWidth, contentHeight, isX3 ? 12 : 24, kMaxCell};
+  return {contentWidth, contentHeight, isX3 ? 12 : 24, kMaxCell, kMaxCellWidth};
 }
 
 }  // namespace
@@ -36,6 +37,8 @@ TEST(CoverGridLayout, X4PortraitIsTwoByTwoWithFullSizeCells) {
     EXPECT_EQ(l.rows, 2);
     EXPECT_EQ(l.cellWidth, 210);
     EXPECT_EQ(l.cellHeight, kMaxCell);  // stored thumb draws 1:1, never resampled
+    EXPECT_EQ(l.thumbWidth, 196);       // the full-size thumbnail: the covers already on the card
+    EXPECT_EQ(l.thumbHeight, 240);
   }
 }
 
@@ -46,6 +49,57 @@ TEST(CoverGridLayout, X3PortraitIsTwoByTwoWithFullSizeCells) {
     EXPECT_EQ(l.rows, 2);
     EXPECT_EQ(l.cellWidth, 219);
     EXPECT_EQ(l.cellHeight, kMaxCell);
+    EXPECT_EQ(l.thumbWidth, 196);
+    EXPECT_EQ(l.thumbHeight, 240);
+  }
+}
+
+// The LilyGo T5S3's 540x960 panel: two full-size rows left 211 px blank, more than half a row, so it
+// takes a third row of slightly smaller cells -- and at that cover width, a third column.
+TEST(CoverGridLayout, T5S3PortraitIsThreeByThreeWithShrunkCells) {
+  const auto l = CoverGridLayout::compute(portrait(540, 960, kLyra, /*isX3=*/false));
+  EXPECT_EQ(l.cols, 3);
+  EXPECT_EQ(l.rows, 3);
+  EXPECT_EQ(l.cellWidth, 156);
+  EXPECT_EQ(l.cellHeight, 212);
+  EXPECT_EQ(l.thumbWidth, 154);  // the thumbnail is made at the cell's size, so it still draws 1:1
+  EXPECT_EQ(l.thumbHeight, 210);
+}
+
+TEST(CoverGridLayout, LessThanHalfARowLeftKeepsFullSizeCells) {
+  constexpr int stride = kMaxCell + CoverGridLayout::kLabelHeight + CoverGridLayout::kMargin;
+  const auto l = CoverGridLayout::compute({.contentWidth = 450,
+                                           .contentHeight = 2 * stride + stride / 2 - 1,
+                                           .bottomReserve = 0,
+                                           .maxCellHeight = kMaxCell,
+                                           .maxCellWidth = kMaxCellWidth});
+  EXPECT_EQ(l.rows, 2);
+  EXPECT_EQ(l.cellHeight, kMaxCell);
+}
+
+TEST(CoverGridLayout, HalfARowLeftTakesAnotherRow) {
+  constexpr int stride = kMaxCell + CoverGridLayout::kLabelHeight + CoverGridLayout::kMargin;
+  const auto l = CoverGridLayout::compute({.contentWidth = 450,
+                                           .contentHeight = 2 * stride + stride / 2,
+                                           .bottomReserve = 0,
+                                           .maxCellHeight = kMaxCell,
+                                           .maxCellWidth = kMaxCellWidth});
+  EXPECT_EQ(l.rows, 3);
+  EXPECT_LT(l.cellHeight, kMaxCell);
+  EXPECT_LE(l.rows * l.rowStride, 2 * stride + stride / 2);
+}
+
+TEST(CoverGridLayout, ThumbnailAlwaysFitsItsCell) {
+  for (const auto& theme : {kClassic, kLyra}) {
+    for (int panelH = 500; panelH <= 1600; panelH += 13) {
+      for (int panelW = 300; panelW <= 1200; panelW += 37) {
+        const auto l = CoverGridLayout::compute(portrait(panelW, panelH, theme, /*isX3=*/false));
+        EXPECT_LE(l.thumbWidth, l.cellWidth - 2) << panelW << "x" << panelH;
+        EXPECT_LE(l.thumbHeight, l.cellHeight - 2) << panelW << "x" << panelH;
+        EXPECT_LE(l.thumbWidth, kMaxCellWidth - 2);
+        EXPECT_LE(l.thumbHeight, kMaxCell - 2);
+      }
+    }
   }
 }
 
@@ -62,16 +116,16 @@ TEST(CoverGridLayout, EveryPageFitsTheContentArea) {
 TEST(CoverGridLayout, HigherResolutionPanelGetsMoreCellsNotBiggerOnes) {
   // A 1072x1448 300 dpi panel: nothing changes but the numbers handed in.
   const auto l = CoverGridLayout::compute(portrait(1072, 1448, kLyra, /*isX3=*/false));
-  EXPECT_EQ(l.cols, 4);
+  EXPECT_EQ(l.cols, 6);
   EXPECT_EQ(l.rows, 4);
-  EXPECT_EQ(l.cellHeight, kMaxCell);  // still capped by the stored thumbnail
-  EXPECT_GE(l.cellWidth, CoverGridLayout::kMinCellWidth);
+  EXPECT_EQ(l.cellHeight, kMaxCell);  // still capped by the full-size thumbnail
 }
 
-TEST(CoverGridLayout, ColumnsNeverDropBelowTheMinimumCellWidth) {
+// A column holds a 2:3 cover at the cell's height -- the usual shape, and what a fitted one fills.
+TEST(CoverGridLayout, EveryColumnHoldsAPortraitCover) {
   for (int panelW = 300; panelW <= 2000; panelW += 7) {
     const auto l = CoverGridLayout::compute(portrait(panelW, 1000, kClassic, /*isX3=*/false));
-    EXPECT_GE(l.cellWidth, CoverGridLayout::kMinCellWidth) << "panel width " << panelW;
+    EXPECT_GE(l.cellWidth, (l.cellHeight - 2) * 2 / 3 + 2) << "panel width " << panelW;
   }
 }
 
