@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "CoverThumbLoader.h"
 #include "RecentBooksStore.h"
 #include "activities/reader/ReaderActivity.h"
 
@@ -53,15 +54,8 @@ class RecentBooksActivity final : public Activity {
   bool firstRenderDone = false;
   size_t nextCoverIndex = 0;
 
-  // Phase 1: sliced ZIP extraction of cover.img for large embedded PNG covers
-  std::unique_ptr<ReaderActivity::CoverExtractSession> extractSession;
-
-  // Phase 2: sliced PNG decode session (non-null while a PNG cover is being decoded row-by-row)
-  std::unique_ptr<PngDecodeSession> pngSession;
-  ReaderActivity::PngThumbFiles pngSessionFiles;
-  bool pngSessionFailed = false;
-  // Throttle for the cover-decode progress log (millis() of the last line emitted).
-  uint32_t lastCoverProgressLogMs_ = 0;
+  // Makes the grid thumbnail of the book at nextCoverIndex, one step per loadNextCover() call.
+  CoverThumbLoader coverLoader;
 
   // Partial selection repaint: track previous index so we only redraw two cells
   int prevSelectorIndex = -1;
@@ -73,7 +67,7 @@ class RecentBooksActivity final : public Activity {
   bool openingBook = false;
 
   void loadRecentBooks();
-  // Generates the next missing grid thumbnail (one per call). Returns true when all done.
+  // One unit of cover making (one CoverThumbLoader step) per call. True once every cover is resolved.
   bool loadNextCover();
 
   void switchViewMode(bool grid);
