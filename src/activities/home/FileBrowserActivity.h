@@ -12,6 +12,8 @@
 #include "BookRowResolver.h"
 #include "FileBrowserModel.h"
 #include "RecentBooksStore.h"
+#include "components/CoverGridLayout.h"
+#include "components/themes/BaseTheme.h"
 
 class FileBrowserActivity final : public UiListActivity {
  public:
@@ -49,6 +51,26 @@ class FileBrowserActivity final : public UiListActivity {
   BookRowResolver bookRows;
 
   bool detailsView() const;
+  bool coversView() const;
+
+  // Covers view: the same rows as a grid of covers, laid out by CoverGridLayout exactly as the
+  // recent-books grid is, so the two share a thumbnail size and every cover either one has made.
+  // Navigation stays the list's -- next/previous cell, a page per Left/Right -- and the page on
+  // screen is the one holding the selection.
+  struct CoverGrid {
+    Rect content{};
+    int top = 0;  // y of the first row, below the header
+    CoverGridLayout::Layout cells{};
+    int perPage = 1;
+  };
+  CoverGrid coverGrid() const;
+  void afterUiRender() override;
+  void drawCoverGrid();
+  void drawCoverCell(int index, int x, int y, const CoverGridLayout::Layout& cells, bool selected,
+                     const std::string& base);
+  bool drawCoverThumb(const std::string& bookPath, int x, int y, int tw, int th);
+  void drawTitleCard(const std::string& title, int x, int y, int tw, int th);
+  bool handleCoverTouch();
 
   [[nodiscard]] int listPageSize() const;
   [[nodiscard]] bool listPages() const;

@@ -74,7 +74,7 @@ void FileContextMenuActivity::buildMenuItems() {
 
   if (offerViewChoice) {
     menuItems.push_back(SettingInfo::DynamicEnumCtx(
-        StrId::STR_BROWSER_VIEW, {StrId::STR_VIEW_FILENAMES, StrId::STR_VIEW_DETAILS}, self,
+        StrId::STR_BROWSER_VIEW, {StrId::STR_VIEW_FILENAMES, StrId::STR_VIEW_DETAILS, StrId::STR_VIEW_COVERS}, self,
         [](const void* ctx) -> uint8_t { return static_cast<const FileContextMenuActivity*>(ctx)->browserView; },
         [](void* ctx, uint8_t v) { static_cast<FileContextMenuActivity*>(ctx)->browserView = v; }));
   }

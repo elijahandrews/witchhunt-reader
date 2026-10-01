@@ -820,6 +820,7 @@ STR_VIEW_GRID: "Grid"
 STR_BROWSER_VIEW: "Book view"
 STR_VIEW_FILENAMES: "Filenames"
 STR_VIEW_DETAILS: "Details"
+STR_VIEW_COVERS: "Covers"
 STR_BOOK_FINISHED: "Finished"
 STR_TOOL_UTILITIES: "Utilities"
 

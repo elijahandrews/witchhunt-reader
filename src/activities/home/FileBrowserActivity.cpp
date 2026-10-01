@@ -1,5 +1,6 @@
 #include "FileBrowserActivity.h"
 
+#include <Bitmap.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
@@ -19,7 +20,9 @@
 
 #include "../ActivityManager.h"
 #include "../ActivityResult.h"
+#include "../ListRowTap.h"
 #include "../reader/FinishedBookActivity.h"
+#include "../reader/ReaderActivity.h"
 #include "../util/BmpViewerActivity.h"
 #include "../util/ConfirmationActivity.h"
 #include "../util/KeyboardEntryActivity.h"
@@ -29,10 +32,16 @@
 #include "FileContextMenuActivity.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
+#include "RecentBooksActivity.h"
+#include "components/BookProgressPresentation.h"
 #include "components/UITheme.h"
+#include "components/icons/folder.h"
 #include "fontIds.h"
 
 namespace fui = freeink::ui;
+
+// A row's display name (defined with materializeListWindow below).
+std::string getFileName(std::string filename);
 
 void FileBrowserActivity::onEnter() {
   model.load();
@@ -67,6 +76,167 @@ void FileBrowserActivity::loop() {
 bool FileBrowserActivity::detailsView() const {
   return model.getMode() == Mode::Books && SETTINGS.fileBrowserView == CrossPointSettings::BROWSER_VIEW_DETAILS &&
          !model.isDeepSearch();
+}
+
+// Browse Files with Covers chosen, on the same terms as detailsView().
+bool FileBrowserActivity::coversView() const {
+  return model.getMode() == Mode::Books && SETTINGS.fileBrowserView == CrossPointSettings::BROWSER_VIEW_COVERS &&
+         !model.isDeepSearch();
+}
+
+// The recent-books grid's own computation (see computeGridLayout there): same content rect, same
+// first-row offset, same ceiling on the cover box -- the stored thumbnail's height -- so a cover
+// is drawn 1:1 and never resampled, which would alias its dither into a visible grid.
+FileBrowserActivity::CoverGrid FileBrowserActivity::coverGrid() const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  CoverGrid g;
+  g.content = UITheme::getContentRect(renderer, true, true);
+  g.top = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  g.cells = CoverGridLayout::compute({.contentWidth = g.content.width,
+                                      .contentHeight = g.content.height - g.top - metrics.verticalSpacing,
+                                      .bottomReserve = 12,
+                                      .maxCellHeight = RecentBooksActivity::GRID_MAX_CELL_HEIGHT});
+  g.perPage = std::max(1, g.cells.cols * g.cells.rows);
+  return g;
+}
+
+void FileBrowserActivity::afterUiRender() {
+  if (coversView()) drawCoverGrid();
+}
+
+void FileBrowserActivity::drawCoverGrid() {
+  const int total = listCount();
+  if (total == 0) return;
+  const CoverGrid g = coverGrid();
+  const int start = (nav.selected / g.perPage) * g.perPage;
+  const int end = std::min(total, start + g.perPage);
+  std::string base = model.path();
+  if (base.back() != '/') base += '/';
+  for (int i = start; i < end; ++i) {
+    const int slot = i - start;
+    const int x =
+        g.content.x + CoverGridLayout::kMargin + (slot % g.cells.cols) * (g.cells.cellWidth + CoverGridLayout::kMargin);
+    const int y = g.top + (slot / g.cells.cols) * g.cells.rowStride;
+    drawCoverCell(i, x, y, g.cells, i == nav.selected, base);
+  }
+}
+
+// One cell: the cover box, then two lines under it. Selection is the recent-books grid's: the
+// whole cell inverted, the cover itself left as it is.
+void FileBrowserActivity::drawCoverCell(const int index, const int x, const int y, const CoverGridLayout::Layout& cells,
+                                        const bool selected, const std::string& base) {
+  const int tw = cells.cellWidth;
+  const int th = cells.cellHeight;
+  if (selected) {
+    renderer.fillRect(x, y, tw, th + CoverGridLayout::kLabelHeight + 3);
+  }
+  renderer.fillRect(x + 1, y + 1, tw - 2, th - 2, false);
+  renderer.drawRect(x, y, tw, th, !selected);
+
+  const std::string entry = model.entryName(static_cast<size_t>(index));
+  if (entry.empty()) return;
+  std::string title;
+  std::string subtitle;
+  if (entry.back() == '/') {
+    // A folder: its icon where a cover would be, its name under it.
+    title = utf8NfcNorm(entry.substr(0, entry.size() - 1));
+    renderer.drawIcon(FolderIcon, x + (tw - 32) / 2, y + (th - 32) / 2, 32, 32);
+  } else {
+    const BookRowResolver::Row& row = bookRows.row(base + entry, model.entrySize(static_cast<size_t>(index)));
+    title = row.title.empty() ? getFileName(entry) : row.title;
+    subtitle = row.subtitle;
+    const int percent = row.percent;  // copied before anything else can reuse the row's slot
+    if (!drawCoverThumb(base + entry, x, y, tw, th)) drawTitleCard(title, x, y, tw, th);
+    BookProgressPresentation::drawIndicator(renderer, Rect{x, y, tw, th}, percent);
+  }
+
+  const int labelY = y + th + 3;
+  const bool black = !selected;
+  renderer.drawText(SMALL_FONT_ID, x + 2, labelY,
+                    renderer.truncatedText(SMALL_FONT_ID, title.c_str(), cells.labelWidth).c_str(), black);
+  if (!subtitle.empty()) {
+    renderer.drawText(SMALL_FONT_ID, x + 2, labelY + 17,
+                      renderer.truncatedText(SMALL_FONT_ID, subtitle.c_str(), cells.labelWidth).c_str(), black);
+  }
+}
+
+// The book's cover, if the recent-books grid, the finished-book screen or an earlier visit here has
+// made its grid thumbnail. Nothing is generated here: a book without one gets a title card.
+bool FileBrowserActivity::drawCoverThumb(const std::string& bookPath, const int x, const int y, const int tw,
+                                         const int th) {
+  const std::string thumbPath =
+      UITheme::getCoverThumbPath(ReaderActivity::coverThumbPlaceholder(bookPath), RecentBooksActivity::GRID_THUMB_WIDTH,
+                                 RecentBooksActivity::GRID_THUMB_HEIGHT);
+  FsFile file;
+  if (!Storage.openFileForRead("FBR", thumbPath, file)) return false;
+  bool drawn = false;
+  Bitmap bmp(file);
+  // Complete, and larger than the 1x1 placeholder a book with no cover at all is given.
+  if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.isComplete() && bmp.getWidth() > 1 && bmp.getHeight() > 1) {
+    const int innerW = tw - 2;
+    const int innerH = th - 2;
+    // Never upscaled; centred in the frame. Same arithmetic as RecentBooksActivity::renderGridCell.
+    const float scale = std::min(
+        1.0f, std::min(static_cast<float>(innerW) / bmp.getWidth(), static_cast<float>(innerH) / bmp.getHeight()));
+    const int rendW = static_cast<int>(bmp.getWidth() * scale);
+    const int rendH = static_cast<int>(bmp.getHeight() * scale);
+    const int offsetX = std::max(1, (tw - rendW) / 2);
+    const int offsetY = std::max(1, (th - rendH) / 2);
+    renderer.drawBitmap1Bit(bmp, x + offsetX, y + offsetY, rendW, rendH);
+    drawn = true;
+  }
+  file.close();
+  return drawn;
+}
+
+// A book without a cover thumbnail: its title, set large inside the frame.
+void FileBrowserActivity::drawTitleCard(const std::string& title, const int x, const int y, const int tw,
+                                        const int th) {
+  constexpr int pad = 10;
+  const int lineH = renderer.getLineHeight(UI_12_FONT_ID);
+  const int maxLines = std::max(1, std::min(6, (th - 2 * pad) / lineH));
+  const auto lines = renderer.wrappedText(UI_12_FONT_ID, title.c_str(), tw - 2 * pad, maxLines, EpdFontFamily::BOLD);
+  int lineY = y + (th - static_cast<int>(lines.size()) * lineH) / 2;
+  for (const auto& line : lines) {
+    const int lineW = renderer.getTextWidth(UI_12_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, x + (tw - lineW) / 2, lineY, line.c_str(), true, EpdFontFamily::BOLD);
+    lineY += lineH;
+  }
+}
+
+// A tap on a cover: the first selects it, a second opens it -- the list's two-step, through the
+// same hit test the recent-books grid uses. A swipe turns the page.
+bool FileBrowserActivity::handleCoverTouch() {
+  const auto swipe = mappedInput.wasSwipe();
+  if (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Down) {
+    pageSelection(swipe == MappedInputManager::SwipeDir::Up ? 1 : -1);
+    return true;
+  }
+  const int total = listCount();
+  if (total == 0) return false;
+  const CoverGrid g = coverGrid();
+  const int pageStartRow = (nav.selected / g.perPage) * g.cells.rows;
+  int index = -1;
+  const auto hit = [&](const int px, const int py) {
+    index = CoverGridLayout::hitTest(g.cells, g.content.x, g.top, pageStartRow, total, px, py);
+    return index >= 0;
+  };
+  int px = 0;
+  int py = 0;
+  // Down is claimed but not acted on, so the same contact cannot also be read by anything else.
+  if (mappedInput.wasScreenTouchDown(px, py) && hit(px, py)) return true;
+  if (!(mappedInput.wasScreenTapped(px, py) && hit(px, py))) return false;
+  switch (ListRowTap::apply(index, total, nav.selected)) {
+    case ListRowTap::Result::Rejected:
+      return true;
+    case ListRowTap::Result::Selected:
+      requestUpdate();
+      return true;
+    case ListRowTap::Result::Activate:
+      activateIndex(index);
+      return true;
+  }
+  return true;
 }
 
 void FileBrowserActivity::clearFileMetadata(const std::string& fullPath) {
@@ -148,6 +318,8 @@ bool FileBrowserActivity::removeDirRecursive(const std::string& fullPath) {
 }
 
 bool FileBrowserActivity::handleCustomInput() {
+  // The grid has no list for the base class to route a touch to.
+  if (coversView() && handleCoverTouch()) return true;
   ButtonEventManager::ButtonEvent ev;
   while (buttonEvents.consumeEvent(ev)) {
     if (ev.button == MappedInputManager::Button::Back) {
@@ -266,13 +438,13 @@ void FileBrowserActivity::navigateButtons() {
   {
     RenderLock lock(*this);
     const int previous = nav.selected;
+    const int pageSize = listPageSize();
     buttonNavigator.onNextList(
-        ButtonNavigator::getStepNextButtons(), nav.selected, listCount(), [&changed] { changed = true; },
-        nav.pageRowsFor(listCount()));
+        ButtonNavigator::getStepNextButtons(), nav.selected, listCount(), [&changed] { changed = true; }, pageSize);
     buttonNavigator.onPreviousList(
-        ButtonNavigator::getStepPreviousButtons(), nav.selected, listCount(), [&changed] { changed = true; },
-        nav.pageRowsFor(listCount()));
-    if (changed) {
+        ButtonNavigator::getStepPreviousButtons(), nav.selected, listCount(), [&changed] { changed = true; }, pageSize);
+    // The grid shows whichever page holds the selection; only the list keeps a viewport to follow.
+    if (changed && !coversView()) {
       if (std::abs(nav.selected - previous) > 2) {
         nav.top = nav.selected;
       } else {
@@ -347,7 +519,9 @@ void FileBrowserActivity::resetNavigation(const int selected) {
 
 // Rows one Left/Right press moves. drawList reports what the last render fit — which for wrapped
 // rows is not a constant — and before the first render there is nothing to report yet.
-int FileBrowserActivity::listPageSize() const { return nav.pageRowsFor(listCount()); }
+int FileBrowserActivity::listPageSize() const {
+  return coversView() ? coverGrid().perPage : nav.pageRowsFor(listCount());
+}
 
 // True when the folder is longer than one screen. When it is not, paging has nothing to do, so
 // Right keeps its old short-press meaning (Options) instead of quietly stepping the selection.
@@ -449,6 +623,9 @@ void FileBrowserActivity::buildScreen(UiScreen& screen) {
     screen.textArea(empty);
     return;
   }
+
+  // The grid is drawn straight to the frame after the (otherwise empty) screen, in afterUiRender().
+  if (coversView()) return;
 
   fui::ListProps props;
   props.count = static_cast<uint16_t>(listCount());

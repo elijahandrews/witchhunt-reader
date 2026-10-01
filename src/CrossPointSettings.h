@@ -298,8 +298,14 @@ class CrossPointSettings {
   // File browser sort direction (per-session, not persisted)
   enum FILE_SORT_DIRECTION { SORT_ASCENDING = 0, SORT_DESCENDING = 1, FILE_SORT_DIRECTION_COUNT };
 
-  // How Browse Files shows a book: its filename, or its title, author, series and progress.
-  enum FILE_BROWSER_VIEW { BROWSER_VIEW_FILES = 0, BROWSER_VIEW_DETAILS = 1, FILE_BROWSER_VIEW_COUNT };
+  // How Browse Files shows a book: its filename; its title, author, series and progress; or its
+  // cover in a grid.
+  enum FILE_BROWSER_VIEW {
+    BROWSER_VIEW_FILES = 0,
+    BROWSER_VIEW_DETAILS = 1,
+    BROWSER_VIEW_COVERS = 2,
+    FILE_BROWSER_VIEW_COUNT
+  };
 
   // Action mapped to each tilt gesture direction.
   enum TILT_GESTURE_ACTION {
