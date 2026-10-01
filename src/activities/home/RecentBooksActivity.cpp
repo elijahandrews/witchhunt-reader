@@ -1,13 +1,16 @@
 #include "RecentBooksActivity.h"
 
 #include <Bitmap.h>
+#include <BuildArena.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalGPIO.h>
+#include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Txt.h>
 #include <Xtc.h>
 
@@ -98,137 +101,44 @@ void RecentBooksActivity::loadRecentBooks() {
   }
 }
 
+// One unit of cover making for the grid -- one CoverThumbLoader step -- so the burst driver in
+// render() can stop between units for input. True once every recent book's cover is resolved.
 bool RecentBooksActivity::loadNextCover() {
-  // Fixed thumbnail dimensions shared with FinishedBookActivity.
-  // The cell renderer scales the BMP down to the runtime cell width for display.
-  const int tw = GRID_THUMB_WIDTH;
-  const int th = GRID_THUMB_HEIGHT;
-
-  // ── Cover extract session tick ───────────────────────────────────────────────
-  if (extractSession) {
-    const auto status = extractSession->continueStep(4096);
-    if (status == ReaderActivity::CoverExtractSession::Status::Running) return false;
-    extractSession.reset();
-    if (status == ReaderActivity::CoverExtractSession::Status::Error) {
-      LOG_ERR("RBA", "Cover extract failed for book %zu", nextCoverIndex);
-      pngSessionFailed = true;
-    }
-    // On Done: fall through to PNG session setup on next call via the for-loop.
+  if (coverLoader.busy()) {
+    const auto step = coverLoader.step();
+    if (step == CoverThumbLoader::Step::Working) return false;
+    RecentBook& book = recentBooks[nextCoverIndex];
+    // Done is a cover written, or the placeholder of a book that has none: either way the stored
+    // path is the canonical one. A transient failure stores none, so the next visit tries again.
+    const std::string stored =
+        step == CoverThumbLoader::Step::Done ? ReaderActivity::coverThumbPlaceholder(book.path) : std::string();
+    // Under the render lock: this runs on the loop task, and renderGridCell() reads the same string.
+    RenderLock lock(*this);
+    RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, stored);
+    book.coverBmpPath = stored;
+    nextCoverIndex++;
     return false;
   }
-
-  // ── PNG session tick ────────────────────────────────────────────────────────
-  if (pngSession) {
-    constexpr uint32_t ROWS_PER_TICK = 6;
-    const auto status = pngSession->continueRows(ROWS_PER_TICK);
-    // Progress evidence (throttled): proves the sliced decode is advancing rather than stalled.
-    const uint32_t now = millis();
-    if (now - lastCoverProgressLogMs_ >= 1000) {
-      lastCoverProgressLogMs_ = now;
-      LOG_DBG("RBA", "PNG cover decode: %u/%u rows for %s", pngSession->rowsDone(), pngSession->totalRows(),
-              recentBooks[nextCoverIndex].path.c_str());
-    }
-    if (status == PngDecodeSession::Status::Running) {
-      return false;  // not done yet — render() will requestUpdate() and call us again
-    }
-    pngSessionFiles.close();
-    // Local, not the member: this branch resolves the book itself and advances the index, so a
-    // failure here must not leak into the NEXT book's first attempt (as wasPostFailure it would
-    // suppress that book's session ladder and record it as coverless for the whole session).
-    const bool decodeFailed = (status == PngDecodeSession::Status::Error);
-    pngSessionFailed = false;
-    pngSession.reset();
-
-    RecentBook& book = recentBooks[nextCoverIndex];
-    const std::string placeholder = ReaderActivity::coverThumbPlaceholder(book.path);
-    if (!decodeFailed) {
-      LOG_DBG("RBA", "PNG session complete for %s", book.path.c_str());
-      RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, placeholder);
-      book.coverBmpPath = placeholder;
-    } else {
-      // Remove the partial BMP; the normal failure path below will store empty.
-      const std::string thumbPath = gridThumbPath(placeholder, tw, th);
-      Storage.remove(thumbPath.c_str());
-      LOG_ERR("RBA", "PNG session failed for %s", book.path.c_str());
-      RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, "");
-      book.coverBmpPath = "";
-    }
-    nextCoverIndex++;
-    return false;  // advance to next book on next render tick
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   for (; nextCoverIndex < recentBooks.size(); nextCoverIndex++) {
     RecentBook& book = recentBooks[nextCoverIndex];
     if (!Storage.exists(book.path.c_str())) continue;
-
-    // The grid thumbnail is source-agnostic: ensureCoverThumb() produces an identical
-    // "<bookCacheDir>/thumb_<W>x<H>.bmp" whether the cover comes from a sidecar image
-    // (preferred source) or the embedded cover, and we always store the canonical placeholder.
-    const std::string placeholder = ReaderActivity::coverThumbPlaceholder(book.path);
-    const std::string thumbPath = gridThumbPath(placeholder, tw, th);
-
-    // Require a COMPLETE BMP (all pixel rows present) at no more than the slot size, not just
-    // size>0: a thumbnail truncated by an interrupted write passes size>0 but fails to draw
-    // partway, and an oversized thumb from an older build's crop mode gets rescaled at draw time
-    // (aliasing the dither into a grid) — regenerate both. A no-cover book's placeholder BMP
-    // (written below) is also a complete exact-size BMP, so it passes here and is treated as a
-    // resolved cover — no re-opening the EPUB three times per scan to rediscover it has no cover.
-    const bool valid = ReaderActivity::isCoverThumbComplete(thumbPath, tw, th);
-    if (!valid) {
-      const ThumbResult res = ReaderActivity::ensureCoverThumb(book.path, tw, th, nullptr, GRID_THUMB_CROP);
-      const bool ok = (res == ThumbResult::Ok);
-      const bool wasPostFailure = pngSessionFailed;
-      pngSessionFailed = false;  // consumed
-      // Only a TRANSIENT failure may walk the session ladder. A structural absence is already
-      // permanent — generateThumbBmp() wrote the 0-byte sentinel, and re-extracting the same ZIP
-      // entry yields the same undecodable bytes. Treating it like a transient failure livelocked
-      // this scan: the sentinel keeps isCoverThumbComplete() false, so the book never resolved,
-      // nextCoverIndex never advanced, and the cover was re-inflated from the ZIP every ~1.3 s
-      // forever (observed on an EPUB whose "cover.png" is really an AVIF). Mirrors HomeActivity.
-      if (res == ThumbResult::TransientFail && !wasPostFailure) {
-        pngSession = ReaderActivity::beginPngThumbSession(book.path, tw, th, pngSessionFiles, nullptr, GRID_THUMB_CROP);
-        if (pngSession) {
-          LOG_DBG("RBA", "Started PNG session for %s (%u rows)", book.path.c_str(), pngSession->totalRows());
-          return false;
-        }
-        extractSession = ReaderActivity::beginCoverExtractSession(book.path);
-        if (extractSession) {
-          LOG_DBG("RBA", "Started cover extract session for %s (%zu bytes)", book.path.c_str(),
-                  extractSession->totalBytes());
-          return false;
-        }
-      }
-
-      // Permanent give-up: structurally absent, or no decode/extract session could be started for
-      // a transient failure. But NOT if a sidecar image exists: that is a real cover source that
-      // simply failed to convert this pass (e.g. tight heap) and should be retried, not permanently
-      // placeholdered. Otherwise write a valid placeholder BMP so future scans treat the book as
-      // resolved and stop re-opening the EPUB. (A transient post-failure retry — wasPostFailure —
-      // is skipped here too, so the next pass gets a clean attempt.)
-      const bool giveUpPermanently = (res == ThumbResult::StructurallyAbsent) || (!ok && !wasPostFailure);
-      if (giveUpPermanently && ReaderActivity::sidecarCoverPath(book.path).empty() &&
-          ReaderActivity::writeCoverPlaceholderBmp(thumbPath)) {
-        LOG_DBG("RBA", "No extractable cover for %s — wrote placeholder", book.path.c_str());
-        RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, placeholder);
-        book.coverBmpPath = placeholder;
-        nextCoverIndex++;
-        return false;
-      }
-      RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, ok ? placeholder : "");
-      book.coverBmpPath = ok ? placeholder : "";
-      nextCoverIndex++;
+    // The grid thumbnail is source-agnostic -- the same "<bookCacheDir>/thumb_<W>x<H>.bmp" whether
+    // the cover comes from a sidecar image or the embedded one -- and the loader checks it complete
+    // and no larger than the slot, so a truncated or oversized thumb is made again.
+    if (!coverLoader.complete(book.path)) {
+      coverLoader.begin(book.path, coverScratch_.get());
       return false;
     }
-
-    // Already present — make sure the stored path is the canonical placeholder so a stale
+    // Already present -- make sure the stored path is the canonical placeholder so a stale
     // "[HEIGHT].bmp" / raw-sidecar entry self-heals to the unified naming without a re-decode.
+    const std::string placeholder = ReaderActivity::coverThumbPlaceholder(book.path);
     if (book.coverBmpPath != placeholder) {
+      RenderLock lock(*this);
       RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.series, placeholder);
       book.coverBmpPath = placeholder;
     }
   }
-
   return true;
 }
 
@@ -249,22 +159,21 @@ void RecentBooksActivity::onEnter() {
   initialFocusIndex = -1;
 
   coversLoaded = false;
-  coversLoading = false;
   firstRenderDone = false;
   nextCoverIndex = 0;
   prevSelectorIndex = -1;
   fullRedrawNeeded = true;
   openingBook = false;
-  extractSession.reset();
-  pngSession.reset();
-  pngSessionFiles.close();
-  pngSessionFailed = false;
+  const std::pair<int, int> gridThumb{GRID_THUMB_WIDTH, GRID_THUMB_HEIGHT};
+  coverLoader.configure(&gridThumb, 1, GRID_THUMB_CROP);
 
   requestUpdate();
 }
 
 void RecentBooksActivity::onExit() {
-  // The cover-loading burst is over; release the one book's metadata the memo still holds.
+  // ActivityManager::exitActivity holds the render lock around onExit(). Returning the region also
+  // closes any session in hand and releases the one book's metadata the cover memo still holds.
+  returnLentBuffer(/*callerHoldsRenderLock=*/true);
   Epub::clearCoverMetadataMemo();
   Activity::onExit();
   recentBooks.clear();
@@ -275,14 +184,10 @@ void RecentBooksActivity::switchViewMode(bool grid) {
   APP_STATE.recentBooksGridView = grid;
   APP_STATE.saveToFile();
   coversLoaded = false;
-  coversLoading = false;
   firstRenderDone = false;
   nextCoverIndex = 0;
   prevSelectorIndex = -1;
-  extractSession.reset();
-  pngSession.reset();
-  pngSessionFiles.close();
-  pngSessionFailed = false;
+  returnLentBuffer(/*callerHoldsRenderLock=*/false);
   fullRedrawNeeded = true;
   requestUpdate(true);
 }
@@ -498,6 +403,8 @@ void RecentBooksActivity::loop() {
       return;
     }
   }
+
+  if (gridView && firstRenderDone && !coversLoaded && !openingBook) generateCovers();
 }
 
 void RecentBooksActivity::render(RenderLock&& lock) {
@@ -511,54 +418,96 @@ void RecentBooksActivity::render(RenderLock&& lock) {
     return;
   }
 
-  // After the first paint, generate covers in time-bounded bursts. A cover slice (a PNG-decode
-  // row batch or a ZIP-extract chunk) only writes SD files — it does NOT change the screen — so we
-  // must NOT repaint per slice. Doing so turned every 6-row slice into a full ~2 s e-ink refresh,
-  // so a 1848-row cover needed 300+ refreshes (~10 min, and brutal on the panel). Instead drive
-  // slices here until a cover actually finishes (repaint once to show it), or until input is
-  // pending / a small time budget elapses (return WITHOUT repainting and resume on the next tick).
-  if (firstRenderDone && !coversLoaded && !coversLoading) {
-    // The cursor moved while a cover is still decoding: repaint the selection NOW (cheap two-cell
-    // partial) and resume decoding next tick. Otherwise the budget loop below would swallow the
-    // move and the highlight would only jump once the cover finished (seen as a frozen cursor).
-    if (prevSelectorIndex != selectorIndex) {
-      requestUpdate();
-      renderGridView(std::move(lock));  // partial path: fullRedrawNeeded stays false
-      return;
-    }
-
-    constexpr uint32_t COVER_SLICE_BUDGET_MS = 150;
-    coversLoading = true;
-    const size_t startIdx = nextCoverIndex;
-    const uint32_t deadline = millis() + COVER_SLICE_BUDGET_MS;
-    bool coverFinished = false;
-    while (true) {
-      if (loadNextCover()) {  // all covers resolved
-        coversLoaded = true;
-        coverFinished = true;
-        break;
-      }
-      if (nextCoverIndex != startIdx) {  // a book's cover just completed → worth showing now
-        coverFinished = true;
-        break;
-      }
-      if (mappedInput.hasPendingInput() || static_cast<int32_t>(millis() - deadline) >= 0) break;
-    }
-    coversLoading = false;
-
-    if (!coverFinished) {
-      requestUpdate();  // still slicing one cover — come back and continue, no repaint
-      return;
-    }
-    if (!coversLoaded) requestUpdate();  // more covers remain — continue after this repaint
-    fullRedrawNeeded = true;
-  }
-
   renderGridView(std::move(lock));
-  if (!firstRenderDone) {
-    firstRenderDone = true;
-    requestUpdate();  // kick off cover generation now that the grid is on screen
+  firstRenderDone = true;  // loop() starts on the covers once the grid is on screen
+}
+
+// Cover making for the grid, in bursts of CoverThumbLoader steps from loop() -- not from render(),
+// where it used to run holding the render lock and decoding on the heap. In the borrowed secondary
+// framebuffer, as Home and Browse Files do it: on the heap a large progressive cover took free heap
+// to 4 KB (X3, 2026-10-01), one failed allocation short of an abort. A step only writes SD files, so
+// the grid is redrawn when a cover lands, not per step; a press ends the burst, and the next pass
+// carries on where it stood.
+void RecentBooksActivity::generateCovers() {
+  if (renderer.isComposingFrame() || mappedInput.hasPendingInput()) return;
+  lendForCovers();                  // without the lend the decoders fall back to the heap, as before
+  HalPowerManager::Lock fullSpeed;  // this runs between presses, when the governor drops the clock
+  constexpr uint32_t COVER_SLICE_BUDGET_MS = 150;
+  const size_t startIdx = nextCoverIndex;
+  const uint32_t deadline = millis() + COVER_SLICE_BUDGET_MS;
+  while (true) {
+    if (loadNextCover()) {  // every cover resolved
+      coversLoaded = true;
+      returnLentBuffer(/*callerHoldsRenderLock=*/false);
+      fullRedrawNeeded = true;
+      requestUpdate();
+      return;
+    }
+    if (nextCoverIndex != startIdx) {  // a book's cover just landed: show it
+      fullRedrawNeeded = true;
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.hasPendingInput() || renderer.isComposingFrame() ||
+        static_cast<int32_t>(millis() - deadline) >= 0) {
+      return;
+    }
   }
+}
+
+// The lend and the return are Browse Files' (FileBrowserActivity::lendForBackgroundWork): before
+// the lend the write buffer is brought up to the frame on the panel and, on the X4, RED RAM is seeded
+// with it, which single-buffer fast diff requires.
+bool RecentBooksActivity::lendForCovers() {
+  if (lentRegion_ != nullptr) return true;
+  if (!renderer.hasSecondaryBuffer()) return false;
+  RenderLock lock(*this);
+  renderer.syncWriteBufferFromDisplayed();
+  if (!renderer.isX3()) renderer.syncRedRamFromFrameBuffer();
+  size_t size = 0;
+  uint8_t* region = renderer.borrowSecondaryBuffer(&size);
+  if (region == nullptr) return false;
+  coverScratch_ = makeUniqueNoThrow<BuildArena>(region, size);
+  if (!coverScratch_ || !coverScratch_->valid()) {
+    coverScratch_.reset();
+    renderer.returnSecondaryBuffer();  // cannot fail: the region never entered the heap
+    return false;
+  }
+  lentRegion_ = region;
+  renderer.setSingleBufferFastDiff(true);
+  LOG_INF("RBA", "Lent secondary framebuffer for covers (%u bytes, free=%lu)", static_cast<unsigned>(size),
+          static_cast<unsigned long>(esp_get_free_heap_size()));
+  return true;
+}
+
+// Whatever holds a block of the region goes first. onExit() runs under the render lock
+// ActivityManager already holds; taking it again would deadlock, hence the flag.
+void RecentBooksActivity::returnLentBuffer(const bool callerHoldsRenderLock) {
+  if (lentRegion_ == nullptr && !coverLoader.busy()) return;
+  const auto doReturn = [this] {
+    coverLoader.reset();
+    if (lentRegion_ == nullptr) return;
+    coverScratch_.reset();
+    renderer.returnSecondaryBuffer();  // cannot fail: the region never entered the heap
+    renderer.setSingleBufferFastDiff(false);
+    lentRegion_ = nullptr;
+    Epub::clearCoverMetadataMemo();
+    LOG_INF("RBA", "Returned secondary framebuffer after covers (free=%lu contig=%lu)",
+            static_cast<unsigned long>(esp_get_free_heap_size()),
+            static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT)));
+  };
+  if (callerHoldsRenderLock) {
+    doReturn();
+  } else {
+    RenderLock lock(*this);
+    doReturn();
+  }
+}
+
+void RecentBooksActivity::startActivityForResult(std::unique_ptr<Activity>&& activity,
+                                                 ActivityResultHandler resultHandler) {
+  returnLentBuffer(/*callerHoldsRenderLock=*/false);
+  Activity::startActivityForResult(std::move(activity), std::move(resultHandler));
 }
 
 void RecentBooksActivity::renderListView(RenderLock&&) {

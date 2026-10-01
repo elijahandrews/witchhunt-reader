@@ -1,4 +1,5 @@
 #pragma once
+#include <BuildArena.h>
 #include <I18n.h>
 #include <PngToBmpConverter.h>
 
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "CoverThumbLoader.h"
 #include "RecentBooksStore.h"
 #include "activities/reader/ReaderActivity.h"
 
@@ -49,19 +51,14 @@ class RecentBooksActivity final : public Activity {
 
   // Lazy cover loading state for grid view
   bool coversLoaded = false;
-  bool coversLoading = false;
   bool firstRenderDone = false;
   size_t nextCoverIndex = 0;
 
-  // Phase 1: sliced ZIP extraction of cover.img for large embedded PNG covers
-  std::unique_ptr<ReaderActivity::CoverExtractSession> extractSession;
-
-  // Phase 2: sliced PNG decode session (non-null while a PNG cover is being decoded row-by-row)
-  std::unique_ptr<PngDecodeSession> pngSession;
-  ReaderActivity::PngThumbFiles pngSessionFiles;
-  bool pngSessionFailed = false;
-  // Throttle for the cover-decode progress log (millis() of the last line emitted).
-  uint32_t lastCoverProgressLogMs_ = 0;
+  // Makes the grid thumbnail of the book at nextCoverIndex, one step per loadNextCover() call, in
+  // the borrowed secondary framebuffer (coverScratch_) while covers are being made.
+  uint8_t* lentRegion_ = nullptr;
+  std::unique_ptr<BuildArena> coverScratch_;
+  CoverThumbLoader coverLoader;  // after coverScratch_, so its sessions go first
 
   // Partial selection repaint: track previous index so we only redraw two cells
   int prevSelectorIndex = -1;
@@ -73,8 +70,11 @@ class RecentBooksActivity final : public Activity {
   bool openingBook = false;
 
   void loadRecentBooks();
-  // Generates the next missing grid thumbnail (one per call). Returns true when all done.
+  // One unit of cover making (one CoverThumbLoader step) per call. True once every cover is resolved.
   bool loadNextCover();
+  void generateCovers();
+  bool lendForCovers();
+  void returnLentBuffer(bool callerHoldsRenderLock);
 
   void switchViewMode(bool grid);
   void removeSelectedBook();
@@ -100,4 +100,6 @@ class RecentBooksActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  // The borrowed framebuffer goes back before any other screen opens on top of this one.
+  void startActivityForResult(std::unique_ptr<Activity>&& activity, ActivityResultHandler resultHandler) override;
 };
