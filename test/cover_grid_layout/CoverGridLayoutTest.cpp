@@ -20,6 +20,9 @@ struct Theme {
 };
 constexpr Theme kClassic{5, 45, 10, 40, 30};
 constexpr Theme kLyra{5, 84, 16, 40, 30};  // the default theme, and the one with the tall header
+// Lyra at the Large UI font size (UiFontLadder): the header grows by title + small (+5 +2), the
+// button hints by a body line (+5).
+constexpr Theme kLyraLarge{5, 91, 16, 45, 30};
 
 CoverGridLayout::Input portrait(int panelW, int panelH, const Theme& t, bool isX3) {
   const int contentWidth = panelW - (isX3 ? 2 * t.sideHints : t.sideHints);
@@ -31,7 +34,7 @@ CoverGridLayout::Input portrait(int panelW, int panelH, const Theme& t, bool isX
 }  // namespace
 
 TEST(CoverGridLayout, X4PortraitIsTwoByTwoWithFullSizeCells) {
-  for (const auto& theme : {kClassic, kLyra}) {
+  for (const auto& theme : {kClassic, kLyra, kLyraLarge}) {
     const auto l = CoverGridLayout::compute(portrait(480, 800, theme, /*isX3=*/false));
     EXPECT_EQ(l.cols, 2);
     EXPECT_EQ(l.rows, 2);
@@ -43,7 +46,7 @@ TEST(CoverGridLayout, X4PortraitIsTwoByTwoWithFullSizeCells) {
 }
 
 TEST(CoverGridLayout, X3PortraitIsTwoByTwoWithFullSizeCells) {
-  for (const auto& theme : {kClassic, kLyra}) {
+  for (const auto& theme : {kClassic, kLyra, kLyraLarge}) {
     const auto l = CoverGridLayout::compute(portrait(528, 792, theme, /*isX3=*/true));
     EXPECT_EQ(l.cols, 2);
     EXPECT_EQ(l.rows, 2);
@@ -64,6 +67,16 @@ TEST(CoverGridLayout, T5S3PortraitIsThreeByThreeWithShrunkCells) {
   EXPECT_EQ(l.cellHeight, 212);
   EXPECT_EQ(l.thumbWidth, 154);  // the thumbnail is made at the cell's size, so it still draws 1:1
   EXPECT_EQ(l.thumbHeight, 210);
+}
+
+// The Large UI font takes 12 px from the grid; on a panel whose cells are already shrunk, that is
+// a smaller thumbnail (device log, T5S3, 2026-10-01: thumb_154x206.bmp).
+TEST(CoverGridLayout, T5S3AtTheLargeUiFontShrinksTheCellsAgain) {
+  const auto l = CoverGridLayout::compute(portrait(540, 960, kLyraLarge, /*isX3=*/false));
+  EXPECT_EQ(l.cols, 3);
+  EXPECT_EQ(l.rows, 3);
+  EXPECT_EQ(l.thumbWidth, 154);
+  EXPECT_EQ(l.thumbHeight, 206);
 }
 
 TEST(CoverGridLayout, LessThanHalfARowLeftKeepsFullSizeCells) {
