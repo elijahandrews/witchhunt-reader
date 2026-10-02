@@ -74,11 +74,17 @@ class ScopedArena {
 
 class ImageBlock final : public Block {
  public:
-  ImageBlock(const std::string& imagePath, int16_t width, int16_t height, const std::string& altText = "");
+  // The alt text is kept to MAX_ALT_TEXT_BYTES (see there).
+  ImageBlock(std::string imagePath, int16_t width, int16_t height, std::string altText = "");
   // Extended constructor used when lazy extraction is desired:
   // imagePath is the SD cache destination; epubFilePath + epubEntryPath are the source.
-  ImageBlock(const std::string& imagePath, int16_t width, int16_t height, const std::string& altText,
-             const std::string& epubFilePath, const std::string& epubEntryPath);
+  ImageBlock(std::string imagePath, int16_t width, int16_t height, std::string altText, std::string epubFilePath,
+             std::string epubEntryPath);
+
+  // The alt text is drawn on one line of the placeholder and nowhere else, so this is all of it
+  // that can ever show. An accessibility description can run to KBs, and an image block holds
+  // its alt for as long as its page is loaded -- every draw, pre-render and image-lane visit.
+  static constexpr size_t MAX_ALT_TEXT_BYTES = 128;
   ~ImageBlock() override = default;
 
   // Return a new ImageBlock that renders a vertical crop of this image.

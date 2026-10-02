@@ -390,6 +390,10 @@ class EpubReaderActivity final : public Activity {
     int pageIndex = -1;
     unsigned long renderDurationMs = 0UL;
     unsigned long completedAtMs = 0UL;
+    // The draw ran short of memory and dropped glyphs. The framebuffer still holds this page
+    // (so `ready` stays true for restoreCurrentPageToBufferIfPreRendered), but the page turn
+    // must not show it: it renders the page afresh, by when the pass's own Page is gone.
+    bool incomplete = false;
   };
   PreRenderedPage preRenderedPage;
   // The pre-render staged this page's grayscale planes, so displaying it can go
@@ -476,6 +480,15 @@ class EpubReaderActivity final : public Activity {
   // since (heap_caps_monitor_local_minimum_free_size_start): logged when the buffer goes back.
   uint32_t backgroundBorrowFreeAtStart_ = 0;
   bool backgroundHeapLowTracked_ = false;
+  // B is building the next chapter while the reader is on the last few pages of this one, so its
+  // borrow survives page turns instead of being taken back by every render (see
+  // BG_BUILD_THROUGH_PAGES). Those pages draw in BW with no pre-render. Cleared when the buffer
+  // goes back or the build passes to the foreground.
+  bool backgroundBuildThrough_ = false;
+  // The next chapter, abandoned to BG_BUILD_MAX_PREEMPTIONS while the reader was mid-chapter. It
+  // gets one more try once the reader is on its last pages, in build-through mode, instead of
+  // being left to the foreground "Indexing". -1 when none; cleared when the reader moves on.
+  int backgroundAbandonedSpine_ = -1;
   // One-shot Background-A re-arm latch (see serviceBackgroundWork): the (spine, page)
   // whose pre-render was already retried after the deferred AA released its memory.
   // Bounds retries to one per displayed page so an image-only next page (which can
@@ -696,6 +709,9 @@ class EpubReaderActivity final : public Activity {
   // --- render() pass dispatch (see RenderPass) ---
   // Opportunistically restore the secondary display buffer if a prior OOM degraded it.
   void recoverSecondaryBufferIfNeeded();
+  // The reader is within BG_BUILD_THROUGH_PAGES of the end of the chapter on screen, on a panel
+  // that can show pages while Background-B holds the secondary buffer (X3).
+  bool nearChapterEndForBuildThrough() const;
   // Realloc the secondary buffer, evicting rebuildable caches (FDC page slots, CSS
   // resolve caches) that a released build may have planted inside the freed hole and
   // retrying once before reporting failure. Shared by the post-build and opportunistic
@@ -839,9 +855,10 @@ class EpubReaderActivity final : public Activity {
                       int orientedMarginBottom, int orientedMarginLeft);
   // Renders page content into the frame buffer (prewarm + BW pass) without drawing the status bar
   // or flushing to the display. Used by the pre-render pass so the status bar can be superimposed
-  // at display time with live values (clock, battery).
-  void renderPageContentOnly(const Page& page, int orientedMarginTop, int orientedMarginRight, int orientedMarginBottom,
-                             int orientedMarginLeft);
+  // at display time with live values (clock, battery). Returns the number of glyphs the font
+  // decompressor could not find memory for -- they drew nothing, so the page is incomplete.
+  uint16_t renderPageContentOnly(const Page& page, int orientedMarginTop, int orientedMarginRight,
+                                 int orientedMarginBottom, int orientedMarginLeft);
   // Draws a single text-only page from an in-progress Background-C build (no AA, no pre-render
   // arming). Releases the lock before the waveform wait (like renderContents) so a C build
   // slice can run on the loop task during the refresh.

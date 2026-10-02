@@ -2,6 +2,7 @@
 
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <HeapFit.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <Serialization.h>
@@ -669,18 +670,31 @@ bool Section::loadSectionFile(const BuildParams& p) {
   // Load LUT into memory (file is now positioned at the lutOffset field)
   uint32_t lutOffset;
   serialization::readPod(file, lutOffset);
-  lut.resize(pageCount);
+  lutFileOffset_ = 0;
   if (!file.seek(lutOffset)) {
     LOG_ERR("SCT", "Deserialization failed: seek to LUT offset %u failed", lutOffset);
     clearCache();
     return false;
   }
-  for (uint32_t& pos : lut) {
-    serialization::readPod(file, pos);
-    if (pos < header::kSize || pos >= lutOffset) {
-      LOG_ERR("SCT", "Deserialization failed: LUT entry %u out of range [%u, %u)", pos, header::kSize, lutOffset);
-      clearCache();
-      return false;
+  // 4 bytes a page: a chapter is a few hundred bytes, a book that is one XHTML file several KB in
+  // one block. Without that block the pages read their offsets from the file instead (one more
+  // 4-byte read per page load) -- a failed resize would abort the device, and failing the load
+  // would delete a good cache.
+  if (!heapHasBlockFor(pageCount * sizeof(uint32_t))) {
+    LOG_ERR("SCT", "No %u-byte block for the %u-page LUT; reading page offsets from the file",
+            static_cast<unsigned>(pageCount * sizeof(uint32_t)), pageCount);
+    lut.clear();
+    lut.shrink_to_fit();
+    lutFileOffset_ = lutOffset;
+  } else {
+    lut.resize(pageCount);
+    for (uint32_t& pos : lut) {
+      serialization::readPod(file, pos);
+      if (pos < header::kSize || pos >= lutOffset) {
+        LOG_ERR("SCT", "Deserialization failed: LUT entry %u out of range [%u, %u)", pos, header::kSize, lutOffset);
+        clearCache();
+        return false;
+      }
     }
   }
   // Build TOC boundaries by scanning anchor data from the still-open file,
@@ -705,6 +719,7 @@ bool Section::clearCache() {
   // and abortBuild.
   if (file) file.close();  // Must be closed before removal on FAT32
   lut.clear();
+  lutFileOffset_ = 0;
   tocBoundaries.clear();
   pageCount = 0;
   currentPage = 0;
@@ -2034,9 +2049,10 @@ void Section::abortSectionBuild() {
 }
 
 std::unique_ptr<Page> Section::loadPageFromSectionFile() {
-  if (currentPage < 0 || currentPage >= static_cast<int>(lut.size())) {
+  const size_t lutEntries = lutFileOffset_ != 0 ? pageCount : lut.size();
+  if (currentPage < 0 || currentPage >= static_cast<int>(lutEntries)) {
     LOG_ERR("SCT", "loadPageFromSectionFile: page %d out of LUT range (%u entries)", currentPage,
-            static_cast<uint32_t>(lut.size()));
+            static_cast<uint32_t>(lutEntries));
     return nullptr;
   }
 
@@ -2048,8 +2064,20 @@ std::unique_ptr<Page> Section::loadPageFromSectionFile() {
     }
   }
 
-  if (!file.seek(lut[currentPage])) {
-    LOG_ERR("SCT", "loadPageFromSectionFile: seek to page %d offset %u failed", currentPage, lut[currentPage]);
+  uint32_t pageOffset = 0;
+  if (lutFileOffset_ != 0) {
+    // The LUT stayed on the card (see loadSectionFile): same range check it gets when cached.
+    if (!file.seek(lutFileOffset_ + static_cast<uint32_t>(currentPage) * sizeof(uint32_t)) ||
+        file.read(reinterpret_cast<uint8_t*>(&pageOffset), sizeof(pageOffset)) != sizeof(pageOffset) ||
+        pageOffset < header::kSize || pageOffset >= lutFileOffset_) {
+      LOG_ERR("SCT", "loadPageFromSectionFile: LUT entry for page %d unreadable or out of range", currentPage);
+      return nullptr;
+    }
+  } else {
+    pageOffset = lut[currentPage];
+  }
+  if (!file.seek(pageOffset)) {
+    LOG_ERR("SCT", "loadPageFromSectionFile: seek to page %d offset %u failed", currentPage, pageOffset);
     return nullptr;
   }
   return Page::deserialize(file);
@@ -2271,6 +2299,15 @@ void Section::buildTocBoundariesFromFile(FsFile& f) {
     int tocIndex;
     std::string anchor;
   };
+  // A handful of entries for a chapter, hundreds for an anthology or a Bible that is one XHTML
+  // file. Without the blocks the status bar names the spine's first TOC entry on every page (the
+  // empty-boundaries fallback in getTocIndexForPage) instead of aborting the device. The anchor
+  // strings themselves are small and not checked.
+  if (!heapHasBlockFor(unresolvedCount * sizeof(TocAnchorEntry)) ||
+      !heapHasBlockFor(totalEntries * sizeof(TocBoundary))) {
+    LOG_ERR("SCT", "No block for %u TOC boundaries; chapter titles fall back to the spine's first", totalEntries);
+    return;
+  }
   std::vector<TocAnchorEntry> tocAnchorsToResolve;
   tocAnchorsToResolve.reserve(unresolvedCount);
   tocBoundaries.reserve(totalEntries);
@@ -2336,6 +2373,20 @@ void Section::buildPageBreakLabelsFromFile(FsFile& f) const {
   f.seek(pageBreakMapOffset);
   uint16_t count;
   serialization::readPod(f, count);
+  // Each entry takes at least 6 bytes on the card (page + string length), so a count the rest of
+  // the file cannot hold is a corrupt map, not a request for up to 1.8 MB. A real one is a few
+  // hundred labels at most (a whole printed book in one XHTML file); without a block for it the
+  // status bar just shows no printed page number.
+  constexpr uint32_t MIN_ENTRY_BYTES = sizeof(uint16_t) + sizeof(uint32_t);
+  if (count == 0) return;
+  if (count > (f.size() - pageBreakMapOffset) / MIN_ENTRY_BYTES) {
+    LOG_ERR("SCT", "Page-break map claims %u labels, more than the file holds; ignored", count);
+    return;
+  }
+  if (!heapHasBlockFor(count * sizeof(decltype(pageBreakLabels)::value_type))) {
+    LOG_ERR("SCT", "No block for %u page-break labels; printed page numbers not shown", count);
+    return;
+  }
   pageBreakLabels.reserve(count);
   for (uint16_t i = 0; i < count; i++) {
     uint16_t page;
