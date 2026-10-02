@@ -163,6 +163,22 @@ int sleepEqualizeBlend(const GfxRenderer& renderer) {
   return renderer.getGrayLevels() > 4 ? adaptive_tone::EQ_BLEND_NUM_DEEP : adaptive_tone::EQ_BLEND_NUM;
 }
 
+// Ships the BW base of a grey sleep image, ahead of its LSB/MSB planes.
+//
+// Overlapping the LSB render with that waveform is only safe while the secondary framebuffer is
+// resident. X3 and the X4 Pro controllers re-read the frame after the waveform (displayFinish()
+// syncs DTM1 from it; an X3 full sync also pushes it to the glass again), and the buffer swap is
+// what keeps the BW frame intact for them while the next plane is drawn into the write buffer.
+// Once the secondary is released or lent there is no swap, and the plane would overwrite the very
+// frame they re-read, so the base has to finish before anything draws again.
+void shipSleepGrayBase(const GfxRenderer& renderer) {
+  if (renderer.hasSecondaryBuffer()) {
+    renderer.triggerDisplayAsync(HalDisplay::HALF_REFRESH);
+  } else {
+    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  }
+}
+
 bool renderPngSleepScreen(const std::string& filename, GfxRenderer& renderer, const BookOverlayInfo& overlayInfo) {
   constexpr size_t MIN_FREE_HEAP = 60 * 1024;  // PNG decoder ~42 KB + overhead
   if (ESP.getFreeHeap() < MIN_FREE_HEAP) {
@@ -331,10 +347,10 @@ bool renderPngSleepScreen(const std::string& filename, GfxRenderer& renderer, co
     useCache = !config.cachePath.empty() && Storage.exists(cachePath.c_str());
   }
   drawOverlay();
-  // Fire the BW scrub without waiting: the waveform runs on the controller's own RAM,
-  // so the LSB decode below (CPU/SD-only work) overlaps it. copyGrayscaleLsbBuffers()
-  // drains the pending finish before its SPI plane write.
-  renderer.triggerDisplayAsync(HalDisplay::HALF_REFRESH);
+  // Fire the BW scrub without waiting where that is safe (see shipSleepGrayBase): the
+  // waveform runs on the controller's own RAM, so the LSB decode below (CPU/SD-only work)
+  // overlaps it. copyGrayscaleLsbBuffers() drains the pending finish before its SPI plane write.
+  shipSleepGrayBase(renderer);
 
   // Passes 2 and 3 replay the cache when one is available; the render mode selects
   // which bit-plane each cached 2-bit value lands in, so no re-decode is needed.
@@ -512,6 +528,14 @@ void SleepActivity::renderSleepScreen() {
 }
 
 void SleepActivity::renderCustomSleepScreen() const {
+  // A PNG needs a ~32 KB contiguous inflate ring, and renderPngSleepScreen() refuses to start
+  // under 60 KB free. With the ~48-52 KB secondary framebuffer still resident, a sleep straight out
+  // of a book can be short of both, and the picture silently gave way to the default screen
+  // (#377). Free it, as renderCoverSleepScreen() does: nothing below needs the previous frame
+  // (shipSleepGrayBase() covers the drivers that re-read it), and enterDeepSleep() powers down
+  // right after. COVER_CUSTOM falls back to this screen with the buffer already gone.
+  if (renderer.hasSecondaryBuffer()) renderer.releaseSecondaryBuffer();
+
   const BookOverlayInfo overlayInfo{};
   const bool shouldLoadOverlayInfo =
       SETTINGS.sleepCoverOverlay != 0 && APP_STATE.lastSleepFromReader && !APP_STATE.openEpubPath.empty();
@@ -911,10 +935,10 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const BookOver
                          : (panelHasAbsolute ? "differential (panel declined the absolute pass)"
                                              : "differential (panel has no absolute encoding)"));
     if (!absolutePass) {
-      // Fire the BW scrub without waiting: the waveform runs on the controller's own RAM,
-      // so the LSB draw below (CPU/SD-only work) overlaps it. copyGrayscaleLsbBuffers()
-      // drains the pending finish before its SPI plane write.
-      renderer.triggerDisplayAsync(HalDisplay::HALF_REFRESH);
+      // Fire the BW scrub without waiting where that is safe (see shipSleepGrayBase): the
+      // waveform runs on the controller's own RAM, so the LSB draw below (CPU/SD-only work)
+      // overlaps it. copyGrayscaleLsbBuffers() drains the pending finish before its SPI plane write.
+      shipSleepGrayBase(renderer);
     }
 
     // A differential plane starts empty and lets the B/W base supply black and
