@@ -568,29 +568,35 @@ void SleepActivity::renderCustomSleepScreen() const {
   const auto files = collectSleepImages(/*allowPng=*/true);
   const auto numFiles = files.size();
   if (numFiles > 0) {
-    const auto pickedIndex = pickSleepImageIndex(numFiles);
-    APP_STATE.lastSleepImage = pickedIndex;
-    APP_STATE.saveToFile();
-    const auto& filename = files[pickedIndex];
-    LOG_DBG("SLP", "Loading sleep image: %s", filename.c_str());
     const BookOverlayInfo resolvedOverlayInfo =
         shouldLoadOverlayInfo ? getBookOverlayInfo(APP_STATE.openEpubPath) : overlayInfo;
-    if (FsHelpers::hasPngExtension(filename)) {
-      if (renderPngSleepScreen(filename, renderer, resolvedOverlayInfo)) {
-        return;
+    const auto renderSleepImage = [&](const std::string& filename) -> bool {
+      if (FsHelpers::hasPngExtension(filename)) {
+        return renderPngSleepScreen(filename, renderer, resolvedOverlayInfo);
       }
-    } else {
       FsFile file;
-      if (Storage.openFileForRead("SLP", filename, file)) {
-        delay(100);
-        Bitmap bitmap(file, true, sleepImageToneMapping(), sleepEqualizeBlend(renderer));
-        if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-          renderBitmapSleepScreen(bitmap, resolvedOverlayInfo);
-          file.close();
-          return;
-        }
-        file.close();
-      }
+      if (!Storage.openFileForRead("SLP", filename, file)) return false;
+      delay(100);
+      Bitmap bitmap(file, true, sleepImageToneMapping(), sleepEqualizeBlend(renderer));
+      const bool parsed = bitmap.parseHeaders() == BmpReaderError::Ok;
+      if (parsed) renderBitmapSleepScreen(bitmap, resolvedOverlayInfo);
+      file.close();
+      return parsed;
+    };
+
+    // The picked image first, then the ones after it. A PNG is only validated by decoding it, so
+    // a truncated or unsupported one should cost the user that one picture, not all of them.
+    const auto pickedIndex = pickSleepImageIndex(numFiles);
+    for (size_t attempt = 0; attempt < numFiles; ++attempt) {
+      const size_t index = (pickedIndex + attempt) % numFiles;
+      // Saved before the attempt rather than after it, as before: an image that takes the device
+      // down mid-decode is then not the next pick as well.
+      APP_STATE.lastSleepImage = index;
+      APP_STATE.saveToFile();
+      const auto& filename = files[index];
+      LOG_DBG("SLP", "Loading sleep image: %s", filename.c_str());
+      if (renderSleepImage(filename)) return;
+      LOG_ERR("SLP", "Sleep image failed: %s", filename.c_str());
     }
   }
 
