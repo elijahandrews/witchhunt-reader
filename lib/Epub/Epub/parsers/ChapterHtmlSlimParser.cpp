@@ -229,6 +229,16 @@ constexpr size_t TABLE_BUFFER_BYTES_PER_CELL = 128;
 const char* BLOCK_TAGS[] = {"p", "li", "div", "br", "blockquote", "pre", "caption"};
 constexpr int NUM_BLOCK_TAGS = sizeof(BLOCK_TAGS) / sizeof(BLOCK_TAGS[0]);
 
+// Elements whose background picture becomes a picture of its own (noteBackgroundImage). Containers
+// only: on body/html a background is a page texture, on li/span/a a bullet, an icon or an ornament.
+const char* BACKGROUND_PICTURE_TAGS[] = {"div",   "p",          "table",   "section", "figure",
+                                         "aside", "blockquote", "article", "center"};
+constexpr int NUM_BACKGROUND_PICTURE_TAGS = sizeof(BACKGROUND_PICTURE_TAGS) / sizeof(BACKGROUND_PICTURE_TAGS[0]);
+// A smaller background picture is decoration -- a flourish, a rule, a corner -- not an illustration.
+constexpr uint16_t MIN_BACKGROUND_PICTURE_SIDE = 96;
+// Background scopes open at once; a deeper one is ignored rather than tracked.
+constexpr size_t MAX_BACKGROUND_PICTURE_SCOPES = 4;
+
 // Elements whose own horizontal inset also applies to the blocks nested inside them
 // (blockInsetStack_). Everything that can hold another block belongs here, plus <p>/<li>/<pre>,
 // whose <br>-separated lines each become a block of their own and must keep the inset of the
@@ -1681,6 +1691,20 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     self->skipTextUntilDepth = self->depth;
   }
 
+  // Background pictures (see BackgroundImageScope): a container with one opens a scope, and inside
+  // one a run of <br/> is cut to two -- the rest only made room for the picture behind the text.
+  // Skipped like a display:none element, so its close is consumed by the skip path.
+  if (strcmp(name, "br") == 0) {
+    if (!self->backgroundImageScopes_.empty() && ++self->brRunInBackground_ > 2) {
+      self->skipUntilDepth = self->depth;
+      self->depth += 1;
+      return;
+    }
+  } else {
+    self->brRunInBackground_ = 0;
+    self->noteBackgroundImage(name, classAttr, idAttr, styleAttr);
+  }
+
   self->observeFontSizeBaseline(name, cssStyle);
   cssStyle = self->normalizeFontSizeForElement(name, cssStyle);
 
@@ -2881,6 +2905,16 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
     return;
   }
 
+  // Text ends a run of <br/> inside a background scope; the whitespace between them does not.
+  if (self->brRunInBackground_ != 0) {
+    for (int i = 0; i < len; ++i) {
+      if (!isWhitespace(s[i])) {
+        self->brRunInBackground_ = 0;
+        break;
+      }
+    }
+  }
+
   // Ignore character data inside synthetic zero-height spacer <p> tags.
   if (self->skipTextUntilDepth < self->depth) {
     return;
@@ -3124,7 +3158,20 @@ void ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const char* s, 
 
 void ChapterHtmlSlimParser::endElement(void* userData, const char* name) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  endElementBody(self, name);
+  // A background picture goes in once its element has closed: after the element's own text and,
+  // for a table, after the grid </table> has just emitted. Out here because the body returns from
+  // a dozen places.
+  while (!self->streamFailed && !self->backgroundImageScopes_.empty() &&
+         self->backgroundImageScopes_.back().depth >= self->depth) {
+    const std::string path = std::move(self->backgroundImageScopes_.back().path);
+    self->backgroundImageScopes_.pop_back();
+    self->brRunInBackground_ = 0;
+    self->placeBackgroundImage(path);
+  }
+}
 
+void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const char* name) {
   if (self->streamFailed) {
     return;
   }
@@ -4147,9 +4194,15 @@ void ChapterHtmlSlimParser::commitPendingRow() {
 
 std::unique_ptr<ImageBlock> ChapterHtmlSlimParser::buildCellImage(const std::string& src, const std::string& alt,
                                                                   const uint16_t maxWidth, const uint16_t maxHeight) {
-  if (src.empty() || maxWidth == 0 || maxHeight == 0) return nullptr;
+  if (src.empty()) return nullptr;
+  return buildImageFromEpubPath(FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(contentBase + src)), alt, maxWidth,
+                                maxHeight);
+}
 
-  const std::string resolvedPath = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(contentBase + src));
+std::unique_ptr<ImageBlock> ChapterHtmlSlimParser::buildImageFromEpubPath(
+    const std::string& resolvedPath, const std::string& alt, const uint16_t maxWidth, const uint16_t maxHeight,
+    uint16_t* nativeWidth, uint16_t* nativeHeight) {
+  if (resolvedPath.empty() || maxWidth == 0 || maxHeight == 0) return nullptr;
   if (!ImageDecoderFactory::isFormatSupported(resolvedPath)) return nullptr;
 
   ImageDimensions dims = {0, 0};
@@ -4161,9 +4214,11 @@ std::unique_ptr<ImageBlock> ChapterHtmlSlimParser::buildCellImage(const std::str
     dimsOk = ImageDecoderFactory::getDimensionsFromZipEntry(epub->getPath(), resolvedPath, dims);
   }
   if (!dimsOk || dims.width == 0 || dims.height == 0) {
-    LOG_DBG("EHP", "Table cell image: no dims for %s", resolvedPath.c_str());
+    LOG_DBG("EHP", "Image: no dims for %s", resolvedPath.c_str());
     return nullptr;
   }
+  if (nativeWidth) *nativeWidth = static_cast<uint16_t>(std::min<uint32_t>(dims.width, UINT16_MAX));
+  if (nativeHeight) *nativeHeight = static_cast<uint16_t>(std::min<uint32_t>(dims.height, UINT16_MAX));
 
   // Scale to fit the cell box, preserving aspect ratio. Never upscale.
   float scale = 1.0f;
@@ -4177,6 +4232,53 @@ std::unique_ptr<ImageBlock> ChapterHtmlSlimParser::buildCellImage(const std::str
 
   return makeUniqueNoThrow<ImageBlock>(cachedPath, static_cast<int16_t>(displayWidth),
                                        static_cast<int16_t>(displayHeight), alt, epub->getPath(), resolvedPath);
+}
+
+void ChapterHtmlSlimParser::noteBackgroundImage(const char* name, const std::string& classAttr,
+                                                const std::string& idAttr, const std::string& styleAttr) {
+  // Only with the book's own styles in play, and only when pictures are shown at all.
+  if (!cssParser || imageRendering != 0 || !matches(name, BACKGROUND_PICTURE_TAGS, NUM_BACKGROUND_PICTURE_TAGS)) {
+    return;
+  }
+  // A grid has no room for a block picture between its rows; a table's own picture waits for
+  // </table>, which is why the <table> element itself is let through (currentTable is set after).
+  if (currentTable || backgroundImageScopes_.size() >= MAX_BACKGROUND_PICTURE_SCOPES) return;
+
+  std::string path;
+  bool inlineDeclared = false;
+  if (!styleAttr.empty()) {
+    const CssParser::BackgroundDeclaration bg = CssParser::parseBackground(styleAttr);
+    if (bg.declared) {
+      inlineDeclared = true;  // outranks the stylesheet, a `none` included
+      if (!bg.url.empty() && bg.noRepeat) path = contentBase + bg.url;
+    }
+  }
+  if (!inlineDeclared) {
+    if (const std::string* sheetPath = cssParser->backgroundImageFor(name, classAttr, idAttr)) path = *sheetPath;
+  }
+  if (path.empty()) return;
+  std::string resolved = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(path));
+  if (!ImageDecoderFactory::isFormatSupported(resolved)) return;
+  backgroundImageScopes_.push_back({depth, std::move(resolved)});
+}
+
+void ChapterHtmlSlimParser::placeBackgroundImage(const std::string& resolvedPath) {
+  // The element's text first: the picture follows everything it held.
+  if (partWordBufferIndex > 0 && !flushPartWordBuffer()) return;
+  if (currentTextBlock && !currentTextBlock->isEmpty()) makePages();
+  uint16_t nativeWidth = 0;
+  uint16_t nativeHeight = 0;
+  auto image = buildImageFromEpubPath(resolvedPath, {}, static_cast<uint16_t>(viewportWidth),
+                                      static_cast<uint16_t>(viewportHeight), &nativeWidth, &nativeHeight);
+  if (!image) return;
+  if (nativeWidth < MIN_BACKGROUND_PICTURE_SIDE || nativeHeight < MIN_BACKGROUND_PICTURE_SIDE) {
+    LOG_DBG("EHP", "Background picture %ux%u is decoration, not placed: %s", nativeWidth, nativeHeight,
+            resolvedPath.c_str());
+    return;
+  }
+  LOG_DBG("EHP", "Background picture placed after its block: %s (%ux%u)", resolvedPath.c_str(), nativeWidth,
+          nativeHeight);
+  placeImageBlockAsBlock(std::move(image));
 }
 
 void ChapterHtmlSlimParser::placeImageBlockAsBlock(std::unique_ptr<ImageBlock> image) {

@@ -595,6 +595,7 @@ void Epub::parseCssFiles() const {
       Storage.remove(tmpCssPath.c_str());
       continue;
     }
+    cssParser->setStylesheetPath(cssPath);  // its url()s resolve against its own directory
     const bool compiledOk = cssParser->appendCompiledFromStream(tempCssFile);
     tempCssFile.close();
     Storage.remove(tmpCssPath.c_str());
