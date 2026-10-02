@@ -2863,6 +2863,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
           BlockStyle updatedStyle = self->currentTextBlock->getBlockStyle();
           updatedStyle.textIndent = marginPx;
           updatedStyle.textIndentDefined = true;
+          updatedStyle.textIndentYields = true;
           self->currentTextBlock->setBlockStyle(updatedStyle);
         }
       }

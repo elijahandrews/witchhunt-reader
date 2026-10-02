@@ -31,7 +31,10 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 77;  // bumped: the status byte records a heap-degraded
+constexpr uint8_t SECTION_FILE_VERSION = 78;  // v78: a span indent (poem line shape) gives way
+                                              // before its line wraps; v77 pages of such poems
+                                              // carry the wrapped lines
+                                              // v77: the status byte records a heap-degraded
                                               // image build (kStatusImageHeaderDegraded); a v76
                                               // cache may be image-less without saying so
                                               // v76: a percentage wrapper (<div

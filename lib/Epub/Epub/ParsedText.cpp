@@ -351,10 +351,32 @@ void ParsedText::layoutAndExtractLines(
           ? std::min(std::max<int>(static_cast<int>(blockStyle.textIndent), -static_cast<int>(blockStyle.leftInset())),
                      pageWidth - 1)
           : 0;
-  const int firstLineIndent = cssTextIndent + (isContinuation_ ? 0 : static_cast<int>(blockStyle.firstLineExtraIndent));
+  int firstLineIndent = cssTextIndent + (isContinuation_ ? 0 : static_cast<int>(blockStyle.firstLineExtraIndent));
 
   std::vector<uint16_t>& wordWidths = wordWidths_;
   calculateWordWidths(renderer, fontId, wordWidths);
+
+  // A span indent gives way before the line does. Poems draw their shape with margin-left on each
+  // line's span (Alice's mouse tale steps out to 10em and back); inside a block that is already
+  // inset, the deepest lines no longer fit, and wrapping put the rest of the line back at the
+  // column's left edge -- the shape broke wherever that happened. A block whose words fit the
+  // column on one line now keeps to one line, its indent shortened by what it lacks. Only the
+  // span-indent channel: a paragraph's own text-indent is typography, not shape, and wraps as
+  // before.
+  if (blockStyle.textIndentYields && cssTextIndent > 0 && includeLastLine && !words.empty()) {
+    int natural = wordWidths[0];
+    for (size_t j = 1; j < words.size(); ++j) {
+      natural +=
+          wordWidths[j] + (wordContinues[j] ? renderer.getKerning(fontId, lastCodepoint(words[j - 1]),
+                                                                  firstCodepoint(words[j]), wordStyles[j - 1])
+                                            : renderer.getSpaceAdvance(fontId, lastCodepoint(words[j - 1]),
+                                                                       firstCodepoint(words[j]), wordStyles[j - 1]));
+    }
+    const int available = widthForLine(0, lineHeight, blockStartY, pageWidth);
+    if (natural <= available && natural + firstLineIndent > available) {
+      firstLineIndent = std::max(0, available - natural);
+    }
+  }
 
   std::vector<size_t>& lineBreakIndices = lineBreakIndices_;
   std::vector<bool>& lineEndsWithHyphenatedWord = lineEndsWithHyphenatedWord_;
