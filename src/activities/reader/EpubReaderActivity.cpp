@@ -850,14 +850,17 @@ void EpubReaderActivity::onExit() {
   restoreCurrentPageToBufferIfPreRendered();
 
   // Record the paragraph under the saved page, so a reopen under a different layout lands on it
-  // (EpubProgressRecord). Here, not per page turn: the lookup opens the section cache, and the
-  // per-page saves only need to survive a reboot, which comes back to the same layout. Past the
-  // last spine the finished-book flow has written its own 100% record; leave that alone.
+  // (EpubProgressRecord), and what the status bar shows for that page -- its place in the whole
+  // chapter and its printed page -- for the sleep screen's overlay, which runs right after this and
+  // cannot lay the book out to work them out. Here, not per page turn: these lookups read the
+  // section cache and the page index, and the per-page saves only need to survive a reboot, which
+  // comes back to the same layout. Past the last spine the finished-book flow has written its own
+  // 100% record; leave that alone.
   if (section && readerPhase_ == ReaderPhase::READING && !section->hasActiveBuild() && section->pageCount > 0 && epub &&
       currentSpineIndex < epub->getSpineItemsCount()) {
-    if (const auto paragraph = section->getParagraphIndexForPage(static_cast<uint16_t>(section->currentPage))) {
-      saveProgress(currentSpineIndex, section->currentPage, section->pageCount, paragraph);
-    }
+    const auto page = static_cast<uint16_t>(section->currentPage);
+    saveProgress(currentSpineIndex, section->currentPage, section->pageCount, section->getParagraphIndexForPage(page),
+                 shownProgress());
   }
 
   // Save bookmarks before exit
@@ -5055,7 +5058,8 @@ bool EpubReaderActivity::maybeRestartForFragmentedHeap(const uint32_t freeHeap, 
 
 bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, const int spineIndex,
                                                   const int currentPage, const int pageCount, const uint8_t percent,
-                                                  const std::optional<uint16_t> paragraphIndex) {
+                                                  const std::optional<uint16_t> paragraphIndex,
+                                                  const std::optional<EpubProgressRecord::Shown>& shown) {
   FsFile f;
   if (!Storage.openFileForWrite("ERS", cachePath + "/progress.bin", f)) {
     LOG_ERR("ERS", "Failed to open progress cache: %s", cachePath.c_str());
@@ -5068,6 +5072,7 @@ bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, 
   record.pageCount = pageCount;
   record.percent = percent;
   record.paragraph = paragraphIndex;
+  record.shown = shown;
   uint8_t data[EpubProgressRecord::kMaxSize] = {};
   const size_t size = record.encode(data);
   f.write(data, size);
@@ -5076,9 +5081,11 @@ bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, 
 }
 
 void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount,
-                                      const std::optional<uint16_t> paragraphIndex) {
+                                      const std::optional<uint16_t> paragraphIndex,
+                                      const std::optional<EpubProgressRecord::Shown>& shown) {
   const uint8_t percent = epubProgressPercentByte(*epub, spineIndex, currentPage, pageCount);
-  if (!writeReaderProgressCache(epub->getCachePath(), spineIndex, currentPage, pageCount, percent, paragraphIndex)) {
+  if (!writeReaderProgressCache(epub->getCachePath(), spineIndex, currentPage, pageCount, percent, paragraphIndex,
+                                shown)) {
     LOG_ERR("ERS", "Could not save progress!");
     return;
   }
@@ -5949,18 +5956,9 @@ void EpubReaderActivity::renderStatusBar() const {
 
   const bool isStarred = section && bookmarkStore.has(static_cast<uint16_t>(currentSpineIndex),
                                                       static_cast<uint16_t>(section->currentPage));
-  std::string printedPageLabel;
-  if (section && SETTINGS.statusBarPrintedPage) {
-    const auto page = static_cast<uint16_t>(section->currentPage);
-    if (const auto label = section->getPrintedPageLabelForPage(page)) {
-      // Exact-match label (already parenthesised, may be "7/8" when multiple anchors collapse).
-      printedPageLabel = *label;
-    } else if (const auto nearest = section->getNearestPrintedPageLabelAtOrBefore(page)) {
-      // No pagebreak on this device page: show the last printed-page label we passed within
-      // this section so the status bar still tells the reader which printed page they're on.
-      printedPageLabel = std::string("(") + *nearest + ")";
-    }
-  }
+  const std::string printedPageLabel = section && SETTINGS.statusBarPrintedPage
+                                           ? printedPageLabelFor(static_cast<uint16_t>(section->currentPage))
+                                           : std::string();
 #if CROSSPOINT_KOREADER_AUTOSYNC
   const SyncIndicator syncIndicator = autoSyncIndicator;
 #else
@@ -5981,6 +5979,28 @@ void EpubReaderActivity::renderStatusBar() const {
   } else {
     lastStatusBarClockMinute = -1;
   }
+}
+
+std::string EpubReaderActivity::printedPageLabelFor(const uint16_t page) const {
+  if (const auto label = section->getPrintedPageLabelForPage(page)) {
+    // Exact-match label (already parenthesised, may be "7/8" when multiple anchors collapse).
+    return *label;
+  }
+  if (const auto nearest = section->getNearestPrintedPageLabelAtOrBefore(page)) {
+    // No pagebreak on this device page: the last printed-page label passed within this section
+    // still tells the reader which printed page they're on.
+    return std::string("(") + *nearest + ")";
+  }
+  return {};
+}
+
+EpubProgressRecord::Shown EpubReaderActivity::shownProgress() const {
+  const ChapterPageSpan::Display chapter = chapterPageDisplay();
+  EpubProgressRecord::Shown shown;
+  shown.chapterPage = static_cast<uint16_t>(std::clamp(chapter.page, 0, 0xFFFF));
+  shown.chapterTotal = static_cast<uint16_t>(std::clamp(chapter.total, 0, 0xFFFF));
+  shown.printedPage = printedPageLabelFor(static_cast<uint16_t>(section->currentPage));
+  return shown;
 }
 
 ChapterPageSpan::Display EpubReaderActivity::chapterPageDisplay() const {

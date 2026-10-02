@@ -21,6 +21,7 @@
 #include <memory>
 #include <new>
 
+#include "../reader/EpubProgressRecord.h"
 #include "../reader/EpubReaderActivity.h"
 #include "../reader/KOReaderAutoSync.h"
 #include "../reader/TxtReaderActivity.h"
@@ -695,23 +696,30 @@ BookOverlayInfo SleepActivity::getBookOverlayInfo(const std::string& bookPath) c
 
       FsFile f;
       if (Storage.openFileForRead("SLP", epub.getCachePath() + "/progress.bin", f)) {
-        uint8_t data[6];
-        const int dataSize = f.read(data, 6);
-        if (dataSize == 4 || dataSize == 6) {
-          int currentSpineIndex = data[0] + (data[1] << 8);
-          int currentPage = data[2] + (data[3] << 8);
-          int pageCount = (dataSize == 6) ? (data[4] + (data[5] << 8)) : 0;
+        uint8_t data[EpubProgressRecord::kMaxSize];
+        const int dataSize = f.read(data, sizeof(data));
+        f.close();
+        if (const auto record = EpubProgressRecord::decode(data, dataSize > 0 ? static_cast<size_t>(dataSize) : 0)) {
+          const int currentSpineIndex = record->spineIndex;
+          const int currentPage = record->page;
+          const int pageCount = record->pageCount;
           if (pageCount > 0) {
             float chapterProgress = static_cast<float>(currentPage) / static_cast<float>(pageCount);
             float bookProgress = epub.calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
 
-            // Pull the printed-page label (NCX <pageList> / EPUB 3 nav page-list /
-            // EPUB 2.01 page-map / inline doc-pagebreak) directly from the section
-            // cache so the sleep overlay can show e.g. "(42)" without instantiating
-            // a Section + render parameters.
+            // The reader records what its status bar showed when it closed the book: the page within
+            // the whole TOC chapter (#325) and the printed page. Records without it (older ones, a
+            // sync restore, a bookmark jump) count the page within its spine item, and pull the
+            // printed-page label (NCX <pageList> / EPUB 3 nav page-list / EPUB 2.01 page-map /
+            // inline doc-pagebreak) from the section cache without instantiating a Section +
+            // render parameters.
+            const auto& shown = record->shown;
+            const bool shownChapter = shown && shown->chapterTotal > 0;
             std::string printedPagePrefix;
-            if (const auto label = Section::getPrintedPageLabelFromCache(epub.getCachePath(), currentSpineIndex,
-                                                                         static_cast<uint16_t>(currentPage))) {
+            if (shown) {
+              if (!shown->printedPage.empty()) printedPagePrefix = shown->printedPage + " ";
+            } else if (const auto label = Section::getPrintedPageLabelFromCache(epub.getCachePath(), currentSpineIndex,
+                                                                                static_cast<uint16_t>(currentPage))) {
               printedPagePrefix = *label + " ";
             }
 
@@ -719,8 +727,10 @@ BookOverlayInfo SleepActivity::getBookOverlayInfo(const std::string& bookPath) c
             if (tocIndex != -1) {
               const auto tocItem = epub.getTocItem(tocIndex);
               info.chapterName = tocItem.title;
+              const int chapterPage = shownChapter ? shown->chapterPage : currentPage + 1;
+              const int chapterTotal = shownChapter ? shown->chapterTotal : pageCount;
               char suffix[64];
-              snprintf(suffix, sizeof(suffix), tr(STR_OVERLAY_CHAPTER_PAGE_SUFFIX), currentPage + 1, pageCount,
+              snprintf(suffix, sizeof(suffix), tr(STR_OVERLAY_CHAPTER_PAGE_SUFFIX), chapterPage, chapterTotal,
                        bookProgress);
               info.progressSuffix = printedPagePrefix + suffix;
               info.progressText = info.chapterName + info.progressSuffix;
@@ -736,7 +746,6 @@ BookOverlayInfo SleepActivity::getBookOverlayInfo(const std::string& bookPath) c
             info.progressText = buf;
           }
         }
-        f.close();
       }
     }
   }
