@@ -19,6 +19,7 @@
 #include "components/BookProgressPresentation.h"
 #include "components/UITheme.h"
 #include "components/themes/ButtonHintLayout.h"
+#include "components/themes/CardTextFit.h"
 #include "components/themes/ListTouchBand.h"
 #include "components/themes/TapTargets.h"
 #include "fontIds.h"
@@ -754,41 +755,62 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
 
     auto lines = renderer.wrappedText(UI_12_FONT_ID, lastBookTitle.c_str(), bookWidth - 40, 3);
 
-    // Book title text
-    int totalTextHeight = renderer.getLineHeight(UI_12_FONT_ID) * static_cast<int>(lines.size());
-    if (!lastBookAuthor.empty()) {
-      totalTextHeight += renderer.getLineHeight(UI_10_FONT_ID) * 3 / 2;
-    }
-    if (!lastBookSeries.empty()) {
-      totalTextHeight += renderer.getLineHeight(UI_10_FONT_ID);
-    }
-
     // What you have put into the book, under the title block rather than over the cover art.
     // The card is a little over half the screen wide, so the sentence gets up to two lines, set
     // in the non-scaling small face: this block is centred inside a fixed-height card and sits
     // above the "Continue Reading" label, so it must not grow with the UI font setting.
     const std::string history = BookProgressPresentation::historyLine(recentBooks[0]);
     const int historyLineHeight = renderer.getLineHeight(FIT_SMALL_FONT_ID);
-    const auto historyLines = history.empty()
-                                  ? std::vector<std::string>{}
-                                  : renderer.wrappedText(FIT_SMALL_FONT_ID, history.c_str(), bookWidth - 40, 2);
-    if (!historyLines.empty()) {
-      totalTextHeight += historyLineHeight / 2 + static_cast<int>(historyLines.size()) * historyLineHeight;
-    }
-
-    // Vertically center the title block within the card
-    int titleYStart = bookY + (bookHeight - totalTextHeight) / 2;
+    auto historyLines = history.empty() ? std::vector<std::string>{}
+                                        : renderer.wrappedText(FIT_SMALL_FONT_ID, history.c_str(), bookWidth - 40, 2);
 
     const auto truncatedAuthor = lastBookAuthor.empty()
                                      ? std::string{}
                                      : renderer.truncatedText(UI_10_FONT_ID, lastBookAuthor.c_str(), bookWidth - 40);
-    const auto truncatedSeries = lastBookSeries.empty()
-                                     ? std::string{}
-                                     : renderer.truncatedText(UI_10_FONT_ID, lastBookSeries.c_str(), bookWidth - 40);
+    auto truncatedSeries = lastBookSeries.empty()
+                               ? std::string{}
+                               : renderer.truncatedText(UI_10_FONT_ID, lastBookSeries.c_str(), bookWidth - 40);
+
+    constexpr int boxPadding = 8;
+    constexpr int continuePadding = 6;
+    const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+    const int smallLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int continueY = bookY + bookHeight - smallLineHeight * 3 / 2;
+
+    // The block has to end above the "Continue Reading" label, with the box drawn round it over a
+    // cover clear of the label's own box. A card trimmed for a long menu at a large UI font has
+    // less room there than a three-line title, author, series and history take, and they ran
+    // into the label; CardTextFit decides what gives way (#375).
+    const int textTop = bookY + boxPadding;
+    const int textBottom = continueY - continuePadding / 2 - 2 * boxPadding;
+    CardTextFit::Parts parts{};
+    parts[CardTextFit::Title] = {titleLineHeight, static_cast<int>(lines.size()), 0};
+    parts[CardTextFit::Author] = {smallLineHeight, truncatedAuthor.empty() ? 0 : 1, smallLineHeight / 2};
+    parts[CardTextFit::Series] = {smallLineHeight, truncatedSeries.empty() ? 0 : 1, 0};
+    parts[CardTextFit::History] = {historyLineHeight, static_cast<int>(historyLines.size()), historyLineHeight / 2};
+    const CardTextFit::Result fit = CardTextFit::fit(parts, textBottom - textTop, /*tightGap=*/4);
+
+    if (fit.lines[CardTextFit::Title] < static_cast<int>(lines.size())) {
+      lines = renderer.wrappedText(UI_12_FONT_ID, lastBookTitle.c_str(), bookWidth - 40, fit.lines[CardTextFit::Title]);
+    }
+    if (fit.lines[CardTextFit::Series] == 0) {
+      truncatedSeries.clear();
+    }
+    if (fit.lines[CardTextFit::History] < static_cast<int>(historyLines.size())) {
+      historyLines.clear();
+      if (fit.lines[CardTextFit::History] > 0) {
+        const std::string compact = BookProgressPresentation::historyLineCompact(recentBooks[0]);
+        historyLines.push_back(renderer.truncatedText(FIT_SMALL_FONT_ID, compact.c_str(), bookWidth - 40));
+      }
+    }
+
+    // Vertically center the title block within the card, but never down into the label
+    const int totalTextHeight = fit.height;
+    const int titleYStart =
+        std::max(textTop, std::min(bookY + (bookHeight - totalTextHeight) / 2, textBottom - totalTextHeight));
 
     // If cover image was rendered, draw box behind title, author, and series
     if (coverRendered) {
-      constexpr int boxPadding = 8;
       // Calculate the max text width for the box
       int maxTextWidth = 0;
       for (const auto& line : lines) {
@@ -827,37 +849,33 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
       renderer.drawRect(boxX, boxY, boxWidth, boxHeight, !bookSelected);
     }
 
+    int lineY = titleYStart + fit.tops[CardTextFit::Title];
     for (const auto& line : lines) {
-      renderer.drawCenteredText(UI_12_FONT_ID, titleYStart, line.c_str(), !bookSelected);
-      titleYStart += renderer.getLineHeight(UI_12_FONT_ID);
+      renderer.drawCenteredText(UI_12_FONT_ID, lineY, line.c_str(), !bookSelected);
+      lineY += titleLineHeight;
     }
 
     if (!truncatedAuthor.empty()) {
-      titleYStart += renderer.getLineHeight(UI_10_FONT_ID) / 2;
-      renderer.drawCenteredText(UI_10_FONT_ID, titleYStart, truncatedAuthor.c_str(), !bookSelected);
-      titleYStart += renderer.getLineHeight(UI_10_FONT_ID);
+      renderer.drawCenteredText(UI_10_FONT_ID, titleYStart + fit.tops[CardTextFit::Author], truncatedAuthor.c_str(),
+                                !bookSelected);
     }
 
     if (!truncatedSeries.empty()) {
-      renderer.drawCenteredText(UI_10_FONT_ID, titleYStart, truncatedSeries.c_str(), !bookSelected);
-      titleYStart += renderer.getLineHeight(UI_10_FONT_ID);
+      renderer.drawCenteredText(UI_10_FONT_ID, titleYStart + fit.tops[CardTextFit::Series], truncatedSeries.c_str(),
+                                !bookSelected);
     }
 
-    if (!historyLines.empty()) {
-      titleYStart += historyLineHeight / 2;
-      for (const auto& line : historyLines) {
-        renderer.drawCenteredText(FIT_SMALL_FONT_ID, titleYStart, line.c_str(), !bookSelected);
-        titleYStart += historyLineHeight;
-      }
+    lineY = titleYStart + fit.tops[CardTextFit::History];
+    for (const auto& line : historyLines) {
+      renderer.drawCenteredText(FIT_SMALL_FONT_ID, lineY, line.c_str(), !bookSelected);
+      lineY += historyLineHeight;
     }
 
     // "Continue Reading" label at the bottom
-    const int continueY = bookY + bookHeight - renderer.getLineHeight(UI_10_FONT_ID) * 3 / 2;
     if (coverRendered) {
       // Draw box behind "Continue Reading" text (inverted when selected: black box instead of white)
       const char* continueText = tr(STR_CONTINUE_READING);
       const int continueTextWidth = renderer.getTextWidth(UI_10_FONT_ID, continueText);
-      constexpr int continuePadding = 6;
       const int continueBoxWidth = continueTextWidth + continuePadding * 2;
       const int continueBoxHeight = renderer.getLineHeight(UI_10_FONT_ID) + continuePadding;
       const int continueBoxX = rect.x + (rect.width - continueBoxWidth) / 2;
