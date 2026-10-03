@@ -610,7 +610,7 @@ you have configured. *Holding* a hint is the same as holding that button.
 | --- | --- |
 | Tap a row, cover, folder or button hint | Select it; tap again to open it |
 | Hold a button hint | The same as holding that button |
-| Swipe up / down over a list | Page the list |
+| Swipe up / down over a list | Page the list (on Bookmarks, Starred pages, Wi-Fi networks and the OPDS catalog, a swipe does nothing for now) |
 | **Tap the scroll bar** above / below the thumb | Page back / forward |
 | Swipe **right from the left edge** | Back |
 | Swipe **down from the top edge** | Reading light panel |
