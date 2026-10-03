@@ -14,7 +14,8 @@ class GfxRenderer;
 class ListHost {
  public:
   virtual int listCount() const = 0;
-  // Rows the screen draws per page, from the same geometry its render uses.
+  // Rows the screen draws per page, as its last render published them. Called on the loop task: never
+  // measure from the renderer's live orientation here.
   virtual int listPageRows() const = 0;
   virtual bool listSelectable(int /*row*/) const { return true; }
   // Whether a declared Left/Right action applies to `row` right now. Asked for declared sides only.

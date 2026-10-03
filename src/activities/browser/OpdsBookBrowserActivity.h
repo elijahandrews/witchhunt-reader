@@ -1,6 +1,7 @@
 #pragma once
 #include <OpdsParser.h>
 
+#include <atomic>
 #include <string>
 #include <utility>
 #include <vector>
@@ -81,6 +82,10 @@ class OpdsBookBrowserActivity final : public Activity {
   bool preventAutoSleep() override;
 
   int catalogRowsPerPage() const;
+  // Rows per page as the last render drew them. Paging runs on the loop task, where the renderer's
+  // orientation can be mid-flip to Portrait for a hint strip, so input reads what render published.
+  std::atomic<int> catalogPageRows{1};
+  std::atomic<int> formatPageRows{1};
   void showBookDetail(const OpdsEntry& entry);
   void closeFormatPicker();
   void retryAfterError();

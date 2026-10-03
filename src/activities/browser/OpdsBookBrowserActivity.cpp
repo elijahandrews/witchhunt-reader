@@ -406,7 +406,7 @@ void OpdsBookBrowserActivity::retryAfterError() {
 
 int OpdsBookBrowserActivity::CatalogHost::listCount() const { return static_cast<int>(browser.entryOffsets.size()); }
 
-int OpdsBookBrowserActivity::CatalogHost::listPageRows() const { return browser.catalogRowsPerPage(); }
+int OpdsBookBrowserActivity::CatalogHost::listPageRows() const { return browser.catalogPageRows.load(); }
 
 bool OpdsBookBrowserActivity::CatalogHost::listActionAvailable(const ListGrammar::Side side, const int row) const {
   if (side == ListGrammar::Side::Left) return !browser.searchTemplate.empty();
@@ -438,9 +438,7 @@ int OpdsBookBrowserActivity::FormatHost::listCount() const {
   return static_cast<int>(browser.formatSelectionLabels.size());
 }
 
-int OpdsBookBrowserActivity::FormatHost::listPageRows() const {
-  return formatItemsPerPage(UITheme::getContentRect(browser.renderer, true, true));
-}
+int OpdsBookBrowserActivity::FormatHost::listPageRows() const { return browser.formatPageRows.load(); }
 
 void OpdsBookBrowserActivity::FormatHost::onListSelectionChanged() { browser.requestUpdate(); }
 
@@ -521,6 +519,7 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
 
     const int listTop = midY + 20;
     const int itemsPerPage = formatItemsPerPage(contentRect);
+    formatPageRows.store(itemsPerPage);
     const int pageStartIndex = formatSelectorIndex / itemsPerPage * itemsPerPage;
     // Format rows published for touch. This screen has TWO lists in two different states, and
     // only one is on screen at a time; the recorders are cleared at the top of each render pass,
@@ -626,6 +625,7 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
   }
 
   const int rowsPerPage = catalogRowsPerPage();
+  catalogPageRows.store(rowsPerPage);
   const auto pageStartIndex = selectorIndex / rowsPerPage * rowsPerPage;
   // Entry rows published for touch. The top is a bare CATALOG_LIST_TOP, NOT contentRect.y + it as
   // the chapter selectors use — matched to the fill below, which is where the row visibly is.
