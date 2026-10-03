@@ -70,8 +70,9 @@ touchscreen:
 | **X4 Pro** | Up, Down, Power | Capacitive Home key — **tap** for Confirm, **hold** for Back |
 | **LilyGo T5 S3** | Down, Power | Capacitive Home key — **tap** for Confirm, **hold** for Back |
 
-The T5 S3 has no **Up** key at all, so paging a list backward is done by tapping the scroll
-bar or swiping — see **[Touch Controls](#5-touch-controls)**.
+The T5 S3 has no **Up** key at all. On lists that follow **[Moving through lists](#moving-through-lists)**
+the side **Up** box stands in for it, and any list pages backward with a swipe — see
+**[Touch Controls](#5-touch-controls)**.
 
 Button layout can be customized in the **[Controls Settings](#373-controls)**.
 
@@ -99,8 +100,8 @@ nothing there, and holding it still pages.
 
 On the **X4 Pro** and the **LilyGo T5 S3**, tap a hint box to press that button and hold the box
 to hold it. A held **«** or **»** box pages once rather than over and over, so swipe to move through
-a long list quickly. Lists always show the side boxes **Up** and **Down**, so the T5 S3, which has
-no Up key, can always move up.
+a long list quickly. Lists that work this way always show the side boxes **Up** and **Down**, so the
+T5 S3, which has no Up key, can always move up.
 
 ### Taking a Screenshot
 When the Power Button and Volume Down button are pressed at the same time, it will take a screenshot and save it in the folder `screenshots/`.
