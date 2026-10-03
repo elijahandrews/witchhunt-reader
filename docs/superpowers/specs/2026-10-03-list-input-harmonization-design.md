@@ -114,7 +114,8 @@ Rules:
 - **R5 — Events, not levels.** All six buttons act on `ButtonEventManager` events: Short at
   release, Long while held at `LONG_PRESS_MS` (1 s). A `Double` event — produced only when a
   double action is configured for that key and was not consumed globally — counts as two
-  Shorts. This is lossless (events are classified from the sampler's edge queue) and treats a
+  steps where the Short is a step, and as one press otherwise (an action, Confirm, Back).
+  This is lossless (events are classified from the sampler's edge queue) and treats a
   physical key and an injected long tap identically. The jump to the ends moves from 1.5 s to
   1 s.
 - **R6 — No needless double-press wait.** `ButtonEventManager::hasDoubleAction(btn)` returns
@@ -293,8 +294,10 @@ the following hold.
 
 One concern per PR; each builds `default`, `x4pro` and `lilygo_t5s3` and passes the host suite.
 
-1. **Swipe fix.** `pageList()` overrides on Bookmarks, Starred pages, Wi-Fi, OPDS (page) and the
-   button-remap wizard (no-op). Standalone; ships first. User guide: §5.2 swipe row.
+1. **Swipe fix.** `pageList()` overrides that consume the swipe without effect on Bookmarks,
+   Starred pages, Wi-Fi, OPDS and the button-remap wizard. Paging by swipe on the first four
+   arrives when each moves to `ListController` (OPDS in PR 3, the rest in PR 6); none of them
+   pages by button today either. Standalone; ships first. User guide: §5.2 swipe row.
 2. **Double-press wait (R6).** Standalone.
 3. **`ListGrammar` + `ListController` + hints, piloted on OPDS** (catalog and format picker).
    Closes #374. User guide: new "Moving through lists" subsection, §3.7.5.
