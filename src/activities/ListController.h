@@ -57,7 +57,8 @@ class ListController {
                  const ListDeclaration& declaration);
 
   // Call from the screen's loop() while this list is on screen. It is the only reader of button
-  // events there, and it consumes every pending event so none is left for a later state to read.
+  // events there; it reads events until the screen acts on one, then leaves the rest queued for
+  // the next tick, where the screen's new state takes them in order. Activity transitions drain.
   void update();
   // A vertical swipe over the list (Activity::pageList): -1 back, +1 forward.
   void page(int direction);

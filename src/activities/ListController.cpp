@@ -154,7 +154,8 @@ bool ListController::apply(const ListGrammar::Result result) {
       break;
   }
 
-  // The rest hands control to the screen, which may leave this list.
+  // The screen may leave this list, so stop here and leave later presses queued
+  // for the next tick, where the new state takes them in order.
   repeating = false;
   switch (result.command) {
     case Command::TabPrev:
