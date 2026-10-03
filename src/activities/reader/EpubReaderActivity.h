@@ -899,6 +899,12 @@ class EpubReaderActivity final : public Activity {
   // The status bar's chapter page counter: the current file's page and total, widened to the
   // whole TOC chapter when that spans several spine items (#325; see ChapterPageSpan).
   ChapterPageSpan::Display chapterPageDisplay() const;
+  // The status bar's printed-page label for `page`: the label landing on it, else the last one
+  // passed in this section, both parenthesised. Empty when the section has none so far.
+  std::string printedPageLabelFor(uint16_t page) const;
+  // What the status bar shows for the current page, recorded in progress.bin for readers of the
+  // file that cannot lay the book out (EpubProgressRecord::Shown).
+  EpubProgressRecord::Shown shownProgress() const;
   // Re-reads the recorded page counts of the current chapter's other spine items from the book's
   // SpinePageIndex on SD. Runs when chapterSpanSpine_ is not the current spine: -1 after a section
   // is created (spine change, settings change, cache clear) or a Background-B build completes,
@@ -932,14 +938,17 @@ class EpubReaderActivity final : public Activity {
   mutable int lastStatusBarClockMinute = -1;
   bool maybeRestartForFragmentedHeap(uint32_t freeHeap, uint32_t contigHeap);
   void saveProgress(int spineIndex, int currentPage, int pageCount,
-                    std::optional<uint16_t> paragraphIndex = std::nullopt);
+                    std::optional<uint16_t> paragraphIndex = std::nullopt,
+                    const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
   // Writes the canonical EPUB progress.bin record (EpubProgressRecord): spine(2) + page(2) +
-  // pageCount(2) + percent(1), plus paragraph(2) when one is given. Used by the per-page
-  // saveProgress() and by transient writers (sync restore, bookmark jump) so the on-disk format
-  // stays consistent regardless of caller. Static (and shared across the split
-  // EpubReaderActivity/EpubReaderSync translation units) since it needs no instance state.
+  // pageCount(2) + percent(1), plus paragraph(2) when one is given, plus what the status bar
+  // showed when that is given. Used by the per-page saveProgress() and by transient writers (sync
+  // restore, bookmark jump) so the on-disk format stays consistent regardless of caller. Static
+  // (and shared across the split EpubReaderActivity/EpubReaderSync translation units) since it
+  // needs no instance state.
   static bool writeReaderProgressCache(const std::string& cachePath, int spineIndex, int currentPage, int pageCount,
-                                       uint8_t percent, std::optional<uint16_t> paragraphIndex = std::nullopt);
+                                       uint8_t percent, std::optional<uint16_t> paragraphIndex = std::nullopt,
+                                       const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
