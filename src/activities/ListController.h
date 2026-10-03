@@ -93,3 +93,6 @@ class ListController {
   void moveTo(int row);
   void continuePageRepeat();
 };
+
+// The spec's budget for a controller per list screen.
+static_assert(sizeof(ListController) <= 100, "ListController must stay under 100 bytes");
