@@ -586,9 +586,13 @@ void SleepActivity::renderCustomSleepScreen() const {
     };
 
     // The picked image first, then the ones after it. A PNG is only validated by decoding it, so
-    // a truncated or unsupported one should cost the user that one picture, not all of them.
+    // a truncated or unsupported one should cost the user that one picture, not all of them. A
+    // failed PNG can take two decodes (tone analysis, then the render) and the device sleeps only
+    // after this returns, so a folder of broken images gets a few tries, not one per file.
+    constexpr size_t MAX_SLEEP_IMAGE_ATTEMPTS = 3;
     const auto pickedIndex = pickSleepImageIndex(numFiles);
-    for (size_t attempt = 0; attempt < numFiles; ++attempt) {
+    const size_t attempts = std::min(numFiles, MAX_SLEEP_IMAGE_ATTEMPTS);
+    for (size_t attempt = 0; attempt < attempts; ++attempt) {
       const size_t index = (pickedIndex + attempt) % numFiles;
       // Saved before the attempt rather than after it, as before: an image that takes the device
       // down mid-decode is then not the next pick as well.
