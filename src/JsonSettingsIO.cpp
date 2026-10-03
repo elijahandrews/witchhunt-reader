@@ -143,14 +143,12 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
   JsonDocument doc;
-  const auto settings = getSettingsList();
-
-  for (const auto& info : settings) {
-    if (!info.key) continue;
+  forEachSetting([&](const SettingInfo& info) {
+    if (!info.key) return;
     // persistPtr covers rows whose UI type carries no field pointer of its own (slider ACTIONs).
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
     const auto field = info.valuePtr ? info.valuePtr : info.persistPtr;
-    if (!field && !info.stringOffset) continue;
+    if (!field && !info.stringOffset) return;
 
     if (info.stringOffset) {
       const char* strPtr = (const char*)&s + info.stringOffset;
@@ -162,7 +160,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     } else {
       doc[info.key] = s.*field;
     }
-  }
+  });
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;
@@ -201,8 +199,22 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   // Left out while unconfigured, so the default keeps following the UI language.
   if (s.keyboardLayouts != 0) doc["keyboardLayouts"] = s.keyboardLayouts;
 
+  // Write nothing rather than a file cut short: a truncated settings.json reads back as a parse
+  // error and every setting returns to its default. The document reports a refused allocation
+  // itself; the String does not (ArduinoJson's String writer counts bytes it failed to append),
+  // so its length is checked against what the document should serialise to.
+  if (doc.overflowed()) {
+    LOG_ERR("CPS", "Settings not saved: JSON document out of memory");
+    return false;
+  }
+  const size_t expected = measureJson(doc);
   String json;
   serializeJson(doc, json);
+  if (json.length() != expected) {
+    LOG_ERR("CPS", "Settings not saved: %u of %u bytes of JSON fitted", static_cast<unsigned>(json.length()),
+            static_cast<unsigned>(expected));
+    return false;
+  }
   return Storage.writeFile(path, json);
 }
 
@@ -217,7 +229,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
-  const auto settings = getSettingsList();
   // Gesture keys written against an older generation of the shipped defaults are
   // ignored below, so the compiled defaults win. Absent (0) counts as older,
   // which is exactly the case for every file written before the stamp existed.
@@ -240,11 +251,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     return false;
   };
 
-  for (const auto& info : settings) {
-    if (!info.key) continue;
+  forEachSetting([&](const SettingInfo& info) {
+    if (!info.key) return;
     // See the matching comment in saveSettings.
     const auto field = info.valuePtr ? info.valuePtr : info.persistPtr;
-    if (!field && !info.stringOffset) continue;
+    if (!field && !info.stringOffset) return;
 
     if (info.stringOffset) {
       const char* strPtr = (const char*)&s + info.stringOffset;
@@ -273,7 +284,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
         destPtr[0] = '\0';
         if (needsResave) *needsResave = true;
-        continue;
+        return;
       }
       strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
       destPtr[info.stringMaxLen - 1] = '\0';
@@ -287,7 +298,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       if (staleGestureDefaults && isGestureKey(info.key)) {
         s.*field = fieldDefault;
         if (needsResave) *needsResave = true;
-        continue;
+        return;
       }
       uint8_t v = doc[info.key] | fieldDefault;
       if (info.persistPtr) {
@@ -309,7 +320,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       }
       s.*field = v;
     }
-  }
+  });
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
   using S = CrossPointSettings;

@@ -66,15 +66,15 @@ void SettingsActivity::onEnter() {
     insertedFontDownload = true;
   };
 
-  for (const auto& setting : getSettingsList()) {
-    if (setting.category == StrId::STR_NONE_OPT) continue;
+  forEachSetting([&](const SettingInfo& setting) {
+    if (setting.category == StrId::STR_NONE_OPT) return;
     if (setting.category == StrId::STR_CAT_SYSTEM &&
         (setting.nameId == StrId::STR_USE_CLOCK || setting.nameId == StrId::STR_CLOCK_FORMAT ||
          setting.nameId == StrId::STR_TIMEZONE)) {
-      continue;
+      return;
     }
     // Enrich font-family entries with SD card families discovered at boot.
-    // The list itself is a namespace-static; we only mutate our local copy here.
+    // The row is the walk's temporary; the screen keeps its own copy, and only that is enriched.
     SettingInfo enriched = setting;
     if (setting.key &&
         (std::strcmp(setting.key, "fontFamily") == 0 || std::strcmp(setting.key, "txtFontFamily") == 0)) {
@@ -86,7 +86,7 @@ void SettingsActivity::onEnter() {
     if (enriched.nameId == StrId::STR_INCLUDE_BETA_UPDATES) {
       includeBetaUpdatesSetting = enriched;
       sawIncludeBetaUpdates = true;
-      continue;
+      return;
     }
     const bool isReaderFontEntry =
         enriched.category == StrId::STR_CAT_READER &&
@@ -108,7 +108,7 @@ void SettingsActivity::onEnter() {
     if (isReaderFontEntry) sawReaderFontSection = true;
 
     // Web-only categories (KOReader Sync, OPDS Browser) are skipped for device UI
-  }
+  });
 
   if (!insertedFontDownload && sawReaderFontSection) {
     insertFontDownloadBelowFontSection();

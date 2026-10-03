@@ -24,7 +24,7 @@ enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING };
 // docs/multiboard-bringup-handover-2026-08-15.md.
 //
 // Each value below names one capability, answered from the HAL or the active
-// board profile in getSettingsList(). Add a value when a setting needs
+// board profile in SettingsListDetail::boardHas(). Add a value when a setting needs
 // something no existing one covers — never a board name.
 enum class SettingRequires : uint8_t {
   Nothing,     // always visible
@@ -119,14 +119,14 @@ struct SettingInfo {
   // options come from StrIds as usual, and the options at and after that index come from this
   // callback, which returns a pointer into flash.
   //
-  // enumLabels would seem to fit, but it is a vector<std::string> -- and getSettingsList()
+  // enumLabels would seem to fit, but it is a vector<std::string> -- and forEachSetting()
   // rebuilds every row on every settings save AND load, so the timezone row's 86 city names
   // would mean 86 heap strings per call, for labels that are string literals and never change.
   //
-  // A FUNCTION rather than a const char* array for the same reason this whole list is built by a
-  // function returning by value (see the note at the top of SettingsList.h): the array would
+  // A FUNCTION rather than a const char* array for the same reason the settings rows are built
+  // at runtime (see the note at the top of SettingsList.h): the array would
   // want a function-local static to assemble it, and the guard variable on first use pulls
-  // __cxa_guard_acquire and a FreeRTOS mutex onto a stack that getSettingsList() is already deep
+  // __cxa_guard_acquire and a FreeRTOS mutex onto a stack that forEachSetting() is already deep
   // into, called as it is from inside SETTINGS.loadFromFile() at boot. A captureless lambda
   // decays to a plain function pointer, needs no storage at all, and cannot allocate.
   //
