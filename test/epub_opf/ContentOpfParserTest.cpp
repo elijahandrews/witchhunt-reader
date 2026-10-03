@@ -399,6 +399,44 @@ TEST(ContentOpfParser, HugeManifestResolvesThroughLinearScanWhenIndexGrowthFails
   EXPECT_GT(opf_test_hooks::g_refusedNothrowArrays, 0u) << "the index never failed to grow; the fallback did not run";
 }
 
+// Without the index, every idref used to rescan .items.bin from its first record: a 2956-itemref
+// book read ~4.4 million records and spent 75 s in this parse on the device. Spine order follows
+// manifest order in practice, so resuming after the previous match reads the store about once.
+// Measured in bytes read, not time: a host finishes either scan quickly, the device does not.
+TEST(ContentOpfParser, AnInOrderSpineReadsTheItemStoreAboutOnceWithoutTheIndex) {
+  const std::string cacheDir = makeTempDir();
+  ASSERT_FALSE(cacheDir.empty());
+  TempDirGuard dirGuard(cacheDir);
+
+  std::vector<std::string> capturedSpineHrefs;
+  ScopedSpineHrefSink sinkGuard(&capturedSpineHrefs);
+
+  constexpr int kItemCount = 3000;
+  std::string spine;
+  for (int i = 0; i < kItemCount; ++i) spine += "<itemref idref='ch" + std::to_string(i) + "'/>";
+  const std::string xml =
+      "<?xml version='1.0' encoding='utf-8'?>"
+      "<package xmlns:opf='http://www.idpf.org/2007/opf' xmlns:dc='http://purl.org/dc/elements/1.1/'>"
+      "<metadata><dc:title>Long</dc:title></metadata>"
+      "<manifest>" +
+      buildManifestItems(kItemCount) + "</manifest><spine>" + spine + "</spine></package>";
+
+  const ScopedIndexGrowthOom oom;
+  BookMetadataCache cache(cacheDir);
+  ContentOpfParser parser(cacheDir, "/book/OEBPS/", xml.size(), &cache);
+  const size_t bytesReadBefore = FsFile::bytesRead;
+  ASSERT_TRUE(parseOpfXml(parser, xml));
+  const size_t bytesRead = FsFile::bytesRead - bytesReadBefore;
+
+  EXPECT_GT(opf_test_hooks::g_refusedNothrowArrays, 0u) << "the index never failed to grow; the fallback did not run";
+  ASSERT_EQ(capturedSpineHrefs.size(), static_cast<size_t>(kItemCount));
+  for (int i = 0; i < kItemCount; ++i) {
+    ASSERT_EQ(capturedSpineHrefs[i], "book/OEBPS/text/ch" + std::to_string(i) + ".xhtml") << "itemref " << i;
+  }
+  const auto storeBytes = static_cast<size_t>(std::filesystem::file_size(cacheDir + "/.items.bin"));
+  EXPECT_LE(bytesRead, 2 * storeBytes) << "item store is " << storeBytes << " bytes";
+}
+
 TEST(ContentOpfParser, DisablesHashTrustedIndexOnDuplicateIdsAndStillResolves) {
   const std::string cacheDir = makeTempDir();
   ASSERT_FALSE(cacheDir.empty());

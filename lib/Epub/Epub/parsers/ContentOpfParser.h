@@ -96,6 +96,9 @@ class ContentOpfParser final : public Print {
   ItemIndexVec itemIndex;
   bool useItemIndex = false;
   bool indexDisabled_ = false;  // latched when an index growth hit OOM → linear-scan fallback
+  // Where the linear scan picks up: the .items.bin offset just past its previous match (see
+  // resolveItemRefHrefLinearScan).
+  uint32_t itemScanResumeOffset_ = 0;
 
   // Memo of the last manifest item's media-type and its classification (MediaClass enum in the
   // .cpp, stored as its uint8_t value here). Manifest items overwhelmingly repeat one media type
