@@ -10,7 +10,7 @@ User-facing changes only. Full commit history is in git log.
 
 ### OPDS
 
-- **OPDS catalogs can be paged, and their buttons do what the hints say** (#374). Hold **Left** / **Right**, or swipe, to page through a catalog; **Up** / **Down** move one row. A short **Left** is **Search** and a short **Right** is **Info** for a book. Where those do not apply, the hint shows only « or », instead of "Up" / "Down" labels on buttons that did nothing. A long catalog in landscape no longer runs off the bottom of the screen. The side Up/Down hints also appear when choosing a download format, so the T5 S3 can move up there.
+- **OPDS catalogs can be paged, and their buttons do what the hints say** (#374). Hold **Left** / **Right**, or swipe, to page through a catalog; **Up** / **Down** move one row. A short **Left** is **Search** and a short **Right** is **Info** for a book. Where those do not apply, the hint shows only « or », instead of "Up" / "Down" labels on buttons that did nothing. Holding **Back** returns to the Home screen, and holding **Up** / **Down** jumps to the first / last entry. A long catalog in landscape no longer runs off the bottom of the screen. The side Up/Down hints also appear when choosing a download format, so the T5 S3 can move up there.
 
 ## 2.37 — 2026-09-29
 

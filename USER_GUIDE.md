@@ -98,6 +98,10 @@ Right move the selection, or the screen's own action, such as **« Search** / **
 showing only **«** or **»** has no action for the selected row right now. A short press does
 nothing there, and holding it still pages.
 
+A button action you set yourself under **Settings → Controls** comes first: give a long Left or
+Right press an action of its own and holding it no longer pages, and a short-press action on the
+page-turn keys (Up/Down) runs as well as the move.
+
 On the **X4 Pro** and the **LilyGo T5 S3**, tap a hint box to press that button and hold the box
 to hold it. A held **«** or **»** box pages once rather than over and over, so swipe to move through
 a long list quickly. Lists that work this way always show the side boxes **Up** and **Down**, so the
