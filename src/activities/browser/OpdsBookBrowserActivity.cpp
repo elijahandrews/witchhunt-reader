@@ -310,15 +310,15 @@ void OpdsBookBrowserActivity::loop() {
     return;
   }
 
-  // The states below are not lists, but they read button events too, never levels: the lists drain
-  // the event queue, so a press read here by level would reach the catalog a second time as an
-  // event once it is back on screen (Back closing Book Detail would also leave the feed).
+  // The states below are not lists, but they read button events too, never levels: every press is
+  // also queued as an event, and a list reads that queue once it is back on screen, so a press read
+  // here by level would be handled a second time there.
   ButtonEventManager::ButtonEvent event;
   while (buttonEvents.consumeEvent(event)) {
     const auto button = event.button;
     if (state == BrowserState::ERROR) {
       if (button == MappedInputManager::Button::Confirm) {
-        retryAfterError();
+        checkAndConnectWifi();
         return;
       }
       if (button == MappedInputManager::Button::Back) {
@@ -345,7 +345,8 @@ void OpdsBookBrowserActivity::loop() {
         return;
       }
     }
-    // DOWNLOADING: the download reads Back by itself; any other press is dropped.
+    // DOWNLOADING never has presses to read here: the download runs inside loop(), reads Back by level
+    // to abort, and drains the queue when it returns.
   }
 }
 
@@ -391,17 +392,6 @@ void OpdsBookBrowserActivity::closeFormatPicker() {
   selectedBookIndex = -1;
   formatSelectionLabels.clear();
   requestUpdate();
-}
-
-void OpdsBookBrowserActivity::retryAfterError() {
-  if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
-    state = BrowserState::LOADING;
-    statusMessage = tr(STR_LOADING);
-    requestUpdate();
-    fetchFeed(currentPath);
-  } else {
-    launchWifiSelection();
-  }
 }
 
 int OpdsBookBrowserActivity::CatalogHost::listCount() const { return static_cast<int>(browser.entryOffsets.size()); }

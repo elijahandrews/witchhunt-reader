@@ -88,7 +88,6 @@ class OpdsBookBrowserActivity final : public Activity {
   std::atomic<int> formatPageRows{1};
   void showBookDetail(const OpdsEntry& entry);
   void closeFormatPicker();
-  void retryAfterError();
 
   // Short Left/Right on the catalog: Search where the feed offers one, Info on a book, and never a
   // step (an action that does not apply leaves its side doing nothing). The format picker keeps
