@@ -2,6 +2,12 @@
 
 User-facing changes only. Full commit history is in git log.
 
+## Unreleased
+
+### Buttons
+
+- **Menus and lists respond to Left and Right without a delay.** Outside a book, every Left/Right press waited 0.3 s to see whether a double press would follow, because the double press is bound to a reading action by default. Two quick presses then moved nothing at all in the file browser. The wait now happens only in the reader, where the double press means something.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.

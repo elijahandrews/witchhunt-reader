@@ -1,6 +1,7 @@
 #include "ButtonEventManager.h"
 
 #include "CrossPointSettings.h"
+#include "util/DoubleActionWait.h"
 
 // Required for constexpr array out-of-class definition (C++14).
 constexpr ButtonEventManager::Button ButtonEventManager::ALL_BUTTONS[ButtonEventManager::NUM_BUTTONS];
@@ -40,26 +41,34 @@ bool ButtonEventManager::hasDoubleAction(const Button button) const {
   if (forcedDoubleMask & pairMask) {
     return true;
   }
-  using BA = CrossPointSettings::BUTTON_ACTION;
+  const uint8_t action = configuredDoubleAction(button);
+  // Outside the reader a reader-only double action falls through to the screen, so there is
+  // nothing to wait for (the default PAGE_BACK_10 / PAGE_FORWARD_10 on Left/Right).
+  const bool readerOnTop = readerOnTopQuery == nullptr || readerOnTopQuery();
+  return doubleActionNeedsWait(action != CrossPointSettings::BTN_DEFAULT,
+                               CrossPointSettings::isReaderScopedAction(action), readerOnTop);
+}
+
+uint8_t ButtonEventManager::configuredDoubleAction(const Button button) {
   switch (button) {
     case Button::Back:
-      return SETTINGS.btnDoubleBack != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoubleBack;
     case Button::Confirm:
-      return SETTINGS.btnDoubleConfirm != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoubleConfirm;
     case Button::Left:
-      return SETTINGS.btnDoubleLeft != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoubleLeft;
     case Button::Right:
-      return SETTINGS.btnDoubleRight != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoubleRight;
     case Button::Up:
     case Button::PageBack:
-      return SETTINGS.btnDoublePageBack != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoublePageBack;
     case Button::Down:
     case Button::PageForward:
-      return SETTINGS.btnDoublePageForward != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoublePageForward;
     case Button::Power:
-      return SETTINGS.btnDoublePower != BA::BTN_DEFAULT;
+      return SETTINGS.btnDoublePower;
   }
-  return false;
+  return CrossPointSettings::BTN_DEFAULT;
 }
 
 ButtonEventManager::PressLog ButtonEventManager::pressLog(const Button button) const {
