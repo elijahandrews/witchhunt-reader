@@ -25,6 +25,7 @@
 #include "Epub/CoverThumbSession.h"
 #include "Epub/HashUtils.h"
 #include "Epub/ImageFormatDetector.h"
+#include "Epub/SpinePageIndex.h"
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
 #include "Epub/parsers/PageListSink.h"
@@ -438,7 +439,36 @@ bool Epub::computeZipFingerprint(uint64_t* out) const {
 namespace {
 constexpr uint32_t FINGERPRINT_MAGIC = 0x31504658;  // "XFP1"
 constexpr const char* FINGERPRINT_FILE = "/fingerprint.bin";
+constexpr const char* TOC_RETRY_FILE = "/toc.retry";
+// Builds that may end without the TOC: the first one, then a retry on each of two later opens.
+constexpr uint8_t MAX_TOC_LOSSES = 3;
 }  // namespace
+
+uint8_t Epub::readTocLossCount() const {
+  // A plain open, not openFileForRead: the sidecar is absent for almost every book, and
+  // openFileForRead logs every miss.
+  FsFile f = Storage.open((cachePath + TOC_RETRY_FILE).c_str());
+  if (!f) return 0;
+  uint8_t count = 0;
+  if (f.read(&count, 1) != 1) count = 0;
+  f.close();
+  return count;
+}
+
+void Epub::writeTocLossCount(const uint8_t count) const {
+  FsFile f;
+  if (!Storage.openFileForWrite("EBP", cachePath + TOC_RETRY_FILE, f)) {
+    LOG_ERR("EBP", "Could not write TOC retry sidecar");
+    return;
+  }
+  f.write(&count, 1);
+  f.close();
+}
+
+bool Epub::lostTocRetryDue() const {
+  const uint8_t losses = readTocLossCount();
+  return losses > 0 && losses < MAX_TOC_LOSSES;
+}
 
 bool Epub::readStoredFingerprint(uint64_t* out) const {
   FsFile f;
@@ -471,6 +501,8 @@ bool Epub::needsFirstOpenIndexing() const {
   // Book content changed at the same path -> load() wipes the cache and rebuilds.
   uint64_t zipFp = 0, storedFp = 0;
   if (computeZipFingerprint(&zipFp) && readStoredFingerprint(&storedFp) && storedFp != zipFp) return true;
+  // An earlier build lost the TOC -> the reader's load() rebuilds to retry it.
+  if (lostTocRetryDue()) return true;
   return false;
 }
 
@@ -664,8 +696,12 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, BuildArena
     }
   }
 
+  // An earlier build lost the TOC: rebuild rather than reuse its book.bin, which has no room to
+  // take the TOC in afterwards. Only on the reader's open (see setLostTocRetryEnabled()).
+  const bool retryLostToc = buildIfMissing && lostTocRetryEnabled_ && lostTocRetryDue();
+
   // Try to load existing cache first
-  if (bookMetadataCache->load()) {
+  if (!retryLostToc && bookMetadataCache->load()) {
     if (!skipLoadingCss) {
       // Rebuild CSS cache when missing or when cache version changed (loadFromCache removes stale file)
       if (!cssParser->hasCache() || !cssParser->loadFromCache()) {
@@ -696,8 +732,18 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, BuildArena
   }
 
   // Cache doesn't exist or is invalid, build it
-  LOG_DBG("EBP", "Cache not found, building spine/TOC cache");
+  if (retryLostToc) {
+    LOG_INF("EBP", "Rebuilding spine/TOC cache to retry a TOC an earlier build lost");
+  } else {
+    LOG_DBG("EBP", "Cache not found, building spine/TOC cache");
+  }
   setupCacheDir();
+
+  // A retry is counted before it starts, so one that fails or takes the device down still uses
+  // up an attempt.
+  const uint8_t tocLossesBefore = readTocLossCount();
+  const auto tocLossesAfter = static_cast<uint8_t>(std::min(tocLossesBefore + 1, 255));
+  if (retryLostToc) writeTocLossCount(tocLossesAfter);
 
   const uint32_t indexingStart = millis();
 
@@ -756,6 +802,15 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, BuildArena
     // Continue anyway - book will work without TOC
   }
 
+  // Recorded before book.bin is written, so no book.bin without its TOC outlives the build
+  // unrecorded. A book that declares no TOC has nothing to lose.
+  const bool tocLost = !tocParsed && (!tocNavItem.empty() || !tocNcxItem.empty());
+  if (tocLost && !retryLostToc) {
+    writeTocLossCount(tocLossesAfter);
+  } else if (!tocLost && tocLossesBefore > 0) {
+    Storage.remove((cachePath + TOC_RETRY_FILE).c_str());
+  }
+
   // EPUB 2.01 page-map.xml — only parse if neither NCX <pageList> nor nav page-list
   // wrote a pagelist.bin already (so an explicit NCX/nav printed-page list always wins).
   if (!pageMapItem.empty()) {
@@ -803,8 +858,13 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, BuildArena
     discoverCssFilesFromZip();
     // Parse CSS files after cache reload
     parseCssFiles();
-    removeSpineCaches();
   }
+  // Sections laid out before this build are stale when the CSS was just recompiled, or when a
+  // retry got the TOC back: its anchors start new pages, which also changes the page counts
+  // pages.bin recorded while the book was read without it.
+  const bool tocRecovered = retryLostToc && !tocLost;
+  if (!skipLoadingCss || tocRecovered) removeSpineCaches();
+  if (tocRecovered) SpinePageIndex::discard(cachePath);
 
   // Pin the content this cache was built from (see the staleness check above).
   if (haveFp) writeStoredFingerprint(zipFp);
