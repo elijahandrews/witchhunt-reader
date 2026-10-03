@@ -90,6 +90,8 @@ set(PIPELINE_INCLUDES
 add_executable(EpubPipelineTest
   EpubPipelineTest.cpp
   FingerprintTest.cpp
+  LostTocRetryTest.cpp
+  PageListSinkTest.cpp
   MetadataSidecarTest.cpp
   SidecarFilesTest.cpp
   SectionAbortTest.cpp

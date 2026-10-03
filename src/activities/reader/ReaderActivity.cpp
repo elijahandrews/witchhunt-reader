@@ -735,6 +735,9 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path, BuildAre
 
   auto epub = std::unique_ptr<Epub>(new Epub(path, "/.crosspoint"));
   epub->setSyntheticTocFallbackEnabled(SETTINGS.syntheticTocFallback != 0);
+  // The open that gets the indexing popup and the lent framebuffer: needsFirstOpenIndexing()
+  // reports a due retry, so a TOC an earlier build lost is retried here and nowhere else.
+  epub->setLostTocRetryEnabled(true);
   if (epub->load(true, SETTINGS.embeddedStyle == 0, scratch)) {
     return epub;
   }

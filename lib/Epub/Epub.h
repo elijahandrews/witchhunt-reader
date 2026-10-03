@@ -47,6 +47,8 @@ class Epub {
   mutable TocReliability tocReliability = TocReliability::Unknown;
   // Library-level option: app code can override this per-book instance.
   bool syntheticTocFallbackEnabled = false;
+  // See setLostTocRetryEnabled().
+  bool lostTocRetryEnabled_ = false;
 
   bool findContentOpfFile(std::string* contentOpfFile) const;
   bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, OpfCacheMode cacheMode);
@@ -107,6 +109,15 @@ class Epub {
   bool readStoredFingerprint(uint64_t* out) const;
   void writeStoredFingerprint(uint64_t fp) const;
 
+  // toc.retry sidecar in the cache dir: how many index builds ended without the TOC the book
+  // declares (0 when there is none). book.bin is reused as it is, so without it a TOC lost to a
+  // passing shortage -- the parser or its inflate ring refused on a fragmented heap -- would stay
+  // lost for good.
+  uint8_t readTocLossCount() const;
+  void writeTocLossCount(uint8_t count) const;
+  // True while a lost TOC has rebuilds left (see setLostTocRetryEnabled()).
+  bool lostTocRetryDue() const;
+
   // Overlay a "<book>.opf" metadata sidecar onto the loaded coreMetadata, if one
   // exists. Called from every load path once coreMetadata is final — including
   // the cached ones, which is the point: the sidecar is never baked into
@@ -159,9 +170,17 @@ class Epub {
 
   // True when opening the book will trigger the (multi-second) first-open index
   // build inside load(): the spine/TOC cache (book.bin) or the compiled CSS rules
-  // cache is missing. Cheap (only file-existence checks) so callers can decide
+  // cache is missing, or a TOC an earlier build lost is due for a retry. Cheap
+  // (file-existence checks and small sidecar reads) so callers can decide
   // whether to show a progress popup before calling load().
   bool needsFirstOpenIndexing() const;
+
+  // Lets load() rebuild the cache when an earlier build lost the TOC the book declares, for at
+  // most three builds in all, so a TOC that never parses stops costing a rebuild per open. Only
+  // the reader's open turns this on: it shows the indexing popup and lends the secondary
+  // framebuffer for the rebuild. The sleep screen, book info and KOReader sync also call
+  // load(true, ...), for metadata, and must not re-index on the way.
+  void setLostTocRetryEnabled(bool enabled) { lostTocRetryEnabled_ = enabled; }
 
   // Path of the Calibre-style metadata sidecar for a book ("/Books/x.epub" ->
   // "/Books/x.opf"), or "" when there is none. Mirrors

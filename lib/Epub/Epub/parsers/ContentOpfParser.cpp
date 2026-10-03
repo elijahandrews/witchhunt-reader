@@ -317,23 +317,33 @@ bool ContentOpfParser::resolveItemRefHrefWithIndex(const std::string& idref, std
 }
 
 bool ContentOpfParser::resolveItemRefHrefLinearScan(const std::string& idref, std::string& href) {
-  itemReader_->seek(0);
+  // Resumes after the previous match and wraps once, instead of starting at the first record:
+  // spine order follows manifest order in practice, so the item wanted is usually the next one.
+  // From the first record, a 2956-itemref spine read ~4.4 million records -- 75 s of a first open
+  // on the device. An id the manifest repeats (invalid EPUB) therefore resolves to its next
+  // occurrence after the resume point rather than always to its first.
   const size_t itemStoreSize = tempItemStore.fileSize();
+  const uint32_t resumeOffset = itemScanResumeOffset_;
   std::string itemId;
 
-  while (itemReader_->position() < itemStoreSize) {
-    const size_t beforeReadPos = itemReader_->position();
-    if (!itemReader_->readString(itemId) || !itemReader_->readString(href)) {
-      return false;
-    }
+  for (int pass = 0; pass < 2; pass++) {
+    const size_t end = pass == 0 ? itemStoreSize : resumeOffset;
+    itemReader_->seek(pass == 0 ? resumeOffset : 0);
+    while (itemReader_->position() < end) {
+      const size_t beforeReadPos = itemReader_->position();
+      if (!itemReader_->readString(itemId) || !itemReader_->readString(href)) {
+        return false;
+      }
 
-    // Guard against malformed temp data or host shims that don't signal EOF via available().
-    if (itemReader_->position() <= beforeReadPos) {
-      return false;
-    }
+      // Guard against malformed temp data or host shims that don't signal EOF via available().
+      if (itemReader_->position() <= beforeReadPos) {
+        return false;
+      }
 
-    if (itemId == idref) {
-      return true;
+      if (itemId == idref) {
+        itemScanResumeOffset_ = itemReader_->position() < itemStoreSize ? itemReader_->position() : 0;
+        return true;
+      }
     }
   }
 
