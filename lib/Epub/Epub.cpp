@@ -306,13 +306,13 @@ bool Epub::parseTocNcxFile() const {
 
   if (!ncxParser.setup()) {
     LOG_ERR("EBP", "Could not setup toc ncx parser");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    ncxPageListSink.discard();
     return false;
   }
 
   if (!readItemContentsToStream(tocNcxItem, ncxParser, 1024)) {
     LOG_ERR("EBP", "Could not stream toc ncx data");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    ncxPageListSink.discard();
     return false;
   }
 
@@ -349,13 +349,13 @@ bool Epub::parseTocNavFile() const {
 
   if (!navParser.setup()) {
     LOG_ERR("EBP", "Could not setup toc nav parser");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    navPageListSink.discard();
     return false;
   }
 
   if (!readItemContentsToStream(tocNavItem, navParser, 1024)) {
     LOG_ERR("EBP", "Could not stream toc nav data");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    navPageListSink.discard();
     return false;
   }
 
@@ -390,13 +390,13 @@ bool Epub::parsePageMapFile() const {
 
   if (!pageMapParser.setup()) {
     LOG_ERR("EBP", "Could not setup page-map parser");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    pageMapPageListSink.discard();
     return false;
   }
 
   if (!readItemContentsToStream(pageMapItem, pageMapParser, 1024)) {
     LOG_ERR("EBP", "Could not stream page-map data");
-    Storage.remove((getCachePath() + "/pagelist.bin").c_str());
+    pageMapPageListSink.discard();
     return false;
   }
 
