@@ -6,7 +6,7 @@ User-facing changes only. Full commit history is in git log.
 
 ### Touch
 
-- **Fix: a swipe on Bookmarks, Starred pages, Wi-Fi or the OPDS catalog no longer acts on the selected row.** A vertical swipe over these lists was passed on as a Left/Right press. Swiping up on Bookmarks or Starred pages deleted the highlighted entry, and on Wi-Fi it started a rescan. On these screens a swipe now does nothing. On other lists it still pages.
+- **Fix: a swipe on Bookmarks, Starred pages, Wi-Fi or the OPDS catalog no longer acts on the selected row.** A vertical swipe over these lists was passed on as a Left/Right press. Swiping up on Bookmarks or Starred pages deleted the highlighted entry, and on Wi-Fi it started a rescan. On Bookmarks, Starred pages and Wi-Fi a swipe now does nothing, while the OPDS catalog pages (see OPDS below). On other lists it still pages.
 
 ### OPDS
 
