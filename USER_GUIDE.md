@@ -97,9 +97,10 @@ Right move the selection, or the screen's own action, such as **« Search** / **
 showing only **«** or **»** has no action for the selected row right now. A short press does
 nothing there, and holding it still pages.
 
-On the **X4 Pro** and the **LilyGo T5 S3**, tap a hint box to press that button. Holding a hint box
-pages once, so a swipe is the quicker way through a long list. Lists always show the side boxes **Up** and **Down**, so the T5 S3, which has no Up
-key, can always move up.
+On the **X4 Pro** and the **LilyGo T5 S3**, tap a hint box to press that button and hold the box
+to hold it. A held **«** or **»** box pages once rather than over and over, so swipe to move through
+a long list quickly. Lists always show the side boxes **Up** and **Down**, so the T5 S3, which has
+no Up key, can always move up.
 
 ### Taking a Screenshot
 When the Power Button and Volume Down button are pressed at the same time, it will take a screenshot and save it in the folder `screenshots/`.
