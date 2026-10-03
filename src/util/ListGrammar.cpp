@@ -61,7 +61,8 @@ Labels labelsFor(const Shape& shape, const Availability& available) {
 
 int step(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return from;
-  int row = from;
+  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
+  int row = start;
   for (int tried = 0; tried < rows.count; ++tried) {
     row = ((row + direction) % rows.count + rows.count) % rows.count;
     if (isSelectable(rows, row)) return row;
@@ -72,7 +73,8 @@ int step(const Rows& rows, const int from, const int direction) {
 int page(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return from;
   const int perPage = rows.pageRows > 0 ? rows.pageRows : 1;
-  const int currentPage = from / perPage;
+  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
+  const int currentPage = start / perPage;
   const int lastPage = (rows.count - 1) / perPage;
   int target = 0;
   if (direction > 0) {
@@ -80,11 +82,12 @@ int page(const Rows& rows, const int from, const int direction) {
   } else {
     target = currentPage > 0 ? (currentPage - 1) * perPage : 0;
   }
-  const int onward = direction > 0 ? 1 : -1;
-  for (int row = target; row >= 0 && row < rows.count; row += onward) {
+  // Settle on the first selectable row at or after the target, so a header that opens a page
+  // never pushes the selection onto another page; failing that, the nearest one before it.
+  for (int row = target; row < rows.count; ++row) {
     if (isSelectable(rows, row)) return row;
   }
-  for (int row = target; row >= 0 && row < rows.count; row -= onward) {
+  for (int row = target - 1; row >= 0; --row) {
     if (isSelectable(rows, row)) return row;
   }
   return from;

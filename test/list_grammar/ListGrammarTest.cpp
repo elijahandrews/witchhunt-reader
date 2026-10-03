@@ -245,7 +245,15 @@ TEST(ListGrammarRows, PageSkipsUnselectableRows) {
   const Rows rows = maskedRows(mask, 4);
   EXPECT_EQ(ListGrammar::page(rows, 0, 1), 5);   // lands on header 4, walks on
   EXPECT_EQ(ListGrammar::page(rows, 5, 1), 9);   // lands on header 8, walks on
-  EXPECT_EQ(ListGrammar::page(rows, 9, -1), 3);  // lands on header 4, walks back
+  EXPECT_EQ(ListGrammar::page(rows, 9, -1), 5);  // lands on header 4, settles on the page it opens
+}
+
+TEST(ListGrammarRows, OutOfRangeStartIsClampedFirst) {
+  const Rows rows = plainRows(5, 2);
+  EXPECT_EQ(ListGrammar::page(rows, 9, -1), 2);
+  EXPECT_EQ(ListGrammar::page(rows, 9, 1), 4);
+  EXPECT_EQ(ListGrammar::step(rows, 9, 1), 0);
+  EXPECT_EQ(ListGrammar::step(rows, -3, -1), 4);
 }
 
 TEST(ListGrammarRows, PageAtAHeaderAtTheEndSettlesBesideIt) {

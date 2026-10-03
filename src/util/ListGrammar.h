@@ -65,6 +65,7 @@ struct Labels {
 Labels labelsFor(const Shape& shape, const Availability& available);
 
 // Row arithmetic. `selectable` may be null (every row is selectable); `ctx` is handed back to it.
+// A `from` outside [0, count) is clamped into it first; `direction` is -1 or +1.
 using Selectable = bool (*)(const void* ctx, int row);
 struct Rows {
   int count = 0;
@@ -76,8 +77,8 @@ struct Rows {
 // One selectable row back (-1) or forward (+1), wrapping round the ends.
 int step(const Rows& rows, int from, int direction);
 // To the first row of the previous / next page, clamped at the ends: the first row from page one,
-// the last row from the last page, so a list that fits one page pages to its ends. A header there
-// is passed over in the direction of travel, or else settled beside.
+// the last row from the last page, so a list that fits one page pages to its ends. A header at the
+// target is passed over to the first selectable row of that page, or else the nearest one before it.
 int page(const Rows& rows, int from, int direction);
 int first(const Rows& rows);
 int last(const Rows& rows);
