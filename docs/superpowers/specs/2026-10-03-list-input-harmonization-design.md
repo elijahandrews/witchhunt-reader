@@ -164,44 +164,47 @@ touch: dispatchListTap ─▶ selectListRow ─▶ ListController::tapRow
   `ButtonNavigator`'s static helpers.
 - Both outputs derive from the one declaration; host tests pin them together.
 
-**`ListDeclaration`** — what a screen states once, in `onEnter`:
+**`ListDeclaration`** — what a screen states once, as a `static constexpr` value:
 
 ```cpp
-struct ListSlot {
+struct ListAction {
+  bool declared;                                 // short Left/Right runs a screen action
   StrId label;                                   // short-press label, e.g. STR_SEARCH
-  bool (*available)(void* ctx, int row);         // nullptr = always available
-  void (*run)(void* ctx, int row);
 };
 struct ListDeclaration {
-  const ListSlot* left = nullptr;                // both null = default pair (step)
-  const ListSlot* right = nullptr;
-  const ListSlot* confirmLong = nullptr;         // null = long Confirm activates
-  bool tabbed = false;                           // long Up/Down switch tabs
-  void* ctx = nullptr;                           // the screen
+  ListAction left;                               // neither declared = default pair (step)
+  ListAction right;
+  bool confirmLong;                              // long Confirm has an action of its own
+  bool tabbed;                                   // long Up/Down switch tabs
 };
 ```
 
-Plain function pointers with a context pointer, not `std::function` (heap discipline). Slots
-are `static const` per screen.
+The screen implements the virtual `ListHost` interface rather than registering function-pointer
+slots with a `ctx`: `listCount`, `listPageRows`, `listSelectable`, `listActionAvailable`,
+`onListSelectionChanged`, `onListActivate(row, longPress)`, `onListBack`, `onListHome`,
+`onListAction`, `onListTab` and `onListOtherEvent`. A screen with two lists gives each its own
+host. A virtual interface costs one vtable pointer, not a `std::function` (heap discipline).
 
-**`ListState`** — per tick: row count, selected row, rows per page (renderer feedback),
-optional selectable predicate, and for each declared slot whether it is available on the
-selected row.
+**List state** — per tick, the controller asks the host for the row count, rows per page, the
+selectable predicate, and whether each declared action is available on the selected row.
+`listPageRows()` returns what the screen's last render published: it is called on the loop task,
+and the renderer's live orientation must not be measured there.
 
 **`ListController`** (`src/activities/ListController.{h,cpp}`) — a member of each list screen,
 not a base class.
 
 - `update()`, called from the screen's `loop()`: the **only** consumer of button events on a
-  list screen. Drains every pending event each tick (no event is left to fill the 16-slot ring),
-  maps each through `ListGrammar`, applies movement, runs callbacks. Matches Up/Down and
+  list screen. Walks the pending events, maps each through `ListGrammar`, applies movement, runs
+  callbacks, and stops at the first event the screen acts on, leaving later presses for the next
+  tick. Every state of a list screen must therefore read events, never levels. Matches Up/Down and
   discards their PageBack/PageForward alias events. Events the grammar does not use go to an
   optional `onOtherEvent` callback (Footnotes uses Power to select).
 - Hold-repeat for Left/Right paging after a Long, while `isPressed` stays true.
 - `page(int dir)` for swipes, `tapRow(int row)` for row taps (wraps `ListRowTap`).
-- `drawHints(confirmLabel, backLabel)` composes the labels into fixed buffers it owns (no
-  allocation per render) and draws both strips.
-- Selection access through a two-function adapter: an `int&` for screens that keep their own
-  index, or a `freeink::ui::ListNav&`, where writes go through `requestSelection()` and page size
+- `drawHints(renderer, backLabel, confirmLabel)` composes the labels into stack buffers per call
+  (no allocation per render) and draws both strips.
+- Selection access: in PR 3 an `int&` for screens that keep their own index; the `ListNav`
+  adapter arrives with PR 4. For a `freeink::ui::ListNav&`, writes go through `requestSelection()` and page size
   comes from `inputPageRows()`. The loop task never writes render-owned `ListNav` fields, which
   removes the unlocked writes in `MenuListActivity` and the file browser.
 - Under 100 bytes per instance.
