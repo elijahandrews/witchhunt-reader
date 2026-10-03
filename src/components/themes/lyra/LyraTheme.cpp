@@ -38,6 +38,7 @@
 #include "components/icons/weather32.h"
 #include "components/icons/wifi.h"
 #include "components/themes/ButtonHintLayout.h"
+#include "components/themes/CardTextFit.h"
 #include "components/themes/ListTouchBand.h"
 #include "components/themes/TapTargets.h"
 #include "fontIds.h"
@@ -700,11 +701,6 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
 
     const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
     const int smallLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
-    const int titleBlockHeight = titleLineHeight * static_cast<int>(titleLines.size());
-    const int authorHeight = static_cast<int>(authorLines.size()) * smallLineHeight;
-    const int seriesHeight = static_cast<int>(seriesLines.size()) * smallLineHeight;
-    const int statusHeight = statusLine.empty() ? 0 : smallLineHeight;
-    const bool hasAuthorBlock = !authorLines.empty() || !seriesLines.empty();
 
     // What you have put into the book, under what is left of it. This column is only the part of
     // the tile the cover does not use, so the sentence usually needs two lines; it is set in the
@@ -714,66 +710,56 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     auto historyLines = history.empty() ? std::vector<std::string>{}
                                         : renderer.wrappedText(FIT_SMALL_FONT_ID, history.c_str(), textWidth, 2);
 
-    // Spacing gives way before content does.
-    //
-    // At a large UI font the title, author and status fill this tile between them, so anything
-    // that asks whether the history "fits" gets told no every time and the row is simply never
-    // drawn. That is the wrong answer on the one setting that most wants a legible summary. The
-    // gaps between the parts are worth less than the parts, so they are what shrinks: tried in
-    // order, first one that fits wins -- the sentence with roomy gaps, the sentence with tight
-    // ones, the short form with tight ones, and only then nothing.
-    const auto blockHeight = [&](int gap, size_t historyRows) {
-      return titleBlockHeight + (hasAuthorBlock ? gap : 0) + authorHeight + seriesHeight +
-             (statusLine.empty() ? 0 : gap) + statusHeight + (historyRows == 0 ? 0 : gap) +
-             static_cast<int>(historyRows) * historyLineHeight;
-    };
+    // Each part wrapped to its own cap can sum to more than the tile: a long title, a list of
+    // co-authors and a long series name did (#375). CardTextFit decides what gives way, gaps first.
+    const int gap = smallLineHeight / 2;
     constexpr int tightGap = 4;
-    int gap = smallLineHeight / 2;
-    if (!historyLines.empty() && blockHeight(gap, historyLines.size()) > tileHeight) {
-      if (blockHeight(tightGap, historyLines.size()) <= tileHeight) {
-        gap = tightGap;
-      } else {
+    CardTextFit::Parts parts{};
+    parts[CardTextFit::Title] = {titleLineHeight, static_cast<int>(titleLines.size()), 0};
+    parts[CardTextFit::Author] = {smallLineHeight, static_cast<int>(authorLines.size()), gap};
+    // Author and series are one group under one gap.
+    parts[CardTextFit::Series] = {smallLineHeight, static_cast<int>(seriesLines.size()), authorLines.empty() ? gap : 0};
+    parts[CardTextFit::Status] = {smallLineHeight, statusLine.empty() ? 0 : 1, gap};
+    parts[CardTextFit::History] = {historyLineHeight, static_cast<int>(historyLines.size()), gap};
+    const CardTextFit::Result fit = CardTextFit::fit(parts, tileHeight - 2 * hPaddingInSelection, tightGap);
+
+    const auto rewrap = [&](std::vector<std::string>& lines, const CardTextFit::PartId part, const int fontId,
+                            const std::string& text, const EpdFontFamily::Style style) {
+      if (fit.lines[part] < static_cast<int>(lines.size())) {
+        lines = renderer.wrappedText(fontId, text.c_str(), textWidth, fit.lines[part], style);
+      }
+    };
+    rewrap(titleLines, CardTextFit::Title, UI_12_FONT_ID, book.title, EpdFontFamily::BOLD);
+    rewrap(authorLines, CardTextFit::Author, UI_10_FONT_ID, book.author, EpdFontFamily::REGULAR);
+    rewrap(seriesLines, CardTextFit::Series, UI_10_FONT_ID, book.series, EpdFontFamily::REGULAR);
+    if (fit.lines[CardTextFit::History] < static_cast<int>(historyLines.size())) {
+      historyLines.clear();
+      if (fit.lines[CardTextFit::History] > 0) {
         const std::string compact = BookProgressPresentation::historyLineCompact(book);
-        historyLines.clear();
-        if (!compact.empty() && blockHeight(tightGap, 1) <= tileHeight) {
-          gap = tightGap;
-          historyLines.push_back(renderer.truncatedText(FIT_SMALL_FONT_ID, compact.c_str(), textWidth));
-        }
+        historyLines.push_back(renderer.truncatedText(FIT_SMALL_FONT_ID, compact.c_str(), textWidth));
       }
     }
-    const int titleAuthorSpacing = hasAuthorBlock ? gap : 0;
-    const int statusSpacing = statusLine.empty() ? 0 : gap;
-    const int historySpacing = historyLines.empty() ? 0 : gap;
-    const int totalBlockHeight = blockHeight(gap, historyLines.size());
-    int titleY = tileY + tileHeight / 2 - totalBlockHeight / 2;
+
+    // Centred in the tile. A block too tall even at its leanest is held to the top of the
+    // selection, so what overflows is the bottom rather than the title.
+    const int blockY = std::max(tileY + hPaddingInSelection, tileY + tileHeight / 2 - fit.height / 2);
     const int textX = tileX + hPaddingInSelection + coverWidth + LyraMetrics::values.verticalSpacing;
-    for (const auto& line : titleLines) {
-      renderer.drawText(UI_12_FONT_ID, textX, titleY, line.c_str(), true, EpdFontFamily::BOLD);
-      titleY += titleLineHeight;
-    }
-    if (!authorLines.empty() || !seriesLines.empty()) {
-      titleY += titleAuthorSpacing;
-    }
-    for (const auto& line : authorLines) {
-      renderer.drawText(UI_10_FONT_ID, textX, titleY, line.c_str(), true);
-      titleY += smallLineHeight;
-    }
-    for (const auto& line : seriesLines) {
-      renderer.drawText(UI_10_FONT_ID, textX, titleY, line.c_str(), true);
-      titleY += smallLineHeight;
-    }
-    if (!statusLine.empty()) {
-      titleY += statusSpacing;
-      renderer.drawText(UI_10_FONT_ID, textX, titleY, statusLine.c_str(), true, EpdFontFamily::BOLD);
-      titleY += smallLineHeight;
-    }
-    if (!historyLines.empty()) {
-      titleY += historySpacing;
-      for (const auto& line : historyLines) {
-        renderer.drawText(FIT_SMALL_FONT_ID, textX, titleY, line.c_str(), true);
-        titleY += historyLineHeight;
+    const auto drawPart = [&](const std::vector<std::string>& lines, const CardTextFit::PartId part, const int fontId,
+                              const EpdFontFamily::Style style) {
+      int y = blockY + fit.tops[part];
+      for (const auto& line : lines) {
+        renderer.drawText(fontId, textX, y, line.c_str(), true, style);
+        y += parts[part].lineHeight;
       }
+    };
+    drawPart(titleLines, CardTextFit::Title, UI_12_FONT_ID, EpdFontFamily::BOLD);
+    drawPart(authorLines, CardTextFit::Author, UI_10_FONT_ID, EpdFontFamily::REGULAR);
+    drawPart(seriesLines, CardTextFit::Series, UI_10_FONT_ID, EpdFontFamily::REGULAR);
+    if (!statusLine.empty()) {
+      renderer.drawText(UI_10_FONT_ID, textX, blockY + fit.tops[CardTextFit::Status], statusLine.c_str(), true,
+                        EpdFontFamily::BOLD);
     }
+    drawPart(historyLines, CardTextFit::History, FIT_SMALL_FONT_ID, EpdFontFamily::REGULAR);
   } else {
     drawEmptyRecents(renderer, rect);
   }
