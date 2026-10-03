@@ -719,7 +719,7 @@ void ActivityManager::dispatchLightPanelGesture() {
   // A dedicated drawer rather than the Display > Reading light submenu, which this used to
   // borrow. The submenu is a settings LIST, and every control on it is one row deep: the
   // brightness row only opens its slider on a further screen. Worse, the rows handed over were
-  // raw getSettingsList() entries that still carried their `submenu` field, so
+  // raw settings-list entries that still carried their `submenu` field, so
   // MenuListActivity::onEnter() re-collapsed them into a nested submenu and the pull-down
   // opened a screen titled "Reading light" whose single row was also "Reading light".
   //

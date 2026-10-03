@@ -1588,9 +1588,6 @@ void CrossPointWebServer::handleGetSettings() const {
   if (rejectIfLowMemory(server.get())) return;
   LOG_WEB_MEM("settings_enter");
 
-  // Build the settings list at runtime; this avoids the expensive static global initializer.
-  const auto settings = getSettingsList();
-
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   ChunkedJsonArray out(server.get());
@@ -1608,8 +1605,10 @@ void CrossPointWebServer::handleGetSettings() const {
     out.addEntry(output, written);
   };
 
-  for (const auto& sBase : settings) {
-    if (!sBase.key) continue;  // Skip ACTION-only entries
+  // Rows are visited one at a time (forEachSetting()), never held as a list: the whole list is
+  // one 11.5 KB block, and this runs while Wi-Fi holds most of the heap.
+  forEachSetting([&](const SettingInfo& sBase) {
+    if (!sBase.key) return;  // Skip ACTION-only entries
 
     // Enrich font-family entries with current SD card families.
     SettingInfo sLocal;
@@ -1707,11 +1706,11 @@ void CrossPointWebServer::handleGetSettings() const {
         break;
       }
       default:
-        continue;
+        return;
     }
 
     sendEntry();
-  }
+  });
 
   // Expose sleepTimeoutMinutes and refreshFrequencyPages as VALUE entries.
   auto appendValueSetting = [&](const char* key, const char* name, const char* category, const char* subcategory,
@@ -1753,13 +1752,12 @@ void CrossPointWebServer::handlePostSettings() {
     return;
   }
 
-  // Iterate the static list by reference — no copy, no 14KB heap spike.
+  // One row at a time, as in handleGetSettings().
   int applied = 0;
-  const auto settings = getSettingsList();
 
-  for (const auto& s : settings) {
-    if (!s.key) continue;
-    if (!doc[s.key].is<JsonVariant>()) continue;
+  forEachSetting([&](const SettingInfo& s) {
+    if (!s.key) return;
+    if (!doc[s.key].is<JsonVariant>()) return;
 
     switch (s.type) {
       case SettingType::TOGGLE: {
@@ -1819,7 +1817,7 @@ void CrossPointWebServer::handlePostSettings() {
       default:
         break;
     }
-  }
+  });
 
   // Handle sleepTimeoutMinutes and refreshFrequencyPages posted as VALUE types.
   if (doc["sleepTimeoutMinutes"].is<int>()) {
