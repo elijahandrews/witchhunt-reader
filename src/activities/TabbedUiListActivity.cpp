@@ -59,7 +59,7 @@ void TabbedUiListActivity::enterTab(const int slot, const bool barFocus) {
 }
 
 void TabbedUiListActivity::focusTabs() {
-  activeNav().selected = -1;
+  activeNav().requestSelection(-1);
   listTapActivation.reset();
   requestUpdate();
 }

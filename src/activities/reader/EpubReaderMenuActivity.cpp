@@ -530,8 +530,6 @@ std::string EpubReaderMenuActivity::getItemValueString(int index) const {
   return item.getDisplayValue();
 }
 
-void EpubReaderMenuActivity::onEnter() { TabbedUiListActivity::onEnter(); }
-
 void EpubReaderMenuActivity::onExit() { TabbedUiListActivity::onExit(); }
 
 void EpubReaderMenuActivity::activateIndex(const int index) {

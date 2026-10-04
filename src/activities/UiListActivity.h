@@ -73,6 +73,9 @@ class UiListActivity : public Activity, protected UiAppHost {
   [[nodiscard]] virtual bool isPositionSelectable(int position) const { return isRowSelectable(position); }
   virtual void activatePosition(int position, bool longPress);
   virtual void backFromPosition(int /*position*/) { onBackButton(); }
+  // Long Back. Home by default; a screen whose way out does more than leave (saves, hands a result
+  // back to the reader) overrides it so Home goes through that way out.
+  virtual void homeFromList() { onGoHome(); }
   virtual void switchTab(int /*direction*/) {}
 
   // The content area a list lays out in: room for the bottom hints AND the side Up/Down boxes.
@@ -109,7 +112,7 @@ class UiListActivity : public Activity, protected UiAppHost {
       list.activatePosition(position, longPress);
     }
     void onListBack() override { list.backFromPosition(list.selectedPosition()); }
-    void onListHome() override { list.onGoHome(); }
+    void onListHome() override { list.homeFromList(); }
     void onListTab(const int direction) override { list.switchTab(direction); }
     UiListActivity& list;
   };

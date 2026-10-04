@@ -47,6 +47,7 @@ class SettingsActivity final : public TabbedUiListActivity {
   [[nodiscard]] int16_t tabBarHeight() const override;
   void onTabSelected(int slot) override { enterCategory(slot); }
   void onBackFromTabs() override;
+  void homeFromList() override { onBackFromTabs(); }
   [[nodiscard]] bool isRowSelectable(int index) const override;
   void drawChrome() override;
   [[nodiscard]] const char* footerConfirmLabel() const override;
