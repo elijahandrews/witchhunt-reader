@@ -102,6 +102,7 @@ class OpdsBookBrowserActivity final : public Activity {
     explicit CatalogHost(OpdsBookBrowserActivity& browser) : browser(browser) {}
     int listCount() const override;
     ListWindow listWindow() const override;
+    bool listPagesAligned() const override { return true; }
     int listSelected() const override;
     void listSelect(int row) override;
     bool listActionAvailable(ListGrammar::Side side, int row) const override;
@@ -116,6 +117,7 @@ class OpdsBookBrowserActivity final : public Activity {
     explicit FormatHost(OpdsBookBrowserActivity& browser) : browser(browser) {}
     int listCount() const override;
     ListWindow listWindow() const override;
+    bool listPagesAligned() const override { return true; }
     int listSelected() const override;
     void listSelect(int row) override;
     void onListActivate(int row, bool longPress) override;

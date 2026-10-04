@@ -282,6 +282,33 @@ TEST(ListGrammarRows, AHeaderEndingTheScreenOpensTheNext) {
   expectTurn(ListGrammar::page(maskedRows(mask, 3, 0), 1, 1), 4, 2);
 }
 
+TEST(ListGrammarRows, PageTurnsOnAlignedPages) {
+  // OPDS lays out pages 0-22, 23-45 and 46-49: the last screen starts at 46, not at 27.
+  const auto aligned = [](int count, int drawn, int top) {
+    Rows rows = plainRows(count, drawn, top);
+    rows.pageAligned = true;
+    return rows;
+  };
+  expectTurn(ListGrammar::page(aligned(50, 23, 23), 30, 1), 49, 46);  // onto the short last page
+  expectTurn(ListGrammar::page(aligned(50, 23, 46), 49, -1), 26, 23);
+  expectTurn(ListGrammar::page(aligned(50, 23, 46), 47, 1), 49, 46);  // last page: clamps on the last row
+}
+
+TEST(ListGrammarRows, PageTurnsBelowALeadingTabBar) {
+  // Position 0 is a tab bar above 30 rows. The first screen shows it and nine rows, later ones nine
+  // rows: the bar is not a line of the page.
+  const auto tabbed = [](int top, int drawn) {
+    Rows rows = plainRows(31, drawn, top);
+    rows.lead = 1;
+    return rows;
+  };
+  expectTurn(ListGrammar::page(tabbed(0, 10), 3, 1), 12, 10);
+  expectTurn(ListGrammar::page(tabbed(10, 9), 12, -1), 3, 0);  // the round trip
+  expectTurn(ListGrammar::page(tabbed(0, 10), 0, 1), 10, 10);  // from the bar: the first row below the screen
+  expectTurn(ListGrammar::page(tabbed(0, 10), 0, -1), 0, 0);   // from the bar: nowhere to go
+  expectTurn(ListGrammar::page(tabbed(0, 10), 3, -1), 1, 0);   // first screen: clamps on the first row
+}
+
 TEST(ListGrammarRows, OutOfRangeStartIsClampedFirst) {
   const Rows rows = plainRows(5, 2);
   expectTurn(ListGrammar::page(rows, 9, -1), 2, 2);

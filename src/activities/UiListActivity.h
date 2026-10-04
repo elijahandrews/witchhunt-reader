@@ -70,6 +70,8 @@ class UiListActivity : public Activity, protected UiAppHost {
   virtual void selectPosition(int position) { moveSelectionTo(position); }
   virtual void showPositionPage(int position, int topPosition) { showRowPage(position, topPosition); }
   [[nodiscard]] virtual ListWindow positionWindow() const { return publishedWindow(); }
+  // Positions in front of row 0 that stay above the rows rather than scroll with them (a tab bar).
+  [[nodiscard]] virtual int leadPositions() const { return 0; }
   [[nodiscard]] virtual bool isPositionSelectable(int position) const { return isRowSelectable(position); }
   virtual void activatePosition(int position, bool longPress);
   virtual void backFromPosition(int /*position*/) { onBackButton(); }
@@ -107,6 +109,7 @@ class UiListActivity : public Activity, protected UiAppHost {
     explicit ControllerHost(UiListActivity& list) : list(list) {}
     int listCount() const override { return list.positionCount(); }
     ListWindow listWindow() const override { return list.positionWindow(); }
+    int listLeadPositions() const override { return list.leadPositions(); }
     bool listSelectable(const int position) const override { return list.isPositionSelectable(position); }
     int listSelected() const override { return list.selectedPosition(); }
     void listSelect(const int position) override { list.selectPosition(position); }

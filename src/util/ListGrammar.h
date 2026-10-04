@@ -73,6 +73,12 @@ struct Rows {
   int drawn = 1;  // how many rows it drew from there: its window, the size of a page
   Selectable selectable = nullptr;
   const void* ctx = nullptr;
+  // Positions before the first row that stay on screen above the rows, such as a tab bar: paging
+  // moves the rows below them alone. The window counts them only when it starts at 0.
+  int lead = 0;
+  // The screen lays rows out a whole page at a time (each page starts at a multiple of `drawn`),
+  // so its last screen starts at the last page boundary, not at count - drawn.
+  bool pageAligned = false;
 };
 
 // One selectable row back (-1) or forward (+1), wrapping round the ends.

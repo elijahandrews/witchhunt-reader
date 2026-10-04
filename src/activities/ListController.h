@@ -26,6 +26,10 @@ class ListHost {
   // The window the last render drew. Published by the render and read here on the loop task: never
   // measure from the renderer's live orientation here.
   virtual ListWindow listWindow() const = 0;
+  // Positions in front of row 0 that stay on screen above the rows (a tab bar); not page lines.
+  virtual int listLeadPositions() const { return 0; }
+  // Whether the screen lays its rows out a whole page at a time, each page at a multiple of drawn.
+  virtual bool listPagesAligned() const { return false; }
   virtual bool listSelectable(int /*row*/) const { return true; }
   // Whether a declared Left/Right action applies to `row` right now. Asked for declared sides only.
   virtual bool listActionAvailable(ListGrammar::Side /*side*/, int /*row*/) const { return true; }
@@ -34,7 +38,8 @@ class ListHost {
   virtual int listSelected() const = 0;
   virtual void listSelect(int row) = 0;
   // A page turn: select `row` with the screen starting at `top`. A screen that lays its rows out a
-  // page at a time already does that by selecting the row, hence the default.
+  // page at a time (listPagesAligned()) gets there by selecting the row, since the grammar then
+  // picks a row on the target page, hence the default.
   virtual void listShowPage(int row, int /*top*/) { listSelect(row); }
 
   virtual void onListActivate(int row, bool longPress) = 0;

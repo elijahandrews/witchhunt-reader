@@ -63,6 +63,8 @@ class TabbedUiListActivity : public UiListActivity {
   void selectPosition(int position) override;
   void showPositionPage(int position, int topPosition) override;
   [[nodiscard]] ListWindow positionWindow() const override;
+  // The bar: it stays on the first screen and is not a line of a page.
+  [[nodiscard]] int leadPositions() const override { return 1; }
   [[nodiscard]] bool isPositionSelectable(int position) const override;
   void activatePosition(int position, bool longPress) override;
   void backFromPosition(int position) override;

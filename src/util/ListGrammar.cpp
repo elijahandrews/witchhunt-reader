@@ -11,6 +11,17 @@ bool isSelectable(const Rows& rows, const int row) {
 
 int clampRow(const Rows& rows, const int row) { return row < 0 ? 0 : (row >= rows.count ? rows.count - 1 : row); }
 
+// The rows below a list's lead positions, seen as a list of their own: row i is position i + lead.
+struct LeadShift {
+  const Rows* outer;
+  int lead;
+};
+
+bool shiftedSelectable(const void* ctx, const int row) {
+  const auto* shift = static_cast<const LeadShift*>(ctx);
+  return isSelectable(*shift->outer, row + shift->lead);
+}
+
 Result once(const Command command) { return {command, 1}; }
 
 // Short Left/Right: the default step, or, once the screen has overloaded the pair, the declared
@@ -76,6 +87,29 @@ int step(const Rows& rows, const int from, const int direction) {
 
 PageTurn page(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return {from, 0};
+  // Lead positions (a tab bar) are not lines of the page: page the rows below them alone, then map
+  // the turn back. A rows top of 0 shows the lead as well, so it maps back to position 0.
+  const int lead = std::min(rows.lead, rows.count);
+  if (lead > 0) {
+    const LeadShift shift{&rows, lead};
+    Rows inner;
+    inner.count = rows.count - lead;
+    inner.top = rows.top >= lead ? rows.top - lead : 0;
+    inner.drawn = rows.top < lead ? rows.drawn - (lead - rows.top) : rows.drawn;
+    inner.selectable = &shiftedSelectable;
+    inner.ctx = &shift;
+    inner.pageAligned = rows.pageAligned;
+    if (inner.count <= 0) return {from, rows.top};
+    PageTurn turn;
+    if (from < lead) {
+      // On the lead: back has nowhere to go; forward pages from the rows' own top.
+      if (direction < 0) return {from, rows.top};
+      turn = page(inner, inner.top, 1);
+    } else {
+      turn = page(inner, from - lead, direction);
+    }
+    return {turn.row + lead, turn.top == 0 ? 0 : turn.top + lead};
+  }
   const int window = rows.drawn > 0 ? rows.drawn : 1;
   const int start = clampRow(rows, from);
   const int top = clampRow(rows, rows.top);
@@ -84,9 +118,10 @@ PageTurn page(const Rows& rows, const int from, const int direction) {
   const bool inWindow = start >= top && start < top + window;
   const int base = inWindow ? top : start;
   const int offset = inWindow ? start - top : 0;
-  // The screen never moves past the ends: the last screen is the last full window. A forward turn
-  // never moves it back, even from a base already past that.
-  const int maxTop = std::max(0, rows.count - window);
+  // The screen never moves past the ends: the last screen is the last full window, or on a screen
+  // laid out a page at a time the last page. A forward turn never moves it back, even from a base
+  // already past that.
+  const int maxTop = rows.pageAligned ? (rows.count - 1) / window * window : std::max(0, rows.count - window);
   int newTop;
   if (direction > 0) {
     newTop = base + window;

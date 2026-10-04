@@ -82,6 +82,8 @@ ListGrammar::Rows ListController::rows() const {
   r.drawn = window.drawn;
   r.selectable = &hostSelectable;
   r.ctx = &host;
+  r.lead = host.listLeadPositions();
+  r.pageAligned = host.listPagesAligned();
   return r;
 }
 

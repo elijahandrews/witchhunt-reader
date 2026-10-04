@@ -130,8 +130,9 @@ Rules:
   top row. A header the selection lands on is passed over to the next selectable row, else the
   nearest one before it. A header directly above the new top opens the new screen. Rows may
   differ in height (wrapped titles, touch row heights), so a window is whatever was drawn, not a
-  fixed count; on a renderer with fixed rows this is exactly the old page-aligned result.
-  Hold-repeat needs the live key level, so on the X4 Pro and the T5S3 a long tap pages once.
+  fixed count. A screen that lays rows out a page at a time (OPDS) pages between page
+  boundaries, and a tab bar above the rows is not a line of the page. Hold-repeat needs the
+  live key level, so on the X4 Pro and the T5S3 a long tap pages once.
   (Revised after X4 testing: the selection used to land on the new screen's top row.)
 - **R4 — Long Up / Down** jumps to the first / last selectable row. On a tabbed list (Settings,
   reader menu) it switches to the previous / next tab instead, wrapping; tabbed lists use the
@@ -212,9 +213,10 @@ struct ListDeclaration {
 ```
 
 The screen implements the virtual `ListHost` interface rather than registering function-pointer
-slots with a `ctx`: `listCount`, `listWindow`, `listSelectable`, `listActionAvailable`,
-`listSelected`, `listSelect`, `listShowAtTop`, `onListActivate(row, longPress)`, `onListBack`,
-`onListHome`, `onListAction`, `onListTab` and `onListOtherEvent`. A screen with two lists gives
+slots with a `ctx`: `listCount`, `listWindow`, `listLeadPositions`, `listPagesAligned`,
+`listSelectable`, `listActionAvailable`, `listSelected`, `listSelect`, `listShowPage(row, top)`,
+`onListActivate(row, longPress)`, `onListBack`, `onListHome`, `onListAction`, `onListTab` and
+`onListOtherEvent`. A screen with two lists gives
 each its own host. A virtual interface costs one vtable pointer, not a `std::function` (heap
 discipline).
 
@@ -237,7 +239,7 @@ not a base class.
 - `drawHints(renderer, backLabel, confirmLabel)` composes the labels into stack buffers per call
   (no allocation per render) and draws both strips.
 - Selection access: the host owns the selection (`listSelected()` / `listSelect()`); a page turn
-  asks it to show a row at the top (`listShowAtTop()`, which takes the RenderLock to set
+  asks it to show a page (`listShowPage(row, top)`, which takes the RenderLock to set
   `ListNav::top`). The loop task never writes render-owned `ListNav` fields otherwise.
 - Under 100 bytes per instance.
 
