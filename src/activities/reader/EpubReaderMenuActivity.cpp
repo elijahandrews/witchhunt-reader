@@ -648,18 +648,14 @@ void EpubReaderMenuActivity::buildScreen(UiScreen& screen) {
   buildTabBar(screen);
   screen.spacer(6);
 
-  fui::ListProps listProps;
-  listProps.count = static_cast<uint16_t>(listCount());
-  listProps.action = ACTION_ROW;
-  listProps.inputMask = fui::InputTouch;
-  listProps.labelText = screen.theme().bodyText;
-  listProps.labelText.maxLines = 2;
-  syncListViewport(screen, listProps);
+  auto props = listProps(screen);
+  props.count = static_cast<uint16_t>(listCount());
+  syncListViewport(screen, props);
   materializeListWindow();
-  listProps.items = windowItems.data();
-  listProps.itemsWindowFirst = windowFirst;
-  listProps.itemsWindowCount = windowCount;
-  screen.list(listProps);
+  props.items = windowItems.data();
+  props.itemsWindowFirst = windowFirst;
+  props.itemsWindowCount = windowCount;
+  screen.list(props);
 }
 
 void EpubReaderMenuActivity::drawChrome() {

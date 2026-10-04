@@ -5,7 +5,6 @@
 #include <I18n.h>
 
 #include "MappedInputManager.h"
-#include "components/UITheme.h"
 #include "components/icons/networkModeIcons.h"
 
 namespace fui = freeink::ui;
@@ -83,27 +82,13 @@ void NetworkModeSelectionActivity::activateIndex(const int index) {
 }
 
 void NetworkModeSelectionActivity::buildScreen(UiScreen& screen) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  // Below the header, inside the room listContentRect() leaves for the bottom and side hints.
-  const Rect contentRect = listContentRect();
-  screen.setContentMarginFromScreen(
-      fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
-                  static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
-                  static_cast<int16_t>(renderer.getScreenHeight() - (contentRect.y + contentRect.height)),
-                  static_cast<int16_t>(contentRect.x)});
-  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
-
-  fui::ListProps props;
+  layoutListArea(screen);
+  auto props = listProps(screen);
   props.items = rowItems;
   props.count = static_cast<uint16_t>(MENU_ITEM_COUNT);
-  props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
-  props.labelText = screen.theme().bodyText;
-  props.labelText.maxLines = 2;
   props.subtitleText = screen.theme().smallText;
   props.subtitleText.maxLines = 2;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
-  screen.list(props);
+  addList(screen, props, /*hasSubtitle=*/true);
 }
 
 void NetworkModeSelectionActivity::onModeSelected(NetworkMode mode) {

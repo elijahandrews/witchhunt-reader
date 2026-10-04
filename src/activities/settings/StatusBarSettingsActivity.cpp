@@ -12,8 +12,6 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 
-namespace fui = freeink::ui;
-
 namespace {
 const StrId progressBarNames[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
 const StrId progressBarThicknessNames[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
@@ -264,17 +262,8 @@ void StatusBarSettingsActivity::activateIndex(const int index) {
 }
 
 void StatusBarSettingsActivity::buildScreen(UiScreen& screen) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  // Below the header, inside the room listContentRect() leaves for both hint strips, and above the
-  // preview band afterUiRender() draws into.
-  const Rect contentRect = listContentRect();
-  screen.setContentMarginFromScreen(
-      fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
-                  static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
-                  static_cast<int16_t>(renderer.getScreenHeight() - (contentRect.y + contentRect.height) +
-                                       previewBandHeight(renderer, metrics)),
-                  static_cast<int16_t>(contentRect.x)});
-  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+  // Above the preview band afterUiRender() draws into.
+  layoutListArea(screen, 0, static_cast<int16_t>(previewBandHeight(renderer, UITheme::getInstance().getMetrics())));
 
   // Labels were set in onEnter(); the values track SETTINGS, so they are refreshed on every pass.
   // A value is an I18N pointer and a switch is two flags: nothing is allocated.
@@ -287,16 +276,11 @@ void StatusBarSettingsActivity::buildScreen(UiScreen& screen) {
     row.value = row.toggle ? nullptr : I18N.get(item.valueNames[value]);
   }
 
-  fui::ListProps props;
+  auto props = listProps(screen);
   props.items = rowItems;
   props.count = static_cast<uint16_t>(rowCount);
-  props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
   props.valueInset = 8;  // air between the value and the row edge
-  props.labelText = screen.theme().bodyText;
-  props.labelText.maxLines = 2;
-  syncListViewport(screen, props);
-  screen.list(props);
+  addList(screen, props);
 }
 
 void StatusBarSettingsActivity::afterUiRender() {

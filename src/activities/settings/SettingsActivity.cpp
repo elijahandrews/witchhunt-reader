@@ -372,12 +372,8 @@ void SettingsActivity::buildScreen(UiScreen& screen) {
   buildTabBar(screen);
   screen.spacer(static_cast<int16_t>(UITheme::getInstance().getMetrics().verticalSpacing));
 
-  fui::ListProps props;
+  auto props = listProps(screen);
   props.count = static_cast<uint16_t>(settingsCount);
-  props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
-  props.labelText = screen.theme().bodyText;
-  props.labelText.maxLines = 2;
   syncListViewport(screen, props);
   materializeListWindow();
   props.items = windowItems.data();
