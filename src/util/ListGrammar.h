@@ -69,21 +69,24 @@ Labels labelsFor(const Shape& shape, const Availability& available);
 using Selectable = bool (*)(const void* ctx, int row);
 struct Rows {
   int count = 0;
-  int pageRows = 1;  // rows the screen draws per page
+  int top = 0;    // the first row the screen drew
+  int drawn = 1;  // how many rows it drew from there: its window, the size of a page
   Selectable selectable = nullptr;
   const void* ctx = nullptr;
 };
 
 // One selectable row back (-1) or forward (+1), wrapping round the ends.
 int step(const Rows& rows, int from, int direction);
-// To the first row of the previous / next page, clamped at the ends: the first row from page one,
-// the last row from the last page, so a list that fits one page pages to its ends. A header at the
-// target is passed over to the first selectable row of that page, or else the nearest one before it.
+// A screenful back (-1) or forward (+1), relative to the window the screen drew: forward lands on
+// the first row below it, back on the row a window above it. From a selection outside the window
+// (the window is a render old) the page is measured from the selection instead. Clamped at the
+// ends, so a list that fits one screen pages to its ends. A header at the target is passed over
+// to the first selectable row of that page, or else the nearest one before it.
 int page(const Rows& rows, int from, int direction);
 int first(const Rows& rows);
 int last(const Rows& rows);
 
-// Whether every row fits on one page, so there is no page to jump to.
+// Whether every row fits in the drawn window, so there is no page to jump to.
 bool fitsOnePage(const Rows& rows);
 
 // Two Up/Down taps whose presses land this close together are a double-tap, which jumps a page.

@@ -7,6 +7,8 @@ bool isSelectable(const Rows& rows, const int row) {
   return rows.selectable == nullptr || rows.selectable(rows.ctx, row);
 }
 
+int clampRow(const Rows& rows, const int row) { return row < 0 ? 0 : (row >= rows.count ? rows.count - 1 : row); }
+
 Result once(const Command command) { return {command, 1}; }
 
 // Short Left/Right: the default step, or, once the screen has overloaded the pair, the declared
@@ -61,7 +63,7 @@ Labels labelsFor(const Shape& shape, const Availability& available) {
 
 int step(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return from;
-  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
+  const int start = clampRow(rows, from);
   int row = start;
   for (int tried = 0; tried < rows.count; ++tried) {
     row = ((row + direction) % rows.count + rows.count) % rows.count;
@@ -72,16 +74,14 @@ int step(const Rows& rows, const int from, const int direction) {
 
 int page(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return from;
-  const int perPage = rows.pageRows > 0 ? rows.pageRows : 1;
-  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
-  const int currentPage = start / perPage;
-  const int lastPage = (rows.count - 1) / perPage;
-  int target = 0;
-  if (direction > 0) {
-    target = currentPage < lastPage ? (currentPage + 1) * perPage : rows.count - 1;
-  } else {
-    target = currentPage > 0 ? (currentPage - 1) * perPage : 0;
-  }
+  const int window = rows.drawn > 0 ? rows.drawn : 1;
+  const int start = clampRow(rows, from);
+  const int top = clampRow(rows, rows.top);
+  // From inside the drawn window a page is the window's neighbour; from outside it (the window is a
+  // render old) it is the same distance from the selection itself.
+  const bool inWindow = start >= top && start < top + window;
+  const int base = inWindow ? top : start;
+  const int target = clampRow(rows, direction > 0 ? base + window : base - window);
   // Settle on the first selectable row at or after the target, so a header that opens a page
   // never pushes the selection onto another page; failing that, the nearest one before it.
   for (int row = target; row < rows.count; ++row) {
@@ -107,7 +107,7 @@ int last(const Rows& rows) {
   return 0;
 }
 
-bool fitsOnePage(const Rows& rows) { return rows.count <= (rows.pageRows > 0 ? rows.pageRows : 1); }
+bool fitsOnePage(const Rows& rows) { return rows.count <= (rows.drawn > 0 ? rows.drawn : 1); }
 
 bool completesDoubleTap(const Key key, const unsigned long pressMs, const Key previousKey,
                         const unsigned long previousPressMs, const Rows& rows) {
