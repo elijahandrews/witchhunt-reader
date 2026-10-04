@@ -530,12 +530,7 @@ std::string EpubReaderMenuActivity::getItemValueString(int index) const {
   return item.getDisplayValue();
 }
 
-void EpubReaderMenuActivity::onEnter() {
-  // Every tab starts focused on the bar rather than on a row; the base puts the ACTIVE tab
-  // there, this resets the others so stepping between them does not reveal a stale selection.
-  for (auto& tab : tabNav) tab.reset(-1);
-  TabbedUiListActivity::onEnter();
-}
+void EpubReaderMenuActivity::onEnter() { TabbedUiListActivity::onEnter(); }
 
 void EpubReaderMenuActivity::onExit() { TabbedUiListActivity::onExit(); }
 
@@ -645,7 +640,7 @@ void EpubReaderMenuActivity::customizeTabBar(UiScreen& screen, fui::TabBarProps&
 #endif
 
 void EpubReaderMenuActivity::buildScreen(UiScreen& screen) {
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
   const int16_t top = static_cast<int16_t>(contentRect.y + 75);
   screen.setContentMarginFromScreen(
       fui::Insets{top, static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
@@ -687,10 +682,8 @@ void EpubReaderMenuActivity::drawChrome() {
   renderer.drawCenteredText(UI_10_FONT_ID, 45 + contentRect.y, progressLine.c_str());
 }
 
-void EpubReaderMenuActivity::drawFooter() {
+const char* EpubReaderMenuActivity::footerConfirmLabel() const {
   // Confirm means "next tab" while the bar holds focus and "select" on a row, so the hint names
   // the tab it would move to, as the settings screen does.
-  const auto confirmLabel = tabsFocused() ? tabLabel((selectedTab() + 1) % tabCount()) : tr(STR_SELECT);
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  return selectedPosition() == 0 ? tabLabel((selectedTab() + 1) % tabCount()) : tr(STR_SELECT);
 }

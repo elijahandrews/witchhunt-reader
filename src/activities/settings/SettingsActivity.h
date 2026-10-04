@@ -49,7 +49,7 @@ class SettingsActivity final : public TabbedUiListActivity {
   void onBackFromTabs() override;
   [[nodiscard]] bool isRowSelectable(int index) const override;
   void drawChrome() override;
-  void drawFooter() override;
+  [[nodiscard]] const char* footerConfirmLabel() const override;
   // Overridden only to ship the frame with this screen's refresh mode; see the definition.
   void render(RenderLock&&) override;
 

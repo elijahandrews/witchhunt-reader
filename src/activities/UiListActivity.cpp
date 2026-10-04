@@ -24,8 +24,7 @@ void UiListActivity::onEnter() {
   Activity::onEnter();
   activeNav().reset();
   listController.reset();
-  windowTop = 0;
-  windowDrawn = 1;
+  resetPublishedWindow();
   resetUi();
   app.on(ACTION_ROW, &UiListActivity::rowActionTrampoline, this);
   app.setScreen(&UiListActivity::screenTrampoline, this);
@@ -185,6 +184,11 @@ void UiListActivity::publishListWindow() {
   // A short last screen keeps the last full screen's row count, so paging back from it moves a
   // whole screen rather than only as many rows as the tail had.
   windowDrawn.store(top + drawn >= count ? std::max(drawn, windowDrawn.load()) : drawn);
+}
+
+void UiListActivity::resetPublishedWindow() {
+  windowTop.store(0);
+  windowDrawn.store(1);
 }
 
 ListWindow UiListActivity::publishedWindow() const {

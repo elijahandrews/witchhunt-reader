@@ -82,7 +82,6 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
   void activateIndex(int index) override;
   // Each tab keeps its own scroll position and selection, so a reader who steps away to another
   // tab and back finds the row they left rather than the top of the list.
-  freeink::ui::ListNav& activeNav() override { return tabNav[activeTabIndex()]; }
   int tabCount() const override { return visibleTabCount; }
   const char* tabLabel(int slot) const override;
 #if READER_MENU_TAB_ICONS
@@ -93,7 +92,7 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
 #endif
   void onBackFromTabs() override { onBackPressed(); }
   void drawChrome() override;
-  void drawFooter() override;
+  [[nodiscard]] const char* footerConfirmLabel() const override;
   [[nodiscard]] std::string getItemValueString(int index) const;
   void onActionSelected(int index);
   void onBackPressed();
@@ -110,7 +109,6 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
 
   std::array<std::vector<SettingInfo>, MENU_TAB_COUNT> tabMenuItems;
   std::array<MenuTab, MENU_TAB_COUNT> visibleTabs{};
-  std::array<freeink::ui::ListNav, MENU_TAB_COUNT> tabNav;
   uint8_t visibleTabCount = 0;
 
   static constexpr size_t LIST_WINDOW_CAPACITY = 24;

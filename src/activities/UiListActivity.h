@@ -82,6 +82,9 @@ class UiListActivity : public Activity, protected UiAppHost {
   // Call once a render pass has laid the list out: hands the drawn window to the input side.
   void publishListWindow();
   [[nodiscard]] ListWindow publishedWindow() const;
+  // Forget the window the last render published, so a list that changes under it (another tab)
+  // does not page by the previous one's row count until its own first render.
+  void resetPublishedWindow();
 
   void syncListViewport(UiScreen& screen, freeink::ui::ListProps& props, bool hasSubtitle = false);
   void moveSelectionTo(int index);
