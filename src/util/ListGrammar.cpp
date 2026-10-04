@@ -108,6 +108,8 @@ PageTurn page(const Rows& rows, const int from, const int direction) {
     } else {
       turn = page(inner, from - lead, direction);
     }
+    // Rows with nothing selectable hand back the row the turn started from: stay where we are.
+    if (!isSelectable(rows, turn.row + lead)) return {from, rows.top};
     return {turn.row + lead, turn.top == 0 ? 0 : turn.top + lead};
   }
   const int window = rows.drawn > 0 ? rows.drawn : 1;

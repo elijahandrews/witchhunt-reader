@@ -307,6 +307,12 @@ TEST(ListGrammarRows, PageTurnsBelowALeadingTabBar) {
   expectTurn(ListGrammar::page(tabbed(0, 10), 0, 1), 10, 10);  // from the bar: the first row below the screen
   expectTurn(ListGrammar::page(tabbed(0, 10), 0, -1), 0, 0);   // from the bar: nowhere to go
   expectTurn(ListGrammar::page(tabbed(0, 10), 3, -1), 1, 0);   // first screen: clamps on the first row
+
+  // A tab whose rows are all headers: from the bar there is nothing to page to.
+  const Mask headersOnly{{true, false, false, false}};
+  Rows rows = maskedRows(headersOnly, 4);
+  rows.lead = 1;
+  expectTurn(ListGrammar::page(rows, 0, 1), 0, 0);
 }
 
 TEST(ListGrammarRows, OutOfRangeStartIsClampedFirst) {
