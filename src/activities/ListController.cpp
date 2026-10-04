@@ -113,6 +113,7 @@ void ListController::update() {
 
     ListGrammar::Key key = ListGrammar::Key::Confirm;
     if (!keyFor(event.button, key)) {
+      lastTapPressMs = 0;  // a press between two taps ends the pair
       host.onListOtherEvent(event);
       continue;
     }
