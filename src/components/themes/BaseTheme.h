@@ -30,6 +30,11 @@ enum class PopupShip : uint8_t {
              // GfxRenderer::finishDisplayAsync() before it next writes the framebuffer, touches
              // the display, or frees a framebuffer — releaseSecondaryBuffer() in particular does
              // NOT drain a refresh in flight, and X3 re-reads the frame after the waveform.
+  Caller,    // Not shipped: the box is only drawn into the write buffer, and the caller's own
+             // displayBuffer() ships it with the rest of the frame. For a popup drawn inside a
+             // render that ships itself, such as UiListActivity::render() via drawFooter(): a ship
+             // here would swap the buffers, and the render's displayBuffer() would then ship the
+             // stale one. Pass overlayDisplayedFrame=false with it, since the caller composed the frame.
 };
 
 struct ThemeMetrics {
@@ -174,6 +179,7 @@ class BaseTheme {
   // composed a full fresh frame into the write buffer (clearScreen + render, then popup in the same
   // displayBuffer) must pass overlayDisplayedFrame=false so their render is not discarded.
   // ship=Async returns while the panel paints; see PopupShip for what the caller then owes.
+  // ship=Caller draws without shipping; the caller's displayBuffer() ships the frame.
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message, bool overlayDisplayedFrame = true,
                          PopupShip ship = PopupShip::Blocking) const;
   // Screen-centred, icon-only "working on it" box: an hourglass, no words. Deliberately wordless —
@@ -253,7 +259,8 @@ class BaseTheme {
   // without a scroll bar.
   static void drawListOverflowArrows(const GfxRenderer& renderer, Rect rect);
 
-  // Ships the frame a drawPopup() override just composed, blocking or not. One place so the two
-  // popup looks cannot drift on the part that isn't a look at all.
+  // Ships the frame a drawPopup() override just composed, blocking or not, or leaves it to the
+  // caller (PopupShip::Caller). One place so the two popup looks cannot drift on the part that
+  // isn't a look at all.
   static void shipPopup(const GfxRenderer& renderer, PopupShip ship);
 };
