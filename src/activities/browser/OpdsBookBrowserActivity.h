@@ -40,6 +40,8 @@ class OpdsBookBrowserActivity final : public Activity {
   // Tap on a row -> move the selection there; ActivityManager synthesizes Confirm. Serves
   // BOTH of this screen's lists (the entry list and the format picker), keyed on state.
   ListRowTap::Result selectListRow(int index) override;
+  // A swipe must not reach Left/Right, which are Search and Info here. Consumed without effect.
+  bool pageList(ListPageDirection direction) override;
   void loop() override;
   void render(RenderLock&&) override;
 
