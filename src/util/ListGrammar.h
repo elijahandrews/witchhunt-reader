@@ -69,21 +69,37 @@ Labels labelsFor(const Shape& shape, const Availability& available);
 using Selectable = bool (*)(const void* ctx, int row);
 struct Rows {
   int count = 0;
-  int pageRows = 1;  // rows the screen draws per page
+  int top = 0;    // the first row the screen drew
+  int drawn = 1;  // how many rows it drew from there: its window, the size of a page
   Selectable selectable = nullptr;
   const void* ctx = nullptr;
+  // Positions before the first row that stay on screen above the rows, such as a tab bar: paging
+  // moves the rows below them alone. The window counts them only when it starts at 0.
+  int lead = 0;
+  // The screen lays rows out a whole page at a time (each page starts at a multiple of `drawn`),
+  // so its last screen starts at the last page boundary, not at count - drawn.
+  bool pageAligned = false;
 };
 
 // One selectable row back (-1) or forward (+1), wrapping round the ends.
 int step(const Rows& rows, int from, int direction);
-// To the first row of the previous / next page, clamped at the ends: the first row from page one,
-// the last row from the last page, so a list that fits one page pages to its ends. A header at the
-// target is passed over to the first selectable row of that page, or else the nearest one before it.
-int page(const Rows& rows, int from, int direction);
+// A page turn: the row to select, and the row the new screen starts from.
+struct PageTurn {
+  int row = 0;
+  int top = 0;
+};
+// A screenful back (-1) or forward (+1). The screen moves by the window the last render drew
+// (forward: the new screen starts with the first row below it; back: one window above it), never
+// past the ends of the list, and the selection keeps its line on the screen. Where the screen
+// cannot move any further, the selection goes to the first / last row. From a selection outside
+// the window (the window is a render old) the page is measured from the selection, which lands on
+// the new top row. A header the selection lands on is passed over to the next selectable row,
+// else the nearest one before it. A header directly above the new top opens the new screen.
+PageTurn page(const Rows& rows, int from, int direction);
 int first(const Rows& rows);
 int last(const Rows& rows);
 
-// Whether every row fits on one page, so there is no page to jump to.
+// Whether every row fits in the drawn window, so there is no page to jump to.
 bool fitsOnePage(const Rows& rows);
 
 // Two Up/Down taps whose presses land this close together are a double-tap, which jumps a page.

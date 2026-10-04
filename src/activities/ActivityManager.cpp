@@ -967,7 +967,9 @@ void ActivityManager::dispatchHintStripTap() {
   const int hint = hitEitherStrip(x, y);
   if (hint < 0) return;
 
-  mappedInput.injectRawPress(static_cast<uint8_t>(hint));
+  // Dated when the finger left the glass, not now: a refresh can hold the loop up between two
+  // quick taps, and the list's double-tap reads the press times.
+  mappedInput.injectRawPress(static_cast<uint8_t>(hint), /*longPress=*/false, mappedInput.lastTouchEventAtMs());
   LOG_DBG("TCH", "Hint strip tap at (%d,%d) -> raw button %d", x, y, hint);
 }
 

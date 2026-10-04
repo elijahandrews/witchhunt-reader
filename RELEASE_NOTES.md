@@ -16,6 +16,12 @@ User-facing changes only. Full commit history is in git log.
 
 - **Lists that wait for a double press no longer lag behind Left and Right.** Outside a book, the file browser, the pickers and the chapter lists waited 0.3 s after every Left/Right press to see whether a double press would follow, because the double press is bound to a reading action by default. Two quick presses then moved nothing at all in the file browser. The wait now happens only in the reader, where the double press means something.
 
+### Lists
+
+- **Settings, the reader menu, the pickers and the menus move the same way as the OPDS catalog.** Up/Down and Left/Right move one row; hold Left/Right to page a screenful (Left/Right used to page at once under "Up" / "Down" labels in the menus); hold Up/Down to jump to the first / last row, or in Settings and the reader menu to switch tabs; tap Up or Down twice quickly to jump a page. A page jump keeps the selection on the same line of the screen. A swipe now moves the selection with the page. The side Up/Down hints appear on all of these lists, so the T5 S3 can always move up.
+- **Holding Up / Down to switch tabs in Settings and the reader menu opens each tab where you left it**, rather than at the top.
+- **Holding Back on these lists returns to the Home screen** (it used to act like a short press), without losing changes: Settings saves first, and the reader menu closes the book as its **Go Home** item does. Inside a book, lists opened over the reader menu and quick overrides, and a file's options menu, still treat a held Back as a press.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.

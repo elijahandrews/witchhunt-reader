@@ -50,20 +50,27 @@ struct Mask {
 
 bool maskSelectable(const void* ctx, const int row) { return static_cast<const Mask*>(ctx)->selectable[row]; }
 
-Rows plainRows(int count, int pageRows) {
+Rows plainRows(int count, int drawn, int top = 0) {
   Rows rows;
   rows.count = count;
-  rows.pageRows = pageRows;
+  rows.top = top;
+  rows.drawn = drawn;
   return rows;
 }
 
-Rows maskedRows(const Mask& mask, int pageRows) {
+Rows maskedRows(const Mask& mask, int drawn, int top = 0) {
   Rows rows;
   rows.count = static_cast<int>(mask.selectable.size());
-  rows.pageRows = pageRows;
+  rows.top = top;
+  rows.drawn = drawn;
   rows.selectable = &maskSelectable;
   rows.ctx = &mask;
   return rows;
+}
+
+void expectTurn(const ListGrammar::PageTurn turn, int row, int top) {
+  EXPECT_EQ(turn.row, row);
+  EXPECT_EQ(turn.top, top);
 }
 
 }  // namespace
@@ -207,60 +214,113 @@ TEST(ListGrammarRows, StepWithNothingSelectableStays) {
 TEST(ListGrammarRows, EmptyListDoesNotMove) {
   const Rows rows = plainRows(0, 10);
   EXPECT_EQ(ListGrammar::step(rows, 0, 1), 0);
-  EXPECT_EQ(ListGrammar::page(rows, 0, 1), 0);
-  EXPECT_EQ(ListGrammar::page(rows, 0, -1), 0);
+  expectTurn(ListGrammar::page(rows, 0, 1), 0, 0);
+  expectTurn(ListGrammar::page(rows, 0, -1), 0, 0);
   EXPECT_EQ(ListGrammar::first(rows), 0);
   EXPECT_EQ(ListGrammar::last(rows), 0);
 }
 
-TEST(ListGrammarRows, PageForwardGoesToTheNextPageAndClampsOnTheLast) {
-  const Rows rows = plainRows(50, 23);
-  EXPECT_EQ(ListGrammar::page(rows, 0, 1), 23);
-  EXPECT_EQ(ListGrammar::page(rows, 10, 1), 23);
-  EXPECT_EQ(ListGrammar::page(rows, 23, 1), 46);
-  EXPECT_EQ(ListGrammar::page(rows, 46, 1), 49);
-  EXPECT_EQ(ListGrammar::page(rows, 49, 1), 49);
+TEST(ListGrammarRows, PageForwardMovesTheScreenAndKeepsTheLine) {
+  expectTurn(ListGrammar::page(plainRows(50, 23, 0), 5, 1), 28, 23);
+  expectTurn(ListGrammar::page(plainRows(50, 23, 23), 30, 1), 34, 27);  // the screen stops at the last full one
+  expectTurn(ListGrammar::page(plainRows(50, 23, 27), 34, 1), 49, 27);  // last screen: clamps on the last row
 }
 
-TEST(ListGrammarRows, PageBackGoesToThePreviousPageAndClampsOnTheFirst) {
-  const Rows rows = plainRows(50, 23);
-  EXPECT_EQ(ListGrammar::page(rows, 49, -1), 23);
-  EXPECT_EQ(ListGrammar::page(rows, 30, -1), 0);
-  EXPECT_EQ(ListGrammar::page(rows, 23, -1), 0);
-  EXPECT_EQ(ListGrammar::page(rows, 5, -1), 0);
-  EXPECT_EQ(ListGrammar::page(rows, 0, -1), 0);
+TEST(ListGrammarRows, PageBackShowsTheWindowAbove) {
+  expectTurn(ListGrammar::page(plainRows(50, 23, 23), 30, -1), 7, 0);
+  expectTurn(ListGrammar::page(plainRows(50, 23, 27), 40, -1), 17, 4);
+  expectTurn(ListGrammar::page(plainRows(50, 23, 0), 5, -1), 0, 0);  // first screen: clamps on the first row
+}
+
+TEST(ListGrammarRows, RowsOfDifferentHeightsPageByWhatWasDrawn) {
+  // Wrapped titles: only 7 of 30 rows fit, and the screen shows rows 7-13.
+  expectTurn(ListGrammar::page(plainRows(30, 7, 7), 9, 1), 16, 14);
+  expectTurn(ListGrammar::page(plainRows(30, 7, 7), 9, -1), 2, 0);
+}
+
+TEST(ListGrammarRows, ASelectionOutsideTheWindowPagesFromItself) {
+  // The window is a render old: the selection has already stepped below it, and lands on the new top.
+  expectTurn(ListGrammar::page(plainRows(50, 23, 0), 23, 1), 27, 27);
+  expectTurn(ListGrammar::page(plainRows(50, 23, 0), 30, -1), 7, 7);
 }
 
 TEST(ListGrammarRows, PageOnOnePageListGoesToTheEnds) {
   const Rows rows = plainRows(5, 23);
-  EXPECT_EQ(ListGrammar::page(rows, 2, 1), 4);
-  EXPECT_EQ(ListGrammar::page(rows, 2, -1), 0);
+  expectTurn(ListGrammar::page(rows, 2, 1), 4, 0);
+  expectTurn(ListGrammar::page(rows, 2, -1), 0, 0);
 }
 
-TEST(ListGrammarRows, PageTreatsANonPositivePageAsOneRow) { EXPECT_EQ(ListGrammar::page(plainRows(5, 0), 0, 1), 1); }
+TEST(ListGrammarRows, PageTreatsANonPositiveWindowAsOneRow) {
+  expectTurn(ListGrammar::page(plainRows(5, 0), 0, 1), 1, 1);
+}
 
 TEST(ListGrammarRows, PageSkipsUnselectableRows) {
-  // Rows 4 and 8 are headers; four rows per page.
+  // Rows 4 and 8 are headers; four rows fit on a screen.
   const Mask mask{{true, true, true, true, false, true, true, true, false, true}};
-  const Rows rows = maskedRows(mask, 4);
-  EXPECT_EQ(ListGrammar::page(rows, 0, 1), 5);   // lands on header 4, walks on
-  EXPECT_EQ(ListGrammar::page(rows, 5, 1), 9);   // lands on header 8, walks on
-  EXPECT_EQ(ListGrammar::page(rows, 9, -1), 5);  // lands on header 4, settles on the page it opens
-}
-
-TEST(ListGrammarRows, OutOfRangeStartIsClampedFirst) {
-  const Rows rows = plainRows(5, 2);
-  EXPECT_EQ(ListGrammar::page(rows, 9, -1), 2);
-  EXPECT_EQ(ListGrammar::page(rows, 9, 1), 4);
-  EXPECT_EQ(ListGrammar::step(rows, 9, 1), 0);
-  EXPECT_EQ(ListGrammar::step(rows, -3, -1), 4);
+  expectTurn(ListGrammar::page(maskedRows(mask, 4, 0), 0, 1), 5, 4);  // lands on header 4, walks on
+  // Screen clamps at the end; the selection keeps its line.
+  expectTurn(ListGrammar::page(maskedRows(mask, 4, 4), 5, 1), 7, 6);
+  expectTurn(ListGrammar::page(maskedRows(mask, 4, 8), 9, -1), 5, 4);  // keeps its line; header 4 opens the screen
 }
 
 TEST(ListGrammarRows, PageAtAHeaderAtTheEndSettlesBesideIt) {
   const Mask mask{{true, true, true, true, true, false}};
-  EXPECT_EQ(ListGrammar::page(maskedRows(mask, 3), 3, 1), 4);
+  expectTurn(ListGrammar::page(maskedRows(mask, 3, 3), 3, 1), 4, 3);
   const Mask leading{{false, true, true, true}};
-  EXPECT_EQ(ListGrammar::page(maskedRows(leading, 2), 3, -1), 1);
+  expectTurn(ListGrammar::page(maskedRows(leading, 2, 2), 3, -1), 1, 0);
+}
+
+TEST(ListGrammarRows, PageTurnsKeepTheSelectionsLine) {
+  // The reported round trip: 13 rows, eight on a screen, the selection on the fourth line.
+  expectTurn(ListGrammar::page(plainRows(13, 8, 0), 3, 1), 8, 5);
+  expectTurn(ListGrammar::page(plainRows(13, 8, 5), 8, -1), 3, 0);
+}
+
+TEST(ListGrammarRows, AHeaderEndingTheScreenOpensTheNext) {
+  // Row 2 is a header; three rows fit. The new screen would start at row 3, under it.
+  const Mask mask{{true, true, false, true, true, true, true, true}};
+  expectTurn(ListGrammar::page(maskedRows(mask, 3, 0), 1, 1), 4, 2);
+}
+
+TEST(ListGrammarRows, PageTurnsOnAlignedPages) {
+  // OPDS lays out pages 0-22, 23-45 and 46-49: the last screen starts at 46, not at 27.
+  const auto aligned = [](int count, int drawn, int top) {
+    Rows rows = plainRows(count, drawn, top);
+    rows.pageAligned = true;
+    return rows;
+  };
+  expectTurn(ListGrammar::page(aligned(50, 23, 23), 30, 1), 49, 46);  // onto the short last page
+  expectTurn(ListGrammar::page(aligned(50, 23, 46), 49, -1), 26, 23);
+  expectTurn(ListGrammar::page(aligned(50, 23, 46), 47, 1), 49, 46);  // last page: clamps on the last row
+}
+
+TEST(ListGrammarRows, PageTurnsBelowALeadingTabBar) {
+  // Position 0 is a tab bar above 30 rows. The first screen shows it and nine rows, later ones nine
+  // rows: the bar is not a line of the page.
+  const auto tabbed = [](int top, int drawn) {
+    Rows rows = plainRows(31, drawn, top);
+    rows.lead = 1;
+    return rows;
+  };
+  expectTurn(ListGrammar::page(tabbed(0, 10), 3, 1), 12, 10);
+  expectTurn(ListGrammar::page(tabbed(10, 9), 12, -1), 3, 0);  // the round trip
+  expectTurn(ListGrammar::page(tabbed(0, 10), 0, 1), 10, 10);  // from the bar: the first row below the screen
+  expectTurn(ListGrammar::page(tabbed(0, 10), 0, -1), 0, 0);   // from the bar: nowhere to go
+  expectTurn(ListGrammar::page(tabbed(0, 10), 3, -1), 1, 0);   // first screen: clamps on the first row
+
+  // A tab whose rows are all headers: from the bar there is nothing to page to.
+  const Mask headersOnly{{true, false, false, false}};
+  Rows rows = maskedRows(headersOnly, 4);
+  rows.lead = 1;
+  expectTurn(ListGrammar::page(rows, 0, 1), 0, 0);
+}
+
+TEST(ListGrammarRows, OutOfRangeStartIsClampedFirst) {
+  const Rows rows = plainRows(5, 2);
+  expectTurn(ListGrammar::page(rows, 9, -1), 2, 2);
+  expectTurn(ListGrammar::page(rows, 9, 1), 4, 4);
+  EXPECT_EQ(ListGrammar::step(rows, 9, 1), 0);
+  EXPECT_EQ(ListGrammar::step(rows, -3, -1), 4);
 }
 
 TEST(ListGrammarRows, FirstAndLastSkipUnselectableRows) {

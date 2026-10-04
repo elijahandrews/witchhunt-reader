@@ -330,13 +330,18 @@ bool FontSelectionActivity::handleCustomInput() {
   }
 
   if (!warmupActive) return false;
-  // Back abandons the warm-up; the remaining families then build lazily, one
-  // per cursor move, exactly as they would without it.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    LOG_DBG("FPRV", "Warm-up cancelled after %u of %u", static_cast<unsigned>(warmupDone),
-            static_cast<unsigned>(warmupQueue.size()));
-    finishWarmup();
-    return true;
+  // Back abandons the warm-up; the remaining families then build lazily, one per cursor move,
+  // exactly as they would without it. Read as an event like every other press on this list: a
+  // Back read here by level would reach the list afterwards as an event and close the screen.
+  // Other presses are dropped while the warm-up owns the screen.
+  ButtonEventManager::ButtonEvent event;
+  while (buttonEvents.consumeEvent(event)) {
+    if (event.button == MappedInputManager::Button::Back) {
+      LOG_DBG("FPRV", "Warm-up cancelled after %u of %u", static_cast<unsigned>(warmupDone),
+              static_cast<unsigned>(warmupQueue.size()));
+      finishWarmup();
+      return true;
+    }
   }
   advanceWarmup();
   return true;  // the warm-up owns the screen until it finishes
@@ -357,7 +362,7 @@ void FontSelectionActivity::activateIndex(const int index) {
 
 void FontSelectionActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
   screen.setContentMarginFromScreen(
       fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
                   static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),

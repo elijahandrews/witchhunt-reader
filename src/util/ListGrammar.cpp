@@ -1,10 +1,25 @@
 #include "ListGrammar.h"
 
+#include <algorithm>
+
 namespace ListGrammar {
 namespace {
 
 bool isSelectable(const Rows& rows, const int row) {
   return rows.selectable == nullptr || rows.selectable(rows.ctx, row);
+}
+
+int clampRow(const Rows& rows, const int row) { return row < 0 ? 0 : (row >= rows.count ? rows.count - 1 : row); }
+
+// The rows below a list's lead positions, seen as a list of their own: row i is position i + lead.
+struct LeadShift {
+  const Rows* outer;
+  int lead;
+};
+
+bool shiftedSelectable(const void* ctx, const int row) {
+  const auto* shift = static_cast<const LeadShift*>(ctx);
+  return isSelectable(*shift->outer, row + shift->lead);
 }
 
 Result once(const Command command) { return {command, 1}; }
@@ -61,7 +76,7 @@ Labels labelsFor(const Shape& shape, const Availability& available) {
 
 int step(const Rows& rows, const int from, const int direction) {
   if (rows.count <= 0) return from;
-  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
+  const int start = clampRow(rows, from);
   int row = start;
   for (int tried = 0; tried < rows.count; ++tried) {
     row = ((row + direction) % rows.count + rows.count) % rows.count;
@@ -70,27 +85,70 @@ int step(const Rows& rows, const int from, const int direction) {
   return from;
 }
 
-int page(const Rows& rows, const int from, const int direction) {
-  if (rows.count <= 0) return from;
-  const int perPage = rows.pageRows > 0 ? rows.pageRows : 1;
-  const int start = from < 0 ? 0 : (from >= rows.count ? rows.count - 1 : from);
-  const int currentPage = start / perPage;
-  const int lastPage = (rows.count - 1) / perPage;
-  int target = 0;
+PageTurn page(const Rows& rows, const int from, const int direction) {
+  if (rows.count <= 0) return {from, 0};
+  // Lead positions (a tab bar) are not lines of the page: page the rows below them alone, then map
+  // the turn back. A rows top of 0 shows the lead as well, so it maps back to position 0.
+  const int lead = std::min(rows.lead, rows.count);
+  if (lead > 0) {
+    const LeadShift shift{&rows, lead};
+    Rows inner;
+    inner.count = rows.count - lead;
+    inner.top = rows.top >= lead ? rows.top - lead : 0;
+    inner.drawn = rows.top < lead ? rows.drawn - (lead - rows.top) : rows.drawn;
+    inner.selectable = &shiftedSelectable;
+    inner.ctx = &shift;
+    inner.pageAligned = rows.pageAligned;
+    if (inner.count <= 0) return {from, rows.top};
+    PageTurn turn;
+    if (from < lead) {
+      // On the lead: back has nowhere to go; forward pages from the rows' own top.
+      if (direction < 0) return {from, rows.top};
+      turn = page(inner, inner.top, 1);
+    } else {
+      turn = page(inner, from - lead, direction);
+    }
+    // Rows with nothing selectable hand back the row the turn started from: stay where we are.
+    if (!isSelectable(rows, turn.row + lead)) return {from, rows.top};
+    return {turn.row + lead, turn.top == 0 ? 0 : turn.top + lead};
+  }
+  const int window = rows.drawn > 0 ? rows.drawn : 1;
+  const int start = clampRow(rows, from);
+  const int top = clampRow(rows, rows.top);
+  // From inside the drawn window a page moves the window and the selection keeps its line on it;
+  // from outside it (the window is a render old) the page is measured from the selection itself.
+  const bool inWindow = start >= top && start < top + window;
+  const int base = inWindow ? top : start;
+  const int offset = inWindow ? start - top : 0;
+  // The screen never moves past the ends: the last screen is the last full window, or on a screen
+  // laid out a page at a time the last page. A forward turn never moves it back, even from a base
+  // already past that.
+  const int maxTop = rows.pageAligned ? (rows.count - 1) / window * window : std::max(0, rows.count - window);
+  int newTop;
   if (direction > 0) {
-    target = currentPage < lastPage ? (currentPage + 1) * perPage : rows.count - 1;
+    newTop = base + window;
+    if (newTop > maxTop) newTop = std::max(maxTop, base);
   } else {
-    target = currentPage > 0 ? (currentPage - 1) * perPage : 0;
+    newTop = std::max(0, base - window);
   }
-  // Settle on the first selectable row at or after the target, so a header that opens a page
-  // never pushes the selection onto another page; failing that, the nearest one before it.
-  for (int row = target; row < rows.count; ++row) {
-    if (isSelectable(rows, row)) return row;
+  // A screen that cannot move any further sends the selection to that end instead.
+  const bool moved = newTop != base;
+  const int target = moved ? std::min(newTop + offset, rows.count - 1) : (direction > 0 ? rows.count - 1 : 0);
+  // Settle on the first selectable row at or after the target, so a header never pushes the
+  // selection onto another page; failing that, the nearest one before it.
+  int row = target;
+  while (row < rows.count && !isSelectable(rows, row)) ++row;
+  if (row >= rows.count) {
+    row = target - 1;
+    while (row >= 0 && !isSelectable(rows, row)) --row;
   }
-  for (int row = target - 1; row >= 0; --row) {
-    if (isSelectable(rows, row)) return row;
+  if (row < 0) return {from, top};
+  // Headers directly above the new top open the new screen with it. Forward, never back onto the
+  // screen the turn left.
+  if (moved) {
+    while (newTop > 0 && !isSelectable(rows, newTop - 1) && (direction < 0 || newTop - 1 > base)) --newTop;
   }
-  return from;
+  return {row, newTop};
 }
 
 int first(const Rows& rows) {
@@ -107,7 +165,7 @@ int last(const Rows& rows) {
   return 0;
 }
 
-bool fitsOnePage(const Rows& rows) { return rows.count <= (rows.pageRows > 0 ? rows.pageRows : 1); }
+bool fitsOnePage(const Rows& rows) { return rows.count <= (rows.drawn > 0 ? rows.drawn : 1); }
 
 bool completesDoubleTap(const Key key, const unsigned long pressMs, const Key previousKey,
                         const unsigned long previousPressMs, const Rows& rows) {

@@ -258,7 +258,10 @@ class MappedInputManager {
   //
   // `longPress` makes it a HOLD rather than a click, for a long tap on the strip. Without it
   // every long-press-only action is out of reach on a board with no nav buttons.
-  void injectRawPress(uint8_t rawButtonIndex, bool longPress = false) const;
+  // `atMs` dates it (see HalGPIO::injectPress); 0 means now.
+  void injectRawPress(uint8_t rawButtonIndex, bool longPress = false, uint32_t atMs = 0) const;
+  // When the touch event this cycle happened, on the sampler's clock; 0 if there was none.
+  uint32_t lastTouchEventAtMs() const;
 
   // Drain one queued raw button edge from the background sampler (FIFO). Returns
   // false when empty. Used by ButtonEventManager to drive its press-type FSM.
