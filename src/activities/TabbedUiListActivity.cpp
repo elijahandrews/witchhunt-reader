@@ -118,6 +118,7 @@ void TabbedUiListActivity::stepSelection(const bool forward) {
 }
 
 void TabbedUiListActivity::navigateButtons() {
+  if (handleButtons()) return;
   buttonNavigator.onNextRelease([this] { stepSelection(true); });
   buttonNavigator.onPreviousRelease([this] { stepSelection(false); });
   buttonNavigator.onNextContinuous([this] { selectTab(ButtonNavigator::nextIndex(selectedTabSlot, tabCount())); });

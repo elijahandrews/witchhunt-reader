@@ -57,7 +57,7 @@ void KeyboardLayoutsActivity::activateIndex(const int index) {
 
 void KeyboardLayoutsActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
   screen.setContentMarginFromScreen(
       fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
                   static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),

@@ -62,7 +62,7 @@ class TabbedUiListActivity : public UiListActivity {
   void buildTabBar(UiScreen& screen);
 
   void onEnter() override;
-  bool handleButtons() override;
+  bool handleButtons();
   void navigateButtons() override;
   ListRowTap::Result selectListRow(int index) override;
 

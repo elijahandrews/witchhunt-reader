@@ -3,6 +3,8 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include <algorithm>
+
 #include "CrossPointSettings.h"
 #include "I18nKeys.h"
 #include "MappedInputManager.h"
@@ -12,12 +14,18 @@
 
 namespace fui = freeink::ui;
 
-UiListActivity::UiListActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput)
-    : Activity(name, renderer, mappedInput), UiAppHost(renderer) {}
+UiListActivity::UiListActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput,
+                               const ListDeclaration& declaration)
+    : Activity(name, renderer, mappedInput),
+      UiAppHost(renderer),
+      listController(mappedInput, buttonEvents, controllerHost, declaration) {}
 
 void UiListActivity::onEnter() {
   Activity::onEnter();
   activeNav().reset();
+  listController.reset();
+  windowTop = 0;
+  windowDrawn = 1;
   resetUi();
   app.on(ACTION_ROW, &UiListActivity::rowActionTrampoline, this);
   app.setScreen(&UiListActivity::screenTrampoline, this);
@@ -55,19 +63,6 @@ void UiListActivity::onRowAction(const int index) {
   activateIndex(index);
 }
 
-bool UiListActivity::handleButtons() {
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    onBackButton();
-    return true;
-  }
-  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    const int selected = activeNav().selected;
-    if (selected >= 0 && selected < listCount()) activateIndex(selected);
-    return true;
-  }
-  return false;
-}
-
 bool UiListActivity::routeListTouch() {
   const auto route = UiAppHost::routeTouch(mappedInput);
   if (route.routed && app.invalidated()) requestUpdate();
@@ -88,43 +83,19 @@ void UiListActivity::moveSelectionTo(const int index) {
 
 void UiListActivity::loop() {
   if (handleCustomInput()) return;
-  if (handleButtons()) return;
   if (routeListTouch()) return;
 
+  // A swipe is a page, the same page as a long Left/Right (spec R3).
   const auto swipe = mappedInput.wasSwipe();
   if (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Down) {
-    bool moved = false;
-    {
-      RenderLock lock(*this);
-      auto& currentNav = activeNav();
-      const int delta = swipe == MappedInputManager::SwipeDir::Up ? currentNav.pageRows() : -currentNav.pageRows();
-      moved = currentNav.scrollBy(delta, listCount());
-    }
-    if (moved) requestUpdate();
+    listController.page(swipe == MappedInputManager::SwipeDir::Up ? 1 : -1);
     return;
   }
 
   navigateButtons();
 }
 
-void UiListActivity::navigateButtons() {
-  const int count = listCount();
-  auto& currentNav = activeNav();
-  // Page by inputPageRows(), not pageRows(): the latter reads the render task's
-  // drawnRows directly, which a build in flight is writing. inputPageRows() is the
-  // atomic that onListRendered() publishes for exactly this caller. It can be one
-  // build old while a refresh runs; the next layout's feedback corrects the viewport.
-  buttonNavigator.onNextRelease(
-      [this, count, &currentNav] { moveSelectionTo(ButtonNavigator::nextIndex(currentNav.selected, count)); });
-  buttonNavigator.onPreviousRelease(
-      [this, count, &currentNav] { moveSelectionTo(ButtonNavigator::previousIndex(currentNav.selected, count)); });
-  buttonNavigator.onNextContinuous([this, count, &currentNav] {
-    moveSelectionTo(ButtonNavigator::nextPageIndex(currentNav.selected, count, currentNav.inputPageRows()));
-  });
-  buttonNavigator.onPreviousContinuous([this, count, &currentNav] {
-    moveSelectionTo(ButtonNavigator::previousPageIndex(currentNav.selected, count, currentNav.inputPageRows()));
-  });
-}
+void UiListActivity::navigateButtons() { listController.update(); }
 
 void UiListActivity::syncListViewport(UiScreen& screen, fui::ListProps& props, const bool hasSubtitle) {
   if (!mappedInput.hasTouch()) {
@@ -171,9 +142,56 @@ void UiListActivity::drawChrome() {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.headerHeight}, title);
 }
 
-void UiListActivity::drawFooter() {
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+void UiListActivity::drawFooter() { drawListHints(); }
+
+const char* UiListActivity::footerBackLabel() const { return tr(STR_BACK); }
+
+const char* UiListActivity::footerConfirmLabel() const { return tr(STR_SELECT); }
+
+void UiListActivity::drawListHints() { listController.drawHints(renderer, footerBackLabel(), footerConfirmLabel()); }
+
+Rect UiListActivity::listContentRect() const { return UITheme::getContentRect(renderer, true, true); }
+
+int UiListActivity::selectedPosition() const {
+  // activeNav() hands out a mutable reference; reading through it changes nothing.
+  return const_cast<UiListActivity*>(this)->activeNav().selected;
+}
+
+void UiListActivity::activatePosition(const int position, bool /*longPress*/) {
+  if (position >= 0 && position < listCount()) activateIndex(position);
+}
+
+void UiListActivity::showRowAtTop(const int row) {
+  {
+    // `top` belongs to the render task: take the lock rather than write it under a build in flight.
+    // The follow flags go too, or the next build would pull the viewport back to a minimal scroll.
+    RenderLock lock(*this);
+    auto& current = activeNav();
+    current.selected = row;
+    current.followOnBuild = false;
+    current.followPending = false;
+    current.top = row;
+  }
+  onSelectionChanged(row);
+  requestUpdate();
+}
+
+void UiListActivity::publishListWindow() {
+  auto& current = activeNav();
+  const int count = listCount();
+  const int top = current.top;
+  const int drawn = current.drawnRows > 0 ? current.drawnRows : 1;
+  windowTop.store(top);
+  // A short last screen keeps the last full screen's row count, so paging back from it moves a
+  // whole screen rather than only as many rows as the tail had.
+  windowDrawn.store(top + drawn >= count ? std::max(drawn, windowDrawn.load()) : drawn);
+}
+
+ListWindow UiListActivity::publishedWindow() const {
+  ListWindow window;
+  window.top = windowTop.load();
+  window.drawn = windowDrawn.load();
+  return window;
 }
 
 void UiListActivity::render(RenderLock&&) {
@@ -185,6 +203,7 @@ void UiListActivity::render(RenderLock&&) {
     drawChrome();
     renderUi();
   }
+  publishListWindow();
   afterUiRender();
   drawFooter();
   renderer.displayBuffer();
