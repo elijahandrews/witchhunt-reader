@@ -61,7 +61,7 @@ class TabbedUiListActivity : public UiListActivity {
   [[nodiscard]] int positionCount() const override { return listCount() + 1; }
   [[nodiscard]] int selectedPosition() const override;
   void selectPosition(int position) override;
-  void showPositionAtTop(int position) override;
+  void showPositionPage(int position, int topPosition) override;
   [[nodiscard]] ListWindow positionWindow() const override;
   [[nodiscard]] bool isPositionSelectable(int position) const override;
   void activatePosition(int position, bool longPress) override;

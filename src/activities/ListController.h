@@ -33,9 +33,9 @@ class ListHost {
   // The selected row, and moving it; listSelect() also asks for the repaint.
   virtual int listSelected() const = 0;
   virtual void listSelect(int row) = 0;
-  // A page turn: select `row` and scroll so it is the top row on screen. A screen that lays its rows
-  // out a page at a time already does that by selecting it, hence the default.
-  virtual void listShowAtTop(int row) { listSelect(row); }
+  // A page turn: select `row` with the screen starting at `top`. A screen that lays its rows out a
+  // page at a time already does that by selecting the row, hence the default.
+  virtual void listShowPage(int row, int /*top*/) { listSelect(row); }
 
   virtual void onListActivate(int row, bool longPress) = 0;
   virtual void onListBack() = 0;
@@ -113,8 +113,8 @@ class ListController {
   // reading events until the next tick.
   bool apply(ListGrammar::Result result);
   void moveTo(int row);
-  // A page turn to `row`: it becomes the top row on screen, unless that changes nothing.
-  void showPage(int row);
+  // A page turn: select its row with the screen starting at its top, unless that changes nothing.
+  void showPage(ListGrammar::PageTurn turn);
   // A short or double Up/Down press: one step, or a page when it completes a double-tap.
   void tapVertical(ListGrammar::Key key, ListGrammar::Press press, unsigned long pressMs);
   void continuePageRepeat();

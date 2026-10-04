@@ -72,7 +72,7 @@ bool UiListActivity::routeListTouch() {
 // No RenderLock for a plain selection: `selected` is atomic, and requestSelection() defers the
 // viewport pull to the next build, where ListNav::syncToProps consumes followOnBuild -- so nothing
 // here touches the render task's `top`, and a step never parks the loop task behind a screen build
-// in flight. A page turn does set `top`; showRowAtTop() below takes the lock for that.
+// in flight. A page turn does set `top`; showRowPage() below takes the lock for that.
 void UiListActivity::moveSelectionTo(const int index) {
   activeNav().requestSelection(index);
   onSelectionChanged(index);
@@ -172,18 +172,14 @@ void UiListActivity::homeFromList() {
   onGoHome();
 }
 
-void UiListActivity::showRowAtTop(const int row) {
+void UiListActivity::showRowPage(const int row, const int top) {
   {
-    // A section header directly above `row` opens the page with it, so the row is not shown
-    // without the header it belongs to.
-    int top = row;
-    while (top > 0 && !isRowSelectable(top - 1)) --top;
     // `top` belongs to the render task: take the lock rather than write it under a build in flight.
-    // The follow flags go too, or the next build would pull the viewport back to a minimal scroll.
+    // The follow request stays on: the build scrolls the least it must from this top to keep the
+    // selection on screen, which matters when rows differ in height.
     RenderLock lock(*this);
     auto& current = activeNav();
-    current.selected = row;
-    current.followOnBuild = false;
+    current.requestSelection(row);
     current.followPending = false;
     current.top = top;
   }

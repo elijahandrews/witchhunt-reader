@@ -1,5 +1,7 @@
 #include "ListGrammar.h"
 
+#include <algorithm>
+
 namespace ListGrammar {
 namespace {
 
@@ -72,25 +74,44 @@ int step(const Rows& rows, const int from, const int direction) {
   return from;
 }
 
-int page(const Rows& rows, const int from, const int direction) {
-  if (rows.count <= 0) return from;
+PageTurn page(const Rows& rows, const int from, const int direction) {
+  if (rows.count <= 0) return {from, 0};
   const int window = rows.drawn > 0 ? rows.drawn : 1;
   const int start = clampRow(rows, from);
   const int top = clampRow(rows, rows.top);
-  // From inside the drawn window a page is the window's neighbour; from outside it (the window is a
-  // render old) it is the same distance from the selection itself.
+  // From inside the drawn window a page moves the window and the selection keeps its line on it;
+  // from outside it (the window is a render old) the page is measured from the selection itself.
   const bool inWindow = start >= top && start < top + window;
   const int base = inWindow ? top : start;
-  const int target = clampRow(rows, direction > 0 ? base + window : base - window);
-  // Settle on the first selectable row at or after the target, so a header that opens a page
-  // never pushes the selection onto another page; failing that, the nearest one before it.
-  for (int row = target; row < rows.count; ++row) {
-    if (isSelectable(rows, row)) return row;
+  const int offset = inWindow ? start - top : 0;
+  // The screen never moves past the ends: the last screen is the last full window. A forward turn
+  // never moves it back, even from a base already past that.
+  const int maxTop = std::max(0, rows.count - window);
+  int newTop;
+  if (direction > 0) {
+    newTop = base + window;
+    if (newTop > maxTop) newTop = std::max(maxTop, base);
+  } else {
+    newTop = std::max(0, base - window);
   }
-  for (int row = target - 1; row >= 0; --row) {
-    if (isSelectable(rows, row)) return row;
+  // A screen that cannot move any further sends the selection to that end instead.
+  const bool moved = newTop != base;
+  const int target = moved ? std::min(newTop + offset, rows.count - 1) : (direction > 0 ? rows.count - 1 : 0);
+  // Settle on the first selectable row at or after the target, so a header never pushes the
+  // selection onto another page; failing that, the nearest one before it.
+  int row = target;
+  while (row < rows.count && !isSelectable(rows, row)) ++row;
+  if (row >= rows.count) {
+    row = target - 1;
+    while (row >= 0 && !isSelectable(rows, row)) --row;
   }
-  return from;
+  if (row < 0) return {from, top};
+  // Headers directly above the new top open the new screen with it. Forward, never back onto the
+  // screen the turn left.
+  if (moved) {
+    while (newTop > 0 && !isSelectable(rows, newTop - 1) && (direction < 0 || newTop - 1 > base)) --newTop;
+  }
+  return {row, newTop};
 }
 
 int first(const Rows& rows) {

@@ -126,12 +126,13 @@ void TabbedUiListActivity::selectPosition(const int position) {
   requestUpdate();
 }
 
-void TabbedUiListActivity::showPositionAtTop(const int position) {
+void TabbedUiListActivity::showPositionPage(const int position, const int topPosition) {
   if (position <= 0) {
     selectPosition(0);
     return;
   }
-  showRowAtTop(position - 1);
+  // The inverse of positionWindow(): a screen starting at the bar starts at row 0.
+  showRowPage(position - 1, topPosition > 0 ? topPosition - 1 : 0);
   listTapActivation.reset();
 }
 

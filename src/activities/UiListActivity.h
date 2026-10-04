@@ -68,7 +68,7 @@ class UiListActivity : public Activity, protected UiAppHost {
   [[nodiscard]] virtual int positionCount() const { return listCount(); }
   [[nodiscard]] virtual int selectedPosition() const;
   virtual void selectPosition(int position) { moveSelectionTo(position); }
-  virtual void showPositionAtTop(int position) { showRowAtTop(position); }
+  virtual void showPositionPage(int position, int topPosition) { showRowPage(position, topPosition); }
   [[nodiscard]] virtual ListWindow positionWindow() const { return publishedWindow(); }
   [[nodiscard]] virtual bool isPositionSelectable(int position) const { return isRowSelectable(position); }
   virtual void activatePosition(int position, bool longPress);
@@ -94,9 +94,8 @@ class UiListActivity : public Activity, protected UiAppHost {
 
   void syncListViewport(UiScreen& screen, freeink::ui::ListProps& props, bool hasSubtitle = false);
   void moveSelectionTo(int index);
-  // A page turn: select `row` and scroll so it is the top row on screen, under any section header
-  // directly above it.
-  void showRowAtTop(int row);
+  // A page turn: select `row` with the screen starting at `top` (ListGrammar::page() decides both).
+  void showRowPage(int row, int top);
 
   freeink::ui::ListNav nav;
   // Used only by the file browser's own navigateButtons() until it moves to the controller (PR 6).
@@ -111,7 +110,7 @@ class UiListActivity : public Activity, protected UiAppHost {
     bool listSelectable(const int position) const override { return list.isPositionSelectable(position); }
     int listSelected() const override { return list.selectedPosition(); }
     void listSelect(const int position) override { list.selectPosition(position); }
-    void listShowAtTop(const int position) override { list.showPositionAtTop(position); }
+    void listShowPage(const int position, const int top) override { list.showPositionPage(position, top); }
     void onListActivate(const int position, const bool longPress) override {
       list.activatePosition(position, longPress);
     }

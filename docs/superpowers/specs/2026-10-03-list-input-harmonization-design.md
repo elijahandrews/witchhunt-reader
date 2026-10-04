@@ -122,13 +122,17 @@ Rules:
   back to stepping. A button therefore never changes between moving and acting as the
   selection moves.
 - **R3 — Page is a screenful.** The render publishes the window it drew: its top row and how
-  many rows it drew. Page forward puts the selection on the first row below that window and
-  scrolls so that row is at the top; page back mirrors it, landing on the row one window above.
-  Paging **clamps** at the ends (a held Right stops on the last screen instead of wrapping), and
-  on a list that fits one screen it moves to the first / last row. Rows may differ in height
-  (wrapped titles, touch row heights), so a window is whatever was drawn, not a fixed count; on
-  a renderer with fixed rows this is exactly the old page-aligned result. Hold-repeat needs the
-  live key level, so on the X4 Pro and the T5S3 a long tap pages once.
+  many rows it drew. A page turn moves the screen by the window the last render drew (forward:
+  the new screen starts with the first row below it; back: one window above it), never past the
+  ends of the list, and the selection keeps its line on the screen. Where the screen cannot move
+  any further, the selection goes to the first / last row. From a selection outside the window
+  (the window is a render old) the page is measured from the selection, which lands on the new
+  top row. A header the selection lands on is passed over to the next selectable row, else the
+  nearest one before it. A header directly above the new top opens the new screen. Rows may
+  differ in height (wrapped titles, touch row heights), so a window is whatever was drawn, not a
+  fixed count; on a renderer with fixed rows this is exactly the old page-aligned result.
+  Hold-repeat needs the live key level, so on the X4 Pro and the T5S3 a long tap pages once.
+  (Revised after X4 testing: the selection used to land on the new screen's top row.)
 - **R4 — Long Up / Down** jumps to the first / last selectable row. On a tabbed list (Settings,
   reader menu) it switches to the previous / next tab instead, wrapping; tabbed lists use the
   default Left/Right pair.
@@ -277,9 +281,10 @@ version, the screen follows the closest upstream pattern.
 **No SDK additions; follow upstream's workarounds instead:**
 - Chapter levels are indented with leading spaces in the label, as upstream does.
 - The Lyra "value pill" (`highlightValue`) is dropped; values draw in FUI's normal value slot.
-- "Selection at the top of the screen" (R3 paging) is applied app-side under `RenderLock`
-  (setting `ListNav::top`, `selected` and clearing `followPending`), as both file browsers
-  already do; the input task never writes render-owned fields without the lock.
+- A page turn's top and selection (R3) are applied app-side under `RenderLock` (setting
+  `ListNav::top` and requesting the selection; the build's follow then scrolls the least it must
+  to keep the selection visible), as both file browsers already do; the input task never writes
+  render-owned fields without the lock.
 
 **Rows on demand.** A migrated screen supplies rows through `ListProps::rowProvider` rather than
 a materialized window of `ListItem`s and `std::string`s, so an open list does not hold ~2–3 KB

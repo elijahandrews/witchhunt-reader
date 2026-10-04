@@ -95,6 +95,9 @@ Other lists still behave as their own sections describe.
 | **Confirm** | Open the selected row | The same as a press |
 | **Back** | Go back | Return to the Home screen (see below) |
 
+A page jump moves the list by a screenful and keeps the selection on the same line of the screen.
+On the last screen it goes to the last row, and on the first screen to the first row.
+
 The hints show which is which. **«** on the Left box and **»** on the Right box mean *hold to
 page*. The word after the arrow is what a short press does: **« Up** / **» Down** where Left and
 Right move the selection, or the screen's own action, such as **« Search** / **» Info**. A box

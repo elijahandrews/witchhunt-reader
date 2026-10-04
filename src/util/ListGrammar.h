@@ -77,12 +77,19 @@ struct Rows {
 
 // One selectable row back (-1) or forward (+1), wrapping round the ends.
 int step(const Rows& rows, int from, int direction);
-// A screenful back (-1) or forward (+1), relative to the window the screen drew: forward lands on
-// the first row below it, back on the row a window above it. From a selection outside the window
-// (the window is a render old) the page is measured from the selection instead. Clamped at the
-// ends, so a list that fits one screen pages to its ends. A header at the target is passed over
-// to the first selectable row of that page, or else the nearest one before it.
-int page(const Rows& rows, int from, int direction);
+// A page turn: the row to select, and the row the new screen starts from.
+struct PageTurn {
+  int row = 0;
+  int top = 0;
+};
+// A screenful back (-1) or forward (+1). The screen moves by the window the last render drew
+// (forward: the new screen starts with the first row below it; back: one window above it), never
+// past the ends of the list, and the selection keeps its line on the screen. Where the screen
+// cannot move any further, the selection goes to the first / last row. From a selection outside
+// the window (the window is a render old) the page is measured from the selection, which lands on
+// the new top row. A header the selection lands on is passed over to the next selectable row,
+// else the nearest one before it. A header directly above the new top opens the new screen.
+PageTurn page(const Rows& rows, int from, int direction);
 int first(const Rows& rows);
 int last(const Rows& rows);
 
