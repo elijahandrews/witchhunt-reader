@@ -2,6 +2,12 @@
 
 User-facing changes only. Full commit history is in git log.
 
+## Unreleased
+
+### Touch
+
+- **Fix: a swipe on Bookmarks, Starred pages, Wi-Fi or the OPDS catalog no longer acts on the selected row.** A vertical swipe over these lists was passed on as a Left/Right press. Swiping up on Bookmarks or Starred pages deleted the highlighted entry, and on Wi-Fi it started a rescan. On these screens a swipe now does nothing. On other lists it still pages.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.

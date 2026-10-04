@@ -1118,3 +1118,5 @@ ListRowTap::Result OpdsBookBrowserActivity::selectListRow(const int index) {
   }
   return ListRowTap::Result::Rejected;
 }
+
+bool OpdsBookBrowserActivity::pageList(ListPageDirection /*direction*/) { return true; }
