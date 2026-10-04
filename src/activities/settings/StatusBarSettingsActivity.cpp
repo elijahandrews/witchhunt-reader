@@ -5,13 +5,14 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstring>
+#include <iterator>
 #include <string>
 
 #include "CrossPointSettings.h"
-#include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+
+namespace fui = freeink::ui;
 
 namespace {
 const StrId progressBarNames[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
@@ -23,7 +24,7 @@ const StrId clockPositionNames[] = {StrId::STR_ALIGN_LEFT, StrId::STR_ALIGN_RIGH
 
 // One menu row. Editing a status-bar option means: cycle `field` through `valueCount` values and
 // display its current value. Rows with an enum-style set of choices provide `valueNames` (indexed by
-// the field value); rows with no `valueNames` are on/off toggles rendered as Show/Hide.
+// the field value); rows with no `valueNames` are on/off toggles, drawn as a switch.
 //
 // The whole menu is this single table. Adding, removing, or reordering a row is a one-line edit here —
 // there is no parallel index bookkeeping to keep in sync. Rows with `requiresClock` are skipped when
@@ -33,7 +34,7 @@ struct StatusBarItem {
   uint8_t CrossPointSettings::* field;
   uint8_t valueCount;
   uint8_t defaultValue;     // value to reset to if the stored one is out of range
-  const StrId* valueNames;  // nullptr → boolean Show/Hide toggle
+  const StrId* valueNames;  // nullptr → on/off switch
   bool requiresClock;
 };
 
@@ -67,6 +68,9 @@ const StatusBarItem statusBarItems[] = {
     enumItem(StrId::STR_LOWER_PROGRESS_BAR_THICKNESS, &CrossPointSettings::statusBarLowerProgressBarThickness,
              progressBarThicknessNames, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS::PROGRESS_BAR_NORMAL),
 };
+static_assert(sizeof(statusBarItems) / sizeof(statusBarItems[0]) ==
+                  static_cast<size_t>(StatusBarSettingsActivity::MAX_STATUS_BAR_ITEMS),
+              "keep StatusBarSettingsActivity::MAX_STATUS_BAR_ITEMS in sync with statusBarItems[]");
 
 // Map a visible row index (clock rows omitted when the clock is off) to its entry in statusBarItems.
 const StatusBarItem& visibleItem(int visibleIndex) {
@@ -97,6 +101,11 @@ constexpr int previewHeight = 78;
 constexpr int previewInnerMargin = 4;
 constexpr int previewBatteryInset = 2;  // matches the battery's inset from the margin in the real bar
 constexpr int statusItemGap = 8;        // gap between adjacent status items, as in BaseTheme::drawStatusBar
+
+// The band under the list that the preview owns: its label, the box, and a spacing above and below.
+int previewBandHeight(const GfxRenderer& renderer, const ThemeMetrics& metrics) {
+  return renderer.getLineHeight(UI_10_FONT_ID) + previewHeight + metrics.verticalSpacing * 2;
+}
 
 void drawPreviewProgressBar(const GfxRenderer& renderer, const Rect& rect, const uint8_t progressBar,
                             const uint8_t thickness, const bool topEdge) {
@@ -218,11 +227,7 @@ void drawPreviewStatusItems(const GfxRenderer& renderer, const Rect& rect, const
 }  // namespace
 
 void StatusBarSettingsActivity::onEnter() {
-  Activity::onEnter();
-
-  if (selectedIndex >= visibleItemCount()) {
-    selectedIndex = 0;
-  }
+  UiListActivity::onEnter();
 
   // Clamp status bar settings in case of corrupt/migrated data: every field must hold a valid value
   // index (0..valueCount-1). A stray value would index past its valueNames array when rendered.
@@ -232,87 +237,82 @@ void StatusBarSettingsActivity::onEnter() {
     }
   }
 
+  // The rows this visit shows. Labels and action values never change while the screen is open;
+  // buildScreen() fills in the values.
+  rowCount = visibleItemCount();
+  for (int i = 0; i < rowCount; ++i) {
+    rowItems[i] = {};
+    rowItems[i].label = I18N.get(visibleItem(i).label);
+    rowItems[i].actionValue = static_cast<int16_t>(i);
+  }
+}
+
+const char* StatusBarSettingsActivity::headerTitle() const { return tr(STR_CUSTOMISE_STATUS_BAR); }
+
+// Every row changes in place on Confirm: a switch flips, a value moves to the next one.
+const char* StatusBarSettingsActivity::footerConfirmLabel() const { return tr(STR_TOGGLE); }
+
+void StatusBarSettingsActivity::activateIndex(const int index) {
+  // The row repaints with its new value; a lingering tap flash would gray it.
+  app.clearTapFlash();
+  nav.selected = index;
+  const StatusBarItem& item = visibleItem(index);
+  SETTINGS.*item.field = static_cast<uint8_t>((SETTINGS.*item.field + 1) % item.valueCount);
+  SETTINGS.saveToFile();
+  // Nothing else repaints: the controller's Confirm path calls activateIndex() and returns.
   requestUpdate();
 }
 
-void StatusBarSettingsActivity::onExit() { Activity::onExit(); }
+void StatusBarSettingsActivity::buildScreen(UiScreen& screen) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  // Below the header, inside the room listContentRect() leaves for both hint strips, and above the
+  // preview band afterUiRender() draws into.
+  const Rect contentRect = listContentRect();
+  screen.setContentMarginFromScreen(
+      fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
+                  static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
+                  static_cast<int16_t>(renderer.getScreenHeight() - (contentRect.y + contentRect.height) +
+                                       previewBandHeight(renderer, metrics)),
+                  static_cast<int16_t>(contentRect.x)});
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
 
-void StatusBarSettingsActivity::loop() {
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    finish();
-    return;
+  // Labels were set in onEnter(); the values track SETTINGS, so they are refreshed on every pass.
+  // A value is an I18N pointer and a switch is two flags: nothing is allocated.
+  for (int i = 0; i < rowCount; ++i) {
+    const StatusBarItem& item = visibleItem(i);
+    const uint8_t value = SETTINGS.*item.field;
+    auto& row = rowItems[i];
+    row.toggle = item.valueNames == nullptr;
+    row.toggleChecked = row.toggle && value != 0;
+    row.value = row.toggle ? nullptr : I18N.get(item.valueNames[value]);
   }
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    handleSelection();
-    requestUpdate();
-    return;
-  }
-
-  // Handle navigation
-  const int menuCount = visibleItemCount();
-  buttonNavigator.onNextList(selectedIndex, menuCount, [this] { requestUpdate(); });
-  buttonNavigator.onPreviousList(selectedIndex, menuCount, [this] { requestUpdate(); });
+  fui::ListProps props;
+  props.items = rowItems;
+  props.count = static_cast<uint16_t>(rowCount);
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch;
+  props.valueInset = 8;  // air between the value and the row edge
+  props.labelText = screen.theme().bodyText;
+  props.labelText.maxLines = 2;
+  syncListViewport(screen, props);
+  screen.list(props);
 }
 
-void StatusBarSettingsActivity::handleSelection() {
-  const StatusBarItem& item = visibleItem(selectedIndex);
-  SETTINGS.*item.field = (SETTINGS.*item.field + 1) % item.valueCount;
-  SETTINGS.saveToFile();
-}
+void StatusBarSettingsActivity::afterUiRender() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect content = listContentRect();
+  const int labelHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int bandTop = content.y + content.height - previewBandHeight(renderer, metrics);
 
-void StatusBarSettingsActivity::render(RenderLock&&) {
-  renderer.clearScreen();
-
-  auto metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
-  const int pageWidth = (int)renderer.getScreenWidth();
-  const int pageHeight = (int)renderer.getScreenHeight();
-
-  GUI.drawHeader(renderer, Rect{contentRect.x, metrics.topPadding, contentRect.width, metrics.headerHeight},
-                 tr(STR_CUSTOMISE_STATUS_BAR));
-
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int previewLabelHeight = renderer.getLineHeight(UI_10_FONT_ID);
-  const int previewAreaHeight = previewLabelHeight + previewHeight + metrics.verticalSpacing * 2;
-  const int contentHeight =
-      pageHeight - contentTop - metrics.buttonHintsHeight - previewAreaHeight - metrics.verticalSpacing * 2;
-  GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, visibleItemCount(), static_cast<int>(selectedIndex),
-      [](int index) { return std::string(I18N.get(visibleItem(index).label)); }, nullptr, nullptr,
-      [](int index) {
-        const StatusBarItem& item = visibleItem(index);
-        const uint8_t value = SETTINGS.*item.field;
-        // Enum rows show their named value; toggle rows (no valueNames) show Show/Hide.
-        if (item.valueNames) {
-          return I18N.get(item.valueNames[value]);
-        }
-        return value ? tr(STR_SHOW) : tr(STR_HIDE);
-      },
-      true);
-
-  // Draw button hints
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-
-  const int previewLabelY = contentTop + contentHeight + metrics.verticalSpacing;
-  renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, previewLabelY, tr(STR_PREVIEW));
-  const Rect previewRect{previewHorizontalInset, previewLabelY + previewLabelHeight + metrics.verticalSpacing / 2,
-                         pageWidth - previewHorizontalInset * 2, previewHeight};
+  const int labelY = bandTop + metrics.verticalSpacing / 2;
+  renderer.drawText(UI_10_FONT_ID, content.x + metrics.contentSidePadding, labelY, tr(STR_PREVIEW));
+  const Rect previewRect{content.x + previewHorizontalInset, labelY + labelHeight + metrics.verticalSpacing / 2,
+                         content.width - previewHorizontalInset * 2, previewHeight};
   renderer.drawRect(previewRect.x, previewRect.y, previewRect.width, previewRect.height);
   drawPreviewProgressBar(renderer, previewRect, SETTINGS.statusBarUpperProgressBar,
                          SETTINGS.statusBarUpperProgressBarThickness, true);
   drawPreviewProgressBar(renderer, previewRect, SETTINGS.statusBarLowerProgressBar,
                          SETTINGS.statusBarLowerProgressBarThickness, false);
   drawPreviewStatusItems(renderer, previewRect, metrics);
-
-  renderer.displayBuffer();
-}
-
-ListRowTap::Result StatusBarSettingsActivity::selectListRow(const int index) {
-  // selectedIndex is a uint8_t; apply() takes an int& to update, so round-trip through one.
-  int selection = static_cast<int>(selectedIndex);
-  const auto result = ListRowTap::apply(index, static_cast<int>(visibleItemCount()), selection);
-  selectedIndex = static_cast<uint8_t>(selection);
-  return result;
 }
