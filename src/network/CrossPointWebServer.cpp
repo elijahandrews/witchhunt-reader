@@ -37,6 +37,7 @@
 #include "html/WelcomePageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "network/HttpDownloader.h"
+#include "util/FontManifestReader.h"
 #include "util/PluginLocations.h"
 
 // Log free heap + max contiguous block at a named point.
@@ -1894,58 +1895,23 @@ bool fetchRemoteFontManifest(HttpDownloader::Session& session, FontInstaller& in
     return false;
   }
 
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, manifestFile);
+  // Streamed off the card a block at a time, never the whole document: this
+  // runs while Wi-Fi is up, and a whole-document parse of the 24 KB manifest
+  // ran the X3 out of heap.
+  FontManifestReader<RemoteManifestFamily> reader("WEB", FontInstaller::isValidFamilyName, isValidFontFileName);
+  const FontManifestStatus status = reader.read(manifestFile, outFamilies, outBaseUrl);
   manifestFile.close();
   Storage.remove(MANIFEST_TMP);
-  if (err) {
+  if (status == FontManifestStatus::Invalid) {
     outError = "Failed to parse font manifest";
     return false;
   }
-
-  const int version = doc["version"] | 0;
-  // v1 (legacy, no crc32) and v2 (with crc32) — crc check is skipped per-file
-  // when absent. See upstream PR #1904 and scripts/generate-font-manifest.py.
-  if (version != 1 && version != 2) {
+  if (status == FontManifestStatus::UnsupportedVersion) {
     outError = "Unsupported manifest version";
     return false;
   }
 
-  outBaseUrl = doc["baseUrl"] | "";
-  outFamilies.clear();
-
-  JsonArray familiesArr = doc["families"].as<JsonArray>();
-  outFamilies.reserve(familiesArr.size());
-
-  for (JsonObject fObj : familiesArr) {
-    RemoteManifestFamily family;
-    family.name = fObj["name"] | "";
-    family.description = fObj["description"] | "";
-
-    if (!FontInstaller::isValidFamilyName(family.name.c_str())) {
-      LOG_ERR("WEB", "Manifest entry rejected, invalid family name: %s", family.name.c_str());
-      continue;
-    }
-
-    bool fileNamesOk = true;
-    for (JsonObject fileObj : fObj["files"].as<JsonArray>()) {
-      RemoteManifestFile file;
-      file.name = fileObj["name"] | "";
-      file.size = static_cast<size_t>(fileObj["size"] | 0);
-      if (fileObj["crc32"].is<uint32_t>()) {
-        file.crc32 = fileObj["crc32"].as<uint32_t>();
-        file.hasCrc32 = true;
-      }
-      if (!isValidFontFileName(file.name)) {
-        LOG_ERR("WEB", "Manifest entry rejected, invalid file name in %s: %s", family.name.c_str(), file.name.c_str());
-        fileNamesOk = false;
-        break;
-      }
-      family.totalSize += file.size;
-      family.files.push_back(std::move(file));
-    }
-    if (!fileNamesOk) continue;
-
+  for (auto& family : outFamilies) {
     family.installed = installer.isFamilyInstalled(family.name.c_str());
     family.hasUpdate = false;
     if (family.installed) {
@@ -1972,8 +1938,6 @@ bool fetchRemoteFontManifest(HttpDownloader::Session& session, FontInstaller& in
         }
       }
     }
-
-    outFamilies.push_back(std::move(family));
   }
 
   return true;
@@ -2223,9 +2187,9 @@ void CrossPointWebServer::handleFontDownload() {
   FontInstaller installer(sdFontSystem.registry());
   installer.refreshRegistry();
 
-  // Manifest fetch uses a local session that closes before parse, so the
-  // ArduinoJson parse runs on a clean heap. A separate install session is
-  // opened below for the actual family downloads.
+  // The manifest fetch uses its own session, closed at the end of the block
+  // below, before a separate install session is opened for the actual family
+  // downloads.
   std::vector<RemoteManifestFamily> families;
   std::string baseUrl;
   std::string error;

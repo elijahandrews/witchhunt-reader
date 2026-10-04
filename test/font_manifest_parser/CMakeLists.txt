@@ -1,11 +1,17 @@
 add_executable(FontManifestParserTest
   FontManifestParserTest.cpp
+  FontManifestReaderTest.cpp
   ${REPO_ROOT}/lib/JsonParser/FontManifestParser.cpp
   ${REPO_ROOT}/lib/JsonParser/StreamingJsonParser.cpp
 )
 
 target_include_directories(FontManifestParserTest PRIVATE
+  # HalStorage.h whose HalFile reads from a string; the real one in lib/hal wants SdFat.
+  ${REPO_ROOT}/test/shims
+  ${REPO_ROOT}/src/util
   ${REPO_ROOT}/lib/JsonParser
+  ${REPO_ROOT}/lib/Logging
+  ${REPO_ROOT}/lib/Memory
 )
 
 target_compile_definitions(FontManifestParserTest PRIVATE

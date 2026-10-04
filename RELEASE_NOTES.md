@@ -22,6 +22,10 @@ User-facing changes only. Full commit history is in git log.
 - **Holding Up / Down to switch tabs in Settings and the reader menu opens each tab where you left it**, rather than at the top.
 - **Holding Back on these lists returns to the Home screen** (it used to act like a short press), without losing changes: Settings saves first, and the reader menu closes the book as its **Go Home** item does. Inside a book, lists opened over the reader menu and quick overrides, and a file's options menu, still treat a held Back as a press.
 
+### Fixes
+
+- **Fix: the Font Manager no longer runs out of memory reading the font list** on the X3 and X4, nor does the fonts page of the web interface, which made the device restart. The list is now read a piece at a time instead of all at once.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.

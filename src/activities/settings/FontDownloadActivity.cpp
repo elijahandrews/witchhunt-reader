@@ -1,6 +1,5 @@
 #include "FontDownloadActivity.h"
 
-#include <ArduinoJson.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -19,6 +18,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
+#include "util/FontManifestReader.h"
 
 FontDownloadActivity::FontDownloadActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
     : Activity("FontDownload", renderer, mappedInput), fontInstaller_(sdFontSystem.registry()) {}
@@ -114,64 +114,28 @@ bool FontDownloadActivity::fetchAndParseManifest() {
     return false;
   }
 
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, manifestFile);
+  // Streamed off the card a block at a time: a whole-document parse of the
+  // 24 KB manifest ran the X3 out of heap and aborted. styles[] in the JSON
+  // is skipped -- see ManifestFamily.
+  FontManifestReader<ManifestFamily> reader("FONT", FontInstaller::isValidFamilyName, [](const std::string& name) {
+    return FontInstaller::isValidFontFileName(name.c_str());
+  });
+  const FontManifestStatus status = reader.read(manifestFile, families_, baseUrl_);
   manifestFile.close();
   Storage.remove(MANIFEST_TMP);
 
-  if (err) {
-    LOG_ERR("FONT", "Manifest parse error: %s", err.c_str());
+  if (status == FontManifestStatus::Invalid) {
+    LOG_ERR("FONT", "Manifest parse error: %s", reader.failure());
     errorMessage_ = "Invalid font manifest";
     return false;
   }
-
-  int version = doc["version"] | 0;
-  // v1 (legacy, no crc32) and v2 (with crc32) are both accepted; crc check is
-  // skipped per-file when the field is absent. See upstream PR #1904 for the
-  // CRC32 design we mirror.
-  if (version != 1 && version != 2) {
-    LOG_ERR("FONT", "Unsupported manifest version: %d", version);
+  if (status == FontManifestStatus::UnsupportedVersion) {
+    LOG_ERR("FONT", "Unsupported manifest version: %d", reader.version());
     errorMessage_ = "Unsupported manifest version";
     return false;
   }
 
-  baseUrl_ = doc["baseUrl"] | "";
-  families_.clear();
-
-  JsonArray familiesArr = doc["families"].as<JsonArray>();
-  families_.reserve(familiesArr.size());
-
-  for (JsonObject fObj : familiesArr) {
-    ManifestFamily family;
-    family.name = fObj["name"] | "";
-    family.description = fObj["description"] | "";
-    // styles[] in the JSON is intentionally ignored — see ManifestFamily.
-
-    if (!FontInstaller::isValidFamilyName(family.name.c_str())) {
-      LOG_ERR("FONT", "Manifest entry rejected, invalid family name: %s", family.name.c_str());
-      continue;
-    }
-
-    family.totalSize = 0;
-    bool fileNamesOk = true;
-    for (JsonObject fileObj : fObj["files"].as<JsonArray>()) {
-      ManifestFile file;
-      file.name = fileObj["name"] | "";
-      file.size = fileObj["size"] | 0;
-      if (fileObj["crc32"].is<uint32_t>()) {
-        file.crc32 = fileObj["crc32"].as<uint32_t>();
-        file.hasCrc32 = true;
-      }
-      if (!FontInstaller::isValidFontFileName(file.name.c_str())) {
-        LOG_ERR("FONT", "Manifest entry rejected, invalid file name in %s: %s", family.name.c_str(), file.name.c_str());
-        fileNamesOk = false;
-        break;
-      }
-      family.totalSize += file.size;
-      family.files.push_back(std::move(file));
-    }
-    if (!fileNamesOk) continue;
-
+  for (auto& family : families_) {
     family.installed = fontInstaller_.isFamilyInstalled(family.name.c_str());
 
     if (family.installed) {
@@ -204,8 +168,6 @@ bool FontDownloadActivity::fetchAndParseManifest() {
       FontInstaller::buildStagingDirPath(family.name.c_str(), stagingDir, sizeof(stagingDir));
       family.hasResumableDownload = Storage.exists(stagingDir);
     }
-
-    families_.push_back(std::move(family));
   }
 
   LOG_DBG("FONT", "Manifest loaded: %zu families", families_.size());
