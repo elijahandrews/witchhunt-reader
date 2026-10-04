@@ -75,6 +75,8 @@ void OpdsServerListActivity::onEnter() {
   UiListActivity::onEnter();
   // Reload from disk in case servers were added/removed by a subactivity or the web UI.
   reloadServers();
+  // The base onEnter() already asked for a render, possibly built before this reload.
+  requestUpdate();
 }
 
 void OpdsServerListActivity::reloadServers() {
@@ -200,6 +202,8 @@ void OpdsServerListActivity::buildScreen(UiScreen& screen) {
   }
 
   auto props = listProps(screen);
+  // Like the old screen, the labels stay on one line: the subtitle row height is fixed.
+  props.labelText = {};
   props.items = rowItems_;
   props.count = static_cast<uint16_t>(count);
   addList(screen, props, /*hasSubtitle=*/true);
