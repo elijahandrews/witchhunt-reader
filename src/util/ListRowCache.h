@@ -34,22 +34,24 @@ inline int nextTop(const int count, const int selected, const int windowTop, con
 
 }  // namespace detail
 
-// The rows the next render draws.
+// The rows the next render draws, and the one after them: list() asks the row provider for the row
+// past the window to decide whether it fits, and on layouts whose row height follows the content
+// a placeholder there could fit where the real row would not.
 inline Range needed(const int count, const int selected, const int windowTop, const int windowDrawn) {
   if (count <= 0) return {};
   const int drawn = std::max(1, windowDrawn);
   const int top = detail::nextTop(count, selected, windowTop, drawn);
-  return {top, std::min(count, top + drawn)};
+  return {top, std::min(count, top + drawn + 1)};
 }
 
 // The rows to decode once needed() is no longer held: that window and one window either side,
-// clipped to the list. Stepping then refills about once a screen, and a page turn about every
-// other page, rather than on every press.
+// (plus the one row needed() adds past a window), clipped to the list. Stepping then refills about once a screen, and a
+// page turn about every other page, rather than on every press.
 inline Range toDecode(const int count, const int selected, const int windowTop, const int windowDrawn) {
   if (count <= 0) return {};
   const int drawn = std::max(1, windowDrawn);
   const int top = detail::nextTop(count, selected, windowTop, drawn);
-  return {std::max(0, top - drawn), std::min(count, top + 2 * drawn)};
+  return {std::max(0, top - drawn), std::min(count, top + 2 * drawn + 1)};
 }
 
 }  // namespace ListRowCache

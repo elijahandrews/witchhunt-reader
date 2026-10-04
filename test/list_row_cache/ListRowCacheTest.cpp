@@ -29,27 +29,27 @@ TEST(ListRowCache, EmptyListHoldsNothing) {
 
 TEST(ListRowCache, SelectionOnScreenNeedsTheWindow) {
   // 100 books, eight drawn from row 40, the selection on row 43.
-  expectRange(ListRowCache::needed(100, 43, 40, 8), 40, 48);
+  expectRange(ListRowCache::needed(100, 43, 40, 8), 40, 49);
 }
 
 TEST(ListRowCache, DecodesTheWindowAndOneWindowEitherSide) {
-  expectRange(ListRowCache::toDecode(100, 43, 40, 8), 32, 56);
+  expectRange(ListRowCache::toDecode(100, 43, 40, 8), 32, 57);
 }
 
 TEST(ListRowCache, StepPastTheBottomNeedsTheWindowTheFollowScrollsTo) {
   // Down from the last line of [40, 48): the follow puts row 48 on the last line.
-  expectRange(ListRowCache::needed(100, 48, 40, 8), 41, 49);
-  expectRange(ListRowCache::toDecode(100, 48, 40, 8), 33, 57);
+  expectRange(ListRowCache::needed(100, 48, 40, 8), 41, 50);
+  expectRange(ListRowCache::toDecode(100, 48, 40, 8), 33, 58);
 }
 
 TEST(ListRowCache, StepPastTheTopNeedsTheWindowTheFollowScrollsTo) {
   // Up from the first line of [40, 48): the follow puts row 39 on the first line.
-  expectRange(ListRowCache::needed(100, 39, 40, 8), 39, 47);
-  expectRange(ListRowCache::toDecode(100, 39, 40, 8), 31, 55);
+  expectRange(ListRowCache::needed(100, 39, 40, 8), 39, 48);
+  expectRange(ListRowCache::toDecode(100, 39, 40, 8), 31, 56);
 }
 
 TEST(ListRowCache, ClampsToTheList) {
-  expectRange(ListRowCache::toDecode(100, 2, 0, 8), 0, 16);
+  expectRange(ListRowCache::toDecode(100, 2, 0, 8), 0, 17);
   expectRange(ListRowCache::toDecode(100, 97, 92, 8), 84, 100);
   // A list shorter than a screen is decoded whole.
   expectRange(ListRowCache::needed(5, 2, 0, 8), 0, 5);
@@ -57,20 +57,20 @@ TEST(ListRowCache, ClampsToTheList) {
 }
 
 TEST(ListRowCache, UnmeasuredWindowCountsAsOneRow) {
-  expectRange(ListRowCache::needed(100, 10, 10, 0), 10, 11);
-  expectRange(ListRowCache::toDecode(100, 10, 10, 0), 9, 12);
-  expectRange(ListRowCache::toDecode(100, 10, 10, -3), 9, 12);
+  expectRange(ListRowCache::needed(100, 10, 10, 0), 10, 12);
+  expectRange(ListRowCache::toDecode(100, 10, 10, 0), 9, 13);
+  expectRange(ListRowCache::toDecode(100, 10, 10, -3), 9, 13);
 }
 
 TEST(ListRowCache, StaleIndexesAreClampedIntoTheList) {
   // The list shrank under a selection and a window from before (a book was removed).
   expectRange(ListRowCache::needed(10, 25, 20, 8), 9, 10);
   expectRange(ListRowCache::toDecode(10, 25, 20, 8), 1, 10);
-  expectRange(ListRowCache::needed(10, -4, -2, 8), 0, 8);
+  expectRange(ListRowCache::needed(10, -4, -2, 8), 0, 9);
 }
 
 // Whatever the inputs: the rows decoded hold the rows needed, lie inside the list and come to at
-// most three windows; the rows needed hold the selection.
+// most three windows and a row; the rows needed hold the selection.
 TEST(ListRowCache, DecodeHoldsWhatIsNeededAndStaysSmall) {
   for (int count = 1; count <= 30; ++count) {
     for (int drawn = 1; drawn <= 10; ++drawn) {
@@ -81,9 +81,11 @@ TEST(ListRowCache, DecodeHoldsWhatIsNeededAndStaysSmall) {
           ASSERT_TRUE(decode.holds(needed)) << count << " " << sel << " " << top << " " << drawn;
           ASSERT_GE(decode.first, 0);
           ASSERT_LE(decode.last, count);
-          ASSERT_LE(decode.last - decode.first, 3 * drawn);
+          ASSERT_LE(decode.last - decode.first, 3 * drawn + 1);
           ASSERT_LE(needed.first, sel);
           ASSERT_GT(needed.last, sel);
+          // The row past the window is held too: the list reads it to see whether it fits.
+          ASSERT_EQ(needed.last, std::min(count, needed.first + drawn + 1));
         }
       }
     }
