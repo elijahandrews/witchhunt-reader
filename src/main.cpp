@@ -1296,6 +1296,7 @@ void setup() {
   WEATHER_SETTINGS.loadFromFile();
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
+  buttonEventManager.setReaderOnTopQuery([] { return activityManager.currentIsReaderActivity(); });
 
   // Brightness and warmth are always restored. A normal wake starts with the
   // light off unless Restore Light on Wake is enabled; silent maintenance

@@ -95,6 +95,11 @@ class ButtonEventManager {
   // both names of an aliased pair, so one physical button always has one wait policy.
   bool hasDoubleAction(Button button) const;
 
+  // Whether a reader activity is on top. Set once from main.cpp; until it is, every configured
+  // double action is assumed to apply and its key waits out the double-click window.
+  using ReaderOnTopQuery = bool (*)();
+  void setReaderOnTopQuery(ReaderOnTopQuery query) { readerOnTopQuery = query; }
+
   // Raw record of a button's press-down edges, for code that classifies taps itself instead of
   // consuming Short/Double events — ButtonNavigator's list paging, which must keep firing on the
   // press edge and so cannot wait out a double-click window.
@@ -118,6 +123,12 @@ class ButtonEventManager {
   };
 
   uint32_t forcedDoubleMask = 0;
+
+  ReaderOnTopQuery readerOnTopQuery = nullptr;
+
+  // The double action configured for a key. Up/Down answer with the PageBack/PageForward settings,
+  // so both names of a physical key share one wait policy.
+  static uint8_t configuredDoubleAction(Button button);
 
   enum class State { Idle, Pressed, ReleasedOnce, DoublePressed };
 

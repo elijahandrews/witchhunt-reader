@@ -12,6 +12,10 @@ User-facing changes only. Full commit history is in git log.
 
 - **OPDS catalogs can be paged, and their buttons do what the hints say** (#374). Hold **Left** / **Right**, or swipe, to page through a catalog; **Up** / **Down** move one row, and two quick taps jump a page. A short **Left** is **Search** and a short **Right** is **Info** for a book. Where those do not apply, the hint shows only « or », instead of "Up" / "Down" labels on buttons that did nothing. Holding **Back** returns to the Home screen, and holding **Up** / **Down** jumps to the first / last entry. A long catalog in landscape no longer runs off the bottom of the screen. The side Up/Down hints also appear when choosing a download format, so the T5 S3 can move up there.
 
+### Buttons
+
+- **Lists that wait for a double press no longer lag behind Left and Right.** Outside a book, the file browser, the pickers and the chapter lists waited 0.3 s after every Left/Right press to see whether a double press would follow, because the double press is bound to a reading action by default. Two quick presses then moved nothing at all in the file browser. The wait now happens only in the reader, where the double press means something.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.
