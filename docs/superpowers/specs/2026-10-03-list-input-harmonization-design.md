@@ -80,8 +80,8 @@ The device matrix the scheme has to serve:
   That conflicts with §1 by design (the T5S3 is not in upstream's model), so their input code
   is not adopted; only their rendering is (§2b).
 - **Two-dimensional screens** keep geometric arrows: the file browser's cover grid, the Home
-  screen (carousel and list layouts), the keyboard, the dictionary word selector, the Wi-Fi
-  yes/no prompts, value pickers (slider, printed-page input).
+  carousel layout, the keyboard, the dictionary word selector, the Wi-Fi yes/no prompts, value
+  pickers (slider, printed-page input). The full list with reasons is in §3.
 - **The SDK.** No FreeInkUI change. Our pin's `libs/ui` is byte-identical to upstream's
   (checked 2026-10-04: ours `c6e1d2b`, upstream `aef1a6c`), which is what lets upstream's FUI
   screens port without an SDK bump; adding SDK features would end that.
@@ -267,6 +267,7 @@ version, the screen follows the closest upstream pattern.
 | OPDS catalog + format picker | upstream's `CatalogActivity`-based OPDS screen, evaluated at that PR |
 | GlobalBookmarks, ReadingStatsBookList, Footnotes, Weather city list | ours, following the closest upstream pattern |
 | UiList / MenuList / Tabbed families, file browser | already FUI; input only |
+| Home, list layout | stays drawn by the theme (a themed launcher; no memory benefit); buttons via the controller |
 | Home carousel, cover grid, keyboard, dictionary word select | not lists; unchanged |
 
 **No SDK additions; follow upstream's workarounds instead:**
@@ -308,9 +309,33 @@ render-published atomic, never a loop-task measurement — see `listPageRows()` 
 | **Wi-Fi networks** | Options (saved network; opens the forget prompt) / Rescan | — | |
 | **File browser**, list views | none / Options | KOReader pull, then open (Books mode) | Back: parent folder; cover grid out of scope |
 | **File browser**, folder picker | New folder / Move here | — | |
+| Home, list layout | default | — | buttons only; rows stay drawn by the theme (§2b) |
 
-The button-remap wizard is not a list; its `pageList` becomes a no-op so a swipe is not
-captured as an assignment.
+**Every screen that keeps a selection, and what happens to it** (complete as of 2026-10-04,
+from a search of `src/activities` for list renderers, navigators and selection indexes):
+
+| Screen | Buttons → `ListController` | Rows → `fui::list` |
+|---|---|---|
+| OPDS catalog + format picker | PR 3 (done) | PR 7 |
+| Settings, reader menu (tabbed) | PR 4 | already FUI |
+| Enum, Font, Dictionary, Keyboard-layout, Language pickers | PR 4 | already FUI |
+| File context menu, Home "More", settings submenus, Clock, Quick overrides, KOReader settings, Weather menu | PR 4 | already FUI |
+| NetworkMode, OPDS server list, OPDS settings, Status bar, Font download, Finished book, Reading-stats book list, Weather city list | PR 5 | PR 5 |
+| Starred pages, Global bookmarks, Wi-Fi network list | PR 6 | PR 6 |
+| File browser list views (Books, All files, Recents, firmware picker, folder picker) | PR 6 | already FUI |
+| Home, list layout | PR 6 | **no** — a themed launcher; moving it brings no memory benefit |
+| EPUB / XTC chapter lists, Markdown TOC, Footnotes, KOReader sync result | PR 7 | PR 7 |
+| Button-remap wizard | **no** — it exists to capture whichever physical button is pressed next; only its `pageList` is a no-op (PR 1) | PR 7, so `drawList` can be deleted |
+
+Not lists, so outside this design:
+
+| Screen | Why |
+|---|---|
+| Home carousel layout, file-browser cover grid | 2-D grids: Left/Right move within a row, Up/Down between rows |
+| Keyboard, dictionary word selection | 2-D cursors (key grid, words on a page) |
+| Wi-Fi save / forget prompts, confirmation dialog | horizontal 2–3-button dialogs |
+| Frontlight panel, slider picker, printed-page input | value pickers: Left/Right change a value |
+| Dictionary definition, system information, button / gesture overviews, book info, reading-stats dashboard | read-only pagers; nothing is selected |
 
 ### 4. User-visible changes
 
@@ -383,9 +408,9 @@ One concern per PR; each builds `default`, `x4pro` and `lilygo_t5s3` and passes 
 5. **The settings and network `drawList` screens onto FUI + the controller:** NetworkMode,
    OpdsServerList, OpdsSettings, StatusBarSettings, FontDownload, ReadingStatsBookList,
    FinishedBook, the weather city list — ported from upstream where it has them. User guide: §3.7.
-6. **Screens with declared pairs:** GlobalBookmarks, StarredPages, Wi-Fi onto FUI + the
-   controller; file browser list views and folder picker onto the controller. User guide:
-   §3.3, §3.4.
+6. **Screens with declared pairs, and Home:** GlobalBookmarks, StarredPages, Wi-Fi onto FUI +
+   the controller; file browser list views and folder picker onto the controller; Home's list
+   layout onto the controller (rows stay theme-drawn). User guide: §3.1, §3.3, §3.4.
 7. **The custom painters:** chapter/TOC lists, footnotes, KOReader sync, the OPDS rendering
    and the button-remap list onto FUI. User guide: §6.
 8. **Cleanup:** delete `drawList` (Base + Lyra), `ButtonNavigator`'s list functions and the
