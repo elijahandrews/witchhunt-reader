@@ -83,10 +83,13 @@ function, and all touch behaviour can be switched off.
 ### Moving through lists
 
 The firmware's lists are moving to one set of buttons, a screen at a time. So far these work this
-way: the **OPDS catalog**, **Settings** and the **reader menu**, the option lists and pickers they
-open (fonts, dictionaries, language, keyboard layouts, long option lists such as the time zone),
-and the menus (file options, Home's More, clock, KOReader sync, weather settings, quick overrides).
-Other lists still behave as their own sections describe.
+way: the **OPDS catalog** and the **OPDS servers** with their settings, **Settings** and the
+**reader menu**, the option lists and pickers they open (fonts, dictionaries, language, keyboard
+layouts, long option lists such as the time zone), the menus (file options, Home's More, clock,
+KOReader sync, weather settings, quick overrides), **File Transfer**'s choice of mode, **Customise
+Status Bar**, the **font manager**, **Reading Stats**' book list, the weather city search results
+and the screen shown when you finish a book. Other lists still behave as their own sections
+describe.
 
 | Button | Press | Hold |
 | --- | --- | --- |
@@ -352,7 +355,7 @@ Moving within a tab follows **[Moving through lists](#moving-through-lists)**.
 - **Bionic Reading**: Bold the first half of each word to guide the eye. "ON" / "OFF"
 - **Guide Dots**: Draw a small dot centered in the space between words to guide the eye along the line (idea borrowed from [CrossInk](https://github.com/uxjulia/CrossInk)). "ON" / "OFF"
 - **Synthetic TOC Fallback**: Generate a table of contents from headings when the EPUB has an invalid or missing TOC. "ON" / "OFF"
-- **Customise Status Bar**: Opens a submenu to configure every element of the reading status bar individually: upper and lower progress bars (Book / Chapter / Hidden, with thickness), status item position (Top / Bottom), chapter page count, book progress percentage, title display (Book / Chapter / Hidden), battery, and clock. The chapter page count and the Chapter progress bar cover the whole chapter as the table of contents lists it, even when the book splits that chapter into several files (many light novels start a new file at every illustration). A `~` before the total means part of it is still an estimate; it firms up as the rest of the chapter is laid out.
+- **Customise Status Bar**: Opens a submenu to configure every element of the reading status bar individually: upper and lower progress bars (Book / Chapter / Hidden, with thickness), status item position (Top / Bottom), chapter page count, book progress percentage, title display (Book / Chapter / Hidden), battery, and clock. The chapter page count and the Chapter progress bar cover the whole chapter as the table of contents lists it, even when the book splits that chapter into several files (many light novels start a new file at every illustration). A `~` before the total means part of it is still an estimate; it firms up as the rest of the chapter is laid out. On/off items are switches; the others step to their next value with **Confirm**. The preview under the list shows the result.
 
 #### 3.7.3 Controls
 
@@ -394,7 +397,7 @@ Moving within a tab follows **[Moving through lists](#moving-through-lists)**.
   - **Timezone**: Pick your timezone from a full-screen list of 86: named places and regions that follow their own daylight-saving rules, fixed UTC offsets for anywhere the list misses, and plain UTC.
   - **Detect Timezone**: Auto-detect timezone via IP geolocation (requires WiFi).
   - **Sync Time**: Sync the clock via NTP (requires WiFi). Afterwards the device restarts quickly and returns to Clock Settings, like every other screen that uses WiFi.
-- **Weather Settings**: Configure the Open-Meteo weather panel shown on the Home Screen.
+- **Weather Settings**: Configure the Open-Meteo weather panel shown on the Home Screen. **Location** searches for a city: pick one of the matches with **Confirm**, or press **Back** to keep the current location. A search with no matches says so instead of returning silently.
 - **All Files**: Browse every file on the SD card, not just books: images, cover and `.opf` files, firmware images and anything else. It works like [Browse Files](#33-browse-files-screen): **Confirm** opens a book or image, and on any other file it opens the menu, where you can **Move to folder** or **Remove** it. Images offer **Set as sleep screen**. Moving or removing a book here moves or removes that file only, not the cover and `.opf` beside it. **Back** at the top folder returns to Settings.
 
 **System**:
