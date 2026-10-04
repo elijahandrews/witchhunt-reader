@@ -2,12 +2,12 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 #include "../Activity.h"
 #include "FontInstaller.h"
 #include "network/HttpDownloader.h"
 #include "util/ButtonNavigator.h"
+#include "util/FontCatalog.h"
 
 #ifndef FONT_MANIFEST_URL
 #define FONT_MANIFEST_URL "https://raw.githubusercontent.com/jpirnay/witchhunt-reader/master/assets/sd-fonts/fonts.json"
@@ -37,29 +37,6 @@ class FontDownloadActivity : public Activity {
     ERROR,
   };
 
-  struct ManifestFile {
-    std::string name;
-    size_t size = 0;
-    uint32_t crc32 = 0;
-    bool hasCrc32 = false;  // false = legacy v1 manifest, fall back to size-only check
-  };
-
-  struct ManifestFamily {
-    std::string name;
-    std::string description;
-    // `styles` was once parsed here but never rendered — dropped to avoid
-    // ArduinoJson string allocations that fragmented the heap before the
-    // first TLS download. Resurrect if a UI surfaces style names.
-    std::vector<ManifestFile> files;
-    size_t totalSize = 0;
-    bool installed = false;
-    bool hasUpdate = false;
-    // True iff a leftover __staging dir from a previous interrupted download
-    // exists for this not-yet-installed family — the next confirm will resume
-    // rather than restart.
-    bool hasResumableDownload = false;
-  };
-
   State state_ = WIFI_SELECTION;
   FontInstaller fontInstaller_;
   ButtonNavigator buttonNavigator_;
@@ -73,7 +50,11 @@ class FontDownloadActivity : public Activity {
   HttpDownloader::Session httpSession_;
 
   std::string baseUrl_;
-  std::vector<ManifestFamily> families_;
+  // The font list, in one block (about 8 KB for 28 families): freeing it before a download gives the
+  // TLS session the heap back in one piece. `styles` in the manifest is not kept -- nothing shows it.
+  // hasResumableDownload: a __staging dir from an interrupted download exists for this not-yet-
+  // installed family, and the next confirm resumes it rather than restarting.
+  FontCatalog families_;
   int selectedIndex_ = 0;
 
   enum class PendingFontAction {
@@ -89,8 +70,9 @@ class FontDownloadActivity : public Activity {
   int downloadingFamilyIndex_ = 0;
   // Cached during downloadFamily() before families_ is stashed to SD, so the
   // render path can show the family name and decide the Retry/Resume label
-  // without touching families_ (which is empty during the download).
-  std::string downloadingFamilyName_;
+  // without touching families_ (which is empty during the download). A
+  // fixed buffer: a valid family name always fits, and it takes no heap.
+  char downloadingFamilyName_[FontInstaller::MAX_FAMILY_NAME_LEN + 1] = {};
   bool downloadingFamilyHasResumable_ = false;
   PendingFontAction pendingErrorAction_ = PendingFontAction::None;
   std::string errorMessage_;
@@ -107,17 +89,18 @@ class FontDownloadActivity : public Activity {
   // are merged back into families_ on return.
   void downloadFamily(int familyIdx);
   // Internal: the body of downloadFamily after the stash. Operates only on
-  // the local family copy and constants like familyIdx; never touches
-  // families_ (which is empty during this call).
-  void downloadFamilyImpl(ManifestFamily& family, int familyIdx);
+  // `family`, a copy holding just the one family (at index 0), and constants
+  // like familyIdx; never touches families_ (which is empty during this call).
+  void downloadFamilyImpl(FontCatalog& family, int familyIdx);
   void downloadAll();
   void updateAll();
 
-  // Persist families_ to /fonts_families.bin and clear the in-memory vector.
-  // Used to free the ~10 KB of scattered std::string allocations that fragment
-  // the heap enough to break the TLS handshake during font downloads.
+  // Persist families_ to /fonts_families.bin and free its block, under the
+  // RenderLock. The TLS session of the download that follows needs a
+  // contiguous ~17 KB record buffer, which the block gives back in one piece.
   bool stashFamiliesToSd();
-  // Read /fonts_families.bin back into families_. Returns true on success.
+  // Read /fonts_families.bin back into families_, publishing it under the
+  // RenderLock. Returns true on success.
   bool restoreFamiliesFromSd();
   bool isDownloadAllSelected() const { return hasDownloadCandidates() && selectedIndex_ == 0; }
   bool isUpdateAllSelected() const {
@@ -130,7 +113,7 @@ class FontDownloadActivity : public Activity {
   int familyIndexFromList(int listIndex) const {
     return listIndex > actionCount() - 1 ? listIndex - actionCount() : -1;
   }
-  int listItemCount() const { return families_.empty() ? 0 : static_cast<int>(families_.size()) + actionCount(); }
+  int listItemCount() const { return families_.empty() ? 0 : static_cast<int>(families_.count()) + actionCount(); }
   size_t totalUninstalledSize() const;
   size_t totalUpdateSize() const;
   void syncSelectedIndexForNewActionCount();

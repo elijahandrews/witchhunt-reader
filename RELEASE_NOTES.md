@@ -25,6 +25,7 @@ User-facing changes only. Full commit history is in git log.
 ### Fixes
 
 - **Fix: the Font Manager no longer runs out of memory reading the font list** on the X3 and X4, nor does the fonts page of the web interface, which made the device restart. The list is now read a piece at a time instead of all at once.
+- **Font downloads no longer fail partway on the X3/X4**; the font list now takes less than half the memory it did and gives it back in one piece before the download starts.
 
 ## 2.37 — 2026-09-29
 

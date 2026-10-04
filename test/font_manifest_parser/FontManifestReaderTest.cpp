@@ -1,31 +1,20 @@
 // FontManifestReader: the glue the Font Manager and the web font API share -- the manifest file read
-// in two streamed passes into each one's own family type, checked family by family.
+// in two streamed passes into one exactly sized FontCatalog, checked family by family.
 
+#include <FontManifestParser.h>
 #include <FontManifestReader.h>
 #include <gtest/gtest.h>
 
 #include <cctype>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <vector>
 
+#include "FailingArrayNew.h"
+
 namespace {
-
-struct TestFile {
-  std::string name;
-  size_t size = 0;
-  uint32_t crc32 = 0;
-  bool hasCrc32 = false;
-};
-
-struct TestFamily {
-  std::string name;
-  std::string description;
-  std::vector<TestFile> files;
-  size_t totalSize = 0;
-  bool installed = false;  // set by the callers afterwards; the reader leaves it alone
-};
 
 // Stand-ins for FontInstaller's checks, with the same shape: a family name is 1-31 characters of
 // [A-Za-z0-9_-]; a file name is 1-60 characters with no "..".
@@ -38,33 +27,59 @@ bool familyNameOk(const char* name) {
   return true;
 }
 
-bool fileNameOk(const std::string& name) {
-  return !name.empty() && name.size() <= 60 && name.find("..") == std::string::npos;
+bool fileNameOk(const char* name) {
+  const std::string n(name);
+  return !n.empty() && n.size() <= 60 && n.find("..") == std::string::npos;
+}
+
+bool anyName(const char*) { return true; }
+
+// What an earlier read left in the catalog: every read replaces it.
+void fillStale(FontCatalog& catalog) {
+  FontCatalog::Builder counter;
+  counter.beginFamily();
+  counter.keepFamily("Stale", 5);
+  ASSERT_TRUE(catalog.allocate(counter.size()));
+  FontCatalog::Builder filler(catalog);
+  filler.beginFamily();
+  filler.keepFamily("Stale", 5);
+  ASSERT_EQ(catalog.count(), 1u);
 }
 
 struct Outcome {
   FontManifestStatus status = FontManifestStatus::Invalid;
-  std::vector<TestFamily> families;
+  FontCatalog catalog;
   std::string baseUrl = "untouched";
   std::string failure;
   int version = -1;
 };
 
-Outcome read(const std::string& json) {
+Outcome read(const std::string& json, FontManifestReader::NameCheck familyCheck = familyNameOk,
+             FontManifestReader::NameCheck fileCheck = fileNameOk) {
   HalFile file = HalFile::fromString(json);
-  FontManifestReader<TestFamily> reader("TEST", familyNameOk, fileNameOk);
+  FontManifestReader reader("TEST", familyCheck, fileCheck);
   Outcome out;
-  out.families.push_back(TestFamily{"Stale", "from an earlier read", {}, 0, false});
-  out.status = reader.read(file, out.families, out.baseUrl);
+  fillStale(out.catalog);
+  out.status = reader.read(file, out.catalog, out.baseUrl);
   out.failure = reader.failure() ? reader.failure() : "";
   out.version = reader.version();
   return out;
 }
 
-std::vector<std::string> names(const std::vector<TestFamily>& families) {
+std::vector<std::string> names(const FontCatalog& catalog) {
   std::vector<std::string> out;
-  for (const auto& f : families) out.push_back(f.name);
+  for (size_t i = 0; i < catalog.count(); ++i) out.push_back(catalog.name(i));
   return out;
+}
+
+// Every string the catalog holds, with its terminator: with the records, all its block may hold.
+size_t stringBytes(const FontCatalog& catalog) {
+  size_t bytes = 0;
+  for (size_t i = 0; i < catalog.count(); ++i) {
+    bytes += strlen(catalog.name(i)) + 1 + strlen(catalog.description(i)) + 1;
+    for (size_t j = 0; j < catalog.fileCount(i); ++j) bytes += strlen(catalog.fileName(i, j)) + 1;
+  }
+  return bytes;
 }
 
 const std::string kManifest = R"({
@@ -86,34 +101,41 @@ TEST(FontManifestReaderTest, BuildsEachFamilyWithItsFilesAndTotal) {
   ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
   EXPECT_EQ(out.version, 2);
   EXPECT_EQ(out.baseUrl, "https://example.com/fonts/");
-  ASSERT_EQ(out.families.size(), 2u);
+  const FontCatalog& catalog = out.catalog;
+  ASSERT_EQ(catalog.count(), 2u);
 
-  const TestFamily& alpha = out.families[0];
-  EXPECT_EQ(alpha.name, "Alpha");
-  EXPECT_EQ(alpha.description, "First");
-  ASSERT_EQ(alpha.files.size(), 2u);
-  EXPECT_EQ(alpha.files[0].name, "Alpha/Alpha_10.cpfont");
-  EXPECT_EQ(alpha.files[0].size, 1000u);
-  EXPECT_TRUE(alpha.files[0].hasCrc32);
-  EXPECT_EQ(alpha.files[0].crc32, 11u);
-  EXPECT_EQ(alpha.files[1].crc32, 22u);
-  EXPECT_EQ(alpha.totalSize, 3000u);
+  EXPECT_STREQ(catalog.name(0), "Alpha");
+  EXPECT_STREQ(catalog.description(0), "First");
+  ASSERT_EQ(catalog.fileCount(0), 2u);
+  EXPECT_STREQ(catalog.fileName(0, 0), "Alpha/Alpha_10.cpfont");
+  EXPECT_EQ(catalog.fileSize(0, 0), 1000u);
+  EXPECT_TRUE(catalog.fileHasCrc32(0, 0));
+  EXPECT_EQ(catalog.fileCrc32(0, 0), 11u);
+  EXPECT_EQ(catalog.fileCrc32(0, 1), 22u);
+  EXPECT_EQ(catalog.totalSize(0), 3000u);
 
-  const TestFamily& beta = out.families[1];
-  EXPECT_EQ(beta.name, "Beta");
-  ASSERT_EQ(beta.files.size(), 1u);
-  EXPECT_FALSE(beta.files[0].hasCrc32);
-  EXPECT_EQ(beta.files[0].crc32, 0u);
-  EXPECT_EQ(beta.totalSize, 3000u);
+  EXPECT_STREQ(catalog.name(1), "Beta");
+  EXPECT_STREQ(catalog.description(1), "Second");
+  ASSERT_EQ(catalog.fileCount(1), 1u);
+  EXPECT_FALSE(catalog.fileHasCrc32(1, 0));
+  EXPECT_EQ(catalog.fileCrc32(1, 0), 0u);
+  EXPECT_EQ(catalog.totalSize(1), 3000u);
+
+  for (size_t i = 0; i < catalog.count(); ++i) {  // set by the callers afterwards
+    EXPECT_FALSE(catalog.installed(i));
+    EXPECT_FALSE(catalog.hasUpdate(i));
+    EXPECT_FALSE(catalog.hasResumableDownload(i));
+  }
 }
 
-// The first pass counts the families, so the list is reserved once at its final size -- every
-// element of families[], as the whole-document parse reserved families.size().
-TEST(FontManifestReaderTest, ReservesTheListForEveryFamilyEntry) {
+// The first pass counts what the families that pass their checks hold, so the block is allocated once
+// at exactly that size: the entries that fail take no room at all.
+TEST(FontManifestReaderTest, SizesTheBlockForTheFamiliesThatPassTheirChecks) {
   const Outcome out = read(R"({"version":2,"families":[{"name":"A"},{"name":"bad name"},{"name":"C"}]})");
   ASSERT_EQ(out.status, FontManifestStatus::Ok);
-  EXPECT_EQ(names(out.families), (std::vector<std::string>{"A", "C"}));
-  EXPECT_EQ(out.families.capacity(), 3u);
+  EXPECT_EQ(names(out.catalog), (std::vector<std::string>{"A", "C"}));
+  // "A", "C" and an empty description each.
+  EXPECT_EQ(out.catalog.blockBytes(), FontCatalog::blockBytesFor({2, 0, 2 * (2 + 1)}));
 }
 
 // A family whose name or any file name fails its check is left out; the rest still load.
@@ -131,23 +153,66 @@ TEST(FontManifestReaderTest, LeavesOutFamiliesThatFailTheirChecks) {
     {"name":"AlsoGood"}
   ]})");
   ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
-  EXPECT_EQ(names(out.families), (std::vector<std::string>{"Good", "AlsoGood"}));
-  EXPECT_TRUE(out.families[1].files.empty());
+  EXPECT_EQ(names(out.catalog), (std::vector<std::string>{"Good", "AlsoGood"}));
+  EXPECT_EQ(out.catalog.fileCount(0), 1u);
+  EXPECT_STREQ(out.catalog.fileName(0, 0), "Good/Good_10.cpfont");
+  EXPECT_EQ(out.catalog.fileCount(1), 0u);
+  EXPECT_EQ(out.catalog.blockBytes(), FontCatalog::blockBytesFor({2, 1, stringBytes(out.catalog)}));
+}
+
+// A family that is rejected after its description and files went into the block is taken back out,
+// in the filling pass too, where the block has no room to spare: what follows it is intact.
+TEST(FontManifestReaderTest, ARejectedFamilyLeavesTheNextIntact) {
+  const Outcome out = read(R"({"version":2,"families":[
+    {"description":")" + std::string(300, 'd') +
+                           R"(","files":[{"name":"Bad/a.cpfont","size":5},{"name":"Bad/b.cpfont","size":6}],
+     "name":"bad name"},
+    {"name":"Kept","description":"Here","files":[{"name":"Kept/k.cpfont","size":7,"crc32":9}]}
+  ]})");
+  ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
+  ASSERT_EQ(out.catalog.count(), 1u);
+  EXPECT_STREQ(out.catalog.name(0), "Kept");
+  EXPECT_STREQ(out.catalog.description(0), "Here");
+  ASSERT_EQ(out.catalog.fileCount(0), 1u);
+  EXPECT_STREQ(out.catalog.fileName(0, 0), "Kept/k.cpfont");
+  EXPECT_EQ(out.catalog.fileCrc32(0, 0), 9u);
+  EXPECT_EQ(out.catalog.totalSize(0), 7u);
+}
+
+// No key order is assumed: a name after the files still names the family they belong to.
+TEST(FontManifestReaderTest, TheNameMayComeLast) {
+  const Outcome out =
+      read(R"({"families":[{"files":[{"size":4,"name":"Late/l.cpfont"}],"description":"D","name":"Late"}],
+               "version":1})");
+  ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
+  ASSERT_EQ(out.catalog.count(), 1u);
+  EXPECT_STREQ(out.catalog.name(0), "Late");
+  EXPECT_STREQ(out.catalog.description(0), "D");
+  EXPECT_STREQ(out.catalog.fileLocalName(0, 0), "l.cpfont");
+  EXPECT_EQ(out.catalog.totalSize(0), 4u);
 }
 
 // A file name over the parser's buffer is rejected even when the check alone would pass it.
 TEST(FontManifestReaderTest, AnOverflowedFileNameRejectsItsFamily) {
   const std::string longName(FontManifestParser::FILE_NAME_BUF_SIZE + 10, 'y');
-  HalFile file = HalFile::fromString(R"({"version":2,"families":[{"name":"F","files":[{"name":")" + longName +
-                                     R"(","size":1}]},{"name":"G"}]})");
-  FontManifestReader<TestFamily> reader("TEST", familyNameOk, [](const std::string&) { return true; });
-  std::vector<TestFamily> families;
-  std::string baseUrl;
-  ASSERT_EQ(reader.read(file, families, baseUrl), FontManifestStatus::Ok);
-  EXPECT_EQ(names(families), (std::vector<std::string>{"G"}));
+  const Outcome out =
+      read(R"({"version":2,"families":[{"name":"F","files":[{"name":")" + longName + R"(","size":1}]},{"name":"G"}]})",
+           familyNameOk, anyName);
+  ASSERT_EQ(out.status, FontManifestStatus::Ok);
+  EXPECT_EQ(names(out.catalog), (std::vector<std::string>{"G"}));
 }
 
-// Whatever goes wrong, nothing half-built is left behind -- not even what the lists held before.
+// So is a family name too long for the reader to hold, which no family name check would pass anyway.
+TEST(FontManifestReaderTest, AFamilyNameTooLongToHoldRejectsItsFamily) {
+  const std::string fits(FontManifestReader::FAMILY_NAME_BUF_SIZE - 1, 'f');
+  const std::string tooLong(FontManifestReader::FAMILY_NAME_BUF_SIZE, 't');
+  const Outcome out =
+      read(R"({"version":2,"families":[{"name":")" + tooLong + R"("},{"name":")" + fits + R"("}]})", anyName, anyName);
+  ASSERT_EQ(out.status, FontManifestStatus::Ok);
+  EXPECT_EQ(names(out.catalog), (std::vector<std::string>{fits}));
+}
+
+// Whatever goes wrong, nothing half-built is left behind -- not even what the catalog held before.
 TEST(FontManifestReaderTest, AnInvalidDocumentLeavesNothingBehind) {
   for (const std::string& json : {
            kManifest.substr(0, kManifest.size() / 2),                        // cut short
@@ -159,17 +224,17 @@ TEST(FontManifestReaderTest, AnInvalidDocumentLeavesNothingBehind) {
     const Outcome out = read(json);
     EXPECT_EQ(out.status, FontManifestStatus::Invalid);
     EXPECT_FALSE(out.failure.empty());
-    EXPECT_TRUE(out.families.empty());
+    EXPECT_TRUE(out.catalog.empty());
     EXPECT_EQ(out.baseUrl, "");
   }
 }
 
 TEST(FontManifestReaderTest, AnUnreadableFileIsInvalid) {
   HalFile file;  // no backing data: seek and read fail
-  FontManifestReader<TestFamily> reader("TEST", familyNameOk, fileNameOk);
-  std::vector<TestFamily> families;
+  FontManifestReader reader("TEST", familyNameOk, fileNameOk);
+  FontCatalog catalog;
   std::string baseUrl;
-  EXPECT_EQ(reader.read(file, families, baseUrl), FontManifestStatus::Invalid);
+  EXPECT_EQ(reader.read(file, catalog, baseUrl), FontManifestStatus::Invalid);
   EXPECT_NE(reader.failure(), nullptr);
 }
 
@@ -178,7 +243,7 @@ TEST(FontManifestReaderTest, OnlyVersions1And2AreAccepted) {
   Outcome out = read(R"({"version":3,"families":[{"name":"A"}]})");
   EXPECT_EQ(out.status, FontManifestStatus::UnsupportedVersion);
   EXPECT_EQ(out.version, 3);
-  EXPECT_TRUE(out.families.empty());
+  EXPECT_TRUE(out.catalog.empty());
   EXPECT_EQ(out.baseUrl, "");
 
   out = read(R"({"families":[{"name":"A"}]})");
@@ -187,10 +252,37 @@ TEST(FontManifestReaderTest, OnlyVersions1And2AreAccepted) {
 
   out = read(R"({"version":1,"families":[{"name":"A"}]})");
   EXPECT_EQ(out.status, FontManifestStatus::Ok);
-  EXPECT_EQ(names(out.families), (std::vector<std::string>{"A"}));
+  EXPECT_EQ(names(out.catalog), (std::vector<std::string>{"A"}));
 }
 
-// The shipped manifest, end to end: every family loads, each with the sum of its file sizes.
+// A manifest whose every family fails its checks loads as an empty list, as before: no block, no error.
+TEST(FontManifestReaderTest, NoFamilyThatPassesIsAnEmptyList) {
+  const Outcome out = read(R"({"version":2,"baseUrl":"https://x/","families":[{"name":"bad name"}]})");
+  ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
+  EXPECT_TRUE(out.catalog.empty());
+  EXPECT_EQ(out.catalog.blockBytes(), 0u);
+  EXPECT_EQ(out.baseUrl, "https://x/");
+}
+
+// The heap cannot give the block: out of memory, said so, and nothing left behind.
+TEST(FontManifestReaderTest, ABlockTheHeapCannotGiveIsOutOfMemory) {
+  HalFile file = HalFile::fromString(kManifest);
+  FontManifestReader reader("TEST", familyNameOk, fileNameOk);
+  FontCatalog catalog;
+  fillStale(catalog);
+  std::string baseUrl = "untouched";
+
+  const FailingArrayNew noHeap(1);
+  EXPECT_EQ(reader.read(file, catalog, baseUrl), FontManifestStatus::OutOfMemory);
+  ASSERT_NE(reader.failure(), nullptr);
+  EXPECT_STREQ(reader.failure(), "out of memory");
+  EXPECT_TRUE(catalog.empty());
+  EXPECT_EQ(baseUrl, "");
+}
+
+// The shipped manifest, end to end: every family loads, each with the sum of its file sizes, in one
+// block that holds its records and strings and nothing else -- under 8 KB, where the vector of
+// families it replaces took about 19 KB in some 300 pieces.
 TEST(FontManifestReaderTest, ReadsTheShippedManifest) {
   std::ifstream in(FONT_MANIFEST_PATH, std::ios::binary);
   ASSERT_TRUE(in.good()) << FONT_MANIFEST_PATH;
@@ -198,19 +290,25 @@ TEST(FontManifestReaderTest, ReadsTheShippedManifest) {
 
   const Outcome out = read(json);
   ASSERT_EQ(out.status, FontManifestStatus::Ok) << out.failure;
-  ASSERT_EQ(out.families.size(), 28u);
-  EXPECT_EQ(out.families.capacity(), 28u);
+  const FontCatalog& catalog = out.catalog;
+  ASSERT_EQ(catalog.count(), 28u);
+  EXPECT_EQ(catalog.totalFiles(), 133u);
   size_t files = 0;
-  for (const auto& family : out.families) {
+  for (size_t i = 0; i < catalog.count(); ++i) {
     size_t sum = 0;
-    for (const auto& file : family.files) {
-      sum += file.size;
-      EXPECT_TRUE(file.hasCrc32) << file.name;
+    for (size_t j = 0; j < catalog.fileCount(i); ++j) {
+      sum += catalog.fileSize(i, j);
+      EXPECT_TRUE(catalog.fileHasCrc32(i, j)) << catalog.fileName(i, j);
     }
-    EXPECT_EQ(family.totalSize, sum) << family.name;
-    files += family.files.size();
+    EXPECT_EQ(catalog.totalSize(i), sum) << catalog.name(i);
+    files += catalog.fileCount(i);
   }
   EXPECT_EQ(files, 133u);
-  EXPECT_EQ(out.families[0].name, "Alegreya");
-  EXPECT_EQ(out.families[0].files[0].name, "Alegreya/Alegreya_10.cpfont");
+  EXPECT_STREQ(catalog.name(0), "Alegreya");
+  EXPECT_STREQ(catalog.fileName(0, 0), "Alegreya/Alegreya_10.cpfont");
+  EXPECT_STREQ(catalog.fileLocalName(0, 0), "Alegreya_10.cpfont");
+
+  EXPECT_EQ(catalog.blockBytes(), FontCatalog::blockBytesFor({28, 133, stringBytes(catalog)}));
+  RecordProperty("blockBytes", static_cast<int>(catalog.blockBytes()));
+  EXPECT_LE(catalog.blockBytes(), 8u * 1024u);
 }
