@@ -5,6 +5,11 @@
 > front buttons labelled "Up"/"Down" that did nothing). The interim fix on
 > `fix/374-opds-front-buttons` (commits `e8d974a7e`, `6e45c08fd`, unpushed) is superseded by
 > this design and is not to be merged; #374 is closed by the OPDS pilot (PR 3 below).
+>
+> **Amended 2026-10-04** (after PRs 1–3 opened as #383 / #384 / #385): row rendering is now in
+> scope (§2b). Lists move onto FreeInkUI's `list()` wherever that brings a functional or memory
+> benefit, porting upstream crosspoint-reader's FUI screens where upstream has them, with no SDK
+> change. A page is now a screenful (R3), and a swipe moves the selection with the page.
 
 ## Problem
 
@@ -62,15 +67,24 @@ The device matrix the scheme has to serve:
    tap on the X4 Pro and the T5S3.
 4. One input implementation for lists (`ListGrammar` + `ListController`) in place of five.
 5. The user guide describes the scheme once and every screen that changed.
+6. One row renderer: every list drawn by FreeInkUI's `list()` where that brings a functional or
+   memory benefit, with the legacy `drawList` implementations deleted.
+7. Less divergence from upstream crosspoint-reader: a screen upstream already draws with FUI is
+   ported from upstream rather than re-invented.
+8. The series ends with less flash than `master` had before PR 1.
 
 ## Non-goals
 
-- **Row rendering.** Moving every list's row drawing onto `fui::list` is a later project. This
-  one replaces input handling and hints only; screens keep drawing their rows as today.
+- **Upstream's input model.** Upstream's list bases step on the press edge, page on any held
+  arrow with wrap-around, open a row on the first tap and draw no hint boxes on touch boards.
+  That conflicts with §1 by design (the T5S3 is not in upstream's model), so their input code
+  is not adopted; only their rendering is (§2b).
 - **Two-dimensional screens** keep geometric arrows: the file browser's cover grid, the Home
   screen (carousel and list layouts), the keyboard, the dictionary word selector, the Wi-Fi
   yes/no prompts, value pickers (slider, printed-page input).
-- **The SDK.** No FreeInkUI change is needed for this project.
+- **The SDK.** No FreeInkUI change. Our pin's `libs/ui` is byte-identical to upstream's
+  (checked 2026-10-04: ours `c6e1d2b`, upstream `aef1a6c`), which is what lets upstream's FUI
+  screens port without an SDK bump; adding SDK features would end that.
 - **Reader controls** (page turns, chapter skip) and the global button-action settings keep
   their current meaning.
 - **Delete without confirmation** on Bookmarks and Starred pages is a separate issue. This
@@ -90,7 +104,7 @@ The device matrix the scheme has to serve:
 | Touch | Effect |
 |---|---|
 | Tap a row | point-then-confirm via `ListRowTap`, unchanged |
-| Swipe up / down over the list | page forward / back — the same page as a long Left/Right, called directly, never as an injected button |
+| Swipe up / down over the list | page forward / back — the same page as a long Left/Right, selection included, called directly, never as an injected button |
 | Tap / long tap a hint box | the same as a short / long press of that button (unchanged mechanism) |
 
 Rules:
@@ -103,11 +117,14 @@ Rules:
   than a book, an unsaved network) makes that side **none** for the moment — it never falls
   back to stepping. A button therefore never changes between moving and acting as the
   selection moves.
-- **R3 — Page** is the number of rows the screen actually draws, reported by the renderer. It
-  moves to the first row of the previous / next page and **clamps** at the ends (a held Right
-  stops on the last page instead of wrapping). On a list that fits one screen it moves to the
-  first / last row. Hold-repeat needs the live key level, so on the X4 Pro and the T5S3 a long
-  tap pages once.
+- **R3 — Page is a screenful.** The render publishes the window it drew: its top row and how
+  many rows it drew. Page forward puts the selection on the first row below that window and
+  scrolls so that row is at the top; page back mirrors it, landing on the row one window above.
+  Paging **clamps** at the ends (a held Right stops on the last screen instead of wrapping), and
+  on a list that fits one screen it moves to the first / last row. Rows may differ in height
+  (wrapped titles, touch row heights), so a window is whatever was drawn, not a fixed count; on
+  a renderer with fixed rows this is exactly the old page-aligned result. Hold-repeat needs the
+  live key level, so on the X4 Pro and the T5S3 a long tap pages once.
 - **R4 — Long Up / Down** jumps to the first / last selectable row. On a tabbed list (Settings,
   reader menu) it switches to the previous / next tab instead, wrapping; tabbed lists use the
   default Left/Right pair.
@@ -166,7 +183,7 @@ touch: dispatchListTap ─▶ selectListRow ─▶ ListController::tapRow
   one of: `StepPrev`, `StepNext`, `PagePrev`, `PageNext`, `First`, `Last`, `TabPrev`, `TabNext`,
   `Activate`, `ActivateLong`, `Back`, `Home`, `LeftAction`, `RightAction`, `None`.
 - `ListLabels labelsFor(const ListDeclaration&, const ListState&)` returns the six labels.
-- Index arithmetic: `stepIndex`, `pageIndex` (clamping, page-aligned), `firstSelectable`,
+- Index arithmetic: `stepIndex`, `pageIndex` (clamping; relative to the drawn window, R3), `firstSelectable`,
   `lastSelectable`, all taking an optional selectable predicate. Replaces the list half of
   `ButtonNavigator`'s static helpers.
 - Both outputs derive from the one declaration; host tests pin them together.
@@ -228,6 +245,53 @@ scrolling the viewport and pages the selection, like every other list.
 **`ButtonNavigator`.** Its list functions (`onNextList` / `onPreviousList`, `onListNav`,
 `onListPageNav`, the press-log double-tap logic) are deleted once the last list has moved.
 `onPressAndContinuous` and friends stay for the slider, keyboard and frontlight panel.
+
+### 2b. Rendering on `fui::list` (hybrid with upstream)
+
+**Rule.** A list moves its row drawing onto FreeInkUI's `list()` + `ListNav` when that brings a
+functional benefit (touch rows, wrapping, one paging model) or a memory benefit (less flash or
+heap). Its input always goes through `ListController` (§2); upstream's input code is not taken.
+
+**Source of the render code.** Where upstream crosspoint-reader (`upstream/develop`, pinned per
+PR to the commit ported from) already draws a screen with FUI, that screen's row building is
+ported from upstream, attributed per the repo's porting convention (source comment + commit
+message; `Co-authored-by` only where the result is mainly theirs). Where upstream has no FUI
+version, the screen follows the closest upstream pattern.
+
+| Our screen | Render source |
+|---|---|
+| NetworkModeSelection, OpdsServerList, OpdsSettings, StatusBarSettings, FontDownload, Wi-Fi, ButtonRemap, KOReaderSync | upstream's FUI version of the same screen |
+| EPUB / XTC chapter lists | upstream's FUI chapter selectors; MD TOC follows the EPUB one |
+| StarredPages | upstream `EpubReaderBookmarksActivity` |
+| FinishedBook | upstream `EndOfBookOptions` |
+| OPDS catalog + format picker | upstream's `CatalogActivity`-based OPDS screen, evaluated at that PR |
+| GlobalBookmarks, ReadingStatsBookList, Footnotes, Weather city list | ours, following the closest upstream pattern |
+| UiList / MenuList / Tabbed families, file browser | already FUI; input only |
+| Home carousel, cover grid, keyboard, dictionary word select | not lists; unchanged |
+
+**No SDK additions; follow upstream's workarounds instead:**
+- Chapter levels are indented with leading spaces in the label, as upstream does.
+- The Lyra "value pill" (`highlightValue`) is dropped; values draw in FUI's normal value slot.
+- "Selection at the top of the screen" (R3 paging) is applied app-side under `RenderLock`
+  (setting `ListNav::top`, `selected` and clearing `followPending`), as both file browsers
+  already do; the input task never writes render-owned fields without the lock.
+
+**Rows on demand.** A migrated screen supplies rows through `ListProps::rowProvider` rather than
+a materialized window of `ListItem`s and `std::string`s, so an open list does not hold ~2–3 KB
+of row copies on the heap. A small fixed list (≤ a dozen rows, e.g. a settings submenu) may
+keep a materialized array where that is simpler and no larger.
+
+**Borrowed from upstream:** per-tab selection memory for tabbed lists (one `ListNav` per tab,
+as upstream's `UiTabListActivity`), the `onRowLongPress` hook, `rowProvider` usage as in their
+file browser.
+
+**Deleted once the last caller moves:** `BaseTheme::drawList` and `LyraTheme::drawList` with
+their `std::function` row callbacks. The `ListTouchBand` path stays while the Home carousel
+records a band.
+
+**Viewport.** `ListNav`'s own follow keeps the selection visible while stepping; paging (R3)
+sets the top explicitly. The render publishes the drawn window for the input side (a
+render-published atomic, never a loop-task measurement — see `listPageRows()` in §2).
 
 ### 3. Screen mapping
 
@@ -311,21 +375,29 @@ One concern per PR; each builds `default`, `x4pro` and `lilygo_t5s3` and passes 
 2. **Double-press wait (R6).** Standalone.
 3. **`ListGrammar` + `ListController` + hints, piloted on OPDS** (catalog and format picker).
    Closes #374. User guide: new "Moving through lists" subsection, §3.7.5.
-4. **`MenuListActivity` family + the 8 default-navigator screens.** Fixes the lying labels and
-   the 10-row page. User guide: §3.7.
-5. **`UiListActivity` pickers + `TabbedUiListActivity`.** User guide: §3.7, §4.
-6. **Screens with declared pairs:** Bookmarks, Starred pages, Wi-Fi, file browser list views
-   and folder picker. User guide: §3.3, §3.4.
-7. **The rest:** chapter/TOC lists, footnotes, KOReader sync result. User guide: §6.
-8. **Cleanup:** delete `ButtonNavigator`'s list functions and the `dispatchListSwipe` injection
-   fallback; `docs/list-input.md`, `docs/touch-gestures.md`, §5.2/§5.7 final pass.
+4. **The FUI bases onto the controller.** `UiListActivity`, `MenuListActivity`,
+   `TabbedUiListActivity` (with per-tab selection memory) drive input through `ListController`
+   with a `ListNav` selection adapter; R3 page-as-screenful and swipe-as-page land here, and
+   `ListGrammar::page` takes the drawn window. About 15 screens follow through their bases; the
+   file browser keeps its own input until PR 6. User guide: §3.7, §4.
+5. **The settings and network `drawList` screens onto FUI + the controller:** NetworkMode,
+   OpdsServerList, OpdsSettings, StatusBarSettings, FontDownload, ReadingStatsBookList,
+   FinishedBook, the weather city list — ported from upstream where it has them. User guide: §3.7.
+6. **Screens with declared pairs:** GlobalBookmarks, StarredPages, Wi-Fi onto FUI + the
+   controller; file browser list views and folder picker onto the controller. User guide:
+   §3.3, §3.4.
+7. **The custom painters:** chapter/TOC lists, footnotes, KOReader sync, the OPDS rendering
+   and the button-remap list onto FUI. User guide: §6.
+8. **Cleanup:** delete `drawList` (Base + Lyra), `ButtonNavigator`'s list functions and the
+   `dispatchListSwipe` injection fallback; `docs/list-input.md`, `docs/touch-gestures.md`,
+   §5.2/§5.7 final pass.
 
 ### 7. Testing
 
 - **Host (new `test/list_grammar/`):** every button × press type × declaration shape (default,
   none/action, action/none, action/action, tabbed, long-Confirm) × list shape (empty, one page,
   several pages, selectable predicate with headers at the ends) → expected command **and**
-  expected labels. Index arithmetic: wrap on step, clamp on page, page alignment, first/last
+  expected labels. Index arithmetic: wrap on step, clamp on page, paging by the drawn window, first/last
   selectable.
 - **Host:** R6 — the double-wait decision, extracted into a pure function if
   `ButtonEventManager` cannot run in the host suite.
@@ -337,11 +409,15 @@ One concern per PR; each builds `default`, `x4pro` and `lilygo_t5s3` and passes 
 
 ### 8. Costs
 
-- **Flash.** The C3 partition is about 95 % full. PR 3 may add at most ~2 KB; the series must
-  end below today's size once per-screen handlers and `ButtonNavigator`'s list code are gone.
-  Each PR records its measured size delta.
-- **Heap.** No `std::function`; labels in fixed buffers inside the controller; under 100 bytes
-  per screen; nothing allocated per tick or per render.
+- **Flash.** The C3 partition is about 95 % full. PR 3 may add at most ~2 KB (it added
+  2,282 B with the double-tap restore). Every later PR records its measured delta and must be
+  flash-negative, or name the function or RAM benefit it buys instead. The series must end
+  below `master`'s size before PR 1. Measured targets (2026-10-04 symbol sizes): ~15.5 KB of
+  per-screen input methods, ~2.4 KB of navigator callback lambdas, ~1.7 KB of `ButtonNavigator`
+  list code, 2.5 KB of `drawList`, ~3 KB of `drawList` row-callback thunks.
+- **Heap.** No `std::function`; labels composed in stack buffers per draw; under 100 bytes
+  per controller; nothing allocated per tick or per render; rows built on demand
+  (`rowProvider`) rather than held in per-screen windows.
 
 ## Open questions
 
