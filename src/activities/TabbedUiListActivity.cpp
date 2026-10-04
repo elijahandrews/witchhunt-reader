@@ -168,7 +168,7 @@ void TabbedUiListActivity::backFromPosition(const int position) {
 void TabbedUiListActivity::switchTab(const int direction) {
   const int count = tabCount();
   if (count <= 0) return;
-  enterTab(((selectedTabSlot + direction) % count + count) % count, tabsFocused());
+  enterTab(((selectedTabSlot + direction) % count + count) % count, /*barFocus=*/false);
 }
 
 ListRowTap::Result TabbedUiListActivity::selectListRow(const int index) {

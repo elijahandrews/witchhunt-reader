@@ -212,7 +212,11 @@ void ListController::moveTo(const int row) {
 }
 
 void ListController::showPage(const int row) {
-  if (row == host.listSelected() && row == host.listWindow().top) return;
+  const ListWindow window = host.listWindow();
+  // Already selected, and either already the top row or on a last screen that is fully shown: the
+  // page turn would change nothing (the render clamps the top at the end of the list).
+  const bool onLastScreen = row >= window.top && window.top + window.drawn >= host.listCount();
+  if (row == host.listSelected() && (row == window.top || onLastScreen)) return;
   host.listShowAtTop(row);
 }
 

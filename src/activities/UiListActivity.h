@@ -73,9 +73,10 @@ class UiListActivity : public Activity, protected UiAppHost {
   [[nodiscard]] virtual bool isPositionSelectable(int position) const { return isRowSelectable(position); }
   virtual void activatePosition(int position, bool longPress);
   virtual void backFromPosition(int /*position*/) { onBackButton(); }
-  // Long Back. Home by default; a screen whose way out does more than leave (saves, hands a result
-  // back to the reader) overrides it so Home goes through that way out.
-  virtual void homeFromList() { onGoHome(); }
+  // Long Back. Home, except while a book is open below this screen: there it is Back, so the
+  // reader's own close path (overrides, KOSync push) is never skipped. A screen whose way out does
+  // more than leave overrides it.
+  virtual void homeFromList();
   virtual void switchTab(int /*direction*/) {}
 
   // The content area a list lays out in: room for the bottom hints AND the side Up/Down boxes.
@@ -91,7 +92,8 @@ class UiListActivity : public Activity, protected UiAppHost {
 
   void syncListViewport(UiScreen& screen, freeink::ui::ListProps& props, bool hasSubtitle = false);
   void moveSelectionTo(int index);
-  // A page turn: select `row` and scroll so it is the top row on screen.
+  // A page turn: select `row` and scroll so it is the top row on screen, under any section header
+  // directly above it.
   void showRowAtTop(int row);
 
   freeink::ui::ListNav nav;

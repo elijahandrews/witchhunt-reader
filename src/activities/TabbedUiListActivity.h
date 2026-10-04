@@ -13,9 +13,9 @@
 //   * Confirm on the bar advances to the next tab; on a row it activates the row.
 //   * Back on a row returns focus to the bar; on the bar it leaves (onBackFromTabs()).
 //   * A tap on a tab selects it; a tap on a row follows the usual ListRowTap rule.
-//   * Each tab keeps its own ListNav, so it remembers its row and scroll position. A switch made
-//     from the bar (Confirm, a tap, a long press) stays on the bar; a long Up/Down from a row lands
-//     on the new tab's remembered row, or its bar if it has none.
+//   * Each tab keeps its own ListNav. A long Up/Down opens the new tab where it was left: on the
+//     row, or on its bar if the bar held focus there (the first visit, too). Confirm on the bar and
+//     a tap on a tab land on the new tab's bar; focusing a tab's bar returns its list to the top.
 //
 // Per-tab ListNav storage adapted from upstream crosspoint-reader's UiTabListActivity
 // (develop @ cdac66ffe, src/activities/UiTabListActivity.cpp).

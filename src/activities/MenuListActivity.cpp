@@ -158,8 +158,8 @@ void MenuListActivity::loop() { UiListActivity::loop(); }
 
 ListRowTap::Result MenuListActivity::selectListRow(const int index) {
   // Separators are already excluded by the band (recorded non-selectable, the same exclusion
-  // initMenuList()'s predicate makes for button navigation); declining here as well is belt and
-  // braces for a list rebuilt between the render and the tap.
+  // isRowSelectable() makes for button navigation); declining here as well is belt and braces for
+  // a list rebuilt between the render and the tap.
   if (index >= 0 && index < static_cast<int>(menuItems.size()) && menuItems[index].isSeparator) {
     return ListRowTap::Result::Rejected;
   }

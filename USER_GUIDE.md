@@ -85,21 +85,26 @@ function, and all touch behaviour can be switched off.
 The firmware's lists are moving to one set of buttons, a screen at a time. So far these work this
 way: the **OPDS catalog**, **Settings** and the **reader menu**, the option lists and pickers they
 open (fonts, dictionaries, language, keyboard layouts, long option lists such as the time zone),
-and the menus (file options, Home's More, clock, KOReader sync, weather, quick overrides). Other
-lists still behave as their own sections describe.
+and the menus (file options, Home's More, clock, KOReader sync, weather settings, quick overrides).
+Other lists still behave as their own sections describe.
 
 | Button | Press | Hold |
 | --- | --- | --- |
 | **Up / Down** | Move one row; tap twice quickly to jump a page | Jump to the first / last row (in Settings and the reader menu: switch to the previous / next tab) |
 | **Left / Right** | Move one row, or the action the screen shows | Page back / forward; keep holding to keep paging |
 | **Confirm** | Open the selected row | The same as a press |
-| **Back** | Go back | Return to the Home screen |
+| **Back** | Go back | Return to the Home screen (see below) |
 
 The hints show which is which. **«** on the Left box and **»** on the Right box mean *hold to
 page*. The word after the arrow is what a short press does: **« Up** / **» Down** where Left and
 Right move the selection, or the screen's own action, such as **« Search** / **» Info**. A box
 showing only **«** or **»** has no action for the selected row right now. A short press does
 nothing there, and holding it still pages.
+
+Holding **Back** never throws away a change. Settings saves before going Home, and the reader
+menu closes the book as its **Go Home** item does, keeping the menu's changes. Inside a book, the
+lists opened over it (quick overrides, the pickers in the reader menu) and a file's options menu
+treat a held Back as a press.
 
 A button action you set yourself under **Settings → Controls** comes first: give a long Left or
 Right press an action of its own and holding it no longer pages, and a short-press action on the
@@ -262,9 +267,8 @@ The Settings screen allows you to configure the device's behavior.
 
 The settings are grouped into tabs. The screen opens on the tab bar: **Confirm** moves to the next
 tab, **Down** enters its list, and **Back** on a row returns to the bar (on the bar it saves and
-returns Home). From anywhere in a list, **hold Up / Down** to switch to the previous / next tab;
-each tab remembers where you were. Moving within a tab follows
-**[Moving through lists](#moving-through-lists)**.
+returns Home). **Hold Up / Down** to switch to the previous / next tab: it opens where you left it.
+Moving within a tab follows **[Moving through lists](#moving-through-lists)**.
 
 #### 3.7.1 Display
 
@@ -581,7 +585,7 @@ This feature can be disabled in the **[Controls Settings](#373-controls)** to he
 ### System Navigation
 * **Return to Home:** Press the **Back** button to close the book and return to the **[Home](#31-home-screen)** screen.
 * **Return to Browse Files:** Press and hold the **Back** button to close the book and return to the **[Browse Files](#33-browse-files-screen)** screen.
-* **Reader Menu:** Press **Confirm** to open the reader menu, which includes: **[Table of Contents](#6-chapter-selection-screen)**, bookmarks, sync progress, reading statistics, quick per-book overrides (font, images, hyphenation, bionic reading…), take screenshot, and more. Its entries are grouped into tabs. While the tab bar is selected, **Confirm** moves to the next tab, and its button hint names that tab. From anywhere in the list, **hold Up / Down** to switch tabs; each tab remembers where you were. **Hold Back** to close the book and return Home, as **Go Home** does; changes made in the menu are kept.
+* **Reader Menu:** Press **Confirm** to open the reader menu, which includes: **[Table of Contents](#6-chapter-selection-screen)**, bookmarks, sync progress, reading statistics, quick per-book overrides (font, images, hyphenation, bionic reading…), take screenshot, and more. Its entries are grouped into tabs. While the tab bar is selected, **Confirm** moves to the next tab, and its button hint names that tab. **Hold Up / Down** to switch tabs: each opens where you left it. **Hold Back** to close the book and return Home, as **Go Home** does; changes made in the menu are kept.
 * **Your place is kept by paragraph as well as by page.** If a book is laid out differently the next time you open it, for example after you changed the font size from outside the book or after a firmware update re-indexed it, it opens at the paragraph you were reading rather than at a page number scaled to the new length.
 
 ### Supported Languages

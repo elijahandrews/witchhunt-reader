@@ -8,6 +8,7 @@
 #include "CrossPointSettings.h"
 #include "I18nKeys.h"
 #include "MappedInputManager.h"
+#include "activities/ActivityManager.h"
 #include "activities/SliderPickerActivity.h"
 #include "components/UITheme.h"
 #include "settings/SliderSettingPicker.h"
@@ -68,12 +69,10 @@ bool UiListActivity::routeListTouch() {
   return static_cast<bool>(route);
 }
 
-// No RenderLock. `selected` is atomic, and requestSelection() defers the viewport
-// pull to the next build, where ListNav::syncToProps consumes followOnBuild -- so
-// nothing here touches the render task's `top`. The lock used to park the loop task
-// for the whole screen build, and buttons are sampled once per loop pass from level
-// state with no queue: a press that both started and ended inside that window was
-// never seen at all. Long lists, where the build is slowest, dropped the most.
+// No RenderLock for a plain selection: `selected` is atomic, and requestSelection() defers the
+// viewport pull to the next build, where ListNav::syncToProps consumes followOnBuild -- so nothing
+// here touches the render task's `top`, and a step never parks the loop task behind a screen build
+// in flight. A page turn does set `top`; showRowAtTop() below takes the lock for that.
 void UiListActivity::moveSelectionTo(const int index) {
   activeNav().requestSelection(index);
   onSelectionChanged(index);
@@ -160,8 +159,20 @@ void UiListActivity::activatePosition(const int position, bool /*longPress*/) {
   if (position >= 0 && position < listCount()) activateIndex(position);
 }
 
+void UiListActivity::homeFromList() {
+  if (activityManager.isReaderActivity()) {
+    onBackButton();
+    return;
+  }
+  onGoHome();
+}
+
 void UiListActivity::showRowAtTop(const int row) {
   {
+    // A section header directly above `row` opens the page with it, so the row is not shown
+    // without the header it belongs to.
+    int top = row;
+    while (top > 0 && !isRowSelectable(top - 1)) --top;
     // `top` belongs to the render task: take the lock rather than write it under a build in flight.
     // The follow flags go too, or the next build would pull the viewport back to a minimal scroll.
     RenderLock lock(*this);
@@ -169,7 +180,7 @@ void UiListActivity::showRowAtTop(const int row) {
     current.selected = row;
     current.followOnBuild = false;
     current.followPending = false;
-    current.top = row;
+    current.top = top;
   }
   onSelectionChanged(row);
   requestUpdate();

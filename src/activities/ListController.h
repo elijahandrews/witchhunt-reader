@@ -113,7 +113,7 @@ class ListController {
   // reading events until the next tick.
   bool apply(ListGrammar::Result result);
   void moveTo(int row);
-  // A page turn to `row`: it becomes the top row on screen, unless that is already so.
+  // A page turn to `row`: it becomes the top row on screen, unless that changes nothing.
   void showPage(int row);
   // A short or double Up/Down press: one step, or a page when it completes a double-tap.
   void tapVertical(ListGrammar::Key key, ListGrammar::Press press, unsigned long pressMs);

@@ -81,5 +81,8 @@ class FileContextMenuActivity final : public MenuListActivity {
   void buildMenuItems();
   void onActionSelected(int index) override;
   void onBackPressed() override;
+  // Long Back commits the display options as Back does; the browser persists them only from this
+  // result.
+  void homeFromList() override { onBackPressed(); }
   void finishWithDisplayOptions(Action action);
 };

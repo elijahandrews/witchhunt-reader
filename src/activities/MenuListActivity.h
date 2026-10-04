@@ -9,7 +9,8 @@
 #include "settings/SettingInfo.h"
 
 // Base class for activities that display a scrollable list of SettingInfo items.
-// Provides common navigation, toggle/cycle logic, and drawList rendering.
+// Provides toggle/cycle logic and drawMenuList() rendering; the buttons follow the list scheme
+// UiListActivity runs through its ListController.
 //
 // Subclasses populate `menuItems` (typically in the constructor or onEnter()),
 // then rely on the default loop()/onEnter() or override selectively.
@@ -43,9 +44,9 @@
 //     // render(): draw header/footer around the list
 //     void render(RenderLock&&) override {
 //       renderer.clearScreen();
-//       const Rect r = UITheme::getContentRect(renderer, true, false);
+//       const Rect r = listContentRect();           // leaves room for both hint strips
 //       drawMenuList(r);                            // <-- draws the item list
-//       GUI.drawButtonHints(renderer, ...);
+//       drawListHints();                            // bottom and side hints
 //       renderer.displayBuffer();
 //     }
 //
@@ -62,8 +63,10 @@
 //   };
 //
 // The base class provides:
-//   onEnter()  — wires up the selectable-predicate (skips separators) and requestUpdate().
-//   loop()     — handles Back (→ onBackPressed), Confirm (→ toggleCurrentItem), and nav.
+//   isRowSelectable() — overridden so the selection steps over separators.
+//   onEnter()  — prepares submenus, moves the selection off a separator, and requestUpdate().
+//   loop()     — Back (→ onBackPressed), Confirm (→ toggleCurrentItem) and navigation, all
+//                through UiListActivity's ListController.
 //   drawMenuList(rect) — renders a virtualized FreeInkUI list of SettingInfo rows.
 //   getItemValueString(i) — override for custom per-item value display.
 //   onBackPressed()    — override to customise Back behaviour (default: finish()).
@@ -75,7 +78,8 @@ class MenuListActivity : public UiListActivity {
   std::atomic<int>& selectedIndex;
   bool submenusPrepared = false;
 
-  // Call after building/rebuilding menuItems to wire up the selectable predicate.
+  // Call after building/rebuilding menuItems: moves the selection off a separator, onto the next
+  // row isRowSelectable() accepts.
   void initMenuList();
 
   // Process SettingInfo items marked with withSubmenu() into submenu placeholders.

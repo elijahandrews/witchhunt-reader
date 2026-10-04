@@ -86,6 +86,7 @@ class OpdsBookBrowserActivity final : public Activity {
   // orientation can be mid-flip to Portrait for a hint strip, so input reads what render published.
   std::atomic<int> catalogPageRows{1};
   std::atomic<int> formatPageRows{1};
+  // The top row of the page the last render drew, published for listWindow().
   std::atomic<int> catalogTop{0};
   std::atomic<int> formatTop{0};
   void showBookDetail(const OpdsEntry& entry);
@@ -123,7 +124,7 @@ class OpdsBookBrowserActivity final : public Activity {
     OpdsBookBrowserActivity& browser;
   };
 
-  // Declared after selectorIndex / formatSelectorIndex, which they hold references to.
+  // Each controller below holds a reference to its host.
   CatalogHost catalogHost{*this};
   FormatHost formatHost{*this};
   ListController catalogList{mappedInput, buttonEvents, catalogHost, kCatalogDeclaration};

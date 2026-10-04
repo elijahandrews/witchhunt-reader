@@ -101,6 +101,10 @@ The device matrix the scheme has to serve:
 | **Confirm** | open / select | the screen's second action if declared, otherwise the same as short |
 | **Back** | the screen's back | Home |
 
+Home never discards a change: a screen whose Back commits something goes Home through its own way
+out (Settings saves; the reader menu runs its Go Home action), and while a book is open below the
+list, or on the file options menu, a long Back is Back.
+
 | Touch | Effect |
 |---|---|
 | Tap a row | point-then-confirm via `ListRowTap`, unchanged |
@@ -204,15 +208,16 @@ struct ListDeclaration {
 ```
 
 The screen implements the virtual `ListHost` interface rather than registering function-pointer
-slots with a `ctx`: `listCount`, `listPageRows`, `listSelectable`, `listActionAvailable`,
-`onListSelectionChanged`, `onListActivate(row, longPress)`, `onListBack`, `onListHome`,
-`onListAction`, `onListTab` and `onListOtherEvent`. A screen with two lists gives each its own
-host. A virtual interface costs one vtable pointer, not a `std::function` (heap discipline).
+slots with a `ctx`: `listCount`, `listWindow`, `listSelectable`, `listActionAvailable`,
+`listSelected`, `listSelect`, `listShowAtTop`, `onListActivate(row, longPress)`, `onListBack`,
+`onListHome`, `onListAction`, `onListTab` and `onListOtherEvent`. A screen with two lists gives
+each its own host. A virtual interface costs one vtable pointer, not a `std::function` (heap
+discipline).
 
-**List state** — per tick, the controller asks the host for the row count, rows per page, the
-selectable predicate, and whether each declared action is available on the selected row.
-`listPageRows()` returns what the screen's last render published: it is called on the loop task,
-and the renderer's live orientation must not be measured there.
+**List state** — per tick, the controller asks the host for the row count, the window its last
+render drew (top row and row count), the selectable predicate, and whether each declared action is
+available on the selected row. `listWindow()` returns what the screen's last render published: it
+is called on the loop task, and the renderer's live orientation must not be measured there.
 
 **`ListController`** (`src/activities/ListController.{h,cpp}`) — a member of each list screen,
 not a base class.
@@ -227,10 +232,9 @@ not a base class.
 - `page(int dir)` for swipes, `tapRow(int row)` for row taps (wraps `ListRowTap`).
 - `drawHints(renderer, backLabel, confirmLabel)` composes the labels into stack buffers per call
   (no allocation per render) and draws both strips.
-- Selection access: in PR 3 an `int&` for screens that keep their own index; the `ListNav`
-  adapter arrives with PR 4. For a `freeink::ui::ListNav&`, writes go through `requestSelection()` and page size
-  comes from `inputPageRows()`. The loop task never writes render-owned `ListNav` fields, which
-  removes the unlocked writes in `MenuListActivity` and the file browser.
+- Selection access: the host owns the selection (`listSelected()` / `listSelect()`); a page turn
+  asks it to show a row at the top (`listShowAtTop()`, which takes the RenderLock to set
+  `ListNav::top`). The loop task never writes render-owned `ListNav` fields otherwise.
 - Under 100 bytes per instance.
 
 **Base classes.** `UiListActivity`, `MenuListActivity` and `TabbedUiListActivity` each hold a
@@ -292,7 +296,7 @@ records a band.
 
 **Viewport.** `ListNav`'s own follow keeps the selection visible while stepping; paging (R3)
 sets the top explicitly. The render publishes the drawn window for the input side (a
-render-published atomic, never a loop-task measurement — see `listPageRows()` in §2).
+render-published atomic, never a loop-task measurement — see `listWindow()` in §2).
 
 ### 3. Screen mapping
 
