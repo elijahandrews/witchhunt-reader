@@ -53,9 +53,9 @@ void composeFront(char* out, const size_t size, const char* glyph, const ListGra
 
 }  // namespace
 
-ListController::ListController(MappedInputManager& input, ButtonEventManager& events, ListHost& host, int& selection,
+ListController::ListController(MappedInputManager& input, ButtonEventManager& events, ListHost& host,
                                const ListDeclaration& declaration)
-    : input(input), events(events), host(host), selection(selection), declaration(declaration) {}
+    : input(input), events(events), host(host), declaration(declaration) {}
 
 ListGrammar::Shape ListController::shape() const {
   ListGrammar::Shape s;
@@ -67,16 +67,19 @@ ListGrammar::Shape ListController::shape() const {
 }
 
 ListGrammar::Availability ListController::availability() const {
+  const int selected = host.listSelected();
   ListGrammar::Availability a;
-  a.left = declaration.left.declared && host.listActionAvailable(ListGrammar::Side::Left, selection);
-  a.right = declaration.right.declared && host.listActionAvailable(ListGrammar::Side::Right, selection);
+  a.left = declaration.left.declared && host.listActionAvailable(ListGrammar::Side::Left, selected);
+  a.right = declaration.right.declared && host.listActionAvailable(ListGrammar::Side::Right, selected);
   return a;
 }
 
 ListGrammar::Rows ListController::rows() const {
+  const ListWindow window = host.listWindow();
   ListGrammar::Rows r;
   r.count = host.listCount();
-  r.pageRows = host.listPageRows();
+  r.top = window.top;
+  r.drawn = window.drawn;
   r.selectable = &hostSelectable;
   r.ctx = &host;
   return r;
@@ -148,7 +151,7 @@ bool ListController::apply(const ListGrammar::Result result) {
     case Command::StepPrev:
     case Command::StepNext: {
       const auto r = rows();
-      int row = selection;
+      int row = host.listSelected();
       for (int i = 0; i < result.times; ++i)
         row = ListGrammar::step(r, row, result.command == Command::StepNext ? 1 : -1);
       moveTo(row);
@@ -156,7 +159,7 @@ bool ListController::apply(const ListGrammar::Result result) {
     }
     case Command::PagePrev:
     case Command::PageNext:
-      moveTo(ListGrammar::page(rows(), selection, result.command == Command::PageNext ? 1 : -1));
+      showPage(ListGrammar::page(rows(), host.listSelected(), result.command == Command::PageNext ? 1 : -1));
       return true;
     case Command::First:
       moveTo(ListGrammar::first(rows()));
@@ -171,6 +174,7 @@ bool ListController::apply(const ListGrammar::Result result) {
   // The screen may leave this list, so stop here and leave later presses queued
   // for the next tick, where the new state takes them in order.
   repeating = false;
+  const int selected = host.listSelected();
   switch (result.command) {
     case Command::TabPrev:
       host.onListTab(-1);
@@ -179,10 +183,10 @@ bool ListController::apply(const ListGrammar::Result result) {
       host.onListTab(1);
       break;
     case Command::Activate:
-      host.onListActivate(selection, false);
+      host.onListActivate(selected, false);
       break;
     case Command::ActivateLong:
-      host.onListActivate(selection, true);
+      host.onListActivate(selected, true);
       break;
     case Command::Back:
       host.onListBack();
@@ -191,10 +195,10 @@ bool ListController::apply(const ListGrammar::Result result) {
       host.onListHome();
       break;
     case Command::LeftAction:
-      host.onListAction(ListGrammar::Side::Left, selection);
+      host.onListAction(ListGrammar::Side::Left, selected);
       break;
     case Command::RightAction:
-      host.onListAction(ListGrammar::Side::Right, selection);
+      host.onListAction(ListGrammar::Side::Right, selected);
       break;
     default:
       break;
@@ -203,22 +207,30 @@ bool ListController::apply(const ListGrammar::Result result) {
 }
 
 void ListController::moveTo(const int row) {
-  if (row == selection) return;
-  selection = row;
-  host.onListSelectionChanged();
+  if (row == host.listSelected()) return;
+  host.listSelect(row);
+}
+
+void ListController::showPage(const int row) {
+  if (row == host.listSelected() && row == host.listWindow().top) return;
+  host.listShowAtTop(row);
 }
 
 void ListController::tapVertical(const ListGrammar::Key key, const ListGrammar::Press press,
                                  const unsigned long pressMs) {
   const auto r = rows();
+  const int selected = host.listSelected();
   const int direction = key == ListGrammar::Key::Down ? 1 : -1;
 
   // A Double event is a whole double-tap in one: it arrives only when the user bound a double
   // action to the page-turn keys and it fell through to the list.
   if (press == ListGrammar::Press::Double) {
     lastTapPressMs = 0;
-    moveTo(ListGrammar::fitsOnePage(r) ? ListGrammar::step(r, ListGrammar::step(r, selection, direction), direction)
-                                       : ListGrammar::page(r, selection, direction));
+    if (ListGrammar::fitsOnePage(r)) {
+      moveTo(ListGrammar::step(r, ListGrammar::step(r, selected, direction), direction));
+    } else {
+      showPage(ListGrammar::page(r, selected, direction));
+    }
     return;
   }
 
@@ -226,14 +238,14 @@ void ListController::tapVertical(const ListGrammar::Key key, const ListGrammar::
   // moves one page, not a page and a row. A third tap starts a new pair.
   if (ListGrammar::completesDoubleTap(key, pressMs, lastTapKey, lastTapPressMs, r)) {
     lastTapPressMs = 0;
-    moveTo(ListGrammar::page(r, rowBeforeTap, direction));
+    showPage(ListGrammar::page(r, rowBeforeTap, direction));
     return;
   }
 
-  rowBeforeTap = selection;
+  rowBeforeTap = selected;
   lastTapKey = key;
   lastTapPressMs = pressMs;
-  moveTo(ListGrammar::step(r, selection, direction));
+  moveTo(ListGrammar::step(r, selected, direction));
 }
 
 void ListController::continuePageRepeat() {
@@ -246,20 +258,28 @@ void ListController::continuePageRepeat() {
   const unsigned long now = millis();
   if (now - repeatSinceMs < kPageRepeatMs) return;
   repeatSinceMs = now;
-  moveTo(ListGrammar::page(rows(), selection, repeatDirection));
+  showPage(ListGrammar::page(rows(), host.listSelected(), repeatDirection));
 }
 
 void ListController::page(const int direction) {
   repeating = false;
   lastTapPressMs = 0;
-  moveTo(ListGrammar::page(rows(), selection, direction));
+  showPage(ListGrammar::page(rows(), host.listSelected(), direction));
 }
 
 ListRowTap::Result ListController::tapRow(const int row) {
   lastTapPressMs = 0;
   const int count = host.listCount();
   if (row >= 0 && row < count && !host.listSelectable(row)) return ListRowTap::Result::Rejected;
-  return ListRowTap::apply(row, count, selection);
+  int selected = host.listSelected();
+  const auto result = ListRowTap::apply(row, count, selected);
+  if (result == ListRowTap::Result::Selected) host.listSelect(selected);
+  return result;
+}
+
+void ListController::reset() {
+  repeating = false;
+  lastTapPressMs = 0;
 }
 
 void ListController::drawHints(GfxRenderer& renderer, const char* backLabel, const char* confirmLabel) const {

@@ -2,6 +2,9 @@
 
 #include <I18n.h>
 
+#include <cstddef>
+#include <cstdint>
+
 #include "ButtonEventManager.h"
 #include "ListRowTap.h"
 #include "MappedInputManager.h"
@@ -9,19 +12,31 @@
 
 class GfxRenderer;
 
+// The rows a screen drew in its last render, from its top row: what a page is (spec R3).
+struct ListWindow {
+  int top = 0;
+  int drawn = 1;
+};
+
 // The screen's half of a ListController: what the controller asks of the list, and what it tells
 // the screen. A screen with two lists (OPDS: catalog and format picker) gives each its own host.
 class ListHost {
  public:
   virtual int listCount() const = 0;
-  // Rows the screen draws per page, as its last render published them. Called on the loop task: never
+  // The window the last render drew. Published by the render and read here on the loop task: never
   // measure from the renderer's live orientation here.
-  virtual int listPageRows() const = 0;
+  virtual ListWindow listWindow() const = 0;
   virtual bool listSelectable(int /*row*/) const { return true; }
   // Whether a declared Left/Right action applies to `row` right now. Asked for declared sides only.
   virtual bool listActionAvailable(ListGrammar::Side /*side*/, int /*row*/) const { return true; }
 
-  virtual void onListSelectionChanged() = 0;
+  // The selected row, and moving it; listSelect() also asks for the repaint.
+  virtual int listSelected() const = 0;
+  virtual void listSelect(int row) = 0;
+  // A page turn: select `row` and scroll so it is the top row on screen. A screen that lays its rows
+  // out a page at a time already does that by selecting it, hence the default.
+  virtual void listShowAtTop(int row) { listSelect(row); }
+
   virtual void onListActivate(int row, bool longPress) = 0;
   virtual void onListBack() = 0;
   virtual void onListHome() = 0;
@@ -54,7 +69,7 @@ struct ListDeclaration {
 // screen, not a base class; it holds no heap and allocates nothing per tick or per render.
 class ListController {
  public:
-  ListController(MappedInputManager& input, ButtonEventManager& events, ListHost& host, int& selection,
+  ListController(MappedInputManager& input, ButtonEventManager& events, ListHost& host,
                  const ListDeclaration& declaration);
 
   // Call from the screen's loop() while this list is on screen. It is the only reader of button
@@ -67,6 +82,8 @@ class ListController {
   ListRowTap::Result tapRow(int row);
   // Draws the bottom and the side hint strips; `backLabel` and `confirmLabel` are the screen's own.
   void drawHints(GfxRenderer& renderer, const char* backLabel, const char* confirmLabel) const;
+  // Forgets a hold-to-repeat and a half-made double-tap: call when the list is (re)entered.
+  void reset();
 
  private:
   using Button = MappedInputManager::Button;
@@ -74,7 +91,6 @@ class ListController {
   MappedInputManager& input;
   ButtonEventManager& events;
   ListHost& host;
-  int& selection;
   ListDeclaration declaration;
 
   // Hold-to-repeat paging after a long Left/Right, while that key stays down.
@@ -97,6 +113,8 @@ class ListController {
   // reading events until the next tick.
   bool apply(ListGrammar::Result result);
   void moveTo(int row);
+  // A page turn to `row`: it becomes the top row on screen, unless that is already so.
+  void showPage(int row);
   // A short or double Up/Down press: one step, or a page when it completes a double-tap.
   void tapVertical(ListGrammar::Key key, ListGrammar::Press press, unsigned long pressMs);
   void continuePageRepeat();

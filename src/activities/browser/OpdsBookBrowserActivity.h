@@ -86,6 +86,8 @@ class OpdsBookBrowserActivity final : public Activity {
   // orientation can be mid-flip to Portrait for a hint strip, so input reads what render published.
   std::atomic<int> catalogPageRows{1};
   std::atomic<int> formatPageRows{1};
+  std::atomic<int> catalogTop{0};
+  std::atomic<int> formatTop{0};
   void showBookDetail(const OpdsEntry& entry);
   void closeFormatPicker();
 
@@ -98,9 +100,10 @@ class OpdsBookBrowserActivity final : public Activity {
   struct CatalogHost final : ListHost {
     explicit CatalogHost(OpdsBookBrowserActivity& browser) : browser(browser) {}
     int listCount() const override;
-    int listPageRows() const override;
+    ListWindow listWindow() const override;
+    int listSelected() const override;
+    void listSelect(int row) override;
     bool listActionAvailable(ListGrammar::Side side, int row) const override;
-    void onListSelectionChanged() override;
     void onListActivate(int row, bool longPress) override;
     void onListBack() override;
     void onListHome() override;
@@ -111,8 +114,9 @@ class OpdsBookBrowserActivity final : public Activity {
   struct FormatHost final : ListHost {
     explicit FormatHost(OpdsBookBrowserActivity& browser) : browser(browser) {}
     int listCount() const override;
-    int listPageRows() const override;
-    void onListSelectionChanged() override;
+    ListWindow listWindow() const override;
+    int listSelected() const override;
+    void listSelect(int row) override;
     void onListActivate(int row, bool longPress) override;
     void onListBack() override;
     void onListHome() override;
@@ -122,6 +126,6 @@ class OpdsBookBrowserActivity final : public Activity {
   // Declared after selectorIndex / formatSelectorIndex, which they hold references to.
   CatalogHost catalogHost{*this};
   FormatHost formatHost{*this};
-  ListController catalogList{mappedInput, buttonEvents, catalogHost, selectorIndex, kCatalogDeclaration};
-  ListController formatList{mappedInput, buttonEvents, formatHost, formatSelectorIndex, kFormatDeclaration};
+  ListController catalogList{mappedInput, buttonEvents, catalogHost, kCatalogDeclaration};
+  ListController formatList{mappedInput, buttonEvents, formatHost, kFormatDeclaration};
 };

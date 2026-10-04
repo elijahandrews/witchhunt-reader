@@ -396,15 +396,25 @@ void OpdsBookBrowserActivity::closeFormatPicker() {
 
 int OpdsBookBrowserActivity::CatalogHost::listCount() const { return static_cast<int>(browser.entryOffsets.size()); }
 
-int OpdsBookBrowserActivity::CatalogHost::listPageRows() const { return browser.catalogPageRows.load(); }
+ListWindow OpdsBookBrowserActivity::CatalogHost::listWindow() const {
+  ListWindow window;
+  window.top = browser.catalogTop.load();
+  window.drawn = browser.catalogPageRows.load();
+  return window;
+}
+
+int OpdsBookBrowserActivity::CatalogHost::listSelected() const { return browser.selectorIndex; }
+
+void OpdsBookBrowserActivity::CatalogHost::listSelect(const int row) {
+  browser.selectorIndex = row;
+  browser.requestUpdate();
+}
 
 bool OpdsBookBrowserActivity::CatalogHost::listActionAvailable(const ListGrammar::Side side, const int row) const {
   if (side == ListGrammar::Side::Left) return !browser.searchTemplate.empty();
   // Bounds first: an empty feed has no entry to read.
   return row >= 0 && row < listCount() && browser.getEntry(row).type == OpdsEntryType::BOOK;
 }
-
-void OpdsBookBrowserActivity::CatalogHost::onListSelectionChanged() { browser.requestUpdate(); }
 
 void OpdsBookBrowserActivity::CatalogHost::onListActivate(const int row, bool /*longPress*/) {
   if (row < 0 || row >= listCount()) return;
@@ -428,9 +438,19 @@ int OpdsBookBrowserActivity::FormatHost::listCount() const {
   return static_cast<int>(browser.formatSelectionLabels.size());
 }
 
-int OpdsBookBrowserActivity::FormatHost::listPageRows() const { return browser.formatPageRows.load(); }
+ListWindow OpdsBookBrowserActivity::FormatHost::listWindow() const {
+  ListWindow window;
+  window.top = browser.formatTop.load();
+  window.drawn = browser.formatPageRows.load();
+  return window;
+}
 
-void OpdsBookBrowserActivity::FormatHost::onListSelectionChanged() { browser.requestUpdate(); }
+int OpdsBookBrowserActivity::FormatHost::listSelected() const { return browser.formatSelectorIndex; }
+
+void OpdsBookBrowserActivity::FormatHost::listSelect(const int row) {
+  browser.formatSelectorIndex = row;
+  browser.requestUpdate();
+}
 
 void OpdsBookBrowserActivity::FormatHost::onListActivate(const int row, bool /*longPress*/) {
   const auto entry = browser.getEntry(browser.selectedBookIndex);
@@ -511,6 +531,7 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
     const int itemsPerPage = formatItemsPerPage(contentRect);
     formatPageRows.store(itemsPerPage);
     const int pageStartIndex = formatSelectorIndex / itemsPerPage * itemsPerPage;
+    formatTop.store(pageStartIndex);
     // Format rows published for touch. This screen has TWO lists in two different states, and
     // only one is on screen at a time; the recorders are cleared at the top of each render pass,
     // so whichever state painted last is the only one a tap can reach.
@@ -617,6 +638,7 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
   const int rowsPerPage = catalogRowsPerPage();
   catalogPageRows.store(rowsPerPage);
   const auto pageStartIndex = selectorIndex / rowsPerPage * rowsPerPage;
+  catalogTop.store(pageStartIndex);
   // Entry rows published for touch. The top is a bare CATALOG_LIST_TOP, NOT contentRect.y + it as
   // the chapter selectors use — matched to the fill below, which is where the row visibly is.
   ListTouchBand::recordUniformRows(contentRect.x, contentRect.width - 1, CATALOG_LIST_TOP - 2, CATALOG_ROW_HEIGHT,
