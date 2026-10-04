@@ -1,6 +1,10 @@
 add_executable(FontManifestParserTest
   FontManifestParserTest.cpp
   FontManifestReaderTest.cpp
+  FontCatalogTest.cpp
+  # Replaces the global nothrow array new, so the tests can fail the catalog's block allocation.
+  FailingArrayNew.cpp
+  ${REPO_ROOT}/src/util/FontCatalog.cpp
   ${REPO_ROOT}/lib/JsonParser/FontManifestParser.cpp
   ${REPO_ROOT}/lib/JsonParser/StreamingJsonParser.cpp
 )
