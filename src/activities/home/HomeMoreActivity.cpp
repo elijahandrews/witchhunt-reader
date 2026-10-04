@@ -36,11 +36,10 @@ void HomeMoreActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect contentRect = listContentRect();
 
-  GUI.drawHeader(renderer, Rect{contentRect.x, metrics.topPadding, contentRect.width, metrics.headerHeight},
-                 tr(STR_MORE));
+  GUI.drawHeader(renderer, listHeaderRect(), tr(STR_MORE));
 
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = contentRect.height - contentTop - metrics.verticalSpacing * 2;
+  const int contentTop = contentRect.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = contentRect.y + contentRect.height - contentTop - metrics.verticalSpacing * 2;
   drawMenuList(Rect{contentRect.x, contentTop, contentRect.width, contentHeight});
 
   drawListHints();

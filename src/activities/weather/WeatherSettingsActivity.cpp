@@ -227,9 +227,7 @@ void WeatherSettingsActivity::render(RenderLock&&) {
 
   if (showingSearchResults) {
     closeRouting();
-    GUI.drawHeader(renderer,
-                   Rect(contentRect.x, contentRect.y + metrics.topPadding, contentRect.width, metrics.headerHeight),
-                   tr(STR_WEATHER_SEARCH_RESULTS));
+    GUI.drawHeader(renderer, listHeaderRect(), tr(STR_WEATHER_SEARCH_RESULTS));
 
     const int contentTop = contentRect.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
     const int contentHeight =
@@ -257,9 +255,7 @@ void WeatherSettingsActivity::render(RenderLock&&) {
     return;
   }
 
-  GUI.drawHeader(renderer,
-                 Rect(contentRect.x, contentRect.y + metrics.topPadding, contentRect.width, metrics.headerHeight),
-                 tr(STR_WEATHER_SETTINGS));
+  GUI.drawHeader(renderer, listHeaderRect(), tr(STR_WEATHER_SETTINGS));
 
   const int contentTop = contentRect.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight =

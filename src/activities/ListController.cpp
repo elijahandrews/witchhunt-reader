@@ -213,10 +213,14 @@ void ListController::moveTo(const int row) {
 
 void ListController::showPage(const int row) {
   const ListWindow window = host.listWindow();
-  // Already selected, and either already the top row or on a last screen that is fully shown: the
-  // page turn would change nothing (the render clamps the top at the end of the list).
+  // The top the page turn would publish: the row itself, under any header rows directly above it
+  // (UiListActivity::showRowAtTop), never above the window the last render drew.
+  int expectedTop = row;
+  while (expectedTop > window.top && !host.listSelectable(expectedTop - 1)) --expectedTop;
+  // Already selected, and either already shown from that top or on a last screen that is fully
+  // shown: the page turn would change nothing (the render clamps the top at the end of the list).
   const bool onLastScreen = row >= window.top && window.top + window.drawn >= host.listCount();
-  if (row == host.listSelected() && (row == window.top || onLastScreen)) return;
+  if (row == host.listSelected() && (expectedTop == window.top || onLastScreen)) return;
   host.listShowAtTop(row);
 }
 

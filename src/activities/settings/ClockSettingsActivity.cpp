@@ -91,9 +91,7 @@ void ClockSettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect contentRect = listContentRect();
 
-  GUI.drawHeader(renderer,
-                 Rect(contentRect.x, contentRect.y + metrics.topPadding, contentRect.width, metrics.headerHeight),
-                 tr(STR_CLOCK_SETTINGS));
+  GUI.drawHeader(renderer, listHeaderRect(), tr(STR_CLOCK_SETTINGS));
 
   const char* batteryWarning = tr(STR_CLOCK_SETTINGS_WARNING_BATTERY);
   const char* driftWarning = tr(STR_CLOCK_SETTINGS_WARNING_DRIFT);

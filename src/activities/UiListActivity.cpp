@@ -136,8 +136,7 @@ void UiListActivity::syncListViewport(UiScreen& screen, fui::ListProps& props, c
 void UiListActivity::drawChrome() {
   const char* title = headerTitle();
   if (!title) return;
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.headerHeight}, title);
+  GUI.drawHeader(renderer, listHeaderRect(), title);
 }
 
 void UiListActivity::drawFooter() { drawListHints(); }
@@ -149,6 +148,12 @@ const char* UiListActivity::footerConfirmLabel() const { return tr(STR_SELECT); 
 void UiListActivity::drawListHints() { listController.drawHints(renderer, footerBackLabel(), footerConfirmLabel()); }
 
 Rect UiListActivity::listContentRect() const { return UITheme::getContentRect(renderer, true, true); }
+
+Rect UiListActivity::listHeaderRect() const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect content = listContentRect();
+  return Rect{content.x, content.y + metrics.topPadding, content.width, metrics.headerHeight};
+}
 
 int UiListActivity::selectedPosition() const {
   // activeNav() hands out a mutable reference; reading through it changes nothing.

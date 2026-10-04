@@ -92,11 +92,10 @@ void SettingsSubmenuActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect contentRect = listContentRect();
 
-  GUI.drawHeader(renderer, Rect{contentRect.x, metrics.topPadding, contentRect.width, metrics.headerHeight},
-                 I18N.get(titleId));
+  GUI.drawHeader(renderer, listHeaderRect(), I18N.get(titleId));
 
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = contentRect.height - contentTop - metrics.verticalSpacing;
+  const int contentTop = contentRect.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = contentRect.y + contentRect.height - contentTop - metrics.verticalSpacing;
   drawMenuList(Rect{contentRect.x, contentTop, contentRect.width, contentHeight});
 
   drawListHints();
