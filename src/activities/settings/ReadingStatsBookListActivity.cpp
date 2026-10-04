@@ -8,7 +8,6 @@
 #include <cstdio>
 
 #include "ReadingStatsBookDetailActivity.h"
-#include "components/UITheme.h"
 #include "util/ListRowCache.h"
 
 namespace fui = freeink::ui;

@@ -29,6 +29,8 @@ class OpdsServerListActivity final : public UiListActivity {
   void activateIndex(int index) override;
   // Picker mode backs out to Home rather than finishing.
   void onBackButton() override;
+  // Long Back goes Home like short Back in picker mode; the base would return to a stale parent.
+  void homeFromList() override;
   const char* headerTitle() const override;
 
   int serverRows() const;

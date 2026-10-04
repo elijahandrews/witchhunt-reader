@@ -87,8 +87,11 @@ void FontDownloadActivity::onWifiSelectionComplete(const bool success) {
   // The fetch held the loop task. Nothing pressed meanwhile may reach the list.
   buttonEvents.drain();
   if (!loaded) {
-    RenderLock lock(*this);
-    state_ = ERROR;
+    {
+      RenderLock lock(*this);
+      state_ = ERROR;
+    }
+    requestUpdate();
     return;
   }
 
@@ -128,9 +131,11 @@ bool FontDownloadActivity::fetchAndParseManifest() {
 
   // Streamed off the card a block at a time: a whole-document parse of the
   // 24 KB manifest ran the X3 out of heap and aborted. styles[] in the JSON
-  // is skipped -- see families_.
+  // is skipped -- see families_. Read aside and swapped in under the lock
+  // below: the render task reads families_.
+  FontCatalog parsed;
   FontManifestReader reader("FONT", FontInstaller::isValidFamilyName, FontInstaller::isValidFontFileName);
-  const FontManifestStatus status = reader.read(manifestFile, families_, baseUrl_);
+  const FontManifestStatus status = reader.read(manifestFile, parsed, baseUrl_);
   manifestFile.close();
   Storage.remove(MANIFEST_TMP);
 
@@ -150,24 +155,24 @@ bool FontDownloadActivity::fetchAndParseManifest() {
     return false;
   }
 
-  for (size_t i = 0; i < families_.count(); i++) {
-    const char* familyName = families_.name(i);
-    families_.setInstalled(i, fontInstaller_.isFamilyInstalled(familyName));
+  for (size_t i = 0; i < parsed.count(); i++) {
+    const char* familyName = parsed.name(i);
+    parsed.setInstalled(i, fontInstaller_.isFamilyInstalled(familyName));
 
-    if (families_.installed(i)) {
-      for (size_t j = 0; j < families_.fileCount(i); j++) {
+    if (parsed.installed(i)) {
+      for (size_t j = 0; j < parsed.fileCount(i); j++) {
         char path[128];
-        FontInstaller::buildFontPath(familyName, families_.fileLocalName(i, j), path, sizeof(path));
+        FontInstaller::buildFontPath(familyName, parsed.fileLocalName(i, j), path, sizeof(path));
         FsFile f;
         if (Storage.openFileForRead("FONT", path, f)) {
           size_t actual = f.fileSize();
           f.close();
-          if (actual != families_.fileSize(i, j)) {
-            families_.setHasUpdate(i, true);
+          if (actual != parsed.fileSize(i, j)) {
+            parsed.setHasUpdate(i, true);
             break;
           }
         } else {
-          families_.setHasUpdate(i, true);
+          parsed.setHasUpdate(i, true);
           break;
         }
       }
@@ -176,8 +181,14 @@ bool FontDownloadActivity::fetchAndParseManifest() {
       // UI can offer "Resume" instead of restarting from scratch.
       char stagingDir[128];
       FontInstaller::buildStagingDirPath(familyName, stagingDir, sizeof(stagingDir));
-      families_.setHasResumableDownload(i, Storage.exists(stagingDir));
+      parsed.setHasResumableDownload(i, Storage.exists(stagingDir));
     }
+  }
+
+  {
+    RenderLock lock(*this);
+    families_.swap(parsed);
+    refreshRowTotals();
   }
 
   LOG_DBG("FONT", "Manifest loaded: %zu families, %zu files, %zu bytes in one block", families_.count(),
@@ -748,6 +759,8 @@ bool FontDownloadActivity::handleCustomInput() {
       if (downloadingFamilyIndex_ >= 0 && downloadingFamilyIndex_ < static_cast<int>(families_.count())) {
         if (pendingErrorAction_ == PendingFontAction::Delete) {
           deleteFamilyAtIndex(downloadingFamilyIndex_);
+          // The delete held the loop task; presses made meanwhile must not reach the list.
+          buttonEvents.drain();
         } else {
           downloadFamily(downloadingFamilyIndex_);
         }

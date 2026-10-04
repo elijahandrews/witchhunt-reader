@@ -91,9 +91,6 @@ int visibleItemCount() {
                     [](const StatusBarItem& item) { return !item.requiresClock || SETTINGS.useClock; }));
 }
 
-// Retained for the progress-bar preview drawing below, which references specific enum cardinalities.
-constexpr int PROGRESS_BAR_ITEMS = 3;
-
 constexpr int previewHorizontalInset = 10;
 constexpr int previewHeight = 78;
 constexpr int previewInnerMargin = 4;
@@ -225,8 +222,6 @@ void drawPreviewStatusItems(const GfxRenderer& renderer, const Rect& rect, const
 }  // namespace
 
 void StatusBarSettingsActivity::onEnter() {
-  UiListActivity::onEnter();
-
   // Clamp status bar settings in case of corrupt/migrated data: every field must hold a valid value
   // index (0..valueCount-1). A stray value would index past its valueNames array when rendered.
   for (const auto& item : statusBarItems) {
@@ -243,6 +238,9 @@ void StatusBarSettingsActivity::onEnter() {
     rowItems[i].label = I18N.get(visibleItem(i).label);
     rowItems[i].actionValue = static_cast<int16_t>(i);
   }
+
+  // Last: this arms the screen, so a render can build from here on.
+  UiListActivity::onEnter();
 }
 
 const char* StatusBarSettingsActivity::headerTitle() const { return tr(STR_CUSTOMISE_STATUS_BAR); }

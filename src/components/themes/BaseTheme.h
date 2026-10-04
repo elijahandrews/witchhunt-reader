@@ -82,23 +82,7 @@ struct ThemeMetrics {
   int keyboardKeyCornerRadius = 0;
 };
 
-enum UIIcon {
-  Folder,
-  Text,
-  Image,
-  Book,
-  File,
-  Recent,
-  Settings,
-  Transfer,
-  Library,
-  Wifi,
-  Hotspot,
-  Weather,
-  Usb,
-  Stats,
-  Ellipsis
-};
+enum UIIcon { Folder, Text, Image, Book, File, Recent, Settings, Transfer, Library, Weather, Stats, Ellipsis };
 
 enum class HomeNavigation { Linear, Carousel };
 

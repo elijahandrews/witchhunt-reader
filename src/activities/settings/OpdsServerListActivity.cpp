@@ -119,6 +119,14 @@ void OpdsServerListActivity::onBackButton() {
   }
 }
 
+void OpdsServerListActivity::homeFromList() {
+  if (pickerMode) {
+    onBackButton();
+  } else {
+    UiListActivity::homeFromList();
+  }
+}
+
 const char* OpdsServerListActivity::headerTitle() const { return tr(STR_OPDS_SERVERS); }
 
 void OpdsServerListActivity::activateIndex(const int index) {

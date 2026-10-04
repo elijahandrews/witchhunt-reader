@@ -586,8 +586,7 @@ void FinishedBookActivity::onEnter() {
 }
 
 // The rows that apply, in display order. None of the conditions changes while the screen is open,
-// so this runs once on entry and again, under the lock, when the preview arrives; it allocates only
-// the OPDS label, once.
+// so this runs once, in onEnter(), before the first render; it allocates only the OPDS label.
 void FinishedBookActivity::rebuildRows() {
   int count = 0;
   actions_[count++] = Row::GoHome;
@@ -722,7 +721,6 @@ void FinishedBookActivity::loadNextBookPreview() {
     coverWidth_ = coverWidth;
     coverHeight_ = coverHeight;
     nextBookMetadataLoaded_ = true;
-    rebuildRows();
   }
   requestUpdate();
 }
