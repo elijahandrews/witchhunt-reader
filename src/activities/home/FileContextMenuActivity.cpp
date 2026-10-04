@@ -249,7 +249,7 @@ void FileContextMenuActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, true);
+  const Rect contentRect = listContentRect();
 
   // Header: bare filename when a file is selected, otherwise a generic title
   const std::string header =
@@ -263,11 +263,7 @@ void FileContextMenuActivity::render(RenderLock&&) {
   const int contentHeight = contentRect.height - contentTop - metrics.verticalSpacing;
   drawMenuList(Rect{contentRect.x, contentTop, contentRect.width, contentHeight});
 
-  const auto hints = mappedInput.mapHints(tr(STR_BACK), tr(STR_SELECT), "", "", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, hints.front.btn1, hints.front.btn2, hints.front.btn3, hints.front.btn4);
-  // This menu can outgrow a screen, and on a board with no digitiser the side hints are the only
-  // thing that says it scrolls.
-  GUI.drawSideButtonHints(renderer, hints.side.up, hints.side.down);
+  drawListHints();
 
   renderer.displayBuffer();
 }

@@ -13,12 +13,15 @@ MenuListActivity::MenuListActivity(const char* name, GfxRenderer& renderer, Mapp
     : UiListActivity(name, renderer, mappedInput), selectedIndex(nav.selected) {}
 
 void MenuListActivity::initMenuList() {
+  // Never open on a separator: step on to the next row that can hold the selection.
   const int count = static_cast<int>(menuItems.size());
-  const auto pred = UITheme::makeSelectablePredicate(count, [this](int i) { return menuItems[i].getTitle(); });
-  buttonNavigator.setSelectablePredicate(pred, count);
-  if (count > 0 && !pred(selectedIndex)) {
-    selectedIndex = buttonNavigator.nextIndex(selectedIndex);
+  for (int tried = 0; tried < count && !isRowSelectable(selectedIndex); ++tried) {
+    selectedIndex = (selectedIndex + 1) % count;
   }
+}
+
+bool MenuListActivity::isRowSelectable(const int index) const {
+  return index >= 0 && index < static_cast<int>(menuItems.size()) && !menuItems[index].isSeparator;
 }
 
 void MenuListActivity::onEnter() {
@@ -31,20 +34,6 @@ void MenuListActivity::onEnter() {
   initMenuList();
   requestUpdate();
 }
-
-void MenuListActivity::handleNavigation() {
-  const int count = static_cast<int>(menuItems.size());
-  // Up/Down step, Left/Right page by whatever the last render fit on screen. A menu shorter than
-  // one page pages by a single item, so short menus are unchanged.
-  const auto moved = [this, count] {
-    nav.follow(count);
-    requestUpdate();
-  };
-  buttonNavigator.onNextList(selectedIndex, count, moved, nav.pageRowsFor(count));
-  buttonNavigator.onPreviousList(selectedIndex, count, moved, nav.pageRowsFor(count));
-}
-
-void MenuListActivity::navigateButtons() { handleNavigation(); }
 
 void MenuListActivity::activateIndex(const int index) {
   selectedIndex = index;
@@ -101,6 +90,7 @@ void MenuListActivity::drawMenuList(const Rect& rect) {
     renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
     renderUi();
   }
+  publishListWindow();
 }
 
 void MenuListActivity::materializeListWindow() {

@@ -239,7 +239,7 @@ void QuickOverridesActivity::finishWithResult(bool cancelled) {
 
 void QuickOverridesActivity::render(RenderLock&&) {
   renderer.clearScreen();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
 
   const std::string title = tr(STR_QUICK_OVERRIDES);
   const int titleX = contentRect.x +
@@ -250,8 +250,7 @@ void QuickOverridesActivity::render(RenderLock&&) {
   const int listHeight = contentRect.height - (startY - contentRect.y);
   drawMenuList(Rect{contentRect.x, startY, contentRect.width, listHeight});
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawListHints();
 
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 }

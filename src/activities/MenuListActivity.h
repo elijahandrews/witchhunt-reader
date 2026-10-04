@@ -85,9 +85,6 @@ class MenuListActivity : public UiListActivity {
   // value-string override that the plain version has no way to pass.
   virtual void openSubmenu(const SettingInfo& submenuEntry);
 
-  // Handle up/down navigation via buttonNavigator.  Call from loop() if overriding.
-  void handleNavigation();
-
   // Toggle/cycle the currently selected item.  For ACTION items, delegates to onActionSelected().
   virtual void toggleCurrentItem();
 
@@ -111,8 +108,10 @@ class MenuListActivity : public UiListActivity {
   int listCount() const override { return static_cast<int>(menuItems.size()); }
   void buildScreen(UiScreen& screen) override;
   void activateIndex(int index) override;
-  void navigateButtons() override;
   void onBackButton() override { onBackPressed(); }
+
+  // Separators are not rows the selection can rest on.
+  [[nodiscard]] bool isRowSelectable(int index) const override;
 
  public:
   MenuListActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput);

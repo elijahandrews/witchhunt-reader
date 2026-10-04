@@ -37,21 +37,26 @@ void WeatherSettingsActivity::onEnter() {
 
 void WeatherSettingsActivity::loop() {
   if (showingSearchResults) {
-    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-      showingSearchResults = false;
-      requestUpdate();
-      return;
-    }
-
-    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-      if (resultIndex >= 0 && resultIndex < static_cast<int>(searchResults.size())) {
-        const auto& result = searchResults[resultIndex];
-        WEATHER_SETTINGS.setLocation(result.latitude, result.longitude, result.name + ", " + result.country);
-        WEATHER_SETTINGS.saveToFile();
+    // This list moves to the ListController in PR 5. Until then its Back and Confirm are read as
+    // events, never levels, so neither reaches the settings menu again once the results close;
+    // the steps below come from the press log, and their events are dropped here.
+    ButtonEventManager::ButtonEvent event;
+    while (buttonEvents.consumeEvent(event)) {
+      if (event.button == MappedInputManager::Button::Back) {
         showingSearchResults = false;
         requestUpdate();
+        return;
       }
-      return;
+      if (event.button == MappedInputManager::Button::Confirm) {
+        if (resultIndex >= 0 && resultIndex < static_cast<int>(searchResults.size())) {
+          const auto& result = searchResults[resultIndex];
+          WEATHER_SETTINGS.setLocation(result.latitude, result.longitude, result.name + ", " + result.country);
+          WEATHER_SETTINGS.saveToFile();
+          showingSearchResults = false;
+          requestUpdate();
+        }
+        return;
+      }
     }
 
     resultsNavigator.onNextList(resultIndex, static_cast<int>(searchResults.size()), [this] { requestUpdate(); });
@@ -218,7 +223,7 @@ void WeatherSettingsActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
 
   if (showingSearchResults) {
     closeRouting();
@@ -262,8 +267,7 @@ void WeatherSettingsActivity::render(RenderLock&&) {
 
   drawMenuList(Rect{contentRect.x, contentTop, contentRect.width, contentHeight});
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawListHints();
 
   renderer.displayBuffer();
 }

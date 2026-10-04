@@ -34,7 +34,7 @@ void HomeMoreActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, false);
+  const Rect contentRect = listContentRect();
 
   GUI.drawHeader(renderer, Rect{contentRect.x, metrics.topPadding, contentRect.width, metrics.headerHeight},
                  tr(STR_MORE));
@@ -43,8 +43,7 @@ void HomeMoreActivity::render(RenderLock&&) {
   const int contentHeight = contentRect.height - contentTop - metrics.verticalSpacing * 2;
   drawMenuList(Rect{contentRect.x, contentTop, contentRect.width, contentHeight});
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawListHints();
 
   renderer.displayBuffer();
 }
