@@ -177,6 +177,9 @@ class HalGPIO {
     float nxEnd = 0.0f;  // Swipe only.
     float nyEnd = 0.0f;
     uint16_t heldMs = 0;  // contact duration, latched at release (0 for LongPress)
+    // millis() when the sampler latched it: a tap's release. The loop may get to the event much
+    // later (a screen refresh can hold it up), so anything timing taps reads this, not the clock.
+    uint32_t atMs = 0;
   };
   // Four is deliberately small. A multi-touch gesture ends when the fingers
   // leave the glass, so they cannot arrive faster than a person can lift and
@@ -202,6 +205,8 @@ class HalGPIO {
   uint8_t snapPressed_ = 0;
   uint8_t snapReleased_ = 0;
   TouchEvent snapTouchEvent_{};
+  // atMs of the touch event drained this cycle, kept when a reader consumes the event itself.
+  uint32_t snapTouchAtMs_ = 0;
   bool snapTouchReleased_ = false;
 
   // Capacitive home key -> the nav buttons the board physically lacks: tap emits
@@ -275,7 +280,10 @@ class HalGPIO {
   // board: X4 Pro has no Back or Confirm pin and its capacitive home key emits press and
   // release in the same pass, so NOTHING there can produce a hold -- and the file browser's
   // context menu, the recents view toggle, remove and book info all sit on one.
-  void injectPress(uint8_t buttonIndex, bool longPress = false);
+  //
+  // `atMs` dates a tap at the moment it happened (TouchEvent::atMs) rather than when the loop got
+  // to it, so two quick taps on a box stay a double-tap. 0 means now.
+  void injectPress(uint8_t buttonIndex, bool longPress = false, uint32_t atMs = 0);
 
   // How far back an injected long press dates its press edge. Must stay above
   // ButtonEventManager::LONG_PRESS_MS, which lives in src/ and cannot be included from the HAL;
@@ -338,6 +346,8 @@ class HalGPIO {
   // release edge). Self-clears once the contact ends.
   void suppressTouchContact();
   unsigned long lastTouchHeldMs() const;
+  // When the touch event drained this cycle happened (its TouchEvent::atMs), 0 if none.
+  uint32_t lastTouchEventAtMs() const { return snapTouchAtMs_; }
   bool wasSwipe(float& nxStart, float& nyStart, float& nxEnd, float& nyEnd) const;
   // Drain one queued multi-touch gesture (FIFO). Returns false when empty.
   bool popTouchGesture(TouchGesture& out);

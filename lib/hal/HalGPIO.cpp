@@ -275,7 +275,9 @@ void HalGPIO::latchTouchEvents() {
     portEXIT_CRITICAL(&inputMux_);
   };
 
+  const uint32_t now = millis();
   TouchEvent event;
+  event.atMs = now;
   // Long press first: it fires WHILE the finger is down, so it precedes anything
   // the same contact produces on release. heldMs stays 0 — the SDK's latched
   // duration belongs to the previous contact until this one ends.
@@ -294,12 +296,14 @@ void HalGPIO::latchTouchEvents() {
   if (inputMgr.wasSwipe(swipe.nx, swipe.ny, swipe.nxEnd, swipe.nyEnd)) {
     swipe.kind = TouchEvent::Kind::Swipe;
     swipe.heldMs = heldMs;
+    swipe.atMs = now;
     push(swipe);
   }
   TouchEvent tap;
   if (inputMgr.wasTouchTap(tap.nx, tap.ny)) {
     tap.kind = TouchEvent::Kind::Tap;
     tap.heldMs = heldMs;
+    tap.atMs = now;
     push(tap);
   }
 
@@ -676,6 +680,7 @@ void HalGPIO::update() {
   } else {
     snapTouchEvent_ = TouchEvent{};
   }
+  snapTouchAtMs_ = snapTouchEvent_.atMs;
   snapTouchReleased_ = touchReleasedPending_;
   touchReleasedPending_ = false;
   portEXIT_CRITICAL(&inputMux_);
@@ -704,7 +709,7 @@ void HalGPIO::updateUsbState(const unsigned long now) {
 
 bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
 
-void HalGPIO::injectPress(const uint8_t buttonIndex, const bool longPress) {
+void HalGPIO::injectPress(const uint8_t buttonIndex, const bool longPress, const uint32_t atMs) {
   if (buttonIndex > BTN_POWER) return;
   // A tap shares one timestamp between press and release, so ButtonEventManager reads it as a
   // Short press. A long tap backdates the press edge past the FSM's threshold instead, so the
@@ -714,13 +719,14 @@ void HalGPIO::injectPress(const uint8_t buttonIndex, const bool longPress) {
   // The backdate is saturated because millis() is small for the first second after boot, and an
   // underflowed press edge would sit ~49 days in the future and never classify at all.
   const uint32_t now = millis();
+  const uint32_t releaseAt = atMs != 0 && atMs <= now ? atMs : now;
   const uint32_t holdMs = longPress ? INJECTED_LONG_PRESS_MS : 0;
-  const uint32_t pressAt = now > holdMs ? now - holdMs : 0;
+  const uint32_t pressAt = releaseAt > holdMs ? releaseAt - holdMs : 0;
   portENTER_CRITICAL(&inputMux_);
   accumPressed_ |= (1u << buttonIndex);
   accumReleased_ |= (1u << buttonIndex);
   pushEdgeLocked(buttonIndex, true, pressAt);
-  pushEdgeLocked(buttonIndex, false, now);
+  pushEdgeLocked(buttonIndex, false, releaseAt);
   portEXIT_CRITICAL(&inputMux_);
 }
 
