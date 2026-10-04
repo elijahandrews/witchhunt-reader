@@ -161,6 +161,12 @@ int verifyCallback(int preverify, WOLFSSL_X509_STORE_CTX* store) {
             store->error);
     return 1;
   }
+  // Name the link that failed: depth 0 is the leaf, higher depths walk up towards the root, so a
+  // chain failure no longer surfaces as one connect-level error with no certificate attached.
+  if (preverify == 0 && store != nullptr) {
+    LOG_ERR("TLS", "verify failed at depth %d: err=%d (callback #%lu)", store->error_depth, store->error,
+            static_cast<unsigned long>(g_chainVerify.count));
+  }
   return preverify;
 }
 }  // namespace
@@ -419,6 +425,10 @@ int SecureClient::read(uint8_t* buf, size_t size) {
     _connected = false;
     return 0;
   }
+  // A hard read error ends the body early (the HTTP layer reports it as truncated), so say why:
+  // MEMORY_E (-125) here means no contiguous block for the next record buffer.
+  LOG_ERR("TLS", "read failed: err=%d ret=%d heap=%u largest=%u", err, n, esp_get_free_heap_size(),
+          heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
   _connected = false;
   return -1;
 }

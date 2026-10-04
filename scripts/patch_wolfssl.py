@@ -113,6 +113,11 @@ OVERRIDES = """
 #define WOLFSSL_SP_384           /* P-384 (Sectigo/GitHub ECDSA chains use it) */
 /* P-256 is on by default with SP-ECC; keep RSA via SP too for USERTrust RSA. */
 #define WOLFSSL_HAVE_SP_RSA
+/* RSA-4096 through SP as well. Without it a 4096-bit public key falls through to the generic
+ * sp_int exponentiation, which fails here: ISRG Root X1 (RSA-4096) signing the cross-signed
+ * Root YR that raw/objects/release-assets.githubusercontent.com send since 2026 failed
+ * ConfirmSignature (-155) at depth 2, while OpenSSL accepts the same chain. */
+#define WOLFSSL_SP_4096
 
 /* Bignum ceiling: sized for RSA-4096 chains (no FFDHE), half of upstream's 16384. */
 #undef  FP_MAX_BITS
