@@ -83,4 +83,17 @@ int page(const Rows& rows, int from, int direction);
 int first(const Rows& rows);
 int last(const Rows& rows);
 
+// Whether every row fits on one page, so there is no page to jump to.
+bool fitsOnePage(const Rows& rows);
+
+// Two Up/Down taps whose presses land this close together are a double-tap, which jumps a page.
+// The same window as ButtonEventManager::DOUBLE_WINDOW_MS (ListController asserts it).
+constexpr unsigned long kDoubleTapMs = 300;
+
+// Whether an Up/Down tap pressed at `pressMs` completes a double-tap with the tap before it: the
+// same key, pressed within kDoubleTapMs, on a list longer than one page. A list that fits one page
+// has no page to jump to, so two quick taps there stay two steps. `previousPressMs` 0 means none.
+bool completesDoubleTap(Key key, unsigned long pressMs, Key previousKey, unsigned long previousPressMs,
+                        const Rows& rows);
+
 }  // namespace ListGrammar

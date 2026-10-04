@@ -12,6 +12,10 @@ namespace {
 // How often a held Left/Right keeps paging once its long press has fired.
 constexpr unsigned long kPageRepeatMs = 500;
 
+// One gesture, one definition of how quick a double press is.
+static_assert(ListGrammar::kDoubleTapMs == ButtonEventManager::DOUBLE_WINDOW_MS,
+              "a list double-tap uses the button manager's double-click window");
+
 // "«" and "»": the page glyphs that open the front Left/Right labels.
 constexpr const char* kPrevGlyph = "\xC2\xAB";
 constexpr const char* kNextGlyph = "\xC2\xBB";
@@ -113,9 +117,18 @@ void ListController::update() {
       continue;
     }
 
+    const auto press = pressFor(event.type);
+    const bool vertical = key == ListGrammar::Key::Up || key == ListGrammar::Key::Down;
+    if (vertical && press != ListGrammar::Press::Long) {
+      tapVertical(key, press, event.pressMs);
+      continue;
+    }
+    // Any other press ends a double-tap in progress.
+    lastTapPressMs = 0;
+
     const bool side = key == ListGrammar::Key::Left || key == ListGrammar::Key::Right;
-    const auto result = ListGrammar::commandFor(key, pressFor(event.type), shape(),
-                                                side ? availability() : ListGrammar::Availability{});
+    const auto result =
+        ListGrammar::commandFor(key, press, shape(), side ? availability() : ListGrammar::Availability{});
     if (side && event.type == ButtonEventManager::PressType::Long) {
       repeating = true;
       repeatButton = event.button;
@@ -194,6 +207,34 @@ void ListController::moveTo(const int row) {
   host.onListSelectionChanged();
 }
 
+void ListController::tapVertical(const ListGrammar::Key key, const ListGrammar::Press press,
+                                 const unsigned long pressMs) {
+  const auto r = rows();
+  const int direction = key == ListGrammar::Key::Down ? 1 : -1;
+
+  // A Double event is a whole double-tap in one: it arrives only when the user bound a double
+  // action to the page-turn keys and it fell through to the list.
+  if (press == ListGrammar::Press::Double) {
+    lastTapPressMs = 0;
+    moveTo(ListGrammar::fitsOnePage(r) ? ListGrammar::step(r, ListGrammar::step(r, selection, direction), direction)
+                                       : ListGrammar::page(r, selection, direction));
+    return;
+  }
+
+  // The first tap of the pair has already stepped. Page from where it started instead, so the pair
+  // moves one page, not a page and a row. A third tap starts a new pair.
+  if (ListGrammar::completesDoubleTap(key, pressMs, lastTapKey, lastTapPressMs, r)) {
+    lastTapPressMs = 0;
+    moveTo(ListGrammar::page(r, rowBeforeTap, direction));
+    return;
+  }
+
+  rowBeforeTap = selection;
+  lastTapKey = key;
+  lastTapPressMs = pressMs;
+  moveTo(ListGrammar::step(r, selection, direction));
+}
+
 void ListController::continuePageRepeat() {
   if (!repeating) return;
   // An injected long press (a long tap on a hint box) never holds the live level, so it pages once.
@@ -209,10 +250,12 @@ void ListController::continuePageRepeat() {
 
 void ListController::page(const int direction) {
   repeating = false;
+  lastTapPressMs = 0;
   moveTo(ListGrammar::page(rows(), selection, direction));
 }
 
 ListRowTap::Result ListController::tapRow(const int row) {
+  lastTapPressMs = 0;
   const int count = host.listCount();
   if (row >= 0 && row < count && !host.listSelectable(row)) return ListRowTap::Result::Rejected;
   return ListRowTap::apply(row, count, selection);

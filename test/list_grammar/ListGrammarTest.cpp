@@ -272,3 +272,39 @@ TEST(ListGrammarRows, FirstAndLastSkipUnselectableRows) {
   EXPECT_EQ(ListGrammar::first(maskedRows(none, 10)), 0);
   EXPECT_EQ(ListGrammar::last(maskedRows(none, 10)), 0);
 }
+
+// --- Double-tap ----------------------------------------------------------------------------
+
+TEST(ListGrammarDoubleTap, SameKeyInsideTheWindowOnALongListPages) {
+  const Rows rows = plainRows(50, 23);
+  EXPECT_TRUE(ListGrammar::completesDoubleTap(Key::Down, 1299, Key::Down, 1000, rows));
+  EXPECT_TRUE(ListGrammar::completesDoubleTap(Key::Up, 1000, Key::Up, 1000, rows));
+}
+
+TEST(ListGrammarDoubleTap, TheWindowEndsAtThreeHundredMilliseconds) {
+  const Rows rows = plainRows(50, 23);
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Down, 1300, Key::Down, 1000, rows));
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Down, 5000, Key::Down, 1000, rows));
+}
+
+TEST(ListGrammarDoubleTap, ADifferentKeyIsANewTap) {
+  const Rows rows = plainRows(50, 23);
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Up, 1100, Key::Down, 1000, rows));
+}
+
+TEST(ListGrammarDoubleTap, OnlyUpAndDownDoubleTap) {
+  const Rows rows = plainRows(50, 23);
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Right, 1100, Key::Right, 1000, rows));
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Confirm, 1100, Key::Confirm, 1000, rows));
+}
+
+TEST(ListGrammarDoubleTap, AListThatFitsOnePageKeepsTwoSteps) {
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Down, 1100, Key::Down, 1000, plainRows(23, 23)));
+  EXPECT_TRUE(ListGrammar::completesDoubleTap(Key::Down, 1100, Key::Down, 1000, plainRows(24, 23)));
+}
+
+TEST(ListGrammarDoubleTap, NoEarlierTapOrAnEarlierTimeIsNotADoubleTap) {
+  const Rows rows = plainRows(50, 23);
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Down, 100, Key::Down, 0, rows));
+  EXPECT_FALSE(ListGrammar::completesDoubleTap(Key::Down, 900, Key::Down, 1000, rows));
+}

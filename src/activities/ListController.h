@@ -83,6 +83,12 @@ class ListController {
   int8_t repeatDirection = 1;
   unsigned long repeatSinceMs = 0;
 
+  // The last Up/Down tap that stepped, so a second tap close behind it can turn the pair into a
+  // page jump. lastTapPressMs 0 means there is no tap to pair with.
+  ListGrammar::Key lastTapKey = ListGrammar::Key::Down;
+  unsigned long lastTapPressMs = 0;
+  int rowBeforeTap = 0;
+
   ListGrammar::Shape shape() const;
   ListGrammar::Availability availability() const;
   ListGrammar::Rows rows() const;
@@ -91,6 +97,8 @@ class ListController {
   // reading events until the next tick.
   bool apply(ListGrammar::Result result);
   void moveTo(int row);
+  // A short or double Up/Down press: one step, or a page when it completes a double-tap.
+  void tapVertical(ListGrammar::Key key, ListGrammar::Press press, unsigned long pressMs);
   void continuePageRepeat();
 };
 

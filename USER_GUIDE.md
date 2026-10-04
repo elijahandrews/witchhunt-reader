@@ -87,7 +87,7 @@ catalog** works this way; other lists still behave as their own sections describ
 
 | Button | Press | Hold |
 | --- | --- | --- |
-| **Up / Down** | Move one row | Jump to the first / last row |
+| **Up / Down** | Move one row; tap twice quickly to jump a page | Jump to the first / last row |
 | **Left / Right** | Move one row, or the action the screen shows | Page back / forward; keep holding to keep paging |
 | **Confirm** | Open the selected row | The same as a press |
 | **Back** | Go back | Return to the Home screen |

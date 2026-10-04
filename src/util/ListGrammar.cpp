@@ -107,4 +107,14 @@ int last(const Rows& rows) {
   return 0;
 }
 
+bool fitsOnePage(const Rows& rows) { return rows.count <= (rows.pageRows > 0 ? rows.pageRows : 1); }
+
+bool completesDoubleTap(const Key key, const unsigned long pressMs, const Key previousKey,
+                        const unsigned long previousPressMs, const Rows& rows) {
+  if (key != Key::Up && key != Key::Down) return false;
+  if (key != previousKey || previousPressMs == 0 || pressMs < previousPressMs) return false;
+  if (fitsOnePage(rows)) return false;
+  return pressMs - previousPressMs < kDoubleTapMs;
+}
+
 }  // namespace ListGrammar

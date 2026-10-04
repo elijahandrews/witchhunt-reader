@@ -82,7 +82,7 @@ The device matrix the scheme has to serve:
 
 | Button | Short press | Long press (1 s) |
 |---|---|---|
-| **Up / Down** | step one row | first / last selectable row; **on tabbed lists**, previous / next tab |
+| **Up / Down** | step one row; two quick taps jump a page | first / last selectable row; **on tabbed lists**, previous / next tab |
 | **Left / Right** | step one row (**default pair**), or the screen's **declared pair** | page back / forward; repeats every 500 ms while still held |
 | **Confirm** | open / select | the screen's second action if declared, otherwise the same as short |
 | **Back** | the screen's back | Home |
@@ -112,12 +112,19 @@ Rules:
   reader menu) it switches to the previous / next tab instead, wrapping; tabbed lists use the
   default Left/Right pair.
 - **R5 — Events, not levels.** All six buttons act on `ButtonEventManager` events: Short at
-  release, Long while held at `LONG_PRESS_MS` (1 s). A `Double` event — produced only when a
-  double action is configured for that key and was not consumed globally — counts as two
-  steps where the Short is a step, and as one press otherwise (an action, Confirm, Back).
-  This is lossless (events are classified from the sampler's edge queue) and treats a
-  physical key and an injected long tap identically. The jump to the ends moves from 1.5 s to
-  1 s.
+  release, Long while held at `LONG_PRESS_MS` (1 s). Each event carries the time its key went
+  down on the sampler's clock (`ButtonEvent::pressMs`). This is lossless (events are classified
+  from the sampler's edge queue) and treats a physical key and an injected long tap
+  identically. The jump to the ends moves from 1.5 s to 1 s.
+- **R5a — Double-tap Up/Down pages.** Two taps of the same Up/Down key whose presses land
+  within `DOUBLE_WINDOW_MS` (300 ms) jump a page, as `ButtonNavigator` did on `master`. The
+  first tap steps at once (single steps never wait); the second undoes that step and pages from
+  where the pair started, so the pair moves exactly one page. On a list that fits one page the
+  two taps stay two steps. The window is measured between the presses, not between the loop
+  ticks that handle them, so a redraw between the taps does not break the pair. A `Double`
+  event (only when a double action is bound to the page-turn keys and falls through) is the
+  same double-tap; elsewhere a `Double` counts as one press (an action, Confirm, Back) or as
+  two steps on the default Left/Right pair.
 - **R6 — No needless double-press wait.** `ButtonEventManager::hasDoubleAction(btn)` returns
   false when the key's configured double action is reader-scoped
   (`CrossPointSettings::isReaderScopedAction`) and no reader activity is on top. The lookup
