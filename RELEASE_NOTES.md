@@ -26,6 +26,8 @@ User-facing changes only. Full commit history is in git log.
 
 - **Fix: the Font Manager no longer runs out of memory reading the font list**, and neither does the fonts page of the web interface (where running out of memory restarted the device). The list is now read a piece at a time instead of all at once.
 - **The font list now takes about half the memory it did**, and it is given back in one piece before a download starts. This makes room for downloads; it does not change the download itself.
+- **Fix: GitHub downloads pass the certificate check again.** GitHub's download servers moved to a new Let's Encrypt certificate chain whose root key is 4096-bit RSA, which the reader's TLS library could not verify. The font list, font files and firmware updates (which never skip the check) failed with a certificate error; the font manager only worked with **Skip HTTPS validation** switched on.
+- **Font downloads fetch each file in small pieces when memory is tight**, so the X3 no longer runs out of memory on GitHub's large secure-connection records partway through a font file (the X4 uses the same method). On those readers a file is now requested in pieces of 1 to 6 KB, sized to the memory that is free, over the same connection; a dropped connection picks up where it stopped. Book downloads from OPDS catalogs use the same method; a server that does not support it sends the whole file as before. The T5 S3 and X4 Pro, with more memory, download as before.
 
 ## 2.37 — 2026-09-29
 
