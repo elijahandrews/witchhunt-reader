@@ -17,7 +17,7 @@
 
 // Session resumption needs the ticket support scripts/patch_wolfssl.py switches on. Without it the
 // ticket API below is not even declared, so say where the define should have come from.
-#if !defined(HAVE_SESSION_TICKET) || !defined(MAX_PSK_ID_LEN)
+#if !defined(CROSSPOINT_NO_TLS_RESUMPTION) && (!defined(HAVE_SESSION_TICKET) || !defined(MAX_PSK_ID_LEN))
 #error "HAVE_SESSION_TICKET / MAX_PSK_ID_LEN did not reach wolfSSL: scripts/patch_wolfssl.py must patch user_settings.h"
 #endif
 
@@ -183,6 +183,7 @@ int verifyCallback(int preverify, WOLFSSL_X509_STORE_CTX* store) {
 }
 
 // ---- TLS session resumption ----------------------------------------------------------------
+#if !defined(CROSSPOINT_NO_TLS_RESUMPTION)
 //
 // Every connection used to repeat the full certificate check. GitHub's chain costs two RSA-4096
 // signature checks, and on the X3 the connection made seconds after the first (the font list,
@@ -321,9 +322,15 @@ WOLFSSL_SESSION* sessionToKeep(WOLFSSL* ssl, const TlsSessionKey& key, int ticke
   if (session != nullptr) LOG_DBG("TLS", "kept session for %s (ticket %dB)", key.host, ticketLen);
   return session;
 }
+#else  // CROSSPOINT_NO_TLS_RESUMPTION: the experiment build keeps no sessions
+void dropCachedSession(const TlsSessionKey&) {}
+void storeCachedSession(const TlsSessionKey&, WOLFSSL_SESSION*) {}
+WOLFSSL_SESSION* sessionToKeep(WOLFSSL*, const TlsSessionKey&, int) { return nullptr; }
+#endif
 }  // namespace
 
 void SecureClient::clearSessionCache() {
+#if !defined(CROSSPOINT_NO_TLS_RESUMPTION)
   unsigned dropped = 0;
   {
     const SessionCacheLock lock;
@@ -335,6 +342,7 @@ void SecureClient::clearSessionCache() {
     }
   }
   if (dropped > 0) LOG_DBG("TLS", "dropped %u cached TLS session(s)", dropped);
+#endif
 }
 
 // One handshake attempt at a fixed verification level and TLS method.
@@ -447,6 +455,11 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   _keepSession = false;
   _sessionOffered = false;
   const char* fullHandshakeReason = "unverified, sessions not kept";
+#if defined(CROSSPOINT_NO_TLS_RESUMPTION)
+  const bool resumable = false;
+  (void)mayResume;
+  if (verifying) fullHandshakeReason = "session resumption compiled out";
+#else
   const bool resumable =
       verifying && mayResume && makeSessionKey(_sessionKey, host, port, _rootCA, _allowCertificateDateErrors);
   if (resumable) {
@@ -467,6 +480,7 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   } else if (verifying) {
     fullHandshakeReason = mayResume ? "host name too long to cache" : "TLS 1.2 retry, sessions not kept";
   }
+#endif
 
   // Non-blocking recv => retry wolfSSL_connect across handshake round-trips.
   // Sample the heap low-water across the handshake (this is where ECC/RSA bignum

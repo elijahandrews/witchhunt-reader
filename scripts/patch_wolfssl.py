@@ -187,6 +187,11 @@ OVERRIDES = """
 #define NO_CLIENT_CACHE
 #endif
 
+/* Experiment switch, to be removed once decided: -DCROSSPOINT_NO_TLS_RESUMPTION in build_flags (or
+ * PLATFORMIO_BUILD_FLAGS) builds without session resumption. Build flags reach every compile,
+ * wolfSSL's included, so the guard below is all it takes (as CROSSPOINT_TLS_VERIFY_TIMING further
+ * down); SecureClient compiles its session cache out under the same flag. */
+#ifndef CROSSPOINT_NO_TLS_RESUMPTION
 /* TLS 1.3 session resumption, client side. A repeat connection to the same host offers the
  * ticket from the previous one; a server that accepts it sends no certificate chain, so nothing
  * is verified (GitHub's chain costs two RSA-4096 checks, which the X3 heap could not afford
@@ -202,6 +207,7 @@ OVERRIDES = """
 #ifndef WOLFSSL_TICKET_NONCE_MALLOC
 #define WOLFSSL_TICKET_NONCE_MALLOC
 #endif
+#endif /* !CROSSPOINT_NO_TLS_RESUMPTION */
 /* Tickets also switch on wolfSSL's PSK identity buffers, which are sized by MAX_PSK_ID_LEN: 1536
  * under TLS 1.3 (internal.h). That is client_identity + server_hint in every handshake's Arrays
  * and server_hint in every CTX, 4.6 KB per connection held through the handshake; on the X3 that
