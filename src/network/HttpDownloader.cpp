@@ -141,15 +141,18 @@ size_t largestFreeBlock() { return heap_caps_get_largest_free_block(MALLOC_CAP_D
 
 // Fetches url in Range requests, so that no response, and so no TLS record, is larger than a chunk
 // plus its headers (lib/SecureNet/HttpRange.h has why and the sizing). Each request is sized from
-// the largest free block just before it, starting from firstLargest, which the caller measured.
-// Returns 200 once the whole file has been written, else the failing HTTP status or SecureHttpError.
+// the largest free block just before it, starting from firstLargest, which the caller measured, and
+// never above chunkCeiling. An out-of-memory read lowers chunkCeiling for good: the caller keeps it
+// for the rest of its session. Returns 200 once the whole file has been written, else the failing
+// HTTP status or SecureHttpError.
 //
 // The handling of a server that ignores Range (200 instead of 206: rewind the sink, take the whole
 // body) and the resume from the bytes already received are adapted from Free-Ink/freeink-sdk f80a99c
 // (ResumableFetch.h, Justin Mitchell). Different here: every request is a bounded range on the same
 // kept-alive connection, the total comes from Content-Range, and chunks after the first go straight
 // to the URL the first one was redirected to.
-int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink, size_t firstLargest) {
+int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink, size_t firstLargest,
+               size_t& chunkCeiling) {
   namespace hr = crosspoint::http_range;
   using C = crosspoint::SecureHttpClient;
   struct RequestModeGuard {
@@ -168,7 +171,7 @@ int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink&
   size_t total = 0;
   unsigned requests = 0;
   bool wholeBody = false;
-  hr::ChunkSizer sizer;
+  hr::ChunkSizer sizer(chunkCeiling);
   hr::RetryBudget retries;
   size_t chunkSize = sizer.next(firstLargest);
   size_t smallest = chunkSize;
@@ -230,8 +233,16 @@ int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink&
       // so no certificate chain) and continue from there. A record that did not fit the heap makes
       // the next requests smaller, whatever the largest block then reads.
       outOfMemory = http.lastReadOutOfMemory();
-      if (outOfMemory) sizer.onOutOfMemory();
-      if (!isTransportFailure(rc) || !retries.reconnectAfterFailure(received > 0)) {
+      if (outOfMemory) {
+        sizer.onOutOfMemory();
+        if (sizer.ceiling() != chunkCeiling) {
+          LOG_DBG("HTTP", "chunk ceiling %u -> %u B for the rest of the session (out-of-memory read at %u B)",
+                  static_cast<unsigned>(chunkCeiling), static_cast<unsigned>(sizer.ceiling()),
+                  static_cast<unsigned>(offset));
+          chunkCeiling = sizer.ceiling();
+        }
+      }
+      if (!isTransportFailure(rc) || !retries.reconnectAfterFailure(received > 0, totalKnown ? total : offset)) {
         LOG_ERR("HTTP", "chunked download stopped at %u B after %u requests, %u reconnect(s): rc=%d%s",
                 static_cast<unsigned>(offset), requests, retries.reconnects(), rc,
                 outOfMemory ? " (out of memory)" : "");
@@ -258,7 +269,6 @@ int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink&
     }
     target = http.lastUrl();  // follow a redirect once, not once per chunk
     if (received > 0) retries.onProgress();
-    sizer.onCleanRequest();
     if (hr::transferComplete(offset, totalKnown, total, chunk.length(), received)) break;
   }
 
@@ -271,9 +281,10 @@ int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink&
 
 // File downloads over https, on a heap too tight for 16 KB TLS records, are fetched in Range
 // chunks; everything else streams as one response. Decided on the largest free block once the
-// connection is up, just before the first request. Returns what SecureHttpClient::get() would:
-// the HTTP status (200 for a complete chunked download) or a negative SecureHttpError.
-int transfer(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink) {
+// connection is up, just before the first request. chunkCeiling is the session's (see chunkedGet).
+// Returns what SecureHttpClient::get() would: the HTTP status (200 for a complete chunked download)
+// or a negative SecureHttpError.
+int transfer(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink, size_t& chunkCeiling) {
   namespace hr = crosspoint::http_range;
   if (!sink.rewind) return streamGet(http, url, sink);
   if (url.compare(0, 8, "https://") != 0) {
@@ -286,9 +297,10 @@ int transfer(crosspoint::SecureHttpClient& http, const std::string& url, Sink& s
     LOG_DBG("HTTP", "download mode: streamed (largest free block %u B)", static_cast<unsigned>(largest));
     return streamGet(http, url, sink);
   }
-  LOG_DBG("HTTP", "download mode: chunked %u B (largest free block %u B)",
-          static_cast<unsigned>(hr::chunkSizeForLargestBlock(largest)), static_cast<unsigned>(largest));
-  return chunkedGet(http, url, sink, largest);
+  LOG_DBG("HTTP", "download mode: chunked %u B (largest free block %u B, ceiling %u B)",
+          static_cast<unsigned>(hr::ChunkSizer(chunkCeiling).next(largest)), static_cast<unsigned>(largest),
+          static_cast<unsigned>(chunkCeiling));
+  return chunkedGet(http, url, sink, largest, chunkCeiling);
 }
 
 // One-shot streaming GET over SecureNet (wolfSSL). Fills the Sink and emits
@@ -327,7 +339,9 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
     return write(data, len);
   };
 
-  const int rc = transfer(http, url, sink);
+  // A one-shot download is its own session: whatever ceiling it learns ends with it.
+  size_t chunkCeiling = crosspoint::http_range::DEFAULT_CHUNK_BYTES;
+  const int rc = transfer(http, url, sink, chunkCeiling);
   // Log the handshake heap trough on EVERY path (incl. early abort via
   // treatAbortAsSuccess) so the TLS-specific low-water is always captured,
   // distinct from the all-time ESP.getMinFreeHeap() figure.
@@ -365,6 +379,10 @@ struct HttpDownloader::Session::Impl {
   // persistent SecureHttpClient across downloadToFile(session, ...) calls.
   std::unique_ptr<crosspoint::SecureHttpClient> http;
   bool preCallLogged = false;
+  // The largest Range chunk this session's files may use. A size that ran out of memory reading a
+  // record stays out of reach for the rest of the session, so later files start at a size that
+  // worked (see chunkedGet).
+  size_t chunkCeiling = crosspoint::http_range::DEFAULT_CHUNK_BYTES;
 };
 
 HttpDownloader::Session::Session() : impl_(std::make_unique<Impl>()) {}
@@ -399,7 +417,7 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
     impl->http->setBasicAuth(username, password);
   }
 
-  const int rc = transfer(*impl->http, url, sink);
+  const int rc = transfer(*impl->http, url, sink, impl->chunkCeiling);
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) return HttpDownloader::ABORTED;
   if (rc != 200) {
     LOG_ERR("HTTP", "SecureNet session GET failed: rc=%d url=%s", rc, url.c_str());

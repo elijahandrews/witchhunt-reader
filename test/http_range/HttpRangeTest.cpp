@@ -203,30 +203,61 @@ TEST(HttpRangeHeap, ChunksOnlyWhenTheLargestBlockIsSmall) {
 TEST(HttpRangeSizer, SizesEveryRequestFromTheBlockAtThatMoment) {
   hr::ChunkSizer sizer;
   EXPECT_EQ(sizer.next(16372), 8192u);
-  sizer.onCleanRequest();
-  EXPECT_EQ(sizer.next(9000), 4096u);  // the heap fragmented: smaller
-  sizer.onCleanRequest();
-  EXPECT_EQ(sizer.next(16372), 8192u);  // and back up, with no out-of-memory read in between
+  EXPECT_EQ(sizer.next(9000), 4096u);   // the heap fragmented: smaller
+  EXPECT_EQ(sizer.next(16372), 8192u);  // and back up to the ceiling, which nothing has lowered
 }
 
-TEST(HttpRangeSizer, AnOutOfMemoryReadStepsDownEvenIfTheBlockReadsLarger) {
+TEST(HttpRangeSizer, AnOutOfMemoryReadLowersTheCeilingForGood) {
+  // Device round 2: 8 KB was let through at 17,396 B and failed every time.
   hr::ChunkSizer sizer;
-  EXPECT_EQ(sizer.next(16372), 8192u);
+  EXPECT_EQ(sizer.next(17396), 8192u);
   sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.cap(), 6144u);
-  EXPECT_EQ(sizer.next(16372), 6144u);  // capped one step below the size that failed
-  sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.next(30000), 4096u);
-  // A smaller block still wins over the cap.
+  EXPECT_EQ(sizer.ceiling(), 6144u);
+  // However many clean requests follow, and however large the block reads, 8 KB stays out of reach.
+  for (int i = 0; i < 1000; ++i) ASSERT_EQ(sizer.next(17396), 6144u) << i;
+  EXPECT_EQ(sizer.next(1 << 20), 6144u);
+  EXPECT_EQ(sizer.ceiling(), 6144u);
+  // A smaller block still wins over the ceiling.
   EXPECT_EQ(sizer.next(6132), 1024u);
 }
 
-TEST(HttpRangeSizer, AnOutOfMemoryReadBelowTheCapStepsBelowThatSize) {
+TEST(HttpRangeSizer, AnOutOfMemoryReadBelowTheCeilingStepsBelowThatSize) {
   hr::ChunkSizer sizer;
-  EXPECT_EQ(sizer.next(7680), 3072u);  // the heap, not the cap, chose 3 KB
+  EXPECT_EQ(sizer.next(7680), 3072u);  // the heap, not the ceiling, chose 3 KB
   sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.cap(), 2048u);
+  EXPECT_EQ(sizer.ceiling(), 2048u);
   EXPECT_EQ(sizer.next(16372), 2048u);
+}
+
+TEST(HttpRangeSizer, TheCeilingCarriesAcrossTheFilesOfOneSession) {
+  // What HttpDownloader::Session does: each file's sizer starts from the ceiling the last one left.
+  size_t sessionCeiling = hr::DEFAULT_CHUNK_BYTES;
+
+  hr::ChunkSizer first(sessionCeiling);
+  EXPECT_EQ(first.next(17396), 8192u);
+  first.onOutOfMemory();
+  sessionCeiling = first.ceiling();
+  EXPECT_EQ(sessionCeiling, 6144u);
+
+  // The next file starts at the size known to work, not at the 8 KB the block reading allows.
+  hr::ChunkSizer second(sessionCeiling);
+  EXPECT_EQ(second.ceiling(), 6144u);
+  EXPECT_EQ(second.next(17396), 6144u);
+  sessionCeiling = second.ceiling();
+
+  // A further failure lowers it again, and the file after that inherits the lower ceiling.
+  hr::ChunkSizer third(sessionCeiling);
+  EXPECT_EQ(third.next(17396), 6144u);
+  third.onOutOfMemory();
+  hr::ChunkSizer fourth(third.ceiling());
+  EXPECT_EQ(fourth.next(17396), 4096u);
+}
+
+TEST(HttpRangeSizer, ACeilingIsRoundedDownToALadderSize) {
+  EXPECT_EQ(hr::ChunkSizer(8192).ceiling(), 8192u);
+  EXPECT_EQ(hr::ChunkSizer(100000).ceiling(), 8192u);
+  EXPECT_EQ(hr::ChunkSizer(5000).ceiling(), 4096u);
+  EXPECT_EQ(hr::ChunkSizer(0).ceiling(), hr::MIN_CHUNK_BYTES);
 }
 
 TEST(HttpRangeSizer, TheSmallestSizeIsAFloor) {
@@ -234,52 +265,49 @@ TEST(HttpRangeSizer, TheSmallestSizeIsAFloor) {
   EXPECT_EQ(sizer.next(4596), 1024u);
   sizer.onOutOfMemory();
   sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.cap(), 1024u);
+  EXPECT_EQ(sizer.ceiling(), 1024u);
   EXPECT_EQ(sizer.next(16372), 1024u);
 }
 
-TEST(HttpRangeSizer, CleanRequestsStepTheCapBackUp) {
-  hr::ChunkSizer sizer;
-  sizer.next(16372);
-  sizer.onOutOfMemory();
-  sizer.next(16372);
-  sizer.onOutOfMemory();
-  ASSERT_EQ(sizer.cap(), 4096u);
-  for (unsigned i = 0; i + 1 < hr::CLEAN_REQUESTS_TO_STEP_UP; ++i) sizer.onCleanRequest();
-  EXPECT_EQ(sizer.cap(), 4096u);
-  sizer.onCleanRequest();
-  EXPECT_EQ(sizer.cap(), 6144u);
-  // An out-of-memory read restarts the count.
-  for (unsigned i = 0; i + 1 < hr::CLEAN_REQUESTS_TO_STEP_UP; ++i) sizer.onCleanRequest();
-  sizer.next(16372);
-  sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.cap(), 4096u);
-  sizer.onCleanRequest();
-  EXPECT_EQ(sizer.cap(), 4096u);
+TEST(HttpRangeRetries, TheHardCapScalesWithTheFile) {
+  EXPECT_EQ(hr::maxReconnectsFor(0), 20u);
+  EXPECT_EQ(hr::maxReconnectsFor(64 * 1024 - 1), 20u);
+  EXPECT_EQ(hr::maxReconnectsFor(64 * 1024), 21u);
+  // Arimo_18 (987,450 B) used exactly the old flat cap of 20 while still making progress.
+  EXPECT_EQ(hr::maxReconnectsFor(987450), 35u);
 }
 
 TEST(HttpRangeRetries, FailuresThatWroteBytesDoNotCountAsStalls) {
   hr::RetryBudget retries;
-  for (unsigned i = 0; i < hr::MAX_RECONNECTS; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(true)) << i;
-  // ...but the hard cap on reconnects still ends it.
-  EXPECT_FALSE(retries.reconnectAfterFailure(true));
-  EXPECT_EQ(retries.reconnects(), hr::MAX_RECONNECTS);
+  const size_t file = 987450;
+  const unsigned cap = hr::maxReconnectsFor(file);
+  for (unsigned i = 0; i < cap; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(true, file)) << i;
+  // ...but the hard cap still ends it.
+  EXPECT_FALSE(retries.reconnectAfterFailure(true, file));
+  EXPECT_EQ(retries.reconnects(), cap);
+}
+
+TEST(HttpRangeRetries, ASmallFileKeepsTheBaseCap) {
+  hr::RetryBudget retries;
+  for (unsigned i = 0; i < hr::MAX_RECONNECTS_BASE; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(true, 24089)) << i;
+  EXPECT_FALSE(retries.reconnectAfterFailure(true, 24089));
 }
 
 TEST(HttpRangeRetries, ConsecutiveStallsEndTheDownload) {
   hr::RetryBudget retries;
-  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
-  EXPECT_FALSE(retries.reconnectAfterFailure(false));
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false, 987450)) << i;
+  EXPECT_FALSE(retries.reconnectAfterFailure(false, 987450));
 }
 
 TEST(HttpRangeRetries, AnyNewBytesResetTheStallCount) {
   hr::RetryBudget retries;
-  EXPECT_TRUE(retries.reconnectAfterFailure(false));
-  EXPECT_TRUE(retries.reconnectAfterFailure(false));
-  EXPECT_TRUE(retries.reconnectAfterFailure(true));  // this failed request still wrote bytes
-  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
+  const size_t file = 987450;
+  EXPECT_TRUE(retries.reconnectAfterFailure(false, file));
+  EXPECT_TRUE(retries.reconnectAfterFailure(false, file));
+  EXPECT_TRUE(retries.reconnectAfterFailure(true, file));  // this failed request still wrote bytes
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false, file)) << i;
   retries.onProgress();  // a request that completed with new bytes
-  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
-  EXPECT_FALSE(retries.reconnectAfterFailure(false));
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false, file)) << i;
+  EXPECT_FALSE(retries.reconnectAfterFailure(false, file));
   EXPECT_EQ(retries.reconnects(), 3 + 2 * hr::MAX_STALLED_RETRIES);
 }

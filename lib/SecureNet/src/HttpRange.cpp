@@ -141,31 +141,36 @@ size_t ladderIndexFor(size_t largestFreeBlock) {
 
 size_t chunkSizeForLargestBlock(size_t largestFreeBlock) { return CHUNK_LADDER[ladderIndexFor(largestFreeBlock)]; }
 
-size_t ChunkSizer::next(size_t largestFreeBlock) {
-  const size_t fits = ladderIndexFor(largestFreeBlock);
-  lastIndex_ = fits > capIndex_ ? fits : capIndex_;
-  return CHUNK_LADDER[lastIndex_];
+ChunkSizer::ChunkSizer(size_t ceiling) : ceilingIndex_(CHUNK_LADDER_SIZE - 1) {
+  for (size_t i = 0; i < CHUNK_LADDER_SIZE; ++i) {
+    if (CHUNK_LADDER[i] <= ceiling) {
+      ceilingIndex_ = i;
+      break;
+    }
+  }
+  lastIndex_ = ceilingIndex_;
 }
 
-void ChunkSizer::onCleanRequest() {
-  if (capIndex_ == 0) return;
-  if (++cleanRequests_ >= CLEAN_REQUESTS_TO_STEP_UP) {
-    --capIndex_;
-    cleanRequests_ = 0;
-  }
+size_t ChunkSizer::next(size_t largestFreeBlock) {
+  const size_t fits = ladderIndexFor(largestFreeBlock);
+  lastIndex_ = fits > ceilingIndex_ ? fits : ceilingIndex_;
+  return CHUNK_LADDER[lastIndex_];
 }
 
 void ChunkSizer::onOutOfMemory() {
   const size_t below = lastIndex_ + 1 < CHUNK_LADDER_SIZE ? lastIndex_ + 1 : CHUNK_LADDER_SIZE - 1;
-  if (below > capIndex_) capIndex_ = below;
-  cleanRequests_ = 0;
+  if (below > ceilingIndex_) ceilingIndex_ = below;
 }
 
-size_t ChunkSizer::cap() const { return CHUNK_LADDER[capIndex_]; }
+size_t ChunkSizer::ceiling() const { return CHUNK_LADDER[ceilingIndex_]; }
 
-bool RetryBudget::reconnectAfterFailure(bool madeProgress) {
+unsigned maxReconnectsFor(size_t fileBytes) {
+  return MAX_RECONNECTS_BASE + static_cast<unsigned>(fileBytes / BYTES_PER_EXTRA_RECONNECT);
+}
+
+bool RetryBudget::reconnectAfterFailure(bool madeProgress, size_t fileBytes) {
   stalledFailures_ = madeProgress ? 0 : stalledFailures_ + 1;
-  if (stalledFailures_ > MAX_STALLED_RETRIES || reconnects_ >= MAX_RECONNECTS) return false;
+  if (stalledFailures_ > MAX_STALLED_RETRIES || reconnects_ >= maxReconnectsFor(fileBytes)) return false;
   ++reconnects_;
   return true;
 }
