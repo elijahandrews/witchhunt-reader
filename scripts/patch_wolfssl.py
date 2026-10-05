@@ -175,6 +175,17 @@ OVERRIDES = """
 #ifndef MICRO_SESSION_CACHE
 #define MICRO_SESSION_CACHE
 #endif
+/* And without its client index (ClientCache, the serverID per session, a pointer per WOLFSSL): it
+ * only serves wolfSSL_SetServerID() lookups and wolfSSL_get_session() references, neither used here.
+ * The two go together (ssl_sess.c refuses NO_CLIENT_CACHE alone). With NO_SESSION_CACHE_REF,
+ * ClientSessionToSession() is the identity and wolfSSL_get_session() returns ssl->session; the calls
+ * resumption makes (get1_session, set_session, SESSION_dup/free) never involved the index. */
+#ifndef NO_SESSION_CACHE_REF
+#define NO_SESSION_CACHE_REF
+#endif
+#ifndef NO_CLIENT_CACHE
+#define NO_CLIENT_CACHE
+#endif
 
 /* TLS 1.3 session resumption, client side. A repeat connection to the same host offers the
  * ticket from the previous one; a server that accepts it sends no certificate chain, so nothing
