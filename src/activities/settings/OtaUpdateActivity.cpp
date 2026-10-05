@@ -37,7 +37,7 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 
   // Re-trim: the status screens rendered since onEnter can have repopulated the
   // font cache. Idempotent - the secondary buffer is already gone by now.
-  trimMemoryForNetworkSession(renderer, "OTA");
+  releaseMemoryForDownload(renderer, "OTA");
 
   const auto res = updater.checkForUpdate();
   if (res != OtaUpdater::OK) {
@@ -104,11 +104,11 @@ void OtaUpdateActivity::onEnter() {
   app.setScreen(&OtaUpdateActivity::confirmScreen, this);
 
   // Free the heap the WiFi stack needs before it is brought up, not after -
-  // association itself is the allocation-heavy step, well ahead of TLS. Matters
-  // most here because SettingsActivity is still on the stack below us with its
-  // per-category SettingInfo vectors resident, fragmenting the heap.
+  // association itself is the allocation-heavy step, well ahead of TLS. That
+  // includes the per-category SettingInfo vectors of the SettingsActivity below
+  // us, which fragment the heap; onExit() reboots, so they are never needed again.
   // WifiSelectionActivity sets WIFI_STA itself, so no radio work happens here.
-  trimMemoryForNetworkSession(renderer, "OTA");
+  releaseMemoryForDownload(renderer, "OTA");
 
   if (WiFi.status() == WL_CONNECTED) {
     onWifiSelectionComplete(true);
@@ -249,6 +249,8 @@ void OtaUpdateActivity::render(RenderLock&&) {
 
 void OtaUpdateActivity::startUpdate() {
   LOG_DBG("OTA", "New update available, starting download...");
+  // The confirm screen drew since the check: give its glyph caches back before the transfer.
+  releaseMemoryForDownload(renderer, "OTA");
   // The install now streams in one blocking call; drive the progress bar and
   // Back-to-cancel from inside the download via this callback. Throttle state
   // is a member (the callback outlives this stack frame).

@@ -29,11 +29,11 @@ void FontDownloadActivity::onEnter() {
   Activity::onEnter();
 
   // Free the heap the WiFi stack needs before it is brought up, not after -
-  // association itself is the allocation-heavy step, well ahead of TLS. Matters
-  // most here because SettingsActivity is still on the stack below us with its
-  // per-category SettingInfo vectors resident, fragmenting the heap.
+  // association itself is the allocation-heavy step, well ahead of TLS. That
+  // includes the per-category SettingInfo vectors of the SettingsActivity below
+  // us, which fragment the heap; onExit() reboots, so they are never needed again.
   // WifiSelectionActivity sets WIFI_STA itself, so no radio work happens here.
-  trimMemoryForNetworkSession(renderer, "FONT");
+  releaseMemoryForDownload(renderer, "FONT");
 
   if (WiFi.status() == WL_CONNECTED) {
     onWifiSelectionComplete(true);
@@ -73,7 +73,7 @@ void FontDownloadActivity::onWifiSelectionComplete(const bool success) {
 
   // Re-trim: the status screens rendered since onEnter can have repopulated the
   // font cache. Idempotent - the secondary buffer is already gone by now.
-  trimMemoryForNetworkSession(renderer, "FONT");
+  releaseMemoryForDownload(renderer, "FONT");
 
   if (!fetchAndParseManifest()) {
     RenderLock lock(*this);
@@ -482,6 +482,8 @@ void FontDownloadActivity::downloadFamily(int familyIdx) {
     errorMessage_ = "Failed to stash manifest";
     return;
   }
+  // The list screens drew since the manifest loaded: give their glyph caches back too.
+  releaseMemoryForDownload(renderer, "FONT");
 
   // Run the actual download with families_ empty (defragmented heap).
   downloadFamilyImpl(family, familyIdx);

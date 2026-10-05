@@ -67,6 +67,9 @@ class ActivityManager {
 
   std::atomic<bool> activityUsesWifi{false};
   void refreshWifiActivityFlag();
+  // An activity on the stack dropped its drawing state (releaseBuriedActivityState()): resuming
+  // one reboots to Settings instead.
+  bool buriedStateReleased = false;
 
   void exitActivity(const RenderLock& lock);
 
@@ -196,6 +199,12 @@ class ActivityManager {
   // Remove the currentActivity, returning the last one on stack
   // Note: if popActivity() on last activity on the stack, we will goHome()
   void popActivity();
+
+  // Asks every activity buried on the stack to drop what it built only to draw itself
+  // (Activity::releaseBuriedState()), for a download that needs the heap in one piece. From then
+  // on, a pop that would resume one of them reboots to Settings instead. Returns how many dropped
+  // something.
+  int releaseBuriedActivityState();
 
   bool currentActivityUsesWifi() const { return activityUsesWifi.load(std::memory_order_relaxed); }
 

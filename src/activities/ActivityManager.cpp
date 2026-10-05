@@ -15,6 +15,7 @@
 #include "OpdsServerStore.h"
 #include "SdCardFontGlobals.h"
 #include "SettingsList.h"
+#include "SilentRestart.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
@@ -315,6 +316,13 @@ void ActivityManager::loop() {
         continue;  // Will launch the target activity immediately
 
       } else {
+        if (buriedStateReleased) {
+          // The activity below dropped its rows for a download; it cannot be drawn again. Every
+          // download that releases reboots in its own onExit(), so this is only the net.
+          LOG_ERR("ACT", "Resuming an activity whose state was released; rebooting to Settings");
+          SETTINGS.saveToFile();
+          silentRestartToSettings();
+        }
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
         refreshWifiActivityFlag();
@@ -654,6 +662,15 @@ void ActivityManager::pushActivity(std::unique_ptr<Activity>&& activity) {
 #endif
   pendingActivity = std::move(activity);
   pendingAction = PendingAction::Push;
+}
+
+int ActivityManager::releaseBuriedActivityState() {
+  int released = 0;
+  for (const auto& activity : stackActivities) {
+    if (activity->releaseBuriedState()) ++released;
+  }
+  if (released > 0) buriedStateReleased = true;
+  return released;
 }
 
 void ActivityManager::popActivity() {
