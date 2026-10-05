@@ -452,6 +452,9 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   if (resumable) {
     fullHandshakeReason = "no cached session";
     wolfSSL_set_SessionTicket_cb(ssl, onSessionTicket, &_ticketLen);
+    // Resume only with a fresh (EC)DHE exchange (psk_dhe_ke), never on the ticket alone (psk_ke),
+    // so a resumed connection keeps forward secrecy (tls.c TLSX_PopulateExtensions).
+    wolfSSL_only_dhe_psk(ssl);
     if (WOLFSSL_SESSION* cached = copyCachedSession(_sessionKey)) {
       _sessionOffered = wolfSSL_set_session(ssl, cached) == WOLFSSL_SUCCESS;
       wolfSSL_SESSION_free(cached);  // the connection holds its own reference once set
@@ -648,7 +651,11 @@ int SecureClient::read(uint8_t* buf, size_t size) {
 
   const int err = wolfSSL_get_error(ssl, n);
   if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) return 0;  // no data yet
-  if (err == WOLFSSL_ERROR_ZERO_RETURN) {                                           // peer closed cleanly
+  // The peer closed: with close_notify (ZERO_RETURN), or by dropping the TCP connection, which
+  // wolfSSL_read reports as SOCKET_PEER_CLOSED_E with a 0 return (internal.c ReceiveData). Both end
+  // the stream normally; framed HTTP bodies still detect a short body as truncation. Neither is an
+  // error to log, and neither spoils the session the handshake verified.
+  if (err == WOLFSSL_ERROR_ZERO_RETURN || err == SOCKET_PEER_CLOSED_E) {
     _connected = false;
     return 0;
   }
