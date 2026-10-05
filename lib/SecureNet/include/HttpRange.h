@@ -56,12 +56,13 @@ struct Chunk {
 };
 
 // The next range to request from offset. False when the total is known and reached. When the
-// total is unknown the range is a full chunk; the transfer ends at a short chunk or a 416.
+// total is unknown the range is a full chunk, and only a 416 for the next byte ends the transfer.
 bool nextChunk(size_t offset, size_t chunkSize, bool totalKnown, size_t total, Chunk& out);
 
-// Whether the transfer is complete after a 206 that delivered `received` of `requested` bytes and
-// left the byte count at `offset`.
-bool transferComplete(size_t offset, bool totalKnown, size_t total, size_t requested, size_t received);
+// Whether the transfer is complete at offset. Only a known total can say so: with an unknown one, a
+// short or empty 206 proves nothing (a truncated reply looks the same), so the end is confirmed by a
+// 416 for the byte after it.
+bool transferComplete(size_t offset, bool totalKnown, size_t total);
 
 // --- sizing from the heap -----------------------------------------------------------------------
 

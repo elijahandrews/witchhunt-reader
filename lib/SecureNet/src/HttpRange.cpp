@@ -110,10 +110,7 @@ bool nextChunk(size_t offset, size_t chunkSize, bool totalKnown, size_t total, C
   return true;
 }
 
-bool transferComplete(size_t offset, bool totalKnown, size_t total, size_t requested, size_t received) {
-  if (totalKnown) return offset >= total;
-  return received < requested;
-}
+bool transferComplete(size_t offset, bool totalKnown, size_t total) { return totalKnown && offset >= total; }
 
 size_t heapBlockFor(size_t request) {
   size_t size = (request + HEAP_POISON_BYTES + HEAP_ALIGN - 1) & ~(HEAP_ALIGN - 1);

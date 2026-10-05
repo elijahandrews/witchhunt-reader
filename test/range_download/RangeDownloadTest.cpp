@@ -221,4 +221,149 @@ TEST_F(Fixture, FailuresThatMakeProgressKeepGoing) {
   EXPECT_EQ(file, resource);
 }
 
+// A 206 with headers and Content-Length but no body.
+FakeReply emptyPartial(size_t first, size_t last, const std::string& total) {
+  return {"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes " + std::to_string(first) + "-" + std::to_string(last) +
+              "/" + total + "\r\nContent-Length: 0\r\n\r\n",
+          FakeReply::End::KeepOpen};
+}
+
+TEST_F(Fixture, AnEmpty206WithAKnownTotalIsAStallNotALoop) {
+  // Review I1: an empty 206 was taken for progress and the identical request repeated for ever.
+  for (int i = 0; i < 50; ++i) FakeNet::replies().push_back(emptyPartial(0, 6143, "20000"));
+  EXPECT_LT(download(), 0);
+  EXPECT_EQ(FakeNet::requests().size(), 1u + hr::MAX_STALLED_RETRIES);
+  EXPECT_TRUE(file.empty());
+}
+
+TEST_F(Fixture, AnEmpty206WithAnUnknownTotalIsNotTheEnd) {
+  // Review I1: with "/*", an empty (or short) 206 used to end the transfer and report success.
+  for (int i = 0; i < 50; ++i) FakeNet::replies().push_back(emptyPartial(0, 6143, "*"));
+  EXPECT_LT(download(), 0);
+  EXPECT_TRUE(file.empty());
+}
+
+TEST_F(Fixture, AChunkWhoseBodyNeverComesIsAskedForAgain) {
+  const std::string resource = makeResource(20000);
+  serve(resource);
+  const size_t c = firstChunk();
+  FakeNet::faults()[1] = {0, FakeReply::End::KeepOpen};  // headers, then silence until the timeout
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  EXPECT_EQ(rangeOf(2), rangeOf(1));  // the same range asked again, on a new connection
+  EXPECT_EQ(rangeOf(1).rfind("bytes=" + std::to_string(c) + "-", 0), 0u);
+  EXPECT_EQ(FakeNet::connects(), 2);
+}
+
+TEST_F(Fixture, AnUnknownTotalEndsOnlyAtA416ForTheNextByte) {
+  const std::string resource = makeResource(9000);
+  serve(resource);
+  FakeNet::totalUnknown() = true;
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  // The short chunk that brought the last bytes did not end it; the 416 for byte 9000 did.
+  const size_t n = FakeNet::requests().size();
+  ASSERT_GE(n, 2u);
+  EXPECT_EQ(rangeOf(n - 1).rfind("bytes=9000-", 0), 0u);
+}
+
+TEST_F(Fixture, AnUnknownTotalOfAWholeNumberOfChunksEndsAtA416) {
+  const size_t c = firstChunk();
+  const std::string resource = makeResource(2 * c);
+  serve(resource);
+  FakeNet::totalUnknown() = true;
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  EXPECT_EQ(FakeNet::requests().size(), 3u);  // two full chunks, then the 416
+}
+
+TEST_F(Fixture, A416ThatDisagreesWithTheBytesWrittenFails) {
+  // Review M3: "bytes */N" must match what was written.
+  FakeNet::replies().push_back(
+      {"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-99/*\r\nContent-Length: "
+       "100\r\n\r\n" +
+           makeResource(100),
+       FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back(
+      {"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */5000\r\nContent-Length: 0\r\n\r\n",
+       FakeReply::End::KeepOpen});
+  EXPECT_EQ(download(), 416);
+}
+
+TEST_F(Fixture, A200FallbackGetsOneAttemptAndTheSessionThenStreams) {
+  // Review I2: after a 200 the loop used to reconnect, ask for a range again, get the whole file
+  // again and start over, up to the reconnect cap.
+  const std::string resource = makeResource(30000);
+  serve(resource);
+  FakeNet::ignoreRangeFrom() = 1;                        // the first chunk is a 206, then 200s
+  FakeNet::faults()[1] = {3000, FakeReply::End::Close};  // and the whole-file reply drops
+
+  EXPECT_LT(download(), 0);
+  EXPECT_EQ(FakeNet::requests().size(), 2u);  // no second whole-file attempt
+  EXPECT_EQ(rewinds, 1);                      // the first chunk was dropped before the 200's body
+  EXPECT_EQ(file, resource.substr(0, 3000));  // what the 200 delivered, from byte 0
+  EXPECT_TRUE(session.rangeUnsupported);
+
+  // The next file on this session streams without a Range header.
+  FakeNet::faults().clear();
+  const size_t before = FakeNet::requests().size();
+  EXPECT_EQ(download("https://raw.example/fonts/g.cpfont"), 200);
+  EXPECT_EQ(file, resource);
+  EXPECT_EQ(FakeNet::requests().size(), before + 1);
+  EXPECT_EQ(rangeOf(before), "");
+}
+
+TEST_F(Fixture, A200ForTheFirstChunkIsTheWholeFile) {
+  const std::string resource = makeResource(30000);
+  serve(resource);
+  FakeNet::ignoreRangeFrom() = 0;
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  EXPECT_EQ(FakeNet::requests().size(), 1u);
+  EXPECT_EQ(rewinds, 0);  // nothing was written before it
+  EXPECT_TRUE(session.rangeUnsupported);
+}
+
+TEST_F(Fixture, AnEmpty200MidFileRewindsTheFile) {
+  // Review M2: an empty 200 after earlier chunks used to leave the old partial file in place.
+  const std::string resource = makeResource(20000);
+  serve(resource);
+  const size_t c = firstChunk();
+  FakeNet::replies().push_back({"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-" + std::to_string(c - 1) +
+                                    "/20000\r\nContent-Length: " + std::to_string(c) + "\r\n\r\n" +
+                                    resource.substr(0, c),
+                                FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back({"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", FakeReply::End::KeepOpen});
+  download();
+  EXPECT_EQ(rewinds, 1);
+  EXPECT_TRUE(file.empty());
+  EXPECT_TRUE(session.rangeUnsupported);
+}
+
+TEST_F(Fixture, AFailedRewindIsAFileError) {
+  const std::string resource = makeResource(20000);
+  serve(resource);
+  FakeNet::ignoreRangeFrom() = 1;
+  crosspoint::DownloadSink sink = fileSink();
+  sink.rewind = [] { return false; };
+  EXPECT_EQ(crosspoint::downloadToSink(http, "https://raw.example/fonts/f.cpfont", sink, session, &fakeLargest),
+            crosspoint::ERR_REWIND);
+}
+
+TEST_F(Fixture, AnOutOfMemoryReadInAClosedDelimited206IsNotTheEnd) {
+  // Review I1: a body without Content-Length ends at the peer's close; a TLS read that failed
+  // (here out of memory) used to pass for that close and the short chunk for the whole range.
+  const std::string resource = makeResource(20000);
+  FakeNet::replies().push_back(
+      {"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-6143/20000\r\nConnection: "
+       "close\r\n\r\n" +
+           resource.substr(0, 1000),
+       FakeReply::End::OutOfMemory});
+  serve(resource);  // after the scripted reply, the server answers ranges itself
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  EXPECT_EQ(rangeOf(1).rfind("bytes=1000-", 0), 0u);             // resumed after the bytes written
+  EXPECT_LT(session.ceiling, hr::ChunkSizer().next(g_largest));  // and treated as out of memory
+}
+
 }  // namespace

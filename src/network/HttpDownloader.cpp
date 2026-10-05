@@ -157,6 +157,7 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) {
     return HttpDownloader::ABORTED;
   }
+  if (rc == crosspoint::ERR_REWIND) return HttpDownloader::FILE_ERROR;
   if (rc < 0) {
     LOG_ERR("HTTP", "SecureNet GET failed: rc=%d url=%s", rc, url.c_str());
     return HttpDownloader::HTTP_ERROR;
@@ -224,6 +225,7 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
 
   const int rc = crosspoint::downloadToSink(*impl->http, url, sink, impl->chunking, &largestFreeBlock);
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) return HttpDownloader::ABORTED;
+  if (rc == crosspoint::ERR_REWIND) return HttpDownloader::FILE_ERROR;
   if (rc != 200) {
     LOG_ERR("HTTP", "SecureNet session GET failed: rc=%d url=%s", rc, url.c_str());
     return HttpDownloader::HTTP_ERROR;

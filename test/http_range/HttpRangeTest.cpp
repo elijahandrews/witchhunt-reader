@@ -130,21 +130,22 @@ TEST(HttpRangeChunks, AnExactMultipleEndsOnAFullChunk) {
   EXPECT_FALSE(hr::nextChunk(16384, 8192, true, 16384, c));
 }
 
-TEST(HttpRangeChunks, AnUnknownTotalAsksForFullChunksUntilOneIsShort) {
+TEST(HttpRangeChunks, AnUnknownTotalAsksForFullChunksAndNeverCompletesByItself) {
   hr::Chunk c;
   ASSERT_TRUE(hr::nextChunk(0, 4096, false, 0, c));
   EXPECT_EQ(c.first, 0u);
   EXPECT_EQ(c.last, 4095u);
   ASSERT_TRUE(hr::nextChunk(4096, 4096, false, 0, c));
   EXPECT_EQ(c.last, 8191u);
-  // A full chunk is not the end; a short one is.
-  EXPECT_FALSE(hr::transferComplete(8192, false, 0, 4096, 4096));
-  EXPECT_TRUE(hr::transferComplete(9000, false, 0, 4096, 808));
+  // Without a total nothing is ever complete by itself, not even after a short chunk: only a 416
+  // for the next byte ends it (the download loop checks that).
+  EXPECT_FALSE(hr::transferComplete(8192, false, 0));
+  EXPECT_FALSE(hr::transferComplete(9000, false, 0));
 }
 
 TEST(HttpRangeChunks, AKnownTotalCompletesAtTheTotal) {
-  EXPECT_FALSE(hr::transferComplete(8192, true, 20000, 8192, 8192));
-  EXPECT_TRUE(hr::transferComplete(20000, true, 20000, 3616, 3616));
+  EXPECT_FALSE(hr::transferComplete(8192, true, 20000));
+  EXPECT_TRUE(hr::transferComplete(20000, true, 20000));
 }
 
 TEST(HttpRangeChunks, AZeroChunkPlansNothing) {

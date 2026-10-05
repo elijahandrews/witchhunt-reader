@@ -337,7 +337,10 @@ int SecureHttpClient::readBody(const BodySink& sink, const ProgressFn& progress,
   // No length, no chunked: read until the peer closes (Connection: close).
   for (;;) {
     const int n = _client->read(buf, sizeof(buf));
-    if (n < 0) return 0;  // treat as end for close-delimited
+    // Over TLS a close reads as 0 (SecureClient::read), so -1 is a real failure, such as a record
+    // that could not be allocated, and must not pass for the end of the body. A plain WiFiClient
+    // reports the peer's close as -1, which is the end here.
+    if (n < 0) return _client == &_secure ? ERR_TRUNCATED : 0;
     if (n == 0) {
       if (!_client->connected() && _client->available() == 0) return 0;  // clean end
       if (static_cast<int32_t>(millis() - idleDeadline) >= 0) return ERR_TIMEOUT;
