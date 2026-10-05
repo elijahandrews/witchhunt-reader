@@ -91,7 +91,9 @@ class CssParser {
   // v20: `background-image` (and the url in a `background` shorthand) is recorded in a side file
   //      next to the rule cache (see backgroundImageFor). A v19 compile never looked for it, so
   //      a book whose picture is a CSS background (Alice's rabbit hole) kept showing none.
-  static constexpr uint8_t CSS_CACHE_VERSION = 20;
+  // v21: `display` keeps Inline apart from Block (#388). A v20 cache stored display:inline as
+  //      Block, which would now lay those spans out as blocks.
+  static constexpr uint8_t CSS_CACHE_VERSION = 21;
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;

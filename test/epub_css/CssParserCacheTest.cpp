@@ -747,7 +747,8 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
       "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; "
       "list-style: none; page-break-before: always; page-break-after: always; }\n"
       ".b { margin-top: 3px; text-align: right; }\n"
-      ".c { display: none; }\n";
+      ".c { display: none; }\n"
+      ".d { display: inline; }\n";
   const std::string cacheDir = makeTempDir();
   ASSERT_FALSE(cacheDir.empty());
   std::string cssPath;
@@ -756,8 +757,8 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   CssParser parser(cacheDir);
   ASSERT_TRUE(compileCache(parser, cssPath));
 
-  const std::vector<std::pair<std::string, std::string>> probes = {
-      {"p", "a"}, {"p", "b"}, {"div", "c"}, {"span", "a"}, {"p", "none"}};
+  const std::vector<std::pair<std::string, std::string>> probes = {{"p", "a"},    {"p", "b"},    {"div", "c"},
+                                                                   {"span", "a"}, {"p", "none"}, {"span", "d"}};
   auto resolveAll = [&](CssParser& p) {
     std::vector<CssStyle> out;
     for (const auto& pr : probes) out.push_back(p.resolveStyle(pr.first, pr.second));
@@ -767,6 +768,9 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   parser.clear();
   ASSERT_TRUE(parser.loadFromCache());
   const std::vector<CssStyle> heapStyles = resolveAll(parser);
+  // Both paths agreeing proves nothing if the disk cache already lost the value.
+  EXPECT_EQ(static_cast<int>(heapStyles[5].display), static_cast<int>(CssDisplay::Inline))
+      << "display:inline did not survive the disk cache";
 
   BuildArena arena(64 * 1024);
   ASSERT_TRUE(arena.valid());
