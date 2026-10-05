@@ -9,6 +9,8 @@
 #include <esp_heap_caps.h>
 #include <esp_wifi.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -49,6 +51,10 @@ constexpr int HTTP_TIMEOUT_MS = 60000;
 struct Sink {
   // Returns false to abort the transfer (e.g. SD write failure or user cancel).
   std::function<bool(const uint8_t*, size_t)> write;
+  // Drops everything written so far (the file is truncated). Set only for file downloads, which are
+  // the only transfers fetched in Range chunks: a chunk lands where the previous one ended, and a
+  // server that ignores Range restarts the body from byte 0.
+  std::function<bool()> rewind;
   HttpDownloader::ProgressCallback progress;
   size_t total = 0;
   size_t downloaded = 0;
@@ -109,6 +115,164 @@ struct WifiPowerSaveGuard {
   }
 };
 
+// The response as one streamed body: every byte the server sends goes to the sink.
+int streamGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink) {
+  auto body = [&](const uint8_t* data, size_t len) -> bool {
+    if (!sink.write(data, len)) return false;  // abort
+    sink.downloaded += len;
+    if (sink.progress && sink.total > 0) {
+      if (!sink.progress(sink.downloaded, sink.total)) return false;
+    }
+    return true;
+  };
+  auto progress = [&](size_t /*downloaded*/, size_t total) -> bool {
+    sink.total = total;
+    return true;
+  };
+  return http.get(url, body, progress);
+}
+
+// A file in Range chunks over one kept-alive connection (see chunkedGet below): a transfer
+// failure is retried once from the bytes already written, at most this often per file.
+constexpr unsigned MAX_CHUNK_RECONNECTS = 3;
+
+bool isTransportFailure(int rc) {
+  using C = crosspoint::SecureHttpClient;
+  return rc == C::ERR_CONNECT || rc == C::ERR_SEND || rc == C::ERR_TIMEOUT || rc == C::ERR_TRUNCATED;
+}
+
+size_t largestFreeBlock() { return heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT); }
+
+// Fetches url in Range requests of chunkSize bytes, so that no response, and so no TLS record, is
+// larger than a chunk plus its headers (lib/SecureNet/HttpRange.h has why and the sizing). Returns
+// 200 once the whole file has been written, else the failing HTTP status or SecureHttpError.
+//
+// The handling of a server that ignores Range (200 instead of 206: rewind the sink, take the whole
+// body) and the resume from the bytes already received are adapted from Free-Ink/freeink-sdk f80a99c
+// (ResumableFetch.h, Justin Mitchell). Different here: every request is a bounded range on the same
+// kept-alive connection, the total comes from Content-Range, and chunks after the first go straight
+// to the URL the first one was redirected to.
+int chunkedGet(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink, size_t chunkSize) {
+  namespace hr = crosspoint::http_range;
+  using C = crosspoint::SecureHttpClient;
+  struct RequestModeGuard {
+    C& client;
+    ~RequestModeGuard() {
+      client.clearRange();
+      client.setQuietRequests(false);
+    }
+  } guard{http};
+  http.setQuietRequests(true);
+
+  const unsigned long startMs = millis();
+  std::string target = url;
+  size_t offset = 0;
+  bool totalKnown = false;
+  size_t total = 0;
+  unsigned requests = 0;
+  unsigned reconnects = 0;
+  size_t offsetAtLastFailure = SIZE_MAX;
+  bool wholeBody = false;
+
+  hr::Chunk chunk;
+  while (hr::nextChunk(offset, chunkSize, totalKnown, total, chunk)) {
+    http.setRange(chunk.first, chunk.last);
+    hr::RangeReply reply = hr::RangeReply::Error;
+    bool classified = false;
+    size_t received = 0;
+    auto body = [&](const uint8_t* data, size_t len) -> bool {
+      if (!classified) {
+        classified = true;
+        reply = hr::classifyReply(http.lastStatus(), http.lastHasContentRange(), http.lastContentRange(), chunk.first);
+        if (reply == hr::RangeReply::WholeBody) {
+          // The server ignored Range: this body is the whole file from byte 0.
+          if (offset > 0 && (!sink.rewind || !sink.rewind())) return false;
+          offset = 0;
+          totalKnown = http.lastContentLength() >= 0;
+          total = totalKnown ? static_cast<size_t>(http.lastContentLength()) : 0;
+        } else if (reply == hr::RangeReply::Partial && http.lastContentRange().totalKnown) {
+          totalKnown = true;
+          total = http.lastContentRange().total;
+        }
+      }
+      // An error page (or a range we did not ask for) is drained, never written into the file.
+      if (reply != hr::RangeReply::Partial && reply != hr::RangeReply::WholeBody) return true;
+      if (!sink.write(data, len)) return false;
+      offset += len;
+      received += len;
+      sink.downloaded = offset;
+      sink.total = totalKnown ? total : 0;
+      if (sink.progress && sink.total > 0 && !sink.progress(sink.downloaded, sink.total)) return false;
+      return true;
+    };
+
+    const int rc = http.get(target, body, nullptr);
+    ++requests;
+    if (rc == C::ERR_ABORTED) return rc;
+    if (rc < 0) {
+      // The connection broke mid-chunk. What was written stays; reconnect (a resumed TLS session,
+      // so no certificate chain) and continue from there. A failure that made no progress since
+      // the last one ends the download, and so does running out of reconnects.
+      if (!isTransportFailure(rc) || reconnects >= MAX_CHUNK_RECONNECTS || offset == offsetAtLastFailure) {
+        LOG_ERR("HTTP", "chunked download stopped at %u B after %u requests, %u reconnect(s): rc=%d",
+                static_cast<unsigned>(offset), requests, reconnects, rc);
+        return rc;
+      }
+      offsetAtLastFailure = offset;
+      ++reconnects;
+      http.close();
+      // The new connection may leave less heap than the first: never grow the chunk, shrink it if needed.
+      if (http.open(target)) chunkSize = std::min(chunkSize, hr::chunkSizeForLargestBlock(largestFreeBlock()));
+      continue;
+    }
+    if (!classified) {  // a response without a body: a 416, or an empty one
+      reply = hr::classifyReply(rc, http.lastHasContentRange(), http.lastContentRange(), chunk.first);
+    }
+    if (reply == hr::RangeReply::WholeBody) {
+      wholeBody = true;
+      break;
+    }
+    if (reply == hr::RangeReply::Unsatisfiable && offset > 0 && (!totalKnown || offset == total)) {
+      break;  // the previous chunk ended exactly at the end of a file of unknown size
+    }
+    if (reply != hr::RangeReply::Partial) {
+      LOG_ERR("HTTP", "chunked download: unexpected reply %d to bytes %u-%u", rc, static_cast<unsigned>(chunk.first),
+              static_cast<unsigned>(chunk.last));
+      return rc;
+    }
+    target = http.lastUrl();  // follow a redirect once, not once per chunk
+    if (hr::transferComplete(offset, totalKnown, total, chunk.length(), received)) break;
+  }
+
+  LOG_DBG("HTTP", "chunked download done: %u B in %u requests, %lu ms, %u reconnect(s)%s",
+          static_cast<unsigned>(offset), requests, millis() - startMs, reconnects,
+          wholeBody ? " (server ignored Range: whole file streamed)" : "");
+  return 200;
+}
+
+// File downloads over https, on a heap too tight for 16 KB TLS records, are fetched in Range
+// chunks; everything else streams as one response. Decided on the largest free block once the
+// connection is up, just before the first request. Returns what SecureHttpClient::get() would:
+// the HTTP status (200 for a complete chunked download) or a negative SecureHttpError.
+int transfer(crosspoint::SecureHttpClient& http, const std::string& url, Sink& sink) {
+  namespace hr = crosspoint::http_range;
+  if (!sink.rewind) return streamGet(http, url, sink);
+  if (url.compare(0, 8, "https://") != 0) {
+    LOG_DBG("HTTP", "download mode: streamed (plain http)");
+    return streamGet(http, url, sink);
+  }
+  if (!http.open(url)) return crosspoint::SecureHttpClient::ERR_CONNECT;
+  const size_t largest = largestFreeBlock();
+  if (!hr::shouldChunk(largest)) {
+    LOG_DBG("HTTP", "download mode: streamed (largest free block %u B)", static_cast<unsigned>(largest));
+    return streamGet(http, url, sink);
+  }
+  const size_t chunkSize = hr::chunkSizeForLargestBlock(largest);
+  LOG_DBG("HTTP", "download mode: chunked %u B (largest free block %u B)", static_cast<unsigned>(chunkSize),
+          static_cast<unsigned>(largest));
+  return chunkedGet(http, url, sink, chunkSize);
+}
+
 // One-shot streaming GET over SecureNet (wolfSSL). Fills the Sink and emits
 // "Phase start"/"Phase open_ok"/"Phase done" heap telemetry. The TlsPolicy
 // decides whether the curated roots are loaded at all and what happens when the
@@ -135,25 +299,17 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
   }
 
   bool openLogged = false;
-  auto bodySink = [&](const uint8_t* data, size_t len) -> bool {
+  const auto write = sink.write;
+  sink.write = [&openLogged, startMs, write](const uint8_t* data, size_t len) -> bool {
     if (!openLogged) {
       openLogged = true;
       LOG_DBG("HTTP", "Phase open_ok @%lums heap=%u largest=%u", millis() - startMs, esp_get_free_heap_size(),
               heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     }
-    if (!sink.write(data, len)) return false;  // abort
-    sink.downloaded += len;
-    if (sink.progress && sink.total > 0) {
-      if (!sink.progress(sink.downloaded, sink.total)) return false;
-    }
-    return true;
-  };
-  auto progress = [&](size_t downloaded, size_t total) -> bool {
-    sink.total = total;
-    return true;
+    return write(data, len);
   };
 
-  const int rc = http.get(url, bodySink, progress);
+  const int rc = transfer(http, url, sink);
   // Log the handshake heap trough on EVERY path (incl. early abort via
   // treatAbortAsSuccess) so the TLS-specific low-water is always captured,
   // distinct from the all-time ESP.getMinFreeHeap() figure.
@@ -225,20 +381,7 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
     impl->http->setBasicAuth(username, password);
   }
 
-  auto bodySink = [&](const uint8_t* data, size_t len) -> bool {
-    if (!sink.write(data, len)) return false;
-    sink.downloaded += len;
-    if (sink.progress && sink.total > 0) {
-      if (!sink.progress(sink.downloaded, sink.total)) return false;
-    }
-    return true;
-  };
-  auto progress = [&](size_t, size_t total) -> bool {
-    sink.total = total;
-    return true;
-  };
-
-  const int rc = impl->http->get(url, bodySink, progress);
+  const int rc = transfer(*impl->http, url, sink);
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) return HttpDownloader::ABORTED;
   if (rc != 200) {
     LOG_ERR("HTTP", "SecureNet session GET failed: rc=%d url=%s", rc, url.c_str());
@@ -353,6 +496,11 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   Sink sink;
   sink.progress = std::move(progress);
   sink.write = [&file](const uint8_t* data, size_t len) { return file.write(data, len) == len; };
+  // Reopening for write truncates: the file starts again from byte 0.
+  sink.rewind = [&file, &destPath]() {
+    file.close();
+    return Storage.openFileForWrite("HTTP", destPath.c_str(), file);
+  };
 
   const DownloadError result = runGetDispatch(url, username, password, sink, tls);
   return finishFileDownload(result, destPath, file, sink.downloaded);
@@ -377,6 +525,11 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(Session& session, c
   Sink sink;
   sink.progress = std::move(progress);
   sink.write = [&file](const uint8_t* data, size_t len) { return file.write(data, len) == len; };
+  // Reopening for write truncates: the file starts again from byte 0.
+  sink.rewind = [&file, &destPath]() {
+    file.close();
+    return Storage.openFileForWrite("HTTP", destPath.c_str(), file);
+  };
 
   const DownloadError result = runGetOnSession(session, url, username, password, sink, tls);
   return finishFileDownload(result, destPath, file, sink.downloaded);
