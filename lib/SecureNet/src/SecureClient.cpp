@@ -11,10 +11,7 @@
 #include <freertos/semphr.h>    // the session cache's mutex
 #include <wolfssl/error-ssl.h>  // VERIFY_CERT_ERROR, DOMAIN_NAME_MISMATCH (SSL-layer codes)
 #include <wolfssl/ssl.h>
-#include <wolfssl/wolfcrypt/memory.h>  // wolfSSL_SetAllocators, for the record buffer reserve
 
-#include <atomic>
-#include <cstdlib>
 #include <cstring>
 #include <ctime>  // time() for the clock reported alongside a cert-date load failure
 
@@ -324,158 +321,7 @@ WOLFSSL_SESSION* sessionToKeep(WOLFSSL* ssl, const TlsSessionKey& key, int ticke
   if (session != nullptr) LOG_DBG("TLS", "kept session for %s (ticket %dB)", key.host, ticketLen);
   return session;
 }
-
-bool hasCachedSession(const TlsSessionKey& key) {
-  const SessionCacheLock lock;
-  return findCachedSession(key) != nullptr;
-}
-
-// ---- Record buffer reserve -----------------------------------------------------------------
-//
-// wolfSSL reads each record into a heap buffer of exactly the record's length (internal.c
-// GetInputData -> GrowInputBuffer: no alignment pad for TLS, nothing carried over from the header),
-// 16,401 B for a full TLS 1.3 AEAD record, and frees it again once the record's data has been read
-// out (ReceiveData / ProcessReply -> ShrinkInputBuffer). The ESP-IDF heap is TLSF, which rounds a
-// request up to its size class before looking for a block (heap/tlsf mapping_search), so on the C3
-// that malloc needs one free block of 17,408 B. The handshake's own allocations come first and can
-// leave none behind; the first full-size record then fails with MEMORY_E (-125) although the free
-// total looks ample. Seen on an X3: 23.5 KB largest before the connect, 8 KB after it.
-//
-// So SecureClient holds such a block back for the record and hands it over at the moment wolfSSL
-// asks for it:
-//  - It is taken before the handshake only when the handshake will be cheap (a cached session is
-//    expected to resume it, or the connection is unverified). A full verified handshake needs that
-//    memory for the RSA-4096 chain math, so it holds nothing back; its block is taken once the
-//    request is written.
-//  - wolfSSL allocates through the hooks below. Any wolfSSL allocation that fails releases the
-//    reserve and retries, so the reserve can never cost wolfSSL an allocation, even when a resumption
-//    turns into a full handshake mid-connect. (A verify callback would be too late for that: it runs
-//    after the signature math.) A failing full-size allocation is the record buffer itself, and the
-//    retry takes the block just released.
-//  - While a response is being read, the block is taken back as soon as a record has been read out,
-//    so it cannot be split up between records. It is given up when the response ends
-//    (SecureHttpClient) or the connection stops, so an idle connection holds nothing back.
-//  - A server that accepted 2 KB records (max_fragment_length, below) never needs one.
-//
-// One reserve at a time, process-wide: the hooks are global.
-
-// 2^14 + 256, the largest TLS 1.3 record (RFC 8446 5.2). TLSF puts it in the same 17,408 B class as
-// a full 16,401 B record (16,896 B on a pool over 256 KB, such as the S3's PSRAM).
-constexpr size_t RECORD_RESERVE_BYTES = 16640;
-// A wolfSSL allocation at least this big is a record buffer: nothing else it allocates comes close.
-constexpr size_t FULL_RECORD_ALLOC = 16384;
-
-enum class ReserveRelease : uint8_t { None, TakenByRecord, RecordFoundOwnBlock, NeededByWolfSsl };
-
-std::atomic<void*> g_recordReserve{nullptr};
-std::atomic<uint8_t> g_reserveRelease{static_cast<uint8_t>(ReserveRelease::None)};
-std::atomic<uint32_t> g_largestAfterReserveRelease{0};
-
-// Called from inside wolfSSL's allocator: no logging here, SecureClient reports it afterwards.
-bool releaseReserveForWolfSsl(ReserveRelease why) {
-  void* block = g_recordReserve.exchange(nullptr);
-  if (block == nullptr) return false;
-  free(block);
-  g_largestAfterReserveRelease.store(heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
-  g_reserveRelease.store(static_cast<uint8_t>(why));
-  return true;
-}
-
-void* wolfMalloc(size_t size) {
-  void* p = malloc(size);
-  if (p != nullptr) {
-    // A record buffer found a block of its own; the reserve has nothing left to protect.
-    if (size >= FULL_RECORD_ALLOC) releaseReserveForWolfSsl(ReserveRelease::RecordFoundOwnBlock);
-    return p;
-  }
-  const ReserveRelease why =
-      size >= FULL_RECORD_ALLOC ? ReserveRelease::TakenByRecord : ReserveRelease::NeededByWolfSsl;
-  if (!releaseReserveForWolfSsl(why)) return nullptr;
-  return malloc(size);
-}
-
-void* wolfRealloc(void* ptr, size_t size) {
-  void* p = realloc(ptr, size);
-  if (p != nullptr || size == 0) return p;
-  if (!releaseReserveForWolfSsl(ReserveRelease::NeededByWolfSsl)) return nullptr;
-  return realloc(ptr, size);
-}
-
-// Behaves exactly like wolfSSL's default allocator (malloc/realloc; with no free hook it calls
-// free(), wolfcrypt/src/memory.c) until an allocation fails. Installed once, on the first connect.
-void installRecordReserveAllocator() {
-  static const bool installed = (wolfSSL_SetAllocators(wolfMalloc, nullptr, wolfRealloc), true);
-  (void)installed;
-}
-
-const char* reserveReleaseReason(ReserveRelease why) {
-  switch (why) {
-    case ReserveRelease::TakenByRecord:
-      return "a full-size record took it";
-    case ReserveRelease::RecordFoundOwnBlock:
-      return "a full-size record found a block of its own";
-    case ReserveRelease::NeededByWolfSsl:
-      return "a wolfSSL allocation needed it";
-    case ReserveRelease::None:
-      break;
-  }
-  return "?";
-}
 }  // namespace
-
-bool SecureClient::takeRecordReserve() {
-  if (_recordReserve != nullptr) return true;
-  if (g_recordReserve.load() != nullptr) return false;  // another connection holds the one reserve
-  void* block = malloc(RECORD_RESERVE_BYTES);
-  if (block == nullptr) return false;
-  void* expected = nullptr;
-  if (!g_recordReserve.compare_exchange_strong(expected, block)) {
-    free(block);
-    return false;
-  }
-  _recordReserve = block;
-  return true;
-}
-
-void SecureClient::dropRecordReserve(const char* why) {
-  noteReserveReleasedByWolfSsl();  // wolfSSL's allocator may have released it already
-  if (_recordReserve == nullptr) return;
-  void* mine = _recordReserve;
-  _recordReserve = nullptr;
-  // Only if it is still ours: wolfSSL's allocator may have released it already.
-  if (!g_recordReserve.compare_exchange_strong(mine, nullptr)) return;
-  free(mine);
-  if (!_reserveReleaseLogged) {
-    _reserveReleaseLogged = true;
-    LOG_DBG("TLS", "record reserve: released %u B (%s); largest free block now %u B",
-            static_cast<unsigned>(RECORD_RESERVE_BYTES), why,
-            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT)));
-  }
-}
-
-void SecureClient::noteReserveReleasedByWolfSsl() {
-  if (_recordReserve == nullptr || g_recordReserve.load() == _recordReserve) return;
-  _recordReserve = nullptr;
-  if (!_reserveReleaseLogged) {
-    _reserveReleaseLogged = true;
-    LOG_DBG("TLS", "record reserve: released %u B (%s); largest free block now %u B",
-            static_cast<unsigned>(RECORD_RESERVE_BYTES),
-            reserveReleaseReason(static_cast<ReserveRelease>(g_reserveRelease.load())),
-            static_cast<unsigned>(g_largestAfterReserveRelease.load()));
-  }
-}
-
-void SecureClient::noteReserveMiss(const char* when) {
-  if (_reserveMissLogged) return;
-  _reserveMissLogged = true;
-  LOG_DBG("TLS", "record reserve: none to take %s (largest free block %u B)", when,
-          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT)));
-}
-
-void SecureClient::releaseRecordReserve() {
-  _reserveWanted = false;
-  dropRecordReserve("response ended");
-}
 
 void SecureClient::clearSessionCache() {
   unsigned dropped = 0;
@@ -495,7 +341,6 @@ void SecureClient::clearSessionCache() {
 int SecureClient::connectWithMethod(const char* host, uint16_t port, void* method, const char* label, bool verifyPeer,
                                     bool mayResume) {
   stop();
-  installRecordReserveAllocator();
 #ifdef CROSSPOINT_TLS_VERIFY_TIMING
   // Proves the instrumentation define actually reached the wolfSSL headers. It travels via
   // build_flags -> user_settings.h, and PlatformIO's build cache can hand back a library object
@@ -524,32 +369,6 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   if (!_transport.connect(host, port)) return 0;
   const uint32_t transportMs = millis() - transportStartMs;
 
-  // Verifying the peer decides the trust store below, whether a TLS session may be kept, and how
-  // expensive the handshake will be.
-  const bool verifying = verifyPeer && !_insecure && _rootCA;
-  const bool resumable =
-      verifying && mayResume && makeSessionKey(_sessionKey, host, port, _rootCA, _allowCertificateDateErrors);
-
-  // Record buffer reserve (see above), taken here only when the handshake will be cheap, so that
-  // everything the handshake allocates is placed around it. A first verified handshake gets the full
-  // heap for its chain verification; its reserve is taken when the request is written.
-  _reserveReleaseLogged = false;
-  _reserveTakenLogged = false;
-  _reserveMissLogged = false;
-  _recordsCapped = false;
-  const bool resumptionExpected = resumable && hasCachedSession(_sessionKey);
-  if (verifying && !resumptionExpected) {
-    LOG_DBG("TLS", "record reserve for %s: skipped (first verified handshake)", host);
-  } else if (takeRecordReserve()) {
-    _reserveWanted = true;
-    _reserveTakenLogged = true;
-    LOG_DBG("TLS", "record reserve for %s: reserved %u B (%s)", host, static_cast<unsigned>(RECORD_RESERVE_BYTES),
-            resumptionExpected ? "resumption expected" : "unverified handshake");
-  } else {
-    LOG_DBG("TLS", "record reserve for %s: unavailable (largest free block %u B)", host,
-            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT)));
-  }
-
   auto* ctx = wolfSSL_CTX_new(static_cast<WOLFSSL_METHOD*>(method));
   if (!ctx) {
     _transport.stop();
@@ -563,6 +382,8 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   // AddSessionToCache): heap that nothing here would ever read.
   wolfSSL_CTX_set_session_cache_mode(ctx, WOLFSSL_SESS_CACHE_OFF);
 
+  // Verifying the peer: decides the trust store below and whether a TLS session may be kept.
+  const bool verifying = verifyPeer && !_insecure && _rootCA;
   if (verifying) {
     // The roots are date-checked AS THEY LOAD, not only during the handshake: plain
     // load_verify_buffer() passes WOLFSSL_LOAD_VERIFY_DEFAULT_FLAGS (== WOLFSSL_LOAD_FLAG_NONE),
@@ -626,6 +447,8 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   _keepSession = false;
   _sessionOffered = false;
   const char* fullHandshakeReason = "unverified, sessions not kept";
+  const bool resumable =
+      verifying && mayResume && makeSessionKey(_sessionKey, host, port, _rootCA, _allowCertificateDateErrors);
   if (resumable) {
     fullHandshakeReason = "no cached session";
     wolfSSL_set_SessionTicket_cb(ssl, onSessionTicket, &_ticketLen);
@@ -755,14 +578,6 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
     }
     LOG_DBG("TLS", "full handshake for %s (%s)", host, fullHandshakeReason);
   }
-  noteReserveReleasedByWolfSsl();  // reports it if the handshake needed the reserve after all
-  // A server that took the max_fragment_length request sends records of 2 KB at most, so this
-  // connection never needs a full-size record buffer (the limit applies both ways, RFC 6066).
-  _recordsCapped = wolfSSL_GetMaxOutputSize(ssl) < static_cast<int>(FULL_RECORD_ALLOC);
-  if (_recordsCapped) {
-    _reserveWanted = false;
-    dropRecordReserve("the server agreed to 2 KB records");
-  }
   _keepSession = resumable;
   _connected = true;
   return 1;
@@ -820,23 +635,7 @@ int SecureClient::connect(IPAddress ip, uint16_t port) {
 
 size_t SecureClient::write(const uint8_t* buf, size_t size) {
   if (!_connected) return 0;
-  // A request is going out, so a response is coming: hold a block back for its first full-size
-  // record. A first verified handshake took none, and a kept-alive connection gave its back when
-  // the last response ended.
-  if (!_reserveWanted && !_recordsCapped) {
-    _reserveWanted = true;
-    if (takeRecordReserve()) {
-      if (!_reserveTakenLogged) {
-        _reserveTakenLogged = true;
-        LOG_DBG("TLS", "record reserve: reserved %u B after the handshake",
-                static_cast<unsigned>(RECORD_RESERVE_BYTES));
-      }
-    } else {
-      noteReserveMiss("for the response");
-    }
-  }
   const int n = wolfSSL_write(static_cast<WOLFSSL*>(_ssl), buf, size);
-  noteReserveReleasedByWolfSsl();
   return n > 0 ? static_cast<size_t>(n) : 0;
 }
 
@@ -844,16 +643,7 @@ int SecureClient::read(uint8_t* buf, size_t size) {
   if (!_connected) return -1;
   auto* ssl = static_cast<WOLFSSL*>(_ssl);
   const int n = wolfSSL_read(ssl, buf, size);
-  noteReserveReleasedByWolfSsl();
-  if (n > 0) {
-    // wolfSSL frees a record's buffer once all its data has been read out (ReceiveData ->
-    // ShrinkInputBuffer). Take the block back at once, before anything can split it, so it is
-    // whole for the next full-size record.
-    if (_reserveWanted && _recordReserve == nullptr && wolfSSL_pending(ssl) == 0 && !takeRecordReserve()) {
-      noteReserveMiss("between records");
-    }
-    return n;
-  }
+  if (n > 0) return n;
 
   const int err = wolfSSL_get_error(ssl, n);
   if (err == WOLFSSL_ERROR_WANT_READ || err == WOLFSSL_ERROR_WANT_WRITE) return 0;  // no data yet
@@ -887,8 +677,6 @@ void SecureClient::stop() {
   }
   _keepSession = false;
   _ticketLen = 0;
-  _reserveWanted = false;
-  dropRecordReserve("connection closed");
   if (_ctx) {
     wolfSSL_CTX_free(static_cast<WOLFSSL_CTX*>(_ctx));
     _ctx = nullptr;
@@ -902,7 +690,6 @@ uint8_t SecureClient::connected() { return _connected && _transport.connected();
 #else  // !FREEINK_NET_WOLFSSL — inert stub so the firmware builds without wolfSSL.
 
 void SecureClient::clearSessionCache() {}
-void SecureClient::releaseRecordReserve() {}
 int SecureClient::connectWithMethod(const char*, uint16_t, void*, const char*, bool, bool) { return 0; }
 int SecureClient::connectAtVerify(const char*, uint16_t, bool) { return 0; }
 int SecureClient::connect(const char* host, uint16_t port) {
