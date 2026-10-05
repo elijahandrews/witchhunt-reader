@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -12,6 +13,10 @@ class OtaUpdater {
   std::string latestVersion;
   std::string otaUrl;
   size_t otaSize = 0;
+  // The asset's SHA-256 from the release metadata (GitHub's "digest"), checked against the image
+  // before it may boot. Releases from before GitHub listed digests have none.
+  uint8_t otaSha256[32] = {};
+  bool otaHasSha256 = false;
   size_t processedSize = 0;
   size_t totalSize = 0;
   bool render = false;
@@ -33,6 +38,8 @@ class OtaUpdater {
     // Release asset was built for another board: chip_id or the embedded board
     // tag disagreed with this build. See FirmwareBoardTag.h.
     WRONG_DEVICE_ERROR,
+    // The downloaded image's SHA-256 is not the one the release metadata lists.
+    CHECKSUM_ERROR,
   };
 
   size_t getOtaSize() const { return otaSize; }

@@ -26,6 +26,7 @@ User-facing changes only. Full commit history is in git log.
 
 - **Fix: GitHub downloads pass the certificate check again.** GitHub's download servers moved to a new Let's Encrypt certificate chain whose root key is 4096-bit RSA, which the reader's TLS library could not verify. The font list, font files and firmware updates (which never skip the check) failed with a certificate error; the font manager only worked with **Skip HTTPS validation** switched on.
 - **Font downloads fetch each file in small pieces when memory is tight**, so the X3 no longer runs out of memory on GitHub's large secure-connection records partway through a font file (the X4 uses the same method). On those readers a file is now requested in pieces of 1 to 6 KB, sized to the memory that is free, over the same connection; a dropped connection picks up where it stopped. Book downloads from OPDS catalogs use the same method; a server that does not support it sends the whole file as before. The T5 S3 and X4 Pro, with more memory, download as before.
+- **Firmware updates download in small pieces too, and are checked before they install.** On the X3 and X4 the update now fetches the firmware the same way as font files. Before the reader switches to the new firmware, it compares the download with the SHA-256 checksum GitHub lists for the release, and refuses an incomplete or corrupted download ("Download corrupted (checksum mismatch)") instead of installing it.
 
 ## 2.37 — 2026-09-29
 

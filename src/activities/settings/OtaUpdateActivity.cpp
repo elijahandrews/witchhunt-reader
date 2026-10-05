@@ -218,6 +218,9 @@ void OtaUpdateActivity::render(RenderLock&&) {
       case OtaUpdater::WRONG_DEVICE_ERROR:
         reason = tr(STR_FIRMWARE_WRONG_DEVICE);
         break;
+      case OtaUpdater::CHECKSUM_ERROR:
+        reason = "Download corrupted (checksum mismatch)";
+        break;
       default:
         break;
     }
