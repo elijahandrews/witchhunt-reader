@@ -190,6 +190,13 @@ OVERRIDES = """
 #define MAX_PSK_ID_LEN 512
 #endif
 
+/* RFC 6066 max_fragment_length, so SecureClient can ask servers for 2 KB records instead of 16 KB
+ * ones (each of which needs a ~17 KB contiguous receive buffer). Ported from Free-Ink/freeink-sdk
+ * b72416b (Justin Mitchell). */
+#ifndef HAVE_MAX_FRAGMENT
+#define HAVE_MAX_FRAGMENT
+#endif
+
 /* Instrumentation only, off unless -DCROSSPOINT_TLS_VERIFY_TIMING is in build_flags.
  * wolfSSL issues the verify callback ONLY on a verification error by default, so a
  * successful handshake reports nothing and per-certificate cost cannot be measured. These two

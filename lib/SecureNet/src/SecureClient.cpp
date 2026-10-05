@@ -425,6 +425,15 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   wolfSSL_SetIOReadCtx(ssl, &_transport);
   wolfSSL_SetIOWriteCtx(ssl, &_transport);
   wolfSSL_UseSNI(ssl, WOLFSSL_SNI_HOST_NAME, host, strlen(host));
+#ifdef HAVE_MAX_FRAGMENT
+  // Ask the peer to cap its TLS records at 2 KB (RFC 6066 max_fragment_length). wolfSSL sizes its
+  // receive buffer to each incoming record, so a full 16 KB record needs a ~17 KB contiguous block;
+  // a server that honours this keeps it at about 2 KB. One that ignores it (GitHub, for TLS 1.2 and
+  // 1.3) keeps its 16 KB records exactly as before: wolfSSL lowers its own limit only when the
+  // server acknowledges (ssl.c wolfSSL_UseMaxFragment, tls.c TLSX_MFL_Parse).
+  // Ported from Free-Ink/freeink-sdk b72416b (Justin Mitchell).
+  wolfSSL_UseMaxFragment(ssl, WOLFSSL_MFL_2_11);
+#endif
   if (verifyPeer && !_insecure) {
     // Also check the hostname against the cert SAN/CN, not just the chain.
     wolfSSL_check_domain_name(ssl, host);
