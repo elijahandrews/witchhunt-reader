@@ -31,7 +31,10 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 78;  // v78: a span indent (poem line shape) gives way
+constexpr uint8_t SECTION_FILE_VERSION = 79;  // v79: a <span> styled display:block is a block,
+                                              // and every block in a heading keeps its centring
+                                              // and size (#388); v78 pages run them together
+                                              // v78: a span indent (poem line shape) gives way
                                               // before its line wraps; v77 pages of such poems
                                               // carry the wrapped lines
                                               // v77: the status byte records a heap-degraded
