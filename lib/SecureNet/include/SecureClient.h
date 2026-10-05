@@ -108,6 +108,11 @@ class SecureClient : public Client {
   // session ends, so a ticket never outlives the network session it came from.
   static void clearSessionCache();
 
+  // Gives up the heap block held back for wolfSSL's next full-size TLS record (SecureClient.cpp,
+  // "Record buffer reserve"). Call it when a response has been read, so that an idle kept-alive
+  // connection holds nothing back; the next write() takes a block again.
+  void releaseRecordReserve();
+
  private:
   // verifyPeer: true = load the curated CA + WOLFSSL_VERIFY_PEER; false = VERIFY_NONE.
   // mayResume: the method can negotiate TLS 1.3, so a cached session may be offered (the kept
@@ -116,6 +121,11 @@ class SecureClient : public Client {
                         bool mayResume);
   // One connect attempt at the given verification level, incl. the TLS1.2 retry.
   int connectAtVerify(const char* host, uint16_t port, bool verifyPeer);
+  // Record buffer reserve (SecureClient.cpp). take: false when none could be taken.
+  bool takeRecordReserve();
+  void dropRecordReserve(const char* why);
+  void noteReserveReleasedByWolfSsl();  // after a wolfSSL call that may have used it
+  void noteReserveMiss(const char* when);
 
   WiFiClient _transport;
   const char* _rootCA = nullptr;
@@ -134,6 +144,13 @@ class SecureClient : public Client {
   int _ticketLen = 0;              // length of the last session ticket on this connection, 0 = none
   bool _keepSession = false;       // a verified handshake completed: keep its ticket on stop()
   bool _sessionOffered = false;    // this connect offered a cached session
+  // Record buffer reserve (see releaseRecordReserve()).
+  void* _recordReserve = nullptr;      // the block this connection holds back, nullptr = none
+  bool _reserveWanted = false;         // a response is under way: hold the block between records
+  bool _recordsCapped = false;         // the server agreed to 2 KB records: no reserve needed
+  bool _reserveTakenLogged = false;    // one "reserved" line per connection
+  bool _reserveReleaseLogged = false;  // one "released" line per connection
+  bool _reserveMissLogged = false;     // one "none to take" line per connection
 };
 
 }  // namespace crosspoint

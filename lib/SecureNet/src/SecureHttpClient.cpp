@@ -346,6 +346,7 @@ int SecureHttpClient::get(const std::string& url, const BodySink& sink, const Pr
       // Drain the redirect's (usually empty) body to keep the socket usable for
       // the next hop; a failed drain leaves undrained bytes, so close instead.
       if (readBody(nullptr, nullptr, meta.contentLength, meta.chunked, meta.keepAlive) < 0 || !meta.keepAlive) close();
+      _secure.releaseRecordReserve();  // this response is done
       current = resolveRedirect(u, meta.location);
       // Refuse to drop TLS silently: stop following a https -> http downgrade
       // and surface the 3xx to the caller (setAllowRedirectDowngrade opts in).
@@ -356,6 +357,8 @@ int SecureHttpClient::get(const std::string& url, const BodySink& sink, const Pr
     }
 
     const int rc = readBody(sink, progress, meta.contentLength, meta.chunked, meta.keepAlive);
+    // The response is done: an idle kept-alive connection holds no record block back.
+    _secure.releaseRecordReserve();
     if (rc < 0) {
       // Undrained body bytes would poison the kept-alive socket: the next
       // request would parse the leftovers as its status line.
@@ -393,6 +396,7 @@ int SecureHttpClient::request(const char* method, const std::string& url, const 
     if (isRedirect(meta.status) && !meta.location.empty()) {
       // See get(): drain to keep the socket usable, close on a failed drain.
       if (readBody(nullptr, nullptr, meta.contentLength, meta.chunked, meta.keepAlive) < 0 || !meta.keepAlive) close();
+      _secure.releaseRecordReserve();  // this response is done
       current = resolveRedirect(u, meta.location);
       // Refuse to drop TLS silently: stop following a https -> http downgrade
       // and surface the 3xx to the caller (setAllowRedirectDowngrade opts in).
@@ -409,6 +413,8 @@ int SecureHttpClient::request(const char* method, const std::string& url, const 
     }
 
     const int rc = readBody(sink, nullptr, meta.contentLength, meta.chunked, meta.keepAlive);
+    // The response is done: an idle kept-alive connection holds no record block back.
+    _secure.releaseRecordReserve();
     if (rc < 0) {
       // Undrained body bytes would poison the kept-alive socket: the next
       // request would parse the leftovers as its status line.
