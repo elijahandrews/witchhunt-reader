@@ -54,7 +54,7 @@ bool isHttps(const std::string& url) {
 // body) and the resume from the bytes already received are adapted from Free-Ink/freeink-sdk f80a99c
 // (ResumableFetch.h, Justin Mitchell). Different here: every request is a bounded range on the same
 // kept-alive connection, the total comes from Content-Range, and chunks after the first go straight
-// to the URL the first one was redirected to.
+// to the URL the first one was redirected to (and back through url when that target starts refusing).
 int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sink, size_t firstLargest,
                ChunkSession& session, LargestFreeBlockFn largestFreeBlock) {
   struct RequestModeGuard {
@@ -68,6 +68,7 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
 
   const unsigned long startMs = millis();
   std::string target = url;
+  bool targetRefreshed = false;  // target went back to url since the last chunk that arrived
   size_t offset = 0;
   bool totalKnown = false;
   size_t total = 0;
@@ -214,12 +215,23 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
       const bool sizeAgrees = !http.lastHasContentRange() || !range.totalKnown || range.total == offset;
       if (offset > 0 && !totalKnown && sizeAgrees) break;
     }
+    // A redirect target that starts refusing is most likely a presigned CDN URL past its expiry
+    // (GitHub's release assets then answer 403). Ask through the original URL, which redirects
+    // afresh: once per stretch of progress, so a target that keeps refusing still fails.
+    if (reply != hr::RangeReply::Partial && rc >= 400 && rc < 500 && rc != 416 && target != url && !targetRefreshed) {
+      LOG_DBG("HTTP", "chunked download: redirect target answered %d at %u B; asking %s again", rc,
+              static_cast<unsigned>(offset), url.c_str());
+      target = url;
+      targetRefreshed = true;
+      continue;
+    }
     if (reply != hr::RangeReply::Partial) {
       LOG_ERR("HTTP", "chunked download: unexpected reply %d to bytes %u-%u", rc, static_cast<unsigned>(chunk.first),
               static_cast<unsigned>(chunk.last));
       return rc;
     }
     target = http.lastUrl();  // follow a redirect once, not once per chunk
+    targetRefreshed = false;
     retries.onProgress();
     if (hr::transferComplete(offset, totalKnown, total)) break;
   }

@@ -353,6 +353,47 @@ TEST_F(Fixture, AFileThatChangesSizeMidDownloadFailsUnspliced) {
   EXPECT_EQ(FakeNet::requests().size(), 2u);
 }
 
+// Review M4: chunks after the first go to the redirect target, and a presigned CDN URL (GitHub's
+// release assets) can expire mid-download. The original URL hands out a fresh one.
+TEST_F(Fixture, AnExpiredRedirectTargetIsRefreshedThroughTheOriginalUrl) {
+  const std::string resource = makeResource(20000);
+  const size_t c = firstChunk();
+  const std::string redirect =
+      "HTTP/1.1 302 Found\r\nLocation: https://cdn.example/signed\r\nContent-Length: 0\r\n\r\n";
+  FakeNet::replies().push_back({redirect, FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back({"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-" + std::to_string(c - 1) +
+                                    "/20000\r\nContent-Length: " + std::to_string(c) + "\r\n\r\n" +
+                                    resource.substr(0, c),
+                                FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back(
+      {"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\n\r\nForbidden", FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back({redirect, FakeReply::End::KeepOpen});
+  serve(resource);  // the rest comes from the refreshed target
+
+  EXPECT_EQ(download(), 200);
+  EXPECT_EQ(file, resource);
+  ASSERT_GE(FakeNet::requests().size(), 5u);
+  EXPECT_EQ(FakeNet::requests()[2].rfind("GET /signed ", 0), 0u);
+  EXPECT_EQ(FakeNet::requests()[3].rfind("GET /fonts/f.cpfont ", 0), 0u);  // back through the original
+  EXPECT_EQ(rangeOf(3), "bytes=" + std::to_string(c) + "-" + std::to_string(2 * c - 1));
+}
+
+TEST_F(Fixture, ARedirectTargetThatStillRefusesFails) {
+  const size_t c = firstChunk();
+  const std::string redirect =
+      "HTTP/1.1 302 Found\r\nLocation: https://cdn.example/signed\r\nContent-Length: 0\r\n\r\n";
+  const FakeReply forbidden{"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\n\r\nForbidden", FakeReply::End::KeepOpen};
+  FakeNet::replies().push_back({redirect, FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back({"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-" + std::to_string(c - 1) +
+                                    "/20000\r\nContent-Length: " + std::to_string(c) + "\r\n\r\n" + makeResource(c),
+                                FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back(forbidden);
+  FakeNet::replies().push_back({redirect, FakeReply::End::KeepOpen});
+  FakeNet::replies().push_back(forbidden);  // the fresh target refuses too
+  EXPECT_EQ(download(), 403);
+  EXPECT_EQ(FakeNet::requests().size(), 5u);
+}
+
 TEST_F(Fixture, AFailedRewindIsAFileError) {
   const std::string resource = makeResource(20000);
   serve(resource);
