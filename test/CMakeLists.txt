@@ -182,5 +182,6 @@ add_subdirectory(glyph_fallback)
 # After zip_entry_reader: reuses its inflate_reader_host target and HalStorage shim.
 add_subdirectory(dictionary)
 add_subdirectory(reading_stats)
+add_subdirectory(font_manifest_parser)
 add_subdirectory(folder_count_memo)
 add_subdirectory(bitmap_rows)

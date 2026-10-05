@@ -37,6 +37,7 @@
 #include "html/WelcomePageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "network/HttpDownloader.h"
+#include "util/FontManifestReader.h"
 #include "util/PluginLocations.h"
 
 // Log free heap + max contiguous block at a named point.
@@ -1845,39 +1846,23 @@ void CrossPointWebServer::handlePostSettings() {
 // ---- Font Management API ----
 
 namespace {
-struct RemoteManifestFile {
-  std::string name;
-  size_t size = 0;
-  uint32_t crc32 = 0;
-  bool hasCrc32 = false;
-};
-
-struct RemoteManifestFamily {
-  std::string name;
-  std::string description;
-  std::vector<RemoteManifestFile> files;
-  size_t totalSize = 0;
-  bool installed = false;
-  bool hasUpdate = false;
-};
-
 // Cap chosen so that FONTS_DIR + "/" + family + "__staging/" + filename stays
 // well under the 128-byte path buffers used below. snprintf truncation checks
 // are the actual guard; this just rejects obviously-bogus entries early.
 static constexpr size_t MAX_FONT_FILE_NAME_LEN = 60;
 
-bool isValidFontFileName(const std::string& name) {
-  if (name.empty() || name.size() > MAX_FONT_FILE_NAME_LEN) return false;
+bool isValidFontFileName(const char* name) {
+  const size_t len = strlen(name);
+  if (len == 0 || len > MAX_FONT_FILE_NAME_LEN) return false;
   // Allow '/' for subdirectories of font families, but prevent absolute paths
   if (name[0] == '/') return false;
-  if (name.find('\\') != std::string::npos) return false;
-  if (name.find("..") != std::string::npos) return false;
+  if (strchr(name, '\\') != nullptr) return false;
+  if (strstr(name, "..") != nullptr) return false;
   return true;
 }
 
-bool fetchRemoteFontManifest(HttpDownloader::Session& session, FontInstaller& installer,
-                             std::vector<RemoteManifestFamily>& outFamilies, std::string& outBaseUrl,
-                             std::string& outError) {
+bool fetchRemoteFontManifest(HttpDownloader::Session& session, FontInstaller& installer, FontCatalog& outFamilies,
+                             std::string& outBaseUrl, std::string& outError) {
   static constexpr const char* MANIFEST_TMP = "/fonts_manifest_web.tmp";
 
   auto result = HttpDownloader::downloadToFile(session, FONT_MANIFEST_URL, MANIFEST_TMP, nullptr);
@@ -1894,100 +1879,67 @@ bool fetchRemoteFontManifest(HttpDownloader::Session& session, FontInstaller& in
     return false;
   }
 
-  JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, manifestFile);
+  // Streamed off the card a block at a time, never the whole document: this
+  // runs while Wi-Fi is up, and a whole-document parse of the 24 KB manifest
+  // ran the X3 out of heap. The list is one block, which the install frees
+  // whole before its downloads -- see handleFontDownload().
+  FontManifestReader reader("WEB", FontInstaller::isValidFamilyName, isValidFontFileName);
+  const FontManifestStatus status = reader.read(manifestFile, outFamilies, outBaseUrl);
   manifestFile.close();
   Storage.remove(MANIFEST_TMP);
-  if (err) {
+  if (status == FontManifestStatus::Invalid) {
     outError = "Failed to parse font manifest";
     return false;
   }
-
-  const int version = doc["version"] | 0;
-  // v1 (legacy, no crc32) and v2 (with crc32) — crc check is skipped per-file
-  // when absent. See upstream PR #1904 and scripts/generate-font-manifest.py.
-  if (version != 1 && version != 2) {
+  if (status == FontManifestStatus::UnsupportedVersion) {
     outError = "Unsupported manifest version";
     return false;
   }
+  if (status == FontManifestStatus::OutOfMemory) {
+    LOG_ERR("WEB", "Font manifest: %s", reader.failure());
+    outError = "Failed to read font manifest: out of memory";
+    return false;
+  }
 
-  outBaseUrl = doc["baseUrl"] | "";
-  outFamilies.clear();
-
-  JsonArray familiesArr = doc["families"].as<JsonArray>();
-  outFamilies.reserve(familiesArr.size());
-
-  for (JsonObject fObj : familiesArr) {
-    RemoteManifestFamily family;
-    family.name = fObj["name"] | "";
-    family.description = fObj["description"] | "";
-
-    if (!FontInstaller::isValidFamilyName(family.name.c_str())) {
-      LOG_ERR("WEB", "Manifest entry rejected, invalid family name: %s", family.name.c_str());
-      continue;
-    }
-
-    bool fileNamesOk = true;
-    for (JsonObject fileObj : fObj["files"].as<JsonArray>()) {
-      RemoteManifestFile file;
-      file.name = fileObj["name"] | "";
-      file.size = static_cast<size_t>(fileObj["size"] | 0);
-      if (fileObj["crc32"].is<uint32_t>()) {
-        file.crc32 = fileObj["crc32"].as<uint32_t>();
-        file.hasCrc32 = true;
-      }
-      if (!isValidFontFileName(file.name)) {
-        LOG_ERR("WEB", "Manifest entry rejected, invalid file name in %s: %s", family.name.c_str(), file.name.c_str());
-        fileNamesOk = false;
-        break;
-      }
-      family.totalSize += file.size;
-      family.files.push_back(std::move(file));
-    }
-    if (!fileNamesOk) continue;
-
-    family.installed = installer.isFamilyInstalled(family.name.c_str());
-    family.hasUpdate = false;
-    if (family.installed) {
-      for (const auto& file : family.files) {
-        std::string localFilename = file.name;
-        std::string familyPrefix = family.name + "/";
-        if (localFilename.find(familyPrefix) == 0) {
-          localFilename = localFilename.substr(familyPrefix.length());
-        }
-
+  for (size_t i = 0; i < outFamilies.count(); i++) {
+    const char* familyName = outFamilies.name(i);
+    outFamilies.setInstalled(i, installer.isFamilyInstalled(familyName));
+    outFamilies.setHasUpdate(i, false);
+    if (outFamilies.installed(i)) {
+      for (size_t j = 0; j < outFamilies.fileCount(i); j++) {
         char path[128];
-        FontInstaller::buildFontPath(family.name.c_str(), localFilename.c_str(), path, sizeof(path));
+        FontInstaller::buildFontPath(familyName, outFamilies.fileLocalName(i, j), path, sizeof(path));
         FsFile f;
         if (Storage.openFileForRead("WEB", path, f)) {
           const size_t actual = static_cast<size_t>(f.size());
           f.close();
-          if (actual != file.size) {
-            family.hasUpdate = true;
+          if (actual != outFamilies.fileSize(i, j)) {
+            outFamilies.setHasUpdate(i, true);
             break;
           }
         } else {
-          family.hasUpdate = true;
+          outFamilies.setHasUpdate(i, true);
           break;
         }
       }
     }
-
-    outFamilies.push_back(std::move(family));
   }
 
   return true;
 }
 
-bool installRemoteFamily(HttpDownloader::Session& session, const RemoteManifestFamily& family,
+// Installs the family at `familyIndex` of `families`.
+bool installRemoteFamily(HttpDownloader::Session& session, const FontCatalog& families, const size_t familyIndex,
                          const std::string& baseUrl, FontInstaller& installer, std::string& outError) {
-  if (!FontInstaller::isValidFamilyName(family.name.c_str())) {
+  const char* familyName = families.name(familyIndex);
+  const size_t fileCount = families.fileCount(familyIndex);
+  if (!FontInstaller::isValidFamilyName(familyName)) {
     outError = "Invalid family name";
     return false;
   }
-  for (const auto& file : family.files) {
-    if (!isValidFontFileName(file.name)) {
-      outError = std::string("Invalid file name: ") + file.name;
+  for (size_t j = 0; j < fileCount; j++) {
+    if (!isValidFontFileName(families.fileName(familyIndex, j))) {
+      outError = std::string("Invalid file name: ") + families.fileName(familyIndex, j);
       return false;
     }
   }
@@ -1996,17 +1948,17 @@ bool installRemoteFamily(HttpDownloader::Session& session, const RemoteManifestF
   char stagingDir[128];
   char backupDir[128];
   int n;
-  n = snprintf(liveDir, sizeof(liveDir), "%s/%s", SdCardFontRegistry::FONTS_DIR, family.name.c_str());
+  n = snprintf(liveDir, sizeof(liveDir), "%s/%s", SdCardFontRegistry::FONTS_DIR, familyName);
   if (n < 0 || static_cast<size_t>(n) >= sizeof(liveDir)) {
     outError = "Family path too long";
     return false;
   }
-  n = snprintf(stagingDir, sizeof(stagingDir), "%s/%s__staging", SdCardFontRegistry::FONTS_DIR, family.name.c_str());
+  n = snprintf(stagingDir, sizeof(stagingDir), "%s/%s__staging", SdCardFontRegistry::FONTS_DIR, familyName);
   if (n < 0 || static_cast<size_t>(n) >= sizeof(stagingDir)) {
     outError = "Family path too long";
     return false;
   }
-  n = snprintf(backupDir, sizeof(backupDir), "%s/%s__backup", SdCardFontRegistry::FONTS_DIR, family.name.c_str());
+  n = snprintf(backupDir, sizeof(backupDir), "%s/%s__backup", SdCardFontRegistry::FONTS_DIR, familyName);
   if (n < 0 || static_cast<size_t>(n) >= sizeof(backupDir)) {
     outError = "Family path too long";
     return false;
@@ -2021,18 +1973,18 @@ bool installRemoteFamily(HttpDownloader::Session& session, const RemoteManifestF
 
   // The session is owned by the caller (handleFontInstall) so it can be
   // reused across the manifest fetch and every family install in one batch.
-  for (const auto& file : family.files) {
+  for (size_t j = 0; j < fileCount; j++) {
     HalSystem::feedWatchdog();
     yield();
 
-    std::string localFilename = file.name;
-    std::string familyPrefix = family.name + "/";
-    if (localFilename.find(familyPrefix) == 0) {
-      localFilename = localFilename.substr(familyPrefix.length());
-    }
+    const char* fileName = families.fileName(familyIndex, j);
+    const char* localFilename = families.fileLocalName(familyIndex, j);
+    const uint32_t expectedSize = families.fileSize(familyIndex, j);
+    const bool hasCrc32 = families.fileHasCrc32(familyIndex, j);
+    const uint32_t expectedCrc32 = families.fileCrc32(familyIndex, j);
 
     char stagedPath[128];
-    int sn = snprintf(stagedPath, sizeof(stagedPath), "%s/%s", stagingDir, localFilename.c_str());
+    int sn = snprintf(stagedPath, sizeof(stagedPath), "%s/%s", stagingDir, localFilename);
     if (sn < 0 || static_cast<size_t>(sn) >= sizeof(stagedPath)) {
       // Path-length bugs are not resumable; nuke staging so we don't get stuck.
       Storage.removeDir(stagingDir);
@@ -2045,14 +1997,14 @@ bool installRemoteFamily(HttpDownloader::Session& session, const RemoteManifestF
       FsFile f;
       bool sizeOk = false;
       if (Storage.openFileForRead("WEB", stagedPath, f)) {
-        sizeOk = (static_cast<size_t>(f.size()) == file.size);
+        sizeOk = (static_cast<size_t>(f.size()) == expectedSize);
         f.close();
       }
-      bool crcOk = !file.hasCrc32;
-      if (sizeOk && file.hasCrc32) {
+      bool crcOk = !hasCrc32;
+      if (sizeOk && hasCrc32) {
         uint32_t actualCrc = 0;
         if (FontInstaller::computeFileCrc32(stagedPath, actualCrc)) {
-          crcOk = (actualCrc == file.crc32);
+          crcOk = (actualCrc == expectedCrc32);
         }
       }
       if (sizeOk && crcOk && installer.validateCpfontFile(stagedPath)) {
@@ -2069,28 +2021,28 @@ bool installRemoteFamily(HttpDownloader::Session& session, const RemoteManifestF
       Storage.mkdir(stagedPathStr.substr(0, lastSlash).c_str());
     }
 
-    const std::string url = baseUrl + file.name;
+    const std::string url = baseUrl + fileName;
 
     auto result = HttpDownloader::downloadToFile(session, url, stagedPath, nullptr);
     if (result != HttpDownloader::OK) {
       // Drop just the failed file; keep already-downloaded siblings.
       Storage.remove(stagedPath);
-      outError = std::string("Download failed: ") + file.name;
+      outError = std::string("Download failed: ") + fileName;
       return false;
     }
 
-    if (file.hasCrc32) {
+    if (hasCrc32) {
       uint32_t actualCrc = 0;
-      if (!FontInstaller::computeFileCrc32(stagedPath, actualCrc) || actualCrc != file.crc32) {
+      if (!FontInstaller::computeFileCrc32(stagedPath, actualCrc) || actualCrc != expectedCrc32) {
         Storage.remove(stagedPath);
-        outError = std::string("Checksum mismatch: ") + file.name;
+        outError = std::string("Checksum mismatch: ") + fileName;
         return false;
       }
     }
 
     if (!installer.validateCpfontFile(stagedPath)) {
       Storage.remove(stagedPath);
-      outError = std::string("Invalid font file: ") + file.name;
+      outError = std::string("Invalid font file: ") + fileName;
       return false;
     }
   }
@@ -2173,7 +2125,7 @@ void CrossPointWebServer::handleFontManifest() {
   FontInstaller installer(sdFontSystem.registry());
   installer.refreshRegistry();
 
-  std::vector<RemoteManifestFamily> families;
+  FontCatalog families;
   std::string baseUrl;
   std::string error;
   {
@@ -2191,14 +2143,14 @@ void CrossPointWebServer::handleFontManifest() {
   doc["ok"] = true;
   doc["baseUrl"] = baseUrl;
   JsonArray arr = doc["families"].to<JsonArray>();
-  for (const auto& family : families) {
+  for (size_t i = 0; i < families.count(); i++) {
     JsonObject obj = arr.add<JsonObject>();
-    obj["name"] = family.name;
-    obj["description"] = family.description;
-    obj["installed"] = family.installed;
-    obj["hasUpdate"] = family.hasUpdate;
-    obj["totalSize"] = static_cast<unsigned long>(family.totalSize);
-    obj["fileCount"] = static_cast<unsigned>(family.files.size());
+    obj["name"] = families.name(i);
+    obj["description"] = families.description(i);
+    obj["installed"] = families.installed(i);
+    obj["hasUpdate"] = families.hasUpdate(i);
+    obj["totalSize"] = static_cast<unsigned long>(families.totalSize(i));
+    obj["fileCount"] = static_cast<unsigned>(families.fileCount(i));
   }
   LOG_WEB_MEM("font_manifest_exit");
   sendJson(server.get(), 200, doc);
@@ -2223,10 +2175,10 @@ void CrossPointWebServer::handleFontDownload() {
   FontInstaller installer(sdFontSystem.registry());
   installer.refreshRegistry();
 
-  // Manifest fetch uses a local session that closes before parse, so the
-  // ArduinoJson parse runs on a clean heap. A separate install session is
-  // opened below for the actual family downloads.
-  std::vector<RemoteManifestFamily> families;
+  // The manifest fetch uses its own session, closed at the end of the block
+  // below, before a separate install session is opened for the actual family
+  // downloads.
+  FontCatalog families;
   std::string baseUrl;
   std::string error;
   {
@@ -2240,32 +2192,36 @@ void CrossPointWebServer::handleFontDownload() {
     }
   }  // manifestSession destructor closes the TLS connection here
 
-  std::vector<RemoteManifestFamily*> targets;
+  // The families to install, copied into a block of their own, so the whole
+  // list can be freed before the downloads: their TLS session needs a
+  // contiguous record buffer, and the list's block comes back in one piece.
+  FontCatalog targets;
+  bool copied = false;
   if (installAll) {
-    for (auto& family : families) {
-      if (!family.installed || family.hasUpdate) {
-        targets.push_back(&family);
-      }
-    }
+    copied = targets.copyFrom(
+        families,
+        [](const void*, const FontCatalog& from, const size_t i) { return !from.installed(i) || from.hasUpdate(i); },
+        nullptr);
   } else {
-    for (auto& family : families) {
-      if (family.name == requestedFamily) {
-        targets.push_back(&family);
+    size_t found = families.count();
+    for (size_t i = 0; i < families.count(); i++) {
+      if (requestedFamily == families.name(i)) {
+        found = i;
         break;
       }
     }
-    if (targets.empty()) {
+    if (found == families.count()) {
       server->send(404, "application/json", "{\"ok\":false,\"error\":\"Family not found in manifest\"}");
       return;
     }
-  }
-
-  std::vector<RemoteManifestFamily> targetCopies;
-  for (auto* f : targets) {
-    targetCopies.push_back(*f);
+    copied = targets.copyFamilyFrom(families, found);
   }
   families.clear();
-  families.shrink_to_fit();
+  if (!copied) {
+    LOG_ERR("WEB", "OOM: copy of the fonts to install");
+    server->send(500, "application/json", "{\"ok\":false,\"error\":\"Out of memory\"}");
+    return;
+  }
 
   // One install session covers every family in this batch. TLS handshake
   // happens once on the first file of the first family; subsequent files
@@ -2273,17 +2229,17 @@ void CrossPointWebServer::handleFontDownload() {
   HttpDownloader::Session installSession;
 
   size_t installedCount = 0;
-  for (auto& family : targetCopies) {
+  for (size_t i = 0; i < targets.count(); i++) {
     HalSystem::feedWatchdog();
     yield();
 
-    LOG_DBG("WEB", "Installing font family: %s", family.name.c_str());
+    LOG_DBG("WEB", "Installing font family: %s", targets.name(i));
 
-    if (!installRemoteFamily(installSession, family, baseUrl, installer, error)) {
+    if (!installRemoteFamily(installSession, targets, i, baseUrl, installer, error)) {
       JsonDocument errDoc;
       errDoc["ok"] = false;
       errDoc["error"] = error;
-      errDoc["family"] = family.name;
+      errDoc["family"] = targets.name(i);
       errDoc["installedCount"] = static_cast<unsigned>(installedCount);
       sendJson(server.get(), 500, errDoc);
       return;
