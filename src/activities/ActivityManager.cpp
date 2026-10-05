@@ -316,7 +316,7 @@ void ActivityManager::loop() {
         continue;  // Will launch the target activity immediately
 
       } else {
-        if (buriedStateReleased) {
+        if (stackActivities.back()->buriedStateReleased) {
           // The activity below dropped its rows for a download; it cannot be drawn again. Every
           // download that releases reboots in its own onExit(), so this is only the net.
           LOG_ERR("ACT", "Resuming an activity whose state was released; rebooting to Settings");
@@ -667,9 +667,11 @@ void ActivityManager::pushActivity(std::unique_ptr<Activity>&& activity) {
 int ActivityManager::releaseBuriedActivityState() {
   int released = 0;
   for (const auto& activity : stackActivities) {
-    if (activity->releaseBuriedState()) ++released;
+    if (activity->releaseBuriedState()) {
+      activity->buriedStateReleased = true;
+      ++released;
+    }
   }
-  if (released > 0) buriedStateReleased = true;
   return released;
 }
 

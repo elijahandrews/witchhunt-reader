@@ -27,6 +27,11 @@ class Activity {
   ActivityResult result;
   ListRowTap::ActivationState listTapActivation;
 
+ private:
+  // Set by ActivityManager when releaseBuriedState() dropped something: this activity can not be
+  // drawn again, so the manager reboots to Settings rather than resume it.
+  bool buriedStateReleased = false;
+
  public:
   enum class ListPageDirection : uint8_t { Back, Forward };
 
