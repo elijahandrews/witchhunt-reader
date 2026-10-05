@@ -11,6 +11,29 @@ void safeCopy(char* dst, size_t dstSize, const char* src, size_t srcLen) {
   dst[n] = '\0';
 }
 
+int hexValue(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+// "sha256:" and 64 hex digits into 32 bytes. False, with out untouched, for anything else.
+bool parseSha256Digest(const char* value, size_t len, uint8_t* out) {
+  static constexpr char PREFIX[] = "sha256:";
+  static constexpr size_t PREFIX_LEN = sizeof(PREFIX) - 1;
+  if (len != PREFIX_LEN + 64 || memcmp(value, PREFIX, PREFIX_LEN) != 0) return false;
+  uint8_t bytes[32];
+  for (size_t i = 0; i < 32; ++i) {
+    const int hi = hexValue(value[PREFIX_LEN + 2 * i]);
+    const int lo = hexValue(value[PREFIX_LEN + 2 * i + 1]);
+    if (hi < 0 || lo < 0) return false;
+    bytes[i] = static_cast<uint8_t>(hi << 4 | lo);
+  }
+  memcpy(out, bytes, sizeof(bytes));
+  return true;
+}
+
 }  // namespace
 
 ReleaseJsonParser::ReleaseJsonParser()
@@ -33,12 +56,16 @@ void ReleaseJsonParser::reset() {
   tagName[0] = '\0';
   firmwareUrl[0] = '\0';
   firmwareSize = 0;
+  memset(firmwareSha256, 0, sizeof(firmwareSha256));
+  firmwareHasSha256 = false;
   tagFound = false;
   firmwareFound = false;
   topLevelArray = false;
   currentAssetName[0] = '\0';
   currentAssetUrl[0] = '\0';
   currentAssetSize = 0;
+  memset(currentAssetSha256, 0, sizeof(currentAssetSha256));
+  currentAssetHasSha256 = false;
 }
 
 bool ReleaseJsonParser::inReleaseObject() const {
@@ -55,16 +82,22 @@ bool ReleaseJsonParser::foundFirmware() const { return firmwareFound; }
 const char* ReleaseJsonParser::getTagName() const { return tagName; }
 const char* ReleaseJsonParser::getFirmwareUrl() const { return firmwareUrl; }
 size_t ReleaseJsonParser::getFirmwareSize() const { return firmwareSize; }
+bool ReleaseJsonParser::hasFirmwareSha256() const { return firmwareHasSha256; }
+const uint8_t* ReleaseJsonParser::getFirmwareSha256() const { return firmwareSha256; }
 
 void ReleaseJsonParser::commitAsset() {
   if (strcmp(currentAssetName, firmwareAssetName) == 0) {
     memcpy(firmwareUrl, currentAssetUrl, sizeof(firmwareUrl));
     firmwareSize = currentAssetSize;
+    memcpy(firmwareSha256, currentAssetSha256, sizeof(firmwareSha256));
+    firmwareHasSha256 = currentAssetHasSha256;
     firmwareFound = true;
   }
   currentAssetName[0] = '\0';
   currentAssetUrl[0] = '\0';
   currentAssetSize = 0;
+  memset(currentAssetSha256, 0, sizeof(currentAssetSha256));
+  currentAssetHasSha256 = false;
 }
 
 void ReleaseJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
@@ -89,6 +122,8 @@ void ReleaseJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
           self->lastKey = LastKey::ASSET_URL;
         else if (len == 4 && memcmp(key, "size", 4) == 0)
           self->lastKey = LastKey::ASSET_SIZE;
+        else if (len == 6 && memcmp(key, "digest", 6) == 0)
+          self->lastKey = LastKey::ASSET_DIGEST;
         else
           self->lastKey = LastKey::NONE;
       }
@@ -115,6 +150,10 @@ void ReleaseJsonParser::sOnString(void* ctx, const char* value, size_t len) {
     case LastKey::ASSET_URL:
       if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
         safeCopy(self->currentAssetUrl, sizeof(self->currentAssetUrl), value, len);
+      break;
+    case LastKey::ASSET_DIGEST:
+      if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
+        self->currentAssetHasSha256 = parseSha256Digest(value, len, self->currentAssetSha256);
       break;
     default:
       break;
@@ -151,6 +190,8 @@ void ReleaseJsonParser::sOnObjectStart(void* ctx) {
       self->currentAssetName[0] = '\0';
       self->currentAssetUrl[0] = '\0';
       self->currentAssetSize = 0;
+      memset(self->currentAssetSha256, 0, sizeof(self->currentAssetSha256));
+      self->currentAssetHasSha256 = false;
       self->lastKey = LastKey::NONE;
       break;
     case Position::IN_ASSET_OBJECT:

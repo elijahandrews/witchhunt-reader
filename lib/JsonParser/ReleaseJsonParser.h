@@ -28,6 +28,11 @@ class ReleaseJsonParser {
   const char* getTagName() const;
   const char* getFirmwareUrl() const;
   size_t getFirmwareSize() const;
+  // The firmware asset's SHA-256, from GitHub's "digest" field ("sha256:" and 64 hex digits), which
+  // GitHub lists for every release asset since 2025. False for an asset without one, or with a
+  // digest in any other form; getFirmwareSha256() is then all zeros.
+  bool hasFirmwareSha256() const;
+  const uint8_t* getFirmwareSha256() const;  // 32 bytes
 
  private:
   bool inReleaseObject() const;
@@ -45,6 +50,7 @@ class ReleaseJsonParser {
     ASSET_NAME,
     ASSET_URL,
     ASSET_SIZE,
+    ASSET_DIGEST,
   };
 
   static void sOnKey(void* ctx, const char* key, size_t len);
@@ -69,6 +75,8 @@ class ReleaseJsonParser {
   char tagName[32];
   char firmwareUrl[512];
   size_t firmwareSize;
+  uint8_t firmwareSha256[32];
+  bool firmwareHasSha256;
   bool tagFound;
   bool firmwareFound;
 
@@ -77,4 +85,6 @@ class ReleaseJsonParser {
   char currentAssetUrl[512];
   bool topLevelArray;
   size_t currentAssetSize;
+  uint8_t currentAssetSha256[32];
+  bool currentAssetHasSha256;
 };
