@@ -101,6 +101,7 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
     hr::RangeReply reply = hr::RangeReply::Error;
     bool classified = false;
     bool rewindFailed = false;
+    bool totalChanged = false;
     size_t received = 0;
     // The server ignored Range: what it sends is the whole file from byte 0, so drop what is there.
     // From now on the session streams (one attempt per file, as before chunking existed).
@@ -123,6 +124,11 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
         if (reply == hr::RangeReply::WholeBody) {
           if (!startWholeBody()) return false;
         } else if (reply == hr::RangeReply::Partial && http.lastContentRange().totalKnown) {
+          // A different size is a different version of the file: never splice it onto this one.
+          if (totalKnown && http.lastContentRange().total != total) {
+            totalChanged = true;
+            return false;
+          }
           totalKnown = true;
           total = http.lastContentRange().total;
         }
@@ -143,6 +149,12 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
     if (rewindFailed) {
       LOG_ERR("HTTP", "chunked download: could not restart the file for a server that ignores Range");
       return ERR_REWIND;
+    }
+    if (totalChanged) {
+      LOG_ERR("HTTP", "chunked download: the file changed on the server at %u B (size %u -> %u B)",
+              static_cast<unsigned>(offset), static_cast<unsigned>(total),
+              static_cast<unsigned>(http.lastContentRange().total));
+      return ERR_RESOURCE_CHANGED;
     }
     if (rc == C::ERR_ABORTED) return rc;
     if (rc >= 0 && !classified) {  // a response without a body: a 416, or an empty 206 or 200

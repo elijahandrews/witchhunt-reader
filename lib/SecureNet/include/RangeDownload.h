@@ -42,6 +42,8 @@ struct ChunkSession {
 
 // The sink could not be rewound (the file could not be reopened). A SecureHttpError-style code.
 constexpr int ERR_REWIND = -20;
+// The file's size changed between two chunks: a new version appeared on the server mid-download.
+constexpr int ERR_RESOURCE_CHANGED = -21;
 
 using LargestFreeBlockFn = size_t (*)();
 
@@ -49,7 +51,7 @@ using LargestFreeBlockFn = size_t (*)();
 // set) over https are fetched in Range chunks when largestFreeBlock(), read once the connection is
 // up, is below http_range::STREAM_MIN_LARGEST_BLOCK; everything else streams as one response.
 // Returns what SecureHttpClient::get() does: the HTTP status (200 for a complete chunked download)
-// or a negative SecureHttpError, or ERR_REWIND.
+// or a negative SecureHttpError, or ERR_REWIND / ERR_RESOURCE_CHANGED.
 int downloadToSink(SecureHttpClient& http, const std::string& url, DownloadSink& sink, ChunkSession& session,
                    LargestFreeBlockFn largestFreeBlock);
 

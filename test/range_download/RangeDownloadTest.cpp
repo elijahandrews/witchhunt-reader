@@ -339,6 +339,20 @@ TEST_F(Fixture, AnEmpty200MidFileRewindsTheFile) {
   EXPECT_TRUE(session.rangeUnsupported);
 }
 
+TEST_F(Fixture, AFileThatChangesSizeMidDownloadFailsUnspliced) {
+  // Review M1: a new version of the file between two chunks would be spliced onto the old one.
+  const std::string oldVersion = makeResource(20000);
+  const size_t c = firstChunk();
+  FakeNet::replies().push_back({"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-" + std::to_string(c - 1) +
+                                    "/20000\r\nContent-Length: " + std::to_string(c) + "\r\n\r\n" +
+                                    oldVersion.substr(0, c),
+                                FakeReply::End::KeepOpen});
+  serve(makeResource(25000, 'b'));  // the next chunk comes from the new version
+  EXPECT_EQ(download(), crosspoint::ERR_RESOURCE_CHANGED);
+  EXPECT_EQ(file, oldVersion.substr(0, c));  // nothing of the new version was written
+  EXPECT_EQ(FakeNet::requests().size(), 2u);
+}
+
 TEST_F(Fixture, AFailedRewindIsAFileError) {
   const std::string resource = makeResource(20000);
   serve(resource);
