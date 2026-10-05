@@ -102,6 +102,18 @@ OVERRIDES = """
 #ifndef WC_RSA_PSS
 #define WC_RSA_PSS
 #endif
+/* RSA public-key operations only: the client verifies RSA (and RSA-PSS) signatures but never signs
+ * or decrypts with an RSA key. Compiles out the RSA private paths, in wolfCrypt and in SP math
+ * (sp_RsaPrivate_*). The only RSA signer left in a client build is client-certificate
+ * authentication (internal.c RsaSign, for CertificateVerify), so that goes too: the reader never
+ * presents a client certificate. A server that asks for one still gets the empty Certificate
+ * message (tls13.c SendTls13Certificate stays), exactly as before. */
+#ifndef WOLFSSL_RSA_PUBLIC_ONLY
+#define WOLFSSL_RSA_PUBLIC_ONLY
+#endif
+#ifndef WOLFSSL_NO_CLIENT_AUTH
+#define WOLFSSL_NO_CLIENT_AUTH
+#endif
 
 /* Math backend: use SP (single-precision) math instead of TFM fast-math so the
  * SP ECC fast path (P-256/P-384) + WOLFSSL_SP_RISCV32 assembly kick in. Our
