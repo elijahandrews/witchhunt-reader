@@ -178,6 +178,16 @@ OVERRIDES = """
 #ifndef WOLFSSL_TICKET_NONCE_MALLOC
 #define WOLFSSL_TICKET_NONCE_MALLOC
 #endif
+/* Tickets also switch on wolfSSL's PSK identity buffers, which are sized by MAX_PSK_ID_LEN: 1536
+ * under TLS 1.3 (internal.h). That is client_identity + server_hint in every handshake's Arrays
+ * and server_hint in every CTX, 4.6 KB per connection held through the handshake; on the X3 that
+ * was enough to fail the RSA-4096 chain verification (MEMORY_E). With NO_PSK only the ticket uses
+ * any of it: the ticket is the PSK identity, so this also caps the ticket that can be offered back
+ * (tls.c TLSX_PopulateExtensions). Tickets measured with openssl, 2026-10-05: GitHub's CDN 160 B,
+ * api.github.com 32 B, sync.koreader.rocks 192 B, mayberry.pub 176 B, timeapi.io 240 B. */
+#ifndef MAX_PSK_ID_LEN
+#define MAX_PSK_ID_LEN 512
+#endif
 
 /* Instrumentation only, off unless -DCROSSPOINT_TLS_VERIFY_TIMING is in build_flags.
  * wolfSSL issues the verify callback ONLY on a verification error by default, so a

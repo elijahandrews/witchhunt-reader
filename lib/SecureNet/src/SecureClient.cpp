@@ -17,8 +17,8 @@
 
 // Session resumption needs the ticket support scripts/patch_wolfssl.py switches on. Without it the
 // ticket API below is not even declared, so say where the define should have come from.
-#if !defined(HAVE_SESSION_TICKET)
-#error "HAVE_SESSION_TICKET did not reach wolfSSL: scripts/patch_wolfssl.py must patch user_settings.h"
+#if !defined(HAVE_SESSION_TICKET) || !defined(MAX_PSK_ID_LEN)
+#error "HAVE_SESSION_TICKET / MAX_PSK_ID_LEN did not reach wolfSSL: scripts/patch_wolfssl.py must patch user_settings.h"
 #endif
 
 // The Arduino-wolfSSL library's logging.c references this hook, normally defined
@@ -208,10 +208,10 @@ int verifyCallback(int preverify, WOLFSSL_X509_STORE_CTX* store) {
 //  - A mutex guards the slots, for the same worker.
 constexpr size_t SESSION_CACHE_SLOTS = 2;
 
-// wolfSSL refuses to build a ClientHello around a ticket longer than MAX_PSK_ID_LEN (1536 with
-// TLS 1.3, wolfssl/internal.h; tls.c TLSX_PopulateExtensions returns BUFFER_ERROR), so such a
-// ticket would fail every connect it was offered on. It is not kept.
-constexpr int MAX_RESUMPTION_TICKET_LEN = 1536;
+// wolfSSL refuses to build a ClientHello around a ticket longer than MAX_PSK_ID_LEN (set in
+// scripts/patch_wolfssl.py; tls.c TLSX_PopulateExtensions returns BUFFER_ERROR), so such a ticket
+// would fail every connect it was offered on. It is not kept.
+constexpr int MAX_RESUMPTION_TICKET_LEN = MAX_PSK_ID_LEN;
 
 struct CachedSession {
   WOLFSSL_SESSION* session;  // owned; nullptr marks a free slot
