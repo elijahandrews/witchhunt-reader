@@ -95,10 +95,10 @@ void FontDownloadActivity::onWifiSelectionComplete(const bool success) {
 bool FontDownloadActivity::fetchAndParseManifest() {
   static constexpr const char* MANIFEST_TMP = "/fonts_manifest.tmp";
 
-  // Standalone manifest fetch: closes the TLS connection before the JSON
-  // parse so the parser has full heap headroom. The Session is opened later
-  // for the per-file download loop, on a heap that's been slimmed by
-  // trimManifestForDownload().
+  // Standalone manifest fetch: closes the TLS connection before the manifest
+  // is read, so the reader has full heap headroom. The Session is opened later
+  // for the per-file download loop, after the font list has been stashed to
+  // the card.
   auto result = HttpDownloader::downloadToFile(FONT_MANIFEST_URL, MANIFEST_TMP, nullptr);
   if (result != HttpDownloader::OK) {
     LOG_ERR("FONT", "Failed to fetch manifest from %s", FONT_MANIFEST_URL);

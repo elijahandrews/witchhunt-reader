@@ -8,7 +8,8 @@
 
 // The reader's working state, on the heap while read() runs and freed on return: the parser (its
 // 512-byte token buffer, the base URL and one file name) and the open family's name and first bad file
-// name, which wait for the family to close. About 1.3 KB, too much for the stack beside the read block.
+// name, which wait for the family to close, and the read block (one SD sector per read). About 1.8 KB,
+// too much for the stack.
 struct FontManifestReader::Work {
   explicit Work(const FontManifestCallbacks& callbacks) : parser(callbacks) {}
 
@@ -18,6 +19,7 @@ struct FontManifestReader::Work {
   bool familyNameOverflow = false;
   bool badFile = false;
   char badFileName[FontManifestParser::FILE_NAME_BUF_SIZE];
+  char block[512];
 };
 
 namespace {
@@ -112,12 +114,11 @@ FontManifestStatus FontManifestReader::read(HalFile& file, FontCatalog& catalog,
 bool FontManifestReader::feedFile(HalFile& file) {
   FontManifestParser& parser = work->parser;
   if (!file.seekSet(0)) return fail("read error");
-  char block[512];  // one SD sector per read
   for (;;) {
-    const int n = file.read(block, sizeof(block));
+    const int n = file.read(work->block, sizeof(work->block));
     if (n < 0) return fail("read error");
     if (n == 0) break;
-    parser.feed(block, static_cast<size_t>(n));
+    parser.feed(work->block, static_cast<size_t>(n));
   }
   if (parser.hasError()) return fail("not valid JSON");
   if (!parser.complete()) return fail("incomplete document");

@@ -35,7 +35,8 @@ class FontManifestReader {
   FontManifestReader& operator=(const FontManifestReader&) = delete;
 
   // Reads `file` from its start. On Ok, `catalog` and `baseUrl` hold the manifest; otherwise both are
-  // left empty. OutOfMemory: the parser or the catalog's block could not be allocated.
+  // left empty. OutOfMemory: the parser or the catalog's block could not be allocated, or the list is too large for
+  // one block.
   FontManifestStatus read(HalFile& file, FontCatalog& catalog, std::string& baseUrl);
 
   // Why read() did not return Ok, for the log.

@@ -44,9 +44,8 @@ class FontDownloadActivity : public Activity {
   // HTTP/TLS session shared across all files of a single downloadFamily()
   // call. Each family install pays the TLS handshake once (on its first
   // file); subsequent files reuse the open keep-alive connection.
-  // NOT shared with the manifest fetch — holding the TLS context open
-  // through the JSON parse aborts on the ~36 KB contiguous allocation
-  // collision with ArduinoJson's working memory.
+  // NOT shared with the manifest fetch: that closes its TLS connection
+  // before the manifest is read, so the reader has the heap to itself.
   HttpDownloader::Session httpSession_;
 
   std::string baseUrl_;
