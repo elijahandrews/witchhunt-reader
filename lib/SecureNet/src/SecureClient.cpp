@@ -164,8 +164,11 @@ int verifyCallback(int preverify, WOLFSSL_X509_STORE_CTX* store) {
   // Name the link that failed: depth 0 is the leaf, higher depths walk up towards the root, so a
   // chain failure no longer surfaces as one connect-level error with no certificate attached.
   if (preverify == 0 && store != nullptr) {
-    LOG_ERR("TLS", "verify failed at depth %d: err=%d (callback #%lu)", store->error_depth, store->error,
-            static_cast<unsigned long>(g_chainVerify.count));
+    // Heap alongside: wolfSSL reports an allocation failure inside the signature math as a signature
+    // failure (ASN_SIG_CONFIRM_E), so a -155 with a small largest block is memory, not the chain.
+    LOG_ERR("TLS", "verify failed at depth %d: err=%d (callback #%lu) heap=%u largest=%u", store->error_depth,
+            store->error, static_cast<unsigned long>(g_chainVerify.count), esp_get_free_heap_size(),
+            heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
   }
   return preverify;
 }
