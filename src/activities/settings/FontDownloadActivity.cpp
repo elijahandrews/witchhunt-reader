@@ -780,6 +780,7 @@ bool FontDownloadActivity::handleCustomInput() {
   return true;
 }
 
+// cppcheck-suppress constParameterCallback ; the signature is fui::ListProps::rowProvider's
 void FontDownloadActivity::provideRow(void* ctx, const uint16_t index, fui::ListItem& item) {
   const auto* self = static_cast<const FontDownloadActivity*>(ctx);
   const int row = index;

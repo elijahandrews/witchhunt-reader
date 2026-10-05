@@ -607,6 +607,7 @@ void FinishedBookActivity::rebuildRows() {
 
 const char* FinishedBookActivity::headerTitle() const { return tr(STR_FINISHED_BOOK_HEADER); }
 
+// cppcheck-suppress constParameterCallback ; the signature is fui::ListProps::rowProvider's
 void FinishedBookActivity::provideRow(void* ctx, const uint16_t index, fui::ListItem& item) {
   const auto* self = static_cast<const FinishedBookActivity*>(ctx);
   item.actionValue = static_cast<int16_t>(index);
