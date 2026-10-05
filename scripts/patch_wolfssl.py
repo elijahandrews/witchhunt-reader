@@ -155,12 +155,13 @@ OVERRIDES = """
 #define NO_FILESYSTEM
 #endif
 
-/* Small session cache: we open few concurrent sessions. It must not become NO_SESSION_CACHE:
- * that also compiles out wolfSSL_get1_session() and wolfSSL_set_session() (ssl_sess.c), which
- * SecureClient's session resumption is built on. SecureClient keeps its own sessions and turns
- * this internal cache off per CTX. */
-#ifndef SMALL_SESSION_CACHE
-#define SMALL_SESSION_CACHE
+/* wolfSSL's own session cache, at its smallest: one session (MICRO). SecureClient keeps its own
+ * sessions and turns this cache off per CTX, so the static array is never used (with tickets, SMALL
+ * cost 6 x 392 B plus a 3.2 KB client index). It cannot go entirely: NO_SESSION_CACHE also compiles
+ * out wolfSSL_get1_session() and wolfSSL_set_session() (ssl_sess.c), which resumption is built on. */
+#undef  SMALL_SESSION_CACHE
+#ifndef MICRO_SESSION_CACHE
+#define MICRO_SESSION_CACHE
 #endif
 
 /* TLS 1.3 session resumption, client side. A repeat connection to the same host offers the
