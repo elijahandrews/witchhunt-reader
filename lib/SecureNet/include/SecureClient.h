@@ -32,6 +32,17 @@
 
 namespace crosspoint {
 
+// What a kept TLS session is filed under: the host and port it was made to, and the verification
+// it passed (trust store, and whether certificate dates were waived for want of a clock). Only
+// SecureClient uses it; it sits at namespace scope so the session cache in SecureClient.cpp can.
+struct TlsSessionKey {
+  static constexpr size_t HOST_MAX = 64;  // a longer host name is simply not cached
+  char host[HOST_MAX];
+  const char* roots;
+  uint16_t port;
+  bool datesWaived;
+};
+
 class SecureClient : public Client {
  public:
   SecureClient() = default;
@@ -89,9 +100,20 @@ class SecureClient : public Client {
   // True if this build has wolfSSL TLS 1.3 support compiled in.
   static bool tls13Available();
 
+  // TLS 1.3 session resumption. A connection that verified its peer keeps the session ticket the
+  // server sends after the handshake. The next connect() to the same host and port, verifying
+  // against the same trust store under the same date policy, offers it; a server that accepts it
+  // sends no certificate chain, so no chain verification runs. Unverified connections neither
+  // keep nor use a session. At most two are kept. This drops them all: call it when the network
+  // session ends, so a ticket never outlives the network session it came from.
+  static void clearSessionCache();
+
  private:
   // verifyPeer: true = load the curated CA + WOLFSSL_VERIFY_PEER; false = VERIFY_NONE.
-  int connectWithMethod(const char* host, uint16_t port, void* method, const char* label, bool verifyPeer);
+  // mayResume: the method can negotiate TLS 1.3, so a cached session may be offered (the kept
+  // sessions are TLS 1.3 ones, and a TLS-1.2-only method must not be handed one).
+  int connectWithMethod(const char* host, uint16_t port, void* method, const char* label, bool verifyPeer,
+                        bool mayResume);
   // One connect attempt at the given verification level, incl. the TLS1.2 retry.
   int connectAtVerify(const char* host, uint16_t port, bool verifyPeer);
 
@@ -107,6 +129,11 @@ class SecureClient : public Client {
   void* _ssl = nullptr;                    // WOLFSSL*      (opaque; keeps wolfSSL headers out of here)
   void* _ctx = nullptr;                    // WOLFSSL_CTX*
   bool _connected = false;
+  // Session resumption (see clearSessionCache()).
+  TlsSessionKey _sessionKey = {};  // this connection's key; valid while _keepSession is set
+  int _ticketLen = 0;              // length of the last session ticket on this connection, 0 = none
+  bool _keepSession = false;       // a verified handshake completed: keep its ticket on stop()
+  bool _sessionOffered = false;    // this connect offered a cached session
 };
 
 }  // namespace crosspoint

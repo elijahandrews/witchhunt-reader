@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <HalClock.h>
 #include <Logging.h>
+#include <SecureClient.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
@@ -138,6 +139,9 @@ void runJob(KOReaderSyncJob& job) {
   if (startedRadio && radioStillOursToTearDown()) {
     WiFi.disconnect(false);
     WiFi.mode(WIFI_OFF);
+    // The one network session that ends without a reboot (a network activity that brought the
+    // radio up reboots on exit), so this is where its TLS session tickets have to go.
+    crosspoint::SecureClient::clearSessionCache();
   }
 }
 

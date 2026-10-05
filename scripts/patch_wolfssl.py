@@ -155,9 +155,28 @@ OVERRIDES = """
 #define NO_FILESYSTEM
 #endif
 
-/* Small session cache: we open few concurrent sessions. */
+/* Small session cache: we open few concurrent sessions. It must not become NO_SESSION_CACHE:
+ * that also compiles out wolfSSL_get1_session() and wolfSSL_set_session() (ssl_sess.c), which
+ * SecureClient's session resumption is built on. SecureClient keeps its own sessions and turns
+ * this internal cache off per CTX. */
 #ifndef SMALL_SESSION_CACHE
 #define SMALL_SESSION_CACHE
+#endif
+
+/* TLS 1.3 session resumption, client side. A repeat connection to the same host offers the
+ * ticket from the previous one; a server that accepts it sends no certificate chain, so nothing
+ * is verified (GitHub's chain costs two RSA-4096 checks, which the X3 heap could not afford
+ * twice in a row). This define is the whole switch: wolfSSL keeps ticket resumption apart from
+ * external PSKs (tls13.c SetupPskKey: HAVE_SESSION_TICKET for resumption, !NO_PSK for external
+ * keys), so NO_PSK above stays. */
+#ifndef HAVE_SESSION_TICKET
+#define HAVE_SESSION_TICKET
+#endif
+/* Once tickets are parsed, a NewSessionTicket nonce longer than the 8-byte static buffer is a
+ * fatal read error (tls13.c DoTls13NewSessionTicket): a server with longer nonces would cut a
+ * response off mid-body. Allocate such a nonce instead. */
+#ifndef WOLFSSL_TICKET_NONCE_MALLOC
+#define WOLFSSL_TICKET_NONCE_MALLOC
 #endif
 
 /* Instrumentation only, off unless -DCROSSPOINT_TLS_VERIFY_TIMING is in build_flags.

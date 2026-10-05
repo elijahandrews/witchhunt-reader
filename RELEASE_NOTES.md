@@ -25,6 +25,7 @@ User-facing changes only. Full commit history is in git log.
 ### Network
 
 - **Fix: GitHub downloads pass the certificate check again.** GitHub's download servers moved to a new Let's Encrypt certificate chain whose root key is 4096-bit RSA, which the reader's TLS library could not verify. The font list, font files and firmware updates (which never skip the check) failed with a certificate error; the font manager only worked with **Skip HTTPS validation** switched on.
+- **Repeat connections to the same server are faster and lighter on memory.** After a connection that passed the certificate check, the reader resumes that secure session the next time it connects to the same server, so the server sends no certificates and the check is not repeated. On the X3, repeating the full check a few seconds later could run out of memory, which broke font downloads right after the font list. OPDS browsing, which connects to the catalog's server for every page, benefits too. A connection that skipped the check (**Skip HTTPS validation**) is never resumed.
 
 ## 2.37 — 2026-09-29
 
