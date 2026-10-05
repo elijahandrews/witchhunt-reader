@@ -117,8 +117,9 @@ class HttpDownloader {
    *
    * Over https on a tight heap (largest free block under 40 KB: the C3 boards with Wi-Fi up), the
    * file is fetched in Range chunks of 1-6 KB on one kept-alive connection, so no TLS record can be
-   * larger than a chunk; a server that ignores Range sends the whole file instead, as before. The
-   * progress callback sees whole-file progress either way. See lib/SecureNet/include/HttpRange.h.
+   * larger than a chunk plus its response headers; a server that ignores Range sends the whole file
+   * instead, as before. The progress callback sees whole-file progress either way. See
+   * lib/SecureNet/include/HttpRange.h.
    */
   static DownloadError downloadToFile(const std::string& url, const std::string& destPath,
                                       ProgressCallback progress = nullptr, const std::string& username = "",

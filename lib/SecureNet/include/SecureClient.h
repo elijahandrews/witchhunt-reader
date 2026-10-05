@@ -108,7 +108,10 @@ class SecureClient : public Client {
   // against the same trust store under the same date policy, offers it; a server that accepts it
   // sends no certificate chain, so no chain verification runs. Unverified connections neither
   // keep nor use a session. At most two are kept. This drops them all: call it when the network
-  // session ends, so a ticket never outlives the network session it came from.
+  // session ends, so a ticket does not outlive the network session it came from. Today only the
+  // KOReader auto-sync worker calls it. Everywhere else the kept sessions last until the reboot,
+  // including while the timezone detection and KOReader sync result screens show with Wi-Fi off,
+  // and the next Wi-Fi session may still offer them to the same host.
   static void clearSessionCache();
 
  private:

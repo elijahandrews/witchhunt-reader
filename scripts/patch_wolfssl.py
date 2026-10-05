@@ -126,9 +126,13 @@ OVERRIDES = """
 /* P-256 is on by default with SP-ECC; keep RSA via SP too for USERTrust RSA. */
 #define WOLFSSL_HAVE_SP_RSA
 /* RSA-4096 through SP as well. Without it a 4096-bit public key falls through to the generic
- * sp_int exponentiation, which fails here: ISRG Root X1 (RSA-4096) signing the cross-signed
- * Root YR that raw/objects/release-assets.githubusercontent.com send since 2026 failed
- * ConfirmSignature (-155) at depth 2, while OpenSSL accepts the same chain. */
+ * sp_int exponentiation, and on the device that failed: ISRG Root X1 (RSA-4096) signing the
+ * cross-signed Root YR that raw/objects/release-assets.githubusercontent.com send since 2026
+ * failed ConfirmSignature (-155) at depth 2, while OpenSSL accepts the same chain. Why is not
+ * established: wolfSSL reports an allocation failure inside the signature math as -155 too
+ * (see the verify log in SecureClient.cpp), so it may have been the generic path's larger heap
+ * use on the X3 rather than the math. Either way this define is what made the chain pass on the
+ * device; dropping it to save its ~3.8 KB risks bringing the failure back. */
 #define WOLFSSL_SP_4096
 
 /* Bignum ceiling: sized for RSA-4096 chains (no FFDHE), half of upstream's 16384. */
@@ -220,8 +224,8 @@ OVERRIDES = """
 #endif
 
 /* RFC 6066 max_fragment_length, so SecureClient can ask servers for 2 KB records instead of 16 KB
- * ones (each of which needs a ~17 KB contiguous receive buffer). Ported from Free-Ink/freeink-sdk
- * b72416b (Justin Mitchell). */
+ * ones (each of which needs a ~17 KB contiguous receive buffer). The request in SecureClient is
+ * ported from Free-Ink/freeink-sdk b72416b (Justin Mitchell); this define is ours. */
 #ifndef HAVE_MAX_FRAGMENT
 #define HAVE_MAX_FRAGMENT
 #endif
