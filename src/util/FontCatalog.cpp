@@ -90,13 +90,13 @@ bool FontCatalog::allocate(const Size& size) {
   const size_t bytes = blockBytesFor(size);
   auto fresh = makeUniqueNoThrow<uint8_t[]>(bytes);
   if (!fresh) return false;
-  const Header header{MAGIC,
-                      VERSION,
-                      static_cast<uint16_t>(size.families),
-                      static_cast<uint16_t>(size.files),
-                      static_cast<uint16_t>(size.stringBytes),
-                      static_cast<uint32_t>(bytes)};
-  memcpy(fresh.get(), &header, sizeof(header));
+  const Header head{MAGIC,
+                    VERSION,
+                    static_cast<uint16_t>(size.families),
+                    static_cast<uint16_t>(size.files),
+                    static_cast<uint16_t>(size.stringBytes),
+                    static_cast<uint32_t>(bytes)};
+  memcpy(fresh.get(), &head, sizeof(head));
   block = std::move(fresh);
   return true;
 }
@@ -254,18 +254,18 @@ bool FontCatalog::readFrom(HalFile& file) {
 }
 
 bool FontCatalog::holdsTogether(const uint8_t* data, const size_t bytes) {
-  Header header;
-  memcpy(&header, data, sizeof(header));
-  if (header.magic != MAGIC || header.version != VERSION || header.families == 0) return false;
-  const Size size{header.families, header.files, header.stringBytes};
-  if (header.blockBytes != bytes || blockBytesFor(size) != bytes) return false;
+  Header head;
+  memcpy(&head, data, sizeof(head));
+  if (head.magic != MAGIC || head.version != VERSION || head.families == 0) return false;
+  const Size size{head.families, head.files, head.stringBytes};
+  if (head.blockBytes != bytes || blockBytesFor(size) != bytes) return false;
 
   const auto* families = reinterpret_cast<const FamilyRecord*>(data + sizeof(Header));
   const auto* files = reinterpret_cast<const FileRecord*>(families + size.families);
-  const char* strings = reinterpret_cast<const char*>(files + size.files);
+  const char* stringPool = reinterpret_cast<const char*>(files + size.files);
 
   // Every string ends inside the block: the last byte is a terminator and every offset is before it.
-  if (size.stringBytes == 0 || strings[size.stringBytes - 1] != '\0') return false;
+  if (size.stringBytes == 0 || stringPool[size.stringBytes - 1] != '\0') return false;
   for (size_t file = 0; file < size.files; ++file) {
     if (files[file].name >= size.stringBytes) return false;
   }

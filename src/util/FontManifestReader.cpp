@@ -7,19 +7,23 @@
 #include <cstring>
 
 // The reader's working state, on the heap while read() runs and freed on return: the parser (its
-// 512-byte token buffer, the base URL and one file name) and the open family's name and first bad file
-// name, which wait for the family to close, and the read block (one SD sector per read). About 1.8 KB,
-// too much for the stack.
+// 512-byte token buffer, the base URL and one file name), the two passes' builders, the open family's
+// name and first bad file name, which wait for the family to close, and the read block (one SD sector
+// per read). About 1.9 KB, too much for the stack.
 struct FontManifestReader::Work {
-  explicit Work(const FontManifestCallbacks& callbacks) : parser(callbacks) {}
+  Work(const FontManifestCallbacks& callbacks, FontCatalog& catalog) : parser(callbacks), filler(catalog) {}
 
   FontManifestParser parser;
-  char familyName[FAMILY_NAME_BUF_SIZE];
+  // Pass 1 counts what the families that pass their checks hold; pass 2 writes them into the block.
+  // FontManifestReader::builder points at one of them while its pass runs.
+  FontCatalog::Builder counter;
+  FontCatalog::Builder filler;
+  char familyName[FAMILY_NAME_BUF_SIZE] = {};
   size_t familyNameLen = 0;
   bool familyNameOverflow = false;
   bool badFile = false;
-  char badFileName[FontManifestParser::FILE_NAME_BUF_SIZE];
-  char block[512];
+  char badFileName[FontManifestParser::FILE_NAME_BUF_SIZE] = {};
+  char block[512] = {};
 };
 
 namespace {
@@ -52,13 +56,13 @@ FontManifestStatus FontManifestReader::read(HalFile& file, FontCatalog& catalog,
   callbacks.onFile = [](void* ctx, const FontManifestFile& f) { static_cast<FontManifestReader*>(ctx)->fileEntry(f); };
   callbacks.onFamilyEnd = [](void* ctx) { static_cast<FontManifestReader*>(ctx)->familyEnd(); };
 
-  const auto state = makeUniqueNoThrow<Work>(callbacks);
+  const auto state = makeUniqueNoThrow<Work>(callbacks, catalog);
   if (!state) {
     LOG_ERR(logTag, "OOM: font manifest parser (%u bytes)", static_cast<unsigned>(sizeof(Work)));
     failureReason = "out of memory";
     return FontManifestStatus::OutOfMemory;
   }
-  // work and builder point into this call only.
+  // work and builder point into `state`, which this call owns: nothing may hold them after it.
   struct Detach {
     FontManifestReader& reader;
     ~Detach() {
@@ -69,8 +73,8 @@ FontManifestStatus FontManifestReader::read(HalFile& file, FontCatalog& catalog,
   work = state.get();
 
   // Pass 1: is this a manifest we read, and how much do the families that pass their checks hold?
-  FontCatalog::Builder counter;
-  builder = &counter;
+  const FontCatalog::Builder& counter = work->counter;
+  builder = &work->counter;
   filling = false;
   if (!feedFile(file)) return FontManifestStatus::Invalid;
   manifestVersion = work->parser.version();
@@ -92,8 +96,8 @@ FontManifestStatus FontManifestReader::read(HalFile& file, FontCatalog& catalog,
   }
 
   // Pass 2: the same events again, into the block.
-  FontCatalog::Builder filler(catalog);
-  builder = &filler;
+  const FontCatalog::Builder& filler = work->filler;
+  builder = &work->filler;
   filling = true;
   work->parser.reset();
   if (!feedFile(file)) {
