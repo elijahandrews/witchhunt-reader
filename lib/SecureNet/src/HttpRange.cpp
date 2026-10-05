@@ -33,11 +33,6 @@ constexpr unsigned TLSF_SL_LOG2 = 4;
 constexpr size_t TLSF_SMALL_BLOCK = 64;
 // CONFIG_HEAP_POISONING_LIGHT: 8-byte head + 4-byte tail canary per allocation.
 constexpr size_t HEAP_POISON_BYTES = 12;
-// lwIP receive window (CONFIG_LWIP_TCP_WND_DEFAULT 5760) in segments of CONFIG_LWIP_TCP_MSS 1436.
-constexpr size_t TCP_MSS = 1436;
-constexpr size_t TCP_WINDOW_SEGMENTS = 4;
-// A full-MSS frame as the Wi-Fi driver hands it to lwIP (802.11 + LLC + IP + TCP headers on top).
-constexpr size_t WIFI_RX_FRAME_BYTES = 1600;
 
 unsigned highestBit(size_t value) {
   unsigned bit = 0;
@@ -133,19 +128,46 @@ size_t recordBlockFor(size_t chunkSize) {
   return heapBlockFor(chunkSize + RESPONSE_HEADER_ALLOWANCE + RECORD_EXPANSION);
 }
 
-size_t receiveBuffersFor(size_t chunkSize) {
-  const size_t responseBytes = chunkSize + RESPONSE_HEADER_ALLOWANCE;
-  size_t segments = (responseBytes + TCP_MSS - 1) / TCP_MSS;
-  if (segments > TCP_WINDOW_SEGMENTS) segments = TCP_WINDOW_SEGMENTS;
-  return segments * heapBlockFor(WIFI_RX_FRAME_BYTES);
+size_t chunkBudget(size_t chunkSize) { return recordBlockFor(chunkSize) + WIFI_MARGIN; }
+
+namespace {
+size_t ladderIndexFor(size_t largestFreeBlock) {
+  for (size_t i = 0; i < CHUNK_LADDER_SIZE; ++i) {
+    if (chunkBudget(CHUNK_LADDER[i]) <= largestFreeBlock) return i;
+  }
+  return CHUNK_LADDER_SIZE - 1;
+}
+}  // namespace
+
+size_t chunkSizeForLargestBlock(size_t largestFreeBlock) { return CHUNK_LADDER[ladderIndexFor(largestFreeBlock)]; }
+
+size_t ChunkSizer::next(size_t largestFreeBlock) {
+  const size_t fits = ladderIndexFor(largestFreeBlock);
+  lastIndex_ = fits > capIndex_ ? fits : capIndex_;
+  return CHUNK_LADDER[lastIndex_];
 }
 
-size_t chunkSizeForLargestBlock(size_t largestFreeBlock) {
-  static constexpr size_t LADDER[] = {DEFAULT_CHUNK_BYTES, 6144, 4096, 2048, MIN_CHUNK_BYTES};
-  for (const size_t chunk : LADDER) {
-    if (recordBlockFor(chunk) + receiveBuffersFor(chunk) <= largestFreeBlock) return chunk;
+void ChunkSizer::onCleanRequest() {
+  if (capIndex_ == 0) return;
+  if (++cleanRequests_ >= CLEAN_REQUESTS_TO_STEP_UP) {
+    --capIndex_;
+    cleanRequests_ = 0;
   }
-  return MIN_CHUNK_BYTES;
+}
+
+void ChunkSizer::onOutOfMemory() {
+  const size_t below = lastIndex_ + 1 < CHUNK_LADDER_SIZE ? lastIndex_ + 1 : CHUNK_LADDER_SIZE - 1;
+  if (below > capIndex_) capIndex_ = below;
+  cleanRequests_ = 0;
+}
+
+size_t ChunkSizer::cap() const { return CHUNK_LADDER[capIndex_]; }
+
+bool RetryBudget::reconnectAfterFailure(bool madeProgress) {
+  stalledFailures_ = madeProgress ? 0 : stalledFailures_ + 1;
+  if (stalledFailures_ > MAX_STALLED_RETRIES || reconnects_ >= MAX_RECONNECTS) return false;
+  ++reconnects_;
+  return true;
 }
 
 bool shouldChunk(size_t largestFreeBlock) { return largestFreeBlock < STREAM_MIN_LARGEST_BLOCK; }

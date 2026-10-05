@@ -96,6 +96,8 @@ class SecureHttpClient {
   const http_range::ContentRange& lastContentRange() const { return _contentRange; }
   const std::string& lastUrl() const { return _lastUrl; }
   bool lastConnectionWasInsecure() const { return _lastInsecure; }
+  // True if the last request failed because a TLS record buffer could not be allocated.
+  bool lastReadOutOfMemory() const { return _secure.lastReadWasOutOfMemory(); }
   // Heap trough sampled across the last TLS handshake (see SecureClient). Only
   // meaningful for https requests; SIZE_MAX if no https handshake occurred.
   size_t lastHandshakeMinFree() const { return _secure.handshakeMinFree(); }

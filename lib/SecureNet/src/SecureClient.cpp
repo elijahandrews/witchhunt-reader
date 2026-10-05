@@ -600,6 +600,7 @@ int SecureClient::connect(const char* host, uint16_t port) {
   // error, and a stale verification code from an earlier attempt would
   // misclassify it and trigger a pointless insecure-fallback retry.
   _lastConnectErr = 0;
+  _lastReadErr = 0;
   _handshakeMinFree = SIZE_MAX;
   _handshakeMinLargest = SIZE_MAX;
 
@@ -657,6 +658,7 @@ int SecureClient::read(uint8_t* buf, size_t size) {
           heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
   _connected = false;
   _keepSession = false;  // a broken connection's session is not kept, ticket or not
+  _lastReadErr = err;
   return -1;
 }
 
@@ -686,6 +688,8 @@ void SecureClient::stop() {
 }
 
 uint8_t SecureClient::connected() { return _connected && _transport.connected(); }
+
+bool SecureClient::lastReadWasOutOfMemory() const { return _lastReadErr == MEMORY_E; }
 
 #else  // !FREEINK_NET_WOLFSSL — inert stub so the firmware builds without wolfSSL.
 
@@ -719,6 +723,7 @@ void SecureClient::stop() {
   _connected = false;
 }
 uint8_t SecureClient::connected() { return 0; }
+bool SecureClient::lastReadWasOutOfMemory() const { return false; }
 
 #endif
 

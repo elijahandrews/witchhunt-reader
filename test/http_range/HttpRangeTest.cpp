@@ -161,22 +161,35 @@ TEST(HttpRangeHeap, RoundsLikeTheC3Heap) {
 }
 
 TEST(HttpRangeHeap, ChunkSizeFollowsTheLargestFreeBlock) {
-  // X3, after a resumed handshake: the largest block was 16,372 B, too small for an 8 KB chunk's
-  // record block and receive buffers (16,896 B), enough for 6 KB (14,592 B).
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(16372), 6144u);
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(16896), 8192u);
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(30000), 8192u);
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(12544), 4096u);
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(9000), 2048u);
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(6016), 1024u);
+  // X3: 16,372 B after a resumed handshake, 12,276 B before the manifest, 4.6-6.1 KB once a long
+  // download had fragmented the heap.
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(16372), 8192u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(12276), 6144u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(9000), 4096u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(7680), 3072u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(6656), 2048u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(6132), 1024u);
   // Nothing fits: the smallest chunk is still the best chance.
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(2000), hr::MIN_CHUNK_BYTES);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(4596), hr::MIN_CHUNK_BYTES);
 }
 
-TEST(HttpRangeHeap, EveryChunkSizeIsBoundedByItsOwnBudget) {
-  for (size_t chunk : {8192u, 6144u, 4096u, 2048u, 1024u}) {
-    const size_t need = hr::recordBlockFor(chunk) + hr::receiveBuffersFor(chunk);
-    EXPECT_EQ(hr::chunkSizeForLargestBlock(need), chunk) << chunk;
+TEST(HttpRangeHeap, AChunkNeedsItsRecordWithHeadersPlusTheWifiMargin) {
+  // 6 KB of body and ~0.9 KB of headers in one record no longer fit the 6.1 KB block the X3 had
+  // left late in a download: that is the failure the per-request sizing avoids.
+  EXPECT_GT(hr::recordBlockFor(6144), 6132u);
+  for (const size_t chunk : hr::CHUNK_LADDER) {
+    EXPECT_GE(hr::recordBlockFor(chunk), chunk + hr::RESPONSE_HEADER_ALLOWANCE + hr::RECORD_EXPANSION) << chunk;
+    EXPECT_EQ(hr::chunkBudget(chunk), hr::recordBlockFor(chunk) + hr::WIFI_MARGIN) << chunk;
+  }
+}
+
+TEST(HttpRangeHeap, EachSizeStartsExactlyAtItsBudget) {
+  for (size_t i = 0; i < hr::CHUNK_LADDER_SIZE; ++i) {
+    const size_t chunk = hr::CHUNK_LADDER[i];
+    EXPECT_EQ(hr::chunkSizeForLargestBlock(hr::chunkBudget(chunk)), chunk) << chunk;
+    if (i + 1 < hr::CHUNK_LADDER_SIZE) {
+      EXPECT_EQ(hr::chunkSizeForLargestBlock(hr::chunkBudget(chunk) - 1), hr::CHUNK_LADDER[i + 1]) << chunk;
+    }
   }
 }
 
@@ -185,4 +198,88 @@ TEST(HttpRangeHeap, ChunksOnlyWhenTheLargestBlockIsSmall) {
   EXPECT_TRUE(hr::shouldChunk(40 * 1024 - 1));
   EXPECT_FALSE(hr::shouldChunk(40 * 1024));
   EXPECT_FALSE(hr::shouldChunk(4 * 1024 * 1024));  // S3 with PSRAM in the default heap
+}
+
+TEST(HttpRangeSizer, SizesEveryRequestFromTheBlockAtThatMoment) {
+  hr::ChunkSizer sizer;
+  EXPECT_EQ(sizer.next(16372), 8192u);
+  sizer.onCleanRequest();
+  EXPECT_EQ(sizer.next(9000), 4096u);  // the heap fragmented: smaller
+  sizer.onCleanRequest();
+  EXPECT_EQ(sizer.next(16372), 8192u);  // and back up, with no out-of-memory read in between
+}
+
+TEST(HttpRangeSizer, AnOutOfMemoryReadStepsDownEvenIfTheBlockReadsLarger) {
+  hr::ChunkSizer sizer;
+  EXPECT_EQ(sizer.next(16372), 8192u);
+  sizer.onOutOfMemory();
+  EXPECT_EQ(sizer.cap(), 6144u);
+  EXPECT_EQ(sizer.next(16372), 6144u);  // capped one step below the size that failed
+  sizer.onOutOfMemory();
+  EXPECT_EQ(sizer.next(30000), 4096u);
+  // A smaller block still wins over the cap.
+  EXPECT_EQ(sizer.next(6132), 1024u);
+}
+
+TEST(HttpRangeSizer, AnOutOfMemoryReadBelowTheCapStepsBelowThatSize) {
+  hr::ChunkSizer sizer;
+  EXPECT_EQ(sizer.next(7680), 3072u);  // the heap, not the cap, chose 3 KB
+  sizer.onOutOfMemory();
+  EXPECT_EQ(sizer.cap(), 2048u);
+  EXPECT_EQ(sizer.next(16372), 2048u);
+}
+
+TEST(HttpRangeSizer, TheSmallestSizeIsAFloor) {
+  hr::ChunkSizer sizer;
+  EXPECT_EQ(sizer.next(4596), 1024u);
+  sizer.onOutOfMemory();
+  sizer.onOutOfMemory();
+  EXPECT_EQ(sizer.cap(), 1024u);
+  EXPECT_EQ(sizer.next(16372), 1024u);
+}
+
+TEST(HttpRangeSizer, CleanRequestsStepTheCapBackUp) {
+  hr::ChunkSizer sizer;
+  sizer.next(16372);
+  sizer.onOutOfMemory();
+  sizer.next(16372);
+  sizer.onOutOfMemory();
+  ASSERT_EQ(sizer.cap(), 4096u);
+  for (unsigned i = 0; i + 1 < hr::CLEAN_REQUESTS_TO_STEP_UP; ++i) sizer.onCleanRequest();
+  EXPECT_EQ(sizer.cap(), 4096u);
+  sizer.onCleanRequest();
+  EXPECT_EQ(sizer.cap(), 6144u);
+  // An out-of-memory read restarts the count.
+  for (unsigned i = 0; i + 1 < hr::CLEAN_REQUESTS_TO_STEP_UP; ++i) sizer.onCleanRequest();
+  sizer.next(16372);
+  sizer.onOutOfMemory();
+  EXPECT_EQ(sizer.cap(), 4096u);
+  sizer.onCleanRequest();
+  EXPECT_EQ(sizer.cap(), 4096u);
+}
+
+TEST(HttpRangeRetries, FailuresThatWroteBytesDoNotCountAsStalls) {
+  hr::RetryBudget retries;
+  for (unsigned i = 0; i < hr::MAX_RECONNECTS; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(true)) << i;
+  // ...but the hard cap on reconnects still ends it.
+  EXPECT_FALSE(retries.reconnectAfterFailure(true));
+  EXPECT_EQ(retries.reconnects(), hr::MAX_RECONNECTS);
+}
+
+TEST(HttpRangeRetries, ConsecutiveStallsEndTheDownload) {
+  hr::RetryBudget retries;
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
+  EXPECT_FALSE(retries.reconnectAfterFailure(false));
+}
+
+TEST(HttpRangeRetries, AnyNewBytesResetTheStallCount) {
+  hr::RetryBudget retries;
+  EXPECT_TRUE(retries.reconnectAfterFailure(false));
+  EXPECT_TRUE(retries.reconnectAfterFailure(false));
+  EXPECT_TRUE(retries.reconnectAfterFailure(true));  // this failed request still wrote bytes
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
+  retries.onProgress();  // a request that completed with new bytes
+  for (unsigned i = 0; i < hr::MAX_STALLED_RETRIES; ++i) EXPECT_TRUE(retries.reconnectAfterFailure(false)) << i;
+  EXPECT_FALSE(retries.reconnectAfterFailure(false));
+  EXPECT_EQ(retries.reconnects(), 3 + 2 * hr::MAX_STALLED_RETRIES);
 }
