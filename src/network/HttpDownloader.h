@@ -116,7 +116,7 @@ class HttpDownloader {
    * Download a file to the SD card with optional credentials.
    *
    * Over https on a tight heap (largest free block under 40 KB: the C3 boards with Wi-Fi up), the
-   * file is fetched in Range chunks of 1-8 KB on one kept-alive connection, so no TLS record can be
+   * file is fetched in Range chunks of 1-6 KB on one kept-alive connection, so no TLS record can be
    * larger than a chunk; a server that ignores Range sends the whole file instead, as before. The
    * progress callback sees whole-file progress either way. See lib/SecureNet/include/HttpRange.h.
    */

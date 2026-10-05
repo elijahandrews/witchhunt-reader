@@ -66,8 +66,10 @@ bool transferComplete(size_t offset, bool totalKnown, size_t total);
 
 // --- sizing from the heap -----------------------------------------------------------------------
 
-// Largest first. 3 KB fills the gap where 4 KB no longer fits a fragmented heap but 2 KB wastes it.
-constexpr size_t CHUNK_LADDER[] = {8192, 6144, 4096, 3072, 2048, 1024};
+// Largest first. 6 KB is the start: on the X3 the first 8 KB request of every download failed
+// reading its record, while 6 KB ran cleanly (device round 2, 2026-10-05; see ChunkSizer). 3 KB
+// fills the gap where 4 KB no longer fits a fragmented heap but 2 KB wastes it.
+constexpr size_t CHUNK_LADDER[] = {6144, 4096, 3072, 2048, 1024};
 constexpr size_t CHUNK_LADDER_SIZE = sizeof(CHUNK_LADDER) / sizeof(CHUNK_LADDER[0]);
 constexpr size_t DEFAULT_CHUNK_BYTES = CHUNK_LADDER[0];
 constexpr size_t MIN_CHUNK_BYTES = CHUNK_LADDER[CHUNK_LADDER_SIZE - 1];
@@ -129,7 +131,8 @@ bool shouldChunk(size_t largestFreeBlock);
 // before a request cannot see the Wi-Fi receive buffers that arrive with the response: on the X3 a
 // 17,396 B reading let 8 KB through every time, and every 8 KB read then failed (largest 5,876 B),
 // costing a reconnect and the lost chunk each cycle. What a step up would win (8 KB instead of
-// 6 KB chunks: ~25 % fewer requests of ~1 KB headers each) never paid for that.
+// 6 KB chunks: ~25 % fewer requests of ~1 KB headers each) never paid for that, and for the same
+// reason 8 KB is no longer on the ladder at all: every download now starts at 6 KB.
 class ChunkSizer {
  public:
   // ceiling: the largest size this download may use, rounded down to a ladder size; e.g. what an

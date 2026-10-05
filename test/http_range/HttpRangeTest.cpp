@@ -164,7 +164,7 @@ TEST(HttpRangeHeap, RoundsLikeTheC3Heap) {
 TEST(HttpRangeHeap, ChunkSizeFollowsTheLargestFreeBlock) {
   // X3: 16,372 B after a resumed handshake, 12,276 B before the manifest, 4.6-6.1 KB once a long
   // download had fragmented the heap.
-  EXPECT_EQ(hr::chunkSizeForLargestBlock(16372), 8192u);
+  EXPECT_EQ(hr::chunkSizeForLargestBlock(16372), 6144u);
   EXPECT_EQ(hr::chunkSizeForLargestBlock(12276), 6144u);
   EXPECT_EQ(hr::chunkSizeForLargestBlock(9000), 4096u);
   EXPECT_EQ(hr::chunkSizeForLargestBlock(7680), 3072u);
@@ -201,23 +201,32 @@ TEST(HttpRangeHeap, ChunksOnlyWhenTheLargestBlockIsSmall) {
   EXPECT_FALSE(hr::shouldChunk(4 * 1024 * 1024));  // S3 with PSRAM in the default heap
 }
 
+TEST(HttpRangeSizer, DownloadsStartAt6KB) {
+  // Device round 2: every first 8 KB request failed on the X3 while 6 KB ran cleanly.
+  EXPECT_EQ(hr::DEFAULT_CHUNK_BYTES, 6144u);
+  EXPECT_EQ(hr::CHUNK_LADDER[0], 6144u);
+  EXPECT_EQ(hr::ChunkSizer().next(17396), 6144u);    // the reading that let 8 KB through
+  EXPECT_EQ(hr::ChunkSizer().next(1 << 20), 6144u);  // however large the block
+}
+
 TEST(HttpRangeSizer, SizesEveryRequestFromTheBlockAtThatMoment) {
   hr::ChunkSizer sizer;
-  EXPECT_EQ(sizer.next(16372), 8192u);
+  EXPECT_EQ(sizer.next(16372), 6144u);
   EXPECT_EQ(sizer.next(9000), 4096u);   // the heap fragmented: smaller
-  EXPECT_EQ(sizer.next(16372), 8192u);  // and back up to the ceiling, which nothing has lowered
+  EXPECT_EQ(sizer.next(16372), 6144u);  // and back up to the ceiling, which nothing has lowered
 }
 
 TEST(HttpRangeSizer, AnOutOfMemoryReadLowersTheCeilingForGood) {
-  // Device round 2: 8 KB was let through at 17,396 B and failed every time.
+  // Device round 2: 8 KB was let through at 17,396 B and failed every time. The same holds for
+  // whatever size fails now.
   hr::ChunkSizer sizer;
-  EXPECT_EQ(sizer.next(17396), 8192u);
+  EXPECT_EQ(sizer.next(17396), 6144u);
   sizer.onOutOfMemory();
-  EXPECT_EQ(sizer.ceiling(), 6144u);
-  // However many clean requests follow, and however large the block reads, 8 KB stays out of reach.
-  for (int i = 0; i < 1000; ++i) ASSERT_EQ(sizer.next(17396), 6144u) << i;
-  EXPECT_EQ(sizer.next(1 << 20), 6144u);
-  EXPECT_EQ(sizer.ceiling(), 6144u);
+  EXPECT_EQ(sizer.ceiling(), 4096u);
+  // However many clean requests follow, and however large the block reads, 6 KB stays out of reach.
+  for (int i = 0; i < 1000; ++i) ASSERT_EQ(sizer.next(17396), 4096u) << i;
+  EXPECT_EQ(sizer.next(1 << 20), 4096u);
+  EXPECT_EQ(sizer.ceiling(), 4096u);
   // A smaller block still wins over the ceiling.
   EXPECT_EQ(sizer.next(6132), 1024u);
 }
@@ -235,28 +244,29 @@ TEST(HttpRangeSizer, TheCeilingCarriesAcrossTheFilesOfOneSession) {
   size_t sessionCeiling = hr::DEFAULT_CHUNK_BYTES;
 
   hr::ChunkSizer first(sessionCeiling);
-  EXPECT_EQ(first.next(17396), 8192u);
+  EXPECT_EQ(first.next(17396), 6144u);
   first.onOutOfMemory();
   sessionCeiling = first.ceiling();
-  EXPECT_EQ(sessionCeiling, 6144u);
+  EXPECT_EQ(sessionCeiling, 4096u);
 
-  // The next file starts at the size known to work, not at the 8 KB the block reading allows.
+  // The next file starts at the size known to work, not at the 6 KB the block reading allows.
   hr::ChunkSizer second(sessionCeiling);
-  EXPECT_EQ(second.ceiling(), 6144u);
-  EXPECT_EQ(second.next(17396), 6144u);
+  EXPECT_EQ(second.ceiling(), 4096u);
+  EXPECT_EQ(second.next(17396), 4096u);
   sessionCeiling = second.ceiling();
 
   // A further failure lowers it again, and the file after that inherits the lower ceiling.
   hr::ChunkSizer third(sessionCeiling);
-  EXPECT_EQ(third.next(17396), 6144u);
+  EXPECT_EQ(third.next(17396), 4096u);
   third.onOutOfMemory();
   hr::ChunkSizer fourth(third.ceiling());
-  EXPECT_EQ(fourth.next(17396), 4096u);
+  EXPECT_EQ(fourth.next(17396), 3072u);
 }
 
 TEST(HttpRangeSizer, ACeilingIsRoundedDownToALadderSize) {
-  EXPECT_EQ(hr::ChunkSizer(8192).ceiling(), 8192u);
-  EXPECT_EQ(hr::ChunkSizer(100000).ceiling(), 8192u);
+  EXPECT_EQ(hr::ChunkSizer(6144).ceiling(), 6144u);
+  EXPECT_EQ(hr::ChunkSizer(8192).ceiling(), 6144u);  // a ceiling above the ladder is its top
+  EXPECT_EQ(hr::ChunkSizer(100000).ceiling(), 6144u);
   EXPECT_EQ(hr::ChunkSizer(5000).ceiling(), 4096u);
   EXPECT_EQ(hr::ChunkSizer(0).ceiling(), hr::MIN_CHUNK_BYTES);
 }
