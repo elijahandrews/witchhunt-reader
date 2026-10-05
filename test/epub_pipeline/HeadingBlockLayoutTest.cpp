@@ -15,12 +15,17 @@
 //   1. Every block inside a heading keeps the heading's centering and size, unless the book's
 //      own alignment applies (the "Book's style" setting) or it sets its own size.
 //   2. The heading's scope ends with it: the paragraph after it is aligned as a paragraph.
+//   3. A <span> styled display:block is a block: its own line, its own margins.
+//   4. Its font size is applied once, by its block, not again per word.
+//   5. Text after it in the same element resumes on a new line, in that element's style.
+//   6. A <span> styled display:inline (or inline-block) stays inline.
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <string>
 #include <vector>
 
+#include "EpdFontFamily.h"
 #include "Epub.h"
 #include "Epub/Page.h"
 #include "Epub/Section.h"
@@ -36,6 +41,8 @@ struct Line {
   CssTextAlign align;
   float mult;
   std::string text;  // the line's words joined by single spaces
+  uint8_t firstWordStyle;
+  uint8_t firstWordSizePct;
 };
 
 struct HeadingBlockLayoutFixture : testing::Test {
@@ -97,7 +104,9 @@ struct HeadingBlockLayoutFixture : testing::Test {
       for (const auto& el : page->elements) {
         if (el->getTag() != TAG_PageLine) continue;
         const TextBlock& block = *static_cast<const PageLine&>(*el).getBlock();
-        Line line{el->yPos, block.getRenderStyle().alignment, block.getRenderStyle().fontSizeMultiplier, {}};
+        if (block.wordCount() == 0) continue;
+        Line line{el->yPos, block.getRenderStyle().alignment,         block.getRenderStyle().fontSizeMultiplier,
+                  {},       static_cast<uint8_t>(block.wordStyle(0)), block.wordSizePct(0)};
         for (uint16_t w = 0; w < block.wordCount(); ++w) {
           if (w > 0) line.text += ' ';
           line.text += block.wordText(w);
@@ -171,4 +180,69 @@ TEST_F(HeadingBlockLayoutFixture, BlockInAHeadingKeepsItsOwnSize) {
   const auto lines = layout("div.big { font-size: 2em; }\n", "<h2><div>Alpha</div><div class=\"big\">Bravo</div></h2>");
   ASSERT_EQ(lines.size(), 2u);
   EXPECT_GT(lines[1].mult, lines[0].mult);
+}
+
+namespace {
+// The #388 book's chapter-head rules, trimmed to what layout reads.
+constexpr const char* kChapterHeadCss =
+    "h1.CHAPTER { font-size: 100%; display: inline; }\n"
+    "span.CN { display: block; font-size: 1.2em; font-weight: bold; text-align: center; }\n"
+    "span.CT { display: block; font-size: 1.4em; font-weight: bold; text-align: center; }\n"
+    "span.gap { margin-bottom: 2em; }\n";
+}  // namespace
+
+TEST_F(HeadingBlockLayoutFixture, BlockSpansInAHeadingStackCentered) {
+  const auto lines = layout(kChapterHeadCss,
+                            "<h1 class=\"CHAPTER\">\n"
+                            "<span class=\"CN\"><a href=\"#t\"><span>10</span></a></span>\n"
+                            "<span class=\"CT\"><a href=\"#t\"><span>The Tempest</span></a></span>\n"
+                            "</h1>\n<p id=\"t\">They struggled along</p>");
+  ASSERT_EQ(lines.size(), 3u);
+  EXPECT_EQ(lines[0].text, "10");
+  EXPECT_STREQ(alignName(lines[0].align), "center");
+  EXPECT_EQ(lines[1].text, "The Tempest");
+  EXPECT_STREQ(alignName(lines[1].align), "center");
+  EXPECT_EQ(lines[2].text, "They struggled along");
+  EXPECT_STREQ(alignName(lines[2].align), "justify");
+  EXPECT_EQ(lines[2].mult, 1.0f) << "the heading's size leaked into the paragraph after it";
+}
+
+TEST_F(HeadingBlockLayoutFixture, BlockSpanKeepsItsMargin) {
+  const std::string body = "<h1 class=\"CHAPTER\"><span class=\"CN %s\">10</span><span class=\"CT\">Title</span></h1>";
+  auto withClass = [&](const char* extra) {
+    std::string b = body;
+    b.replace(b.find("%s"), 2, extra);
+    return layout(kChapterHeadCss, b);
+  };
+  const auto plain = withClass("");
+  const auto spaced = withClass("gap");
+  ASSERT_EQ(plain.size(), 2u);
+  ASSERT_EQ(spaced.size(), 2u);
+  EXPECT_GT(spaced[1].y - spaced[0].y, plain[1].y - plain[0].y) << "the span's margin-bottom was dropped";
+}
+
+TEST_F(HeadingBlockLayoutFixture, BlockSpanSizeIsAppliedOnce) {
+  const auto lines =
+      layout("span.big { display: block; font-size: 2em; }\n", "<p>Body <span class=\"big\">Large</span></p>");
+  ASSERT_EQ(lines.size(), 2u);
+  EXPECT_EQ(lines[1].text, "Large");
+  EXPECT_NEAR(lines[1].mult * lines[1].firstWordSizePct / 100.0f, 2.0f, 0.01f)
+      << "mult=" << lines[1].mult << " word size=" << int(lines[1].firstWordSizePct) << "%";
+}
+
+TEST_F(HeadingBlockLayoutFixture, TextAfterABlockSpanResumesOnItsOwnLine) {
+  const auto lines = layout("p.it { font-style: italic; } span.blk { display: block; font-weight: bold; }\n",
+                            "<p class=\"it\">Before <span class=\"blk\">middle</span> after</p>");
+  ASSERT_EQ(lines.size(), 3u);
+  EXPECT_EQ(lines[0].text, "Before");
+  EXPECT_EQ(lines[1].text, "middle");
+  EXPECT_EQ(lines[2].text, "after");
+  EXPECT_EQ(lines[2].firstWordStyle, EpdFontFamily::ITALIC) << "the paragraph's italic did not resume after the span";
+}
+
+TEST_F(HeadingBlockLayoutFixture, InlineSpanStaysInline) {
+  const auto lines = layout("span.a { display: inline; font-weight: bold; } span.b { display: inline-block; }\n",
+                            "<p>One <span class=\"a\">two</span> <span class=\"b\">three</span> four</p>");
+  ASSERT_EQ(lines.size(), 1u);
+  EXPECT_EQ(lines[0].text, "One two three four");
 }

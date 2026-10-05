@@ -590,6 +590,22 @@ class ChapterHtmlSlimParser final : public Print {
   CssTextAlign headingAlignment_ = CssTextAlign::Center;
   float headingFontSizeMultiplier_ = 1.0f;
   void applyHeadingScope(BlockStyle& blockStyle, const CssStyle& cssStyle) const;
+  // The <span> laid out as a block because the book styles it display:block (#388), and the
+  // alignment and size of the block it interrupted: text after the span, still inside the same
+  // element, resumes on a line of its own in that style. One at a time -- a display:block span
+  // inside another stays inline. depth is INT_MAX when none is open.
+  struct BlockSpan {
+    int depth = INT_MAX;
+    int interruptedOwnerDepth = -1;
+    CssTextAlign alignment = CssTextAlign::Justify;
+    bool textAlignDefined = false;
+    bool fontResolved = false;
+    float fontSizeMultiplier = 1.0f;
+    int32_t headingFontId = 0;
+  };
+  BlockSpan blockSpan_;
+  void startBlockSpan(const CssStyle& cssStyle, BlockStyle blockStyle);
+  void endBlockSpan();
   bool heapAllowsTableRowLayout() const;
   bool flushPartWordBuffer();
   void makePages();

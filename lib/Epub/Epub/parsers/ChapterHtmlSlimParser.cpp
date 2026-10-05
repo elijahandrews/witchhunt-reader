@@ -2500,18 +2500,36 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     self->blockInsetStack_.push_back({self->depth, ownInsetLeft, ownInsetRight});
   }
 
+  // A <span> the book styles display:block is laid out as a block (#388): St. Martin's chapter
+  // heads are two of them in one <h1>, the number above the title. Not when floated (out of flow,
+  // and a floated span is a drop cap), not inside a table (cells lay their text out apart from
+  // the page's blocks), and not inside another such span.
+  const bool opensBlockSpan = strcmp(name, "span") == 0 && cssStyle.hasDisplay() &&
+                              cssStyle.display == CssDisplay::Block && !isFloated && !self->currentTable &&
+                              self->blockSpan_.depth == INT_MAX;
+
   // Block/header boundaries must flush any buffered trailing word first.
   // Otherwise tags like ..."item?"<p ...> can carry the final word into the next paragraph.
-  if (self->partWordBufferIndex > 0 && ((matches(name, HEADER_TAGS, NUM_HEADER_TAGS)) ||
-                                        (matches(name, BLOCK_TAGS, NUM_BLOCK_TAGS) && strcmp(name, "br") != 0))) {
+  if (self->partWordBufferIndex > 0 &&
+      ((matches(name, HEADER_TAGS, NUM_HEADER_TAGS)) ||
+       (matches(name, BLOCK_TAGS, NUM_BLOCK_TAGS) && strcmp(name, "br") != 0) || opensBlockSpan)) {
     if (!self->flushPartWordBuffer()) return;
   }
 
   // CSS page-break-before: always — emit the current page before this block starts.
   if (cssStyle.pageBreakBefore &&
-      (matches(name, HEADER_TAGS, NUM_HEADER_TAGS) || matches(name, BLOCK_TAGS, NUM_BLOCK_TAGS)) && self->currentPage &&
-      !self->currentPage->elements.empty()) {
+      (matches(name, HEADER_TAGS, NUM_HEADER_TAGS) || matches(name, BLOCK_TAGS, NUM_BLOCK_TAGS) || opensBlockSpan) &&
+      self->currentPage && !self->currentPage->elements.empty()) {
     self->emitPage(self->lastBodyChildByteOffset);
+  }
+
+  if (opensBlockSpan) {
+    self->startBlockSpan(cssStyle, userAlignmentBlockStyle);
+    // Its size and margins went to its block. What the span branch below still pushes as an
+    // inline entry is its weight, style and decoration: the parts that end with the span.
+    cssStyle.defined.fontSizeMultiplier = 0;
+    cssStyle.defined.marginLeft = 0;
+    cssStyle.defined.verticalAlign = 0;
   }
 
   if (matches(name, HEADER_TAGS, NUM_HEADER_TAGS)) {
@@ -3197,6 +3215,7 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
       willPopStyleStack || willClearBold || willClearItalic || willClearUnderline || willClearStrikethrough;
   const bool headerOrBlockTag = isHeaderOrBlock(name);
   const bool tableStructuralTag = isTableStructuralTag(name);
+  const bool closesBlockSpan = self->blockSpan_.depth == self->depth - 1;
 
   if (self->currentTable && self->currentTable->depth > 1 && strcmp(name, "table") == 0) {
     self->partWordBufferIndex = 0;
@@ -3209,10 +3228,10 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   // Flush buffer with current style BEFORE any style changes
   if (self->partWordBufferIndex > 0) {
     // Flush if style will change OR if we're closing a block/structural element
-    const bool isInlineTag =
-        !headerOrBlockTag && !tableStructuralTag && !matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS) && self->depth != 1;
-    const bool shouldFlush = styleWillChange || headerOrBlockTag || matches(name, BOLD_TAGS, NUM_BOLD_TAGS) ||
-                             matches(name, ITALIC_TAGS, NUM_ITALIC_TAGS) ||
+    const bool isInlineTag = !headerOrBlockTag && !closesBlockSpan && !tableStructuralTag &&
+                             !matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS) && self->depth != 1;
+    const bool shouldFlush = styleWillChange || headerOrBlockTag || closesBlockSpan ||
+                             matches(name, BOLD_TAGS, NUM_BOLD_TAGS) || matches(name, ITALIC_TAGS, NUM_ITALIC_TAGS) ||
                              matches(name, UNDERLINE_TAGS, NUM_UNDERLINE_TAGS) ||
                              matches(name, STRIKETHROUGH_TAGS, NUM_STRIKETHROUGH_TAGS) || tableStructuralTag ||
                              matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS) || self->depth == 1;
@@ -3278,6 +3297,9 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   while (!self->blockInsetStack_.empty() && self->blockInsetStack_.back().depth >= self->depth) {
     self->blockInsetStack_.pop_back();
   }
+
+  // After its bottom spacing has landed on its block, so the next block starts clean.
+  if (closesBlockSpan) self->endBlockSpan();
 
   // Closing a footnote link — create entry from collected text and href
   if (self->insideFootnoteLink && self->depth == self->footnoteLinkDepth) {
@@ -3881,6 +3903,62 @@ void ChapterHtmlSlimParser::applyHeadingScope(BlockStyle& blockStyle, const CssS
   if (!booksOwnAlignment) blockStyle.alignment = headingAlignment_;
   blockStyle.textAlignDefined = true;
   if (!cssStyle.hasFontSizeMultiplier()) blockStyle.fontSizeMultiplier = headingFontSizeMultiplier_;
+}
+
+void ChapterHtmlSlimParser::startBlockSpan(const CssStyle& cssStyle, BlockStyle blockStyle) {
+  blockSpan_ = BlockSpan{};
+  blockSpan_.depth = depth;
+  blockSpan_.interruptedOwnerDepth = currentBlockOwnerDepth_;
+  if (currentTextBlock) {
+    const BlockStyle& interrupted = currentTextBlock->getBlockStyle();
+    blockSpan_.alignment = interrupted.alignment;
+    blockSpan_.textAlignDefined = interrupted.textAlignDefined;
+    blockSpan_.fontSizeMultiplier = interrupted.fontSizeMultiplier;
+    blockSpan_.headingFontId = interrupted.headingFontId;
+    blockSpan_.fontResolved = interrupted.fontResolved;
+  }
+
+  // From here on the span is laid out as a <div> would be.
+  if (embeddedStyle && cssStyle.hasTextAlign() && paragraphAlignment == static_cast<uint8_t>(CssTextAlign::None)) {
+    blockStyle.alignment = cssStyle.textAlign;
+    blockStyle.textAlignDefined = true;
+  }
+  if (depth > headingDepth_) applyHeadingScope(blockStyle, cssStyle);
+  holdBottomSpacing(blockStyle, /*floated=*/false);
+  startNewTextBlock(blockStyle);
+  currentBlockOwnerDepth_ = depth;
+}
+
+void ChapterHtmlSlimParser::endBlockSpan() {
+  // Alignment, size and insets of the element the span interrupted, not its vertical spacing:
+  // that was spent where the element started. The size fields travel together, as for <br>.
+  BlockStyle resumed;
+  resumed.alignment = blockSpan_.alignment;
+  resumed.textAlignDefined = blockSpan_.textAlignDefined;
+  resumed.fontSizeMultiplier = blockSpan_.fontSizeMultiplier;
+  resumed.headingFontId = blockSpan_.headingFontId;
+  resumed.fontResolved = blockSpan_.fontResolved;
+  addAncestorInsets(resumed, static_cast<float>(renderer.getFontAscenderSize(fontId)));
+
+  if (currentTextBlock && currentTextBlock->isEmpty()) {
+    // Nothing of the span reached its block. Its spacing stays there for whatever follows to
+    // merge with; only what it would lend that follower is replaced.
+    BlockStyle style = currentTextBlock->getBlockStyle();
+    style.alignment = resumed.alignment;
+    style.textAlignDefined = resumed.textAlignDefined;
+    style.fontSizeMultiplier = resumed.fontSizeMultiplier;
+    style.headingFontId = resumed.headingFontId;
+    style.fontResolved = resumed.fontResolved;
+    style.marginLeft = resumed.marginLeft;
+    style.marginRight = resumed.marginRight;
+    style.paddingLeft = resumed.paddingLeft;
+    style.paddingRight = resumed.paddingRight;
+    currentTextBlock->setBlockStyle(style);
+  } else {
+    startNewTextBlock(resumed);
+  }
+  currentBlockOwnerDepth_ = blockSpan_.interruptedOwnerDepth;
+  blockSpan_.depth = INT_MAX;
 }
 
 void ChapterHtmlSlimParser::clearSpentBlockHeadingStyle() {
