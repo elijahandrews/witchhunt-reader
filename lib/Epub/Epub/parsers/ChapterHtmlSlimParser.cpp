@@ -2534,6 +2534,11 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
         headerBlockStyle.fontSizeMultiplier = kHeadingMultiplier[level - 1];
       }
     }
+    if (self->headingDepth_ == INT_MAX) {
+      self->headingDepth_ = self->depth;
+      self->headingAlignment_ = headerBlockStyle.alignment;
+      self->headingFontSizeMultiplier_ = headerBlockStyle.fontSizeMultiplier;
+    }
     self->holdBottomSpacing(headerBlockStyle, isFloated);
     self->startNewTextBlock(headerBlockStyle);
     self->currentBlockOwnerDepth_ = self->depth;
@@ -2600,6 +2605,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
         blockStyle.alignment = cssStyle.textAlign;
         blockStyle.textAlignDefined = true;
       }
+      if (self->depth > self->headingDepth_) self->applyHeadingScope(blockStyle, cssStyle);
       self->holdBottomSpacing(blockStyle, isFloated);
       self->startNewTextBlock(blockStyle);
       self->currentBlockOwnerDepth_ = self->depth;
@@ -3255,6 +3261,7 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
     self->currentBlockOwnerDepth_ = -1;
     self->clearSpentBlockHeadingStyle();
   }
+  if (self->depth == self->headingDepth_) self->headingDepth_ = INT_MAX;
 
   // Apply held bottom spacing whose block-level element is now out of scope
   while (!self->heldBottomSpacing_.empty() && self->heldBottomSpacing_.back().depth >= self->depth) {
@@ -3866,6 +3873,16 @@ ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_p
 
 // Strip heading sizing from a block that makePages() has already drained, so the next block
 // does not inherit it through startNewTextBlock's empty-block merge. See the <table> handler.
+void ChapterHtmlSlimParser::applyHeadingScope(BlockStyle& blockStyle, const CssStyle& cssStyle) const {
+  // The same rule the heading's own alignment follows: centered unless the reader is set to the
+  // book's style and the book aligns this block itself.
+  const bool booksOwnAlignment =
+      embeddedStyle && cssStyle.hasTextAlign() && paragraphAlignment == static_cast<uint8_t>(CssTextAlign::None);
+  if (!booksOwnAlignment) blockStyle.alignment = headingAlignment_;
+  blockStyle.textAlignDefined = true;
+  if (!cssStyle.hasFontSizeMultiplier()) blockStyle.fontSizeMultiplier = headingFontSizeMultiplier_;
+}
+
 void ChapterHtmlSlimParser::clearSpentBlockHeadingStyle() {
   if (!currentTextBlock || !currentTextBlock->isEmpty()) return;
   BlockStyle& spent = currentTextBlock->getBlockStyle();

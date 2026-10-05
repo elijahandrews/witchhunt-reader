@@ -583,6 +583,13 @@ class ChapterHtmlSlimParser final : public Print {
   // that element has closed. A <br> inside it splits the element into more blocks, which keep its
   // font size; after it has closed, what it leaves behind must not lend that size to a sibling.
   int currentBlockOwnerDepth_ = -1;
+  // The open heading and the alignment and size its block was given. A block opening inside it is
+  // heading text and takes both (applyHeadingScope): otherwise only the first such block got them,
+  // by merging into the heading's still-empty block. INT_MAX when no heading is open.
+  int headingDepth_ = INT_MAX;
+  CssTextAlign headingAlignment_ = CssTextAlign::Center;
+  float headingFontSizeMultiplier_ = 1.0f;
+  void applyHeadingScope(BlockStyle& blockStyle, const CssStyle& cssStyle) const;
   bool heapAllowsTableRowLayout() const;
   bool flushPartWordBuffer();
   void makePages();
