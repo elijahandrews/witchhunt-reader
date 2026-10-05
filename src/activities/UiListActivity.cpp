@@ -133,6 +133,33 @@ void UiListActivity::syncListViewport(UiScreen& screen, fui::ListProps& props, c
   }
 }
 
+// Out of line on purpose: every list screen's buildScreen() calls these, and inlined they cost
+// about 800 B of FreeInkUI code per screen.
+void UiListActivity::layoutListArea(UiScreen& screen, const int16_t extraTop, const int16_t extraBottom) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const Rect contentRect = listContentRect();
+  screen.setContentMarginFromScreen(
+      fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight + extraTop),
+                  static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
+                  static_cast<int16_t>(renderer.getScreenHeight() - (contentRect.y + contentRect.height) + extraBottom),
+                  static_cast<int16_t>(contentRect.x)});
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+}
+
+fui::ListProps UiListActivity::listProps(UiScreen& screen) const {
+  fui::ListProps props;
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch;
+  props.labelText = screen.theme().bodyText;
+  props.labelText.maxLines = 2;
+  return props;
+}
+
+void UiListActivity::addList(UiScreen& screen, fui::ListProps& props, const bool hasSubtitle) {
+  syncListViewport(screen, props, hasSubtitle);
+  screen.list(props);
+}
+
 void UiListActivity::drawChrome() {
   const char* title = headerTitle();
   if (!title) return;

@@ -948,6 +948,7 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
 }
 
 void BaseTheme::shipPopup(const GfxRenderer& renderer, const PopupShip ship) {
+  if (ship == PopupShip::Caller) return;  // drawn only; the caller's displayBuffer() ships it
   if (ship == PopupShip::Async) {
     renderer.triggerDisplayAsync();
   } else {

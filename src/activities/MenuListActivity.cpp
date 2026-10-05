@@ -128,12 +128,8 @@ void MenuListActivity::buildScreen(UiScreen& screen) {
       static_cast<int16_t>(renderer.getScreenHeight() - (listRect.y + listRect.height)),
       static_cast<int16_t>(listRect.x)});
 
-  fui::ListProps props;
+  auto props = listProps(screen);
   props.count = static_cast<uint16_t>(listCount());
-  props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
-  props.labelText = screen.theme().bodyText;
-  props.labelText.maxLines = 2;
   syncListViewport(screen, props);
   materializeListWindow();
   props.items = windowItems.data();

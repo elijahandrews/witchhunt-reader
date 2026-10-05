@@ -886,14 +886,7 @@ void FileBrowserActivity::materializeListWindow() {
 }
 
 void FileBrowserActivity::buildScreen(UiScreen& screen) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  const Rect contentRect = UITheme::getContentRect(renderer, true, true);
-  screen.setContentMarginFromScreen(
-      fui::Insets{static_cast<int16_t>(contentRect.y + metrics.topPadding + metrics.headerHeight),
-                  static_cast<int16_t>(renderer.getScreenWidth() - (contentRect.x + contentRect.width)),
-                  static_cast<int16_t>(renderer.getScreenHeight() - (contentRect.y + contentRect.height)),
-                  static_cast<int16_t>(contentRect.x)});
-  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+  layoutListArea(screen);
 
   if (listCount() == 0) {
     fui::TextAreaProps empty;
@@ -909,11 +902,8 @@ void FileBrowserActivity::buildScreen(UiScreen& screen) {
   // The grid is drawn straight to the frame after the (otherwise empty) screen, in afterUiRender().
   if (coversView()) return;
 
-  fui::ListProps props;
+  auto props = listProps(screen);
   props.count = static_cast<uint16_t>(listCount());
-  props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
-  props.labelText = screen.theme().bodyText;
   // A filename may wrap; a Details row is a title over a subtitle at a fixed two-line height.
   const bool details = detailsView();
   props.labelText.maxLines = details ? 1 : 3;

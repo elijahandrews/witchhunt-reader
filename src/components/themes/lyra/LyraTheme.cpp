@@ -24,7 +24,6 @@
 #include "components/icons/file24.h"
 #include "components/icons/folder.h"
 #include "components/icons/folder24.h"
-#include "components/icons/hotspot.h"
 #include "components/icons/image24.h"
 #include "components/icons/library.h"
 #include "components/icons/recent.h"
@@ -32,11 +31,8 @@
 #include "components/icons/stats.h"
 #include "components/icons/text24.h"
 #include "components/icons/transfer.h"
-#include "components/icons/usb.h"
-#include "components/icons/usb24.h"
 #include "components/icons/weather24.h"
 #include "components/icons/weather32.h"
-#include "components/icons/wifi.h"
 #include "components/themes/ButtonHintLayout.h"
 #include "components/themes/CardTextFit.h"
 #include "components/themes/ListTouchBand.h"
@@ -99,8 +95,6 @@ const uint8_t* LyraTheme::iconForName(UIIcon icon, int size) {
         return File24Icon;
       case UIIcon::Weather:
         return Weather24Icon;
-      case UIIcon::Usb:
-        return Usb24Icon;
       default:
         return nullptr;
     }
@@ -122,14 +116,8 @@ const uint8_t* LyraTheme::iconForName(UIIcon icon, int size) {
         return TransferIcon;
       case UIIcon::Library:
         return LibraryIcon;
-      case UIIcon::Wifi:
-        return WifiIcon;
-      case UIIcon::Hotspot:
-        return HotspotIcon;
       case UIIcon::Weather:
         return Weather32Icon;
-      case UIIcon::Usb:
-        return UsbIcon;
       default:
         return nullptr;
     }

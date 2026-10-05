@@ -21,6 +21,9 @@ User-facing changes only. Full commit history is in git log.
 - **Settings, the reader menu, the pickers and the menus move the same way as the OPDS catalog.** Up/Down and Left/Right move one row; hold Left/Right to page a screenful (Left/Right used to page at once under "Up" / "Down" labels in the menus); hold Up/Down to jump to the first / last row, or in Settings and the reader menu to switch tabs; tap Up or Down twice quickly to jump a page. A page jump keeps the selection on the same line of the screen. A swipe now moves the selection with the page. The side Up/Down hints appear on all of these lists, so the T5 S3 can always move up.
 - **Holding Up / Down to switch tabs in Settings and the reader menu opens each tab where you left it**, rather than at the top.
 - **Holding Back on these lists returns to the Home screen** (it used to act like a short press), without losing changes: Settings saves first, and the reader menu closes the book as its **Go Home** item does. Inside a book, lists opened over the reader menu and quick overrides, and a file's options menu, still treat a held Back as a press.
+- **More screens move the same way:** File Transfer's mode choice, the OPDS servers and their settings, Customise Status Bar, the font manager, Reading Stats' book list, the weather city search results and the finished-book screen. They show the side Up/Down hints, page with a hold of Left/Right or a swipe, and keep the selection's line when they do.
+- **On/off settings on Customise Status Bar and the finished-book screen are switches** instead of "Show"/"Hide" and "On"/"Off" words.
+- **A weather city search with no matches now says so** instead of returning to the settings without a word.
 
 ### Fixes
 

@@ -8,10 +8,10 @@
 #include <WiFi.h>
 
 #include "MappedInputManager.h"
+#include "WeatherCityResultsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
-#include "fontIds.h"
 
 void WeatherSettingsActivity::buildMenuItems() {
   menuItems.reserve(10);
@@ -28,43 +28,6 @@ void WeatherSettingsActivity::buildMenuItems() {
   menuItems.push_back(SettingInfo::Action(StrId::STR_WEATHER_TEMP_UNIT, SettingAction::None));
   menuItems.push_back(SettingInfo::Action(StrId::STR_WEATHER_WIND_UNIT, SettingAction::None));
   menuItems.push_back(SettingInfo::Action(StrId::STR_WEATHER_PRECIP_UNIT, SettingAction::None));
-}
-
-void WeatherSettingsActivity::onEnter() {
-  MenuListActivity::onEnter();
-  showingSearchResults = false;
-}
-
-void WeatherSettingsActivity::loop() {
-  if (showingSearchResults) {
-    // This list moves to the ListController in PR 5. Until then its Back and Confirm are read as
-    // events, never levels, so neither reaches the settings menu again once the results close;
-    // the steps below come from the press log, and their events are dropped here.
-    ButtonEventManager::ButtonEvent event;
-    while (buttonEvents.consumeEvent(event)) {
-      if (event.button == MappedInputManager::Button::Back) {
-        showingSearchResults = false;
-        requestUpdate();
-        return;
-      }
-      if (event.button == MappedInputManager::Button::Confirm) {
-        if (resultIndex >= 0 && resultIndex < static_cast<int>(searchResults.size())) {
-          const auto& result = searchResults[resultIndex];
-          WEATHER_SETTINGS.setLocation(result.latitude, result.longitude, result.name + ", " + result.country);
-          WEATHER_SETTINGS.saveToFile();
-          showingSearchResults = false;
-          requestUpdate();
-        }
-        return;
-      }
-    }
-
-    resultsNavigator.onNextList(resultIndex, static_cast<int>(searchResults.size()), [this] { requestUpdate(); });
-    resultsNavigator.onPreviousList(resultIndex, static_cast<int>(searchResults.size()), [this] { requestUpdate(); });
-    return;
-  }
-
-  MenuListActivity::loop();
 }
 
 std::string WeatherSettingsActivity::getItemValueString(int index) const {
@@ -138,20 +101,6 @@ void WeatherSettingsActivity::onSettingToggled(int index) {
   }
 }
 
-void WeatherSettingsActivity::onBackPressed() {
-  if (showingSearchResults) {
-    showingSearchResults = false;
-    requestUpdate();
-    return;
-  }
-  finish();
-}
-
-ListRowTap::Result WeatherSettingsActivity::selectListRow(const int index) {
-  if (!showingSearchResults) return MenuListActivity::selectListRow(index);
-  return ListRowTap::apply(index, static_cast<int>(searchResults.size()), resultIndex);
-}
-
 void WeatherSettingsActivity::launchCitySearch() {
   startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_WEATHER_SEARCH_CITY), "",
                                                                  64, InputType::Text),
@@ -164,19 +113,23 @@ void WeatherSettingsActivity::launchCitySearch() {
                            if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
                              startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
                                                     [this, query = kb.text](const ActivityResult& wifiResult) {
-                                                      if (wifiResult.isCancelled) return;
-                                                      searchResults = WeatherClient::searchCity(query);
-                                                      showingSearchResults = !searchResults.empty();
-                                                      resultIndex = 0;
-                                                      requestUpdate();
+                                                      if (!wifiResult.isCancelled) showCityResults(query);
                                                     });
-                           } else {
-                             searchResults = WeatherClient::searchCity(kb.text);
-                             showingSearchResults = !searchResults.empty();
-                             resultIndex = 0;
-                             requestUpdate();
+                             return;
                            }
+                           showCityResults(kb.text);
                          });
+}
+
+// The search is a blocking request on the loop task, as it always was; the matches then open as
+// their own list, also when there are none, so an empty search says so. This runs inside a result
+// handler (the keyboard's, or the Wi-Fi picker's). ActivityManager moves a handler out before
+// running it, so starting another activity from one is supported, the same way the keyboard handler
+// above starts the Wi-Fi picker.
+void WeatherSettingsActivity::showCityResults(const std::string& query) {
+  startActivityForResult(
+      std::make_unique<WeatherCityResultsActivity>(renderer, mappedInput, WeatherClient::searchCity(query)),
+      [this](const ActivityResult&) { requestUpdate(); });  // the Location row shows a pick
 }
 
 void WeatherSettingsActivity::launchLatitudeEntry() {
@@ -224,36 +177,6 @@ void WeatherSettingsActivity::render(RenderLock&&) {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect contentRect = listContentRect();
-
-  if (showingSearchResults) {
-    closeRouting();
-    GUI.drawHeader(renderer, listHeaderRect(), tr(STR_WEATHER_SEARCH_RESULTS));
-
-    const int contentTop = contentRect.y + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-    const int contentHeight =
-        contentRect.height - (metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing * 2);
-
-    if (searchResults.empty()) {
-      renderer.drawCenteredText(UI_10_FONT_ID, contentTop + contentHeight / 2, tr(STR_NO_ENTRIES));
-    } else {
-      GUI.drawList(
-          renderer, Rect(contentRect.x, contentTop, contentRect.width, contentHeight),
-          static_cast<int>(searchResults.size()), resultIndex,
-          [this](int index) {
-            const auto& r = searchResults[index];
-            std::string label = r.name;
-            if (!r.admin1.empty()) label += ", " + r.admin1;
-            if (!r.country.empty()) label += ", " + r.country;
-            return label;
-          },
-          nullptr, nullptr, nullptr, true);
-    }
-
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-    renderer.displayBuffer();
-    return;
-  }
 
   GUI.drawHeader(renderer, listHeaderRect(), tr(STR_WEATHER_SETTINGS));
 

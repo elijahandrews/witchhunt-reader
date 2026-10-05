@@ -3,27 +3,27 @@
 #include <cstdint>
 #include <string>
 
-#include "../Activity.h"
 #include "FontInstaller.h"
+#include "activities/UiListActivity.h"
 #include "network/HttpDownloader.h"
-#include "util/ButtonNavigator.h"
 #include "util/FontCatalog.h"
 
 #ifndef FONT_MANIFEST_URL
 #define FONT_MANIFEST_URL "https://raw.githubusercontent.com/jpirnay/witchhunt-reader/master/assets/sd-fonts/fonts.json"
 #endif
 
-class FontDownloadActivity : public Activity {
+// Adapted from upstream crosspoint-reader's FontDownloadActivity
+// (develop @ cdac66ffe, src/activities/settings/FontDownloadActivity.cpp).
+// Only the family list's FreeInkUI skeleton is theirs. The stash-to-SD download, resume, the v1
+// manifest, the delete prompt and the reboot on exit are ours; their groups, string arena,
+// mandatory CRC and delete-on-abort are not taken.
+class FontDownloadActivity final : public UiListActivity {
  public:
   explicit FontDownloadActivity(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
   void onEnter() override;
   bool usesWifi() const override { return true; }
   void onExit() override;
-  // Tap on a row -> move the selection there; ActivityManager synthesizes Confirm.
-  ListRowTap::Result selectListRow(int index) override;
-  void loop() override;
-  void render(RenderLock&&) override;
   bool preventAutoSleep() override { return state_ == LOADING_MANIFEST || state_ == DOWNLOADING; }
   bool skipLoopDelay() override { return true; }
 
@@ -39,7 +39,6 @@ class FontDownloadActivity : public Activity {
 
   State state_ = WIFI_SELECTION;
   FontInstaller fontInstaller_;
-  ButtonNavigator buttonNavigator_;
 
   // HTTP/TLS session shared across all files of a single downloadFamily()
   // call. Each family install pays the TLS handshake once (on its first
@@ -53,8 +52,9 @@ class FontDownloadActivity : public Activity {
   // TLS session the heap back in one piece. `styles` in the manifest is not kept -- nothing shows it.
   // hasResumableDownload: a __staging dir from an interrupted download exists for this not-yet-
   // installed family, and the next confirm resumes it rather than restarting.
+  // Read by the render task (listCount(), the row provider, the confirm label): replaced or
+  // changed on the loop task only under RenderLock.
   FontCatalog families_;
-  int selectedIndex_ = 0;
 
   enum class PendingFontAction {
     None,
@@ -77,8 +77,28 @@ class FontDownloadActivity : public Activity {
   std::string errorMessage_;
   bool cancelRequested_ = false;
   int previousActionCount_ = 0;
+  // What the two action rows offer, counted by refreshRowTotals() so that listCount() and the row
+  // provider never walk families_, and the rows' labels ("Download all (12.3 MB)") they point at.
+  int uninstalledCount_ = 0;
+  int updateCount_ = 0;
+  char downloadAllLabel_[64] = {};
+  char updateAllLabel_[64] = {};
   int lastProgressPercent_ = -1;
   unsigned long lastProgressUpdateMs_ = 0;
+
+  // --- The family list (UiListActivity) ---
+  int listCount() const override { return state_ == FAMILY_LIST ? listItemCount() : 0; }
+  const char* headerTitle() const override;
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  // Every state but the family list: COMPLETE and ERROR read their own events, the others none.
+  bool handleCustomInput() override;
+  // The header in every state, and the status screens' text outside the family list.
+  void drawChrome() override;
+  // The list's hint strips in the family list; Back and Retry/Resume on the status screens.
+  void drawFooter() override;
+  [[nodiscard]] const char* footerConfirmLabel() const override;
+  static void provideRow(void* ctx, uint16_t index, freeink::ui::ListItem& item);
 
   void onWifiSelectionComplete(bool success);
   bool fetchAndParseManifest();
@@ -93,33 +113,35 @@ class FontDownloadActivity : public Activity {
   void downloadFamilyImpl(FontCatalog& family, int familyIdx);
   void downloadAll();
   void updateAll();
+  // The transfer's input pump: true once Back has been pressed, read as an event.
+  bool backPressedDuringTransfer();
 
   // Persist families_ to /fonts_families.bin and free its block, under the
   // RenderLock. The TLS session of the download that follows needs a
   // contiguous ~17 KB record buffer, which the block gives back in one piece.
   bool stashFamiliesToSd();
-  // Read /fonts_families.bin back into families_, publishing it under the
-  // RenderLock. Returns true on success.
-  bool restoreFamiliesFromSd();
-  bool isDownloadAllSelected() const { return hasDownloadCandidates() && selectedIndex_ == 0; }
-  bool isUpdateAllSelected() const {
-    if (!hasUpdateCandidates()) return false;
-    return selectedIndex_ == (hasDownloadCandidates() ? 1 : 0);
-  }
-  bool hasDownloadCandidates() const;
-  bool hasUpdateCandidates() const;
+  // Read /fonts_families.bin into `out`, a block of its own. Returns true on success. The caller
+  // swaps it into families_ under RenderLock.
+  bool restoreFamiliesFromSd(FontCatalog& out);
+  bool hasDownloadCandidates() const { return uninstalledCount_ > 0; }
+  bool hasUpdateCandidates() const { return updateCount_ > 0; }
   int actionCount() const { return (hasDownloadCandidates() ? 1 : 0) + (hasUpdateCandidates() ? 1 : 0); }
-  int familyIndexFromList(int listIndex) const {
-    return listIndex > actionCount() - 1 ? listIndex - actionCount() : -1;
+  bool isDownloadAllRow(const int row) const { return hasDownloadCandidates() && row == 0; }
+  bool isUpdateAllRow(const int row) const { return hasUpdateCandidates() && row == (hasDownloadCandidates() ? 1 : 0); }
+  // The family a list row shows; -1 for an action row or a row past the list.
+  int familyIndexFromList(const int listIndex) const {
+    const int familyIndex = listIndex - actionCount();
+    return familyIndex >= 0 && familyIndex < static_cast<int>(families_.count()) ? familyIndex : -1;
   }
   int listItemCount() const { return families_.empty() ? 0 : static_cast<int>(families_.count()) + actionCount(); }
-  size_t totalUninstalledSize() const;
-  size_t totalUpdateSize() const;
+  // Recounts the action rows and formats their labels. Call under RenderLock after families_ or a
+  // family's installed / hasUpdate flag changes.
+  void refreshRowTotals();
+  // Loop task only: moves the selection through the nav when the action rows come or go.
   void syncSelectedIndexForNewActionCount();
 
-  std::string confirmButtonLabel() const;
   void promptDeleteFamily(int familyIndex);
   void deleteFamilyAtIndex(int familyIndex);
 
-  static std::string formatSize(size_t bytes);
+  static void formatSize(size_t bytes, char* out, size_t outSize);
 };
