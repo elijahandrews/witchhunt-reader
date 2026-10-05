@@ -4,11 +4,13 @@
 #include <CrossPointRoots.h>
 #include <HalClock.h>
 #include <Logging.h>
+#include <RangeDownload.h>
 #include <SecureHttpClient.h>
 #include <base64.h>
 #include <esp_heap_caps.h>
 #include <esp_wifi.h>
 
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -46,13 +48,9 @@ bool ensureClockForTls() { return HalClock::ensureUsableForTls(SETTINGS.ntpServe
 // SecureHttpClient's own READ_CHUNK-sized pieces.
 constexpr int HTTP_TIMEOUT_MS = 60000;
 
-struct Sink {
-  // Returns false to abort the transfer (e.g. SD write failure or user cancel).
-  std::function<bool(const uint8_t*, size_t)> write;
-  HttpDownloader::ProgressCallback progress;
-  size_t total = 0;
-  size_t downloaded = 0;
-};
+// The sink, the chunked-download loop and its session state live in lib/SecureNet (RangeDownload.h),
+// where they are host-tested.
+using Sink = crosspoint::DownloadSink;
 
 bool isRedirect(int status) {
   return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
@@ -109,6 +107,8 @@ struct WifiPowerSaveGuard {
   }
 };
 
+size_t largestFreeBlock() { return heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT); }
+
 // One-shot streaming GET over SecureNet (wolfSSL). Fills the Sink and emits
 // "Phase start"/"Phase open_ok"/"Phase done" heap telemetry. The TlsPolicy
 // decides whether the curated roots are loaded at all and what happens when the
@@ -135,25 +135,19 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
   }
 
   bool openLogged = false;
-  auto bodySink = [&](const uint8_t* data, size_t len) -> bool {
+  const auto write = sink.write;
+  sink.write = [&openLogged, startMs, write](const uint8_t* data, size_t len) -> bool {
     if (!openLogged) {
       openLogged = true;
       LOG_DBG("HTTP", "Phase open_ok @%lums heap=%u largest=%u", millis() - startMs, esp_get_free_heap_size(),
               heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     }
-    if (!sink.write(data, len)) return false;  // abort
-    sink.downloaded += len;
-    if (sink.progress && sink.total > 0) {
-      if (!sink.progress(sink.downloaded, sink.total)) return false;
-    }
-    return true;
-  };
-  auto progress = [&](size_t downloaded, size_t total) -> bool {
-    sink.total = total;
-    return true;
+    return write(data, len);
   };
 
-  const int rc = http.get(url, bodySink, progress);
+  // A one-shot download is its own session: whatever it learns ends with it.
+  crosspoint::ChunkSession chunking;
+  const int rc = crosspoint::downloadToSink(http, url, sink, chunking, &largestFreeBlock);
   // Log the handshake heap trough on EVERY path (incl. early abort via
   // treatAbortAsSuccess) so the TLS-specific low-water is always captured,
   // distinct from the all-time ESP.getMinFreeHeap() figure.
@@ -163,6 +157,7 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) {
     return HttpDownloader::ABORTED;
   }
+  if (rc == crosspoint::ERR_REWIND) return HttpDownloader::FILE_ERROR;
   if (rc < 0) {
     LOG_ERR("HTTP", "SecureNet GET failed: rc=%d url=%s", rc, url.c_str());
     return HttpDownloader::HTTP_ERROR;
@@ -191,6 +186,9 @@ struct HttpDownloader::Session::Impl {
   // persistent SecureHttpClient across downloadToFile(session, ...) calls.
   std::unique_ptr<crosspoint::SecureHttpClient> http;
   bool preCallLogged = false;
+  // What this session's files learn about chunked downloads (RangeDownload.h): a chunk size that ran
+  // out of memory stays out of reach, so later files start at a size that worked.
+  crosspoint::ChunkSession chunking;
 };
 
 HttpDownloader::Session::Session() : impl_(std::make_unique<Impl>()) {}
@@ -225,21 +223,9 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
     impl->http->setBasicAuth(username, password);
   }
 
-  auto bodySink = [&](const uint8_t* data, size_t len) -> bool {
-    if (!sink.write(data, len)) return false;
-    sink.downloaded += len;
-    if (sink.progress && sink.total > 0) {
-      if (!sink.progress(sink.downloaded, sink.total)) return false;
-    }
-    return true;
-  };
-  auto progress = [&](size_t, size_t total) -> bool {
-    sink.total = total;
-    return true;
-  };
-
-  const int rc = impl->http->get(url, bodySink, progress);
+  const int rc = crosspoint::downloadToSink(*impl->http, url, sink, impl->chunking, &largestFreeBlock);
   if (rc == crosspoint::SecureHttpClient::ERR_ABORTED) return HttpDownloader::ABORTED;
+  if (rc == crosspoint::ERR_REWIND) return HttpDownloader::FILE_ERROR;
   if (rc != 200) {
     LOG_ERR("HTTP", "SecureNet session GET failed: rc=%d url=%s", rc, url.c_str());
     return HttpDownloader::HTTP_ERROR;
@@ -353,6 +339,11 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   Sink sink;
   sink.progress = std::move(progress);
   sink.write = [&file](const uint8_t* data, size_t len) { return file.write(data, len) == len; };
+  // Reopening for write truncates: the file starts again from byte 0.
+  sink.rewind = [&file, &destPath]() {
+    file.close();
+    return Storage.openFileForWrite("HTTP", destPath.c_str(), file);
+  };
 
   const DownloadError result = runGetDispatch(url, username, password, sink, tls);
   return finishFileDownload(result, destPath, file, sink.downloaded);
@@ -377,6 +368,11 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(Session& session, c
   Sink sink;
   sink.progress = std::move(progress);
   sink.write = [&file](const uint8_t* data, size_t len) { return file.write(data, len) == len; };
+  // Reopening for write truncates: the file starts again from byte 0.
+  sink.rewind = [&file, &destPath]() {
+    file.close();
+    return Storage.openFileForWrite("HTTP", destPath.c_str(), file);
+  };
 
   const DownloadError result = runGetOnSession(session, url, username, password, sink, tls);
   return finishFileDownload(result, destPath, file, sink.downloaded);

@@ -22,6 +22,11 @@ User-facing changes only. Full commit history is in git log.
 - **Holding Up / Down to switch tabs in Settings and the reader menu opens each tab where you left it**, rather than at the top.
 - **Holding Back on these lists returns to the Home screen** (it used to act like a short press), without losing changes: Settings saves first, and the reader menu closes the book as its **Go Home** item does. Inside a book, lists opened over the reader menu and quick overrides, and a file's options menu, still treat a held Back as a press.
 
+### Network
+
+- **Fix: GitHub downloads pass the certificate check again.** GitHub's download servers moved to a new Let's Encrypt certificate chain whose root key is 4096-bit RSA, which the reader's TLS library could not verify. The font list, font files and firmware updates (which never skip the check) failed with a certificate error; the font manager only worked with **Skip HTTPS validation** switched on.
+- **Font downloads fetch each file in small pieces when memory is tight**, so the X3 no longer runs out of memory on GitHub's large secure-connection records partway through a font file (the X4 uses the same method). On those readers a file is now requested in pieces of 1 to 6 KB, sized to the memory that is free, over the same connection; a dropped connection picks up where it stopped. Book downloads from OPDS catalogs use the same method; a server that does not support it sends the whole file as before. The T5 S3 and X4 Pro, with more memory, download as before.
+
 ## 2.37 — 2026-09-29
 
 Everything since 2.35, including the 2.36 pre-release. The on-screen keyboard now types Cyrillic, French, German and Spanish, and reading statistics no longer slow down leaving a book. The page counter counts the whole chapter, and a book whose layout changed reopens at the paragraph you were reading.
