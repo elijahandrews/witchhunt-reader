@@ -25,6 +25,22 @@ bool SettingsActivity::isRowSelectable(const int index) const {
   return index >= 0 && index < settingsCount && !(*currentSettings)[index].isSeparator;
 }
 
+bool SettingsActivity::releaseBuriedState() {
+  // The four tabs' rows, the submenus and the visible window's labels: ~80 SettingInfo rows with
+  // their label vectors, in many small blocks across the heap. onEnter() builds them all again.
+  std::vector<SettingInfo>().swap(displaySettings);
+  std::vector<SettingInfo>().swap(readerSettings);
+  std::vector<SettingInfo>().swap(controlsSettings);
+  std::vector<SettingInfo>().swap(systemSettings);
+  std::vector<SettingInfo::SubmenuData>().swap(submenuData);
+  for (std::string& label : windowLabels) std::string().swap(label);
+  for (std::string& value : windowValues) std::string().swap(value);
+  currentSettings = nullptr;
+  settingsCount = 0;
+  windowCount = 0;
+  return true;
+}
+
 void SettingsActivity::onEnter() {
   needsHalfRefresh = true;
 

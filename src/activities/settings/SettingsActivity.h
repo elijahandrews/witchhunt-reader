@@ -59,4 +59,5 @@ class SettingsActivity final : public TabbedUiListActivity {
       : TabbedUiListActivity("Settings", renderer, mappedInput) {}
   void onEnter() override;
   void onExit() override;
+  bool releaseBuriedState() override;
 };

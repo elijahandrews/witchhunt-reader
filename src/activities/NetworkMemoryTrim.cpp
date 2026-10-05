@@ -3,11 +3,18 @@
 #include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
+
+#include "GlobalBookmarkIndex.h"
+#include "SdCardFontGlobals.h"
+#include "activities/Activity.h"  // and ActivityManager, which needs the complete Activity
 
 void trimMemoryForNetworkSession(const GfxRenderer& renderer, const char* logTag) {
   if (auto* cache = renderer.getFontCacheManager()) {
     cache->clearCache();
   }
+  // Allocated on the first scaled glyph and kept (~5-8 KB); the next one allocates it again.
+  renderer.releaseScaledGlyphCache();
   // Reclaim the buffer first if the reader lent it out for a background page build. A lent
   // buffer reports hasSecondaryBuffer() == false, so without this the trim below would quietly
   // do nothing AND the later releaseFrameBuffers() would bail out on _secondaryLent — leaving
@@ -25,4 +32,19 @@ void trimMemoryForNetworkSession(const GfxRenderer& renderer, const char* logTag
       renderer.setSingleBufferFastDiff(true);
     }
   }
+}
+
+void releaseMemoryForDownload(const GfxRenderer& renderer, const char* logTag) {
+  const size_t freeBefore = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+  const size_t largestBefore = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+  trimMemoryForNetworkSession(renderer, logTag);
+  // A loaded SD font: intervals, kern and ligature tables, up to ~60 KB. Usually already gone,
+  // since leaving the reader unloads it.
+  unloadSdFontIfLoaded();
+  GLOBAL_BOOKMARKS.unload();
+  const int buried = activityManager.releaseBuriedActivityState();
+  LOG_DBG(logTag, "Released for download (%d buried screen(s)): free %u -> %u B, largest block %u -> %u B", buried,
+          static_cast<unsigned>(freeBefore), static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_DEFAULT)),
+          static_cast<unsigned>(largestBefore),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT)));
 }

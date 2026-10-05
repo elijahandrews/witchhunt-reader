@@ -197,6 +197,12 @@ class ActivityManager {
   // Note: if popActivity() on last activity on the stack, we will goHome()
   void popActivity();
 
+  // Asks every activity buried on the stack to drop what it built only to draw itself
+  // (Activity::releaseBuriedState()), for a download that needs the heap in one piece. A pop that
+  // would resume one that dropped something reboots to Settings instead; the activities above it,
+  // the caller's own children included, pop as usual. Returns how many dropped something.
+  int releaseBuriedActivityState();
+
   bool currentActivityUsesWifi() const { return activityUsesWifi.load(std::memory_order_relaxed); }
 
   bool inSleepTransition() const { return sleepTransition; }

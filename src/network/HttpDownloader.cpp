@@ -287,6 +287,17 @@ bool HttpDownloader::fetchUrlVerified(const std::string& url, const DataCallback
   return treatAbortAsSuccess && result == ABORTED;
 }
 
+HttpDownloader::DownloadError HttpDownloader::fetchVerifiedRestartable(const std::string& url,
+                                                                       const DataCallback& onData,
+                                                                       const std::function<bool()>& restart) {
+  LOG_DBG("HTTP", "Fetching (restartable, verify-only): %s", url.c_str());
+  if (!onData || !restart) return HTTP_ERROR;
+  Sink sink;
+  sink.write = [&onData](const uint8_t* data, size_t len) { return onData(data, len); };
+  sink.rewind = restart;  // what makes the transfer eligible for Range chunks
+  return runGetDispatch(url, "", "", sink, TlsPolicy::Strict);
+}
+
 bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, const std::string& username,
                               const std::string& password, TlsPolicy tls) {
   LOG_DBG("HTTP", "Fetching: %s", url.c_str());
