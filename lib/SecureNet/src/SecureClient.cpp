@@ -7,19 +7,10 @@
 // wolfSSL is only pulled in when explicitly enabled, keeping flag-off builds
 // (and host tests) free of the dependency. See SecureClient.h.
 #if defined(FREEINK_NET_WOLFSSL)
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>    // the session cache's mutex
 #include <wolfssl/error-ssl.h>  // VERIFY_CERT_ERROR, DOMAIN_NAME_MISMATCH (SSL-layer codes)
 #include <wolfssl/ssl.h>
 
-#include <cstring>
 #include <ctime>  // time() for the clock reported alongside a cert-date load failure
-
-// Session resumption needs the ticket support scripts/patch_wolfssl.py switches on. Without it the
-// ticket API below is not even declared, so say where the define should have come from.
-#if !defined(CROSSPOINT_NO_TLS_RESUMPTION) && (!defined(HAVE_SESSION_TICKET) || !defined(MAX_PSK_ID_LEN))
-#error "HAVE_SESSION_TICKET / MAX_PSK_ID_LEN did not reach wolfSSL: scripts/patch_wolfssl.py must patch user_settings.h"
-#endif
 
 // The Arduino-wolfSSL library's logging.c references this hook, normally defined
 // in the library's wolfssl.h sketch glue (not compiled in a PlatformIO lib build),
@@ -181,173 +172,10 @@ int verifyCallback(int preverify, WOLFSSL_X509_STORE_CTX* store) {
   }
   return preverify;
 }
-
-// ---- TLS session resumption ----------------------------------------------------------------
-#if !defined(CROSSPOINT_NO_TLS_RESUMPTION)
-//
-// Every connection used to repeat the full certificate check. GitHub's chain costs two RSA-4096
-// signature checks, and on the X3 the connection made seconds after the first (the font list,
-// then the first font file) failed that check for lack of heap (err=-155 at depth 1). A TLS 1.3
-// resumption skips it: the server sends no certificate chain at all.
-//
-// The ticket arrives after the handshake, as a NewSessionTicket that wolfSSL processes inside
-// wolfSSL_read() (tls13.c DoTls13NewSessionTicket), so the session is taken when the connection
-// is stopped, not when it connects.
-//
-// Rules:
-//  - Only a connection that VERIFIED its peer keeps a session, filed under host, port, trust store
-//    and date policy, and only a connection that would verify the same way is offered it. A
-//    resumed handshake carries no certificate: wolfSSL takes the peer as authenticated by the
-//    ticket (tls13.c SetupPskKey, peerAuthGood), so a ticket from an unverified connection must
-//    never stand in for a verification.
-//  - Two slots; the least recently used session goes first.
-//  - The cache owns its sessions outright and hands out copies. wolfSSL is built SINGLE_THREADED,
-//    so its reference counts are plain integers, and the S3 KOSync worker connects from its own
-//    task: a session object shared between the cache and a live connection could race on its
-//    count. The copy costs nothing extra, because wolfSSL copies a shared session before resuming
-//    from it anyway (internal.c HaveUniqueSessionObj).
-//  - A mutex guards the slots, for the same worker.
-constexpr size_t SESSION_CACHE_SLOTS = 2;
-
-// wolfSSL refuses to build a ClientHello around a ticket longer than MAX_PSK_ID_LEN (set in
-// scripts/patch_wolfssl.py; tls.c TLSX_PopulateExtensions returns BUFFER_ERROR), so such a ticket
-// would fail every connect it was offered on. It is not kept.
-constexpr int MAX_RESUMPTION_TICKET_LEN = MAX_PSK_ID_LEN;
-
-struct CachedSession {
-  WOLFSSL_SESSION* session;  // owned; nullptr marks a free slot
-  uint32_t lastUsed;         // least-recently-used stamp
-  TlsSessionKey key;
-};
-CachedSession g_sessionCache[SESSION_CACHE_SLOTS] = {};
-uint32_t g_sessionCacheTick = 0;
-
-// Statically allocated, so the cache takes no heap of its own; a function-local static is
-// initialised exactly once even when two tasks arrive together.
-SemaphoreHandle_t sessionCacheMutex() {
-  static StaticSemaphore_t storage;
-  static const SemaphoreHandle_t mutex = xSemaphoreCreateMutexStatic(&storage);
-  return mutex;
-}
-
-class SessionCacheLock {
- public:
-  SessionCacheLock() { xSemaphoreTake(sessionCacheMutex(), portMAX_DELAY); }
-  ~SessionCacheLock() { xSemaphoreGive(sessionCacheMutex()); }
-  SessionCacheLock(const SessionCacheLock&) = delete;
-  SessionCacheLock& operator=(const SessionCacheLock&) = delete;
-};
-
-// False when the host does not fit the key: such a host neither keeps nor is offered a session.
-bool makeSessionKey(TlsSessionKey& key, const char* host, uint16_t port, const char* roots, bool datesWaived) {
-  const size_t len = strlen(host);
-  if (len >= sizeof(key.host)) return false;
-  memcpy(key.host, host, len + 1);
-  key.roots = roots;
-  key.port = port;
-  key.datesWaived = datesWaived;
-  return true;
-}
-
-bool sameSessionKey(const TlsSessionKey& a, const TlsSessionKey& b) {
-  return a.port == b.port && a.roots == b.roots && a.datesWaived == b.datesWaived && strcmp(a.host, b.host) == 0;
-}
-
-// Caller holds the lock.
-CachedSession* findCachedSession(const TlsSessionKey& key) {
-  for (CachedSession& slot : g_sessionCache) {
-    if (slot.session != nullptr && sameSessionKey(slot.key, key)) return &slot;
-  }
-  return nullptr;
-}
-
-// A private copy of the session kept for `key`, or nullptr. The caller owns the copy.
-WOLFSSL_SESSION* copyCachedSession(const TlsSessionKey& key) {
-  const SessionCacheLock lock;
-  CachedSession* slot = findCachedSession(key);
-  if (slot == nullptr) return nullptr;
-  slot->lastUsed = ++g_sessionCacheTick;
-  return wolfSSL_SESSION_dup(slot->session);
-}
-
-// Takes ownership of `session` and files it under `key`: in place of that key's previous session,
-// else in a free slot, else in place of the least recently used one. What it displaces is freed.
-void storeCachedSession(const TlsSessionKey& key, WOLFSSL_SESSION* session) {
-  const SessionCacheLock lock;
-  CachedSession* slot = findCachedSession(key);
-  if (slot == nullptr) {
-    slot = &g_sessionCache[0];
-    for (CachedSession& candidate : g_sessionCache) {
-      if (candidate.session == nullptr) {
-        slot = &candidate;
-        break;
-      }
-      if (candidate.lastUsed < slot->lastUsed) slot = &candidate;
-    }
-  }
-  if (slot->session != nullptr) wolfSSL_SESSION_free(slot->session);
-  slot->session = session;
-  slot->key = key;
-  slot->lastUsed = ++g_sessionCacheTick;
-}
-
-void dropCachedSession(const TlsSessionKey& key) {
-  const SessionCacheLock lock;
-  CachedSession* slot = findCachedSession(key);
-  if (slot == nullptr) return;
-  wolfSSL_SESSION_free(slot->session);
-  slot->session = nullptr;
-}
-
-// wolfSSL calls this from inside wolfSSL_read() when a NewSessionTicket arrives (internal.c
-// SetTicket). It only notes the ticket's length; stop() takes the session itself.
-int onSessionTicket(WOLFSSL* /*ssl*/, const unsigned char* /*ticket*/, int len, void* ctx) {
-  *static_cast<int*>(ctx) = len;
-  return 0;
-}
-
-// The session to keep from a connection that is closing, as a reference the caller owns, or
-// nullptr. wolfSSL_get1_session() hands back the connection's own session object with one more
-// reference, so the caller must not publish it until wolfSSL_free() has dropped the other one.
-WOLFSSL_SESSION* sessionToKeep(WOLFSSL* ssl, const TlsSessionKey& key, int ticketLen) {
-  if (ticketLen <= 0) {
-    LOG_DBG("TLS", "no session ticket from %s on this connection; nothing new kept", key.host);
-    return nullptr;
-  }
-  if (ticketLen > MAX_RESUMPTION_TICKET_LEN) {
-    LOG_DBG("TLS", "session ticket from %s is %dB, too long to offer back; not kept", key.host, ticketLen);
-    return nullptr;
-  }
-  WOLFSSL_SESSION* session = wolfSSL_get1_session(ssl);
-  if (session != nullptr) LOG_DBG("TLS", "kept session for %s (ticket %dB)", key.host, ticketLen);
-  return session;
-}
-#else  // CROSSPOINT_NO_TLS_RESUMPTION: the experiment build keeps no sessions
-void dropCachedSession(const TlsSessionKey&) {}
-void storeCachedSession(const TlsSessionKey&, WOLFSSL_SESSION*) {}
-WOLFSSL_SESSION* sessionToKeep(WOLFSSL*, const TlsSessionKey&, int) { return nullptr; }
-#endif
 }  // namespace
 
-void SecureClient::clearSessionCache() {
-#if !defined(CROSSPOINT_NO_TLS_RESUMPTION)
-  unsigned dropped = 0;
-  {
-    const SessionCacheLock lock;
-    for (CachedSession& slot : g_sessionCache) {
-      if (slot.session == nullptr) continue;
-      wolfSSL_SESSION_free(slot.session);
-      slot.session = nullptr;
-      ++dropped;
-    }
-  }
-  if (dropped > 0) LOG_DBG("TLS", "dropped %u cached TLS session(s)", dropped);
-#endif
-}
-
 // One handshake attempt at a fixed verification level and TLS method.
-int SecureClient::connectWithMethod(const char* host, uint16_t port, void* method, const char* label, bool verifyPeer,
-                                    bool mayResume) {
+int SecureClient::connectWithMethod(const char* host, uint16_t port, void* method, const char* label, bool verifyPeer) {
   stop();
 #ifdef CROSSPOINT_TLS_VERIFY_TIMING
   // Proves the instrumentation define actually reached the wolfSSL headers. It travels via
@@ -384,15 +212,7 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
   }
   _ctx = ctx;
 
-  // Sessions are kept by the session cache above, not by wolfSSL's own global cache. Left on,
-  // that cache takes a copy of every session, and with tickets enabled it mallocs a copy of any
-  // ticket too long for its static buffer and holds it until the slot is reused (ssl_sess.c
-  // AddSessionToCache): heap that nothing here would ever read.
-  wolfSSL_CTX_set_session_cache_mode(ctx, WOLFSSL_SESS_CACHE_OFF);
-
-  // Verifying the peer: decides the trust store below and whether a TLS session may be kept.
-  const bool verifying = verifyPeer && !_insecure && _rootCA;
-  if (verifying) {
+  if (verifyPeer && !_insecure && _rootCA) {
     // The roots are date-checked AS THEY LOAD, not only during the handshake: plain
     // load_verify_buffer() passes WOLFSSL_LOAD_VERIFY_DEFAULT_FLAGS (== WOLFSSL_LOAD_FLAG_NONE),
     // so a cold-booted RTC-less board sitting at 1970 sees every curated root's notBefore as
@@ -447,41 +267,6 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
     wolfSSL_check_domain_name(ssl, host);
   }
 
-  // Resumption: only a connection that verifies (the roots were loaded above) keeps a session or
-  // is offered one, and only under the key it would be verified with. If the server does not take
-  // the offered session it runs a full handshake on this same connection, with the Certificate it
-  // must then send verified as usual (tls13.c: the PSK is cleared when ServerHello picks none).
-  _ticketLen = 0;
-  _keepSession = false;
-  _sessionOffered = false;
-  const char* fullHandshakeReason = "unverified, sessions not kept";
-#if defined(CROSSPOINT_NO_TLS_RESUMPTION)
-  const bool resumable = false;
-  (void)mayResume;
-  if (verifying) fullHandshakeReason = "session resumption compiled out";
-#else
-  const bool resumable =
-      verifying && mayResume && makeSessionKey(_sessionKey, host, port, _rootCA, _allowCertificateDateErrors);
-  if (resumable) {
-    fullHandshakeReason = "no cached session";
-    wolfSSL_set_SessionTicket_cb(ssl, onSessionTicket, &_ticketLen);
-    // Resume only with a fresh (EC)DHE exchange (psk_dhe_ke), never on the ticket alone (psk_ke),
-    // so a resumed connection keeps forward secrecy (tls.c TLSX_PopulateExtensions).
-    wolfSSL_only_dhe_psk(ssl);
-    if (WOLFSSL_SESSION* cached = copyCachedSession(_sessionKey)) {
-      _sessionOffered = wolfSSL_set_session(ssl, cached) == WOLFSSL_SUCCESS;
-      wolfSSL_SESSION_free(cached);  // the connection holds its own reference once set
-      if (!_sessionOffered) {
-        // wolfSSL refuses a session past its lifetime (the ticket's hint, by the wall clock).
-        dropCachedSession(_sessionKey);
-        fullHandshakeReason = "cached session expired";
-      }
-    }
-  } else if (verifying) {
-    fullHandshakeReason = mayResume ? "host name too long to cache" : "TLS 1.2 retry, sessions not kept";
-  }
-#endif
-
   // Non-blocking recv => retry wolfSSL_connect across handshake round-trips.
   // Sample the heap low-water across the handshake (this is where ECC/RSA bignum
   // allocations peak) so callers can report the handshake's real heap trough,
@@ -524,15 +309,12 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
       // on the insecure fallback; keep the log at DBG (connect() logs the WARN).
       _lastConnectErr = err;
       LOG_DBG("TLS", "wolfSSL_connect(%s) failed: err=%d", label, err);
-      // A connection that failed with a session offered must not be offered it again.
-      if (_sessionOffered) dropCachedSession(_sessionKey);
       stop();
       return 0;
     }
     if (static_cast<int32_t>(millis() - deadline) >= 0) {
       _lastConnectErr = WOLFSSL_ERROR_WANT_READ;  // treat timeout as transport, not verify
       LOG_INF("TLS", "handshake timeout to %s", host);
-      if (_sessionOffered) dropCachedSession(_sessionKey);
       stop();
       return 0;
     }
@@ -583,19 +365,6 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
     LOG_DBG("TLS", "chain verify: %lu certs [%s] (first entry includes key exchange)",
             static_cast<unsigned long>(g_chainVerify.count), chainList);
   }
-
-  // One line that settles the device test: a resumed connection received no certificate chain and
-  // verified nothing; a full one says why it was not resumed.
-  if (_sessionOffered && wolfSSL_session_reused(ssl)) {
-    LOG_DBG("TLS", "resumed session for %s: no certificate chain, nothing verified", host);
-  } else {
-    if (_sessionOffered) {
-      dropCachedSession(_sessionKey);  // the server would not take it; do not offer it again
-      fullHandshakeReason = "server declined the cached session";
-    }
-    LOG_DBG("TLS", "full handshake for %s (%s)", host, fullHandshakeReason);
-  }
-  _keepSession = resumable;
   _connected = true;
   return 1;
 }
@@ -604,11 +373,11 @@ int SecureClient::connectWithMethod(const char* host, uint16_t port, void* metho
 int SecureClient::connectAtVerify(const char* host, uint16_t port, bool verifyPeer) {
   // v23 negotiates the highest mutually supported version (TLS 1.3 when offered,
   // 1.2 otherwise). WOLFSSL_TLS13 is enabled in user_settings.h.
-  if (connectWithMethod(host, port, wolfSSLv23_client_method(), "auto", verifyPeer, /*mayResume=*/true)) return 1;
+  if (connectWithMethod(host, port, wolfSSLv23_client_method(), "auto", verifyPeer)) return 1;
   // Some TLS-1.2-only servers choke on a 1.3-capable ClientHello; retry 1.2-only,
   // but only if the failure wasn't a cert-verify problem (that won't change).
   if (isVerificationError(_lastConnectErr)) return 0;
-  return connectWithMethod(host, port, wolfTLSv1_2_client_method(), "tls1.2", verifyPeer, /*mayResume=*/false);
+  return connectWithMethod(host, port, wolfTLSv1_2_client_method(), "tls1.2", verifyPeer);
 }
 
 int SecureClient::connect(const char* host, uint16_t port) {
@@ -668,7 +437,7 @@ int SecureClient::read(uint8_t* buf, size_t size) {
   // The peer closed: with close_notify (ZERO_RETURN), or by dropping the TCP connection, which
   // wolfSSL_read reports as SOCKET_PEER_CLOSED_E with a 0 return (internal.c ReceiveData). Both end
   // the stream normally; framed HTTP bodies still detect a short body as truncation. Neither is an
-  // error to log, and neither spoils the session the handshake verified.
+  // error to log.
   if (err == WOLFSSL_ERROR_ZERO_RETURN || err == SOCKET_PEER_CLOSED_E) {
     _connected = false;
     return 0;
@@ -678,7 +447,6 @@ int SecureClient::read(uint8_t* buf, size_t size) {
   LOG_ERR("TLS", "read failed: err=%d ret=%d heap=%u largest=%u", err, n, esp_get_free_heap_size(),
           heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
   _connected = false;
-  _keepSession = false;  // a broken connection's session is not kept, ticket or not
   _lastReadErr = err;
   return -1;
 }
@@ -690,16 +458,9 @@ int SecureClient::available() {
 
 void SecureClient::stop() {
   if (_ssl) {
-    auto* ssl = static_cast<WOLFSSL*>(_ssl);
-    // Closing is when the session is complete: a TLS 1.3 ticket only arrives after the handshake.
-    WOLFSSL_SESSION* keep = _keepSession ? sessionToKeep(ssl, _sessionKey, _ticketLen) : nullptr;
-    wolfSSL_free(ssl);
+    wolfSSL_free(static_cast<WOLFSSL*>(_ssl));
     _ssl = nullptr;
-    // Published only now that the connection has let go of it, so the cache is its sole owner.
-    if (keep) storeCachedSession(_sessionKey, keep);
   }
-  _keepSession = false;
-  _ticketLen = 0;
   if (_ctx) {
     wolfSSL_CTX_free(static_cast<WOLFSSL_CTX*>(_ctx));
     _ctx = nullptr;
@@ -714,8 +475,7 @@ bool SecureClient::lastReadWasOutOfMemory() const { return _lastReadErr == MEMOR
 
 #else  // !FREEINK_NET_WOLFSSL — inert stub so the firmware builds without wolfSSL.
 
-void SecureClient::clearSessionCache() {}
-int SecureClient::connectWithMethod(const char*, uint16_t, void*, const char*, bool, bool) { return 0; }
+int SecureClient::connectWithMethod(const char*, uint16_t, void*, const char*, bool) { return 0; }
 int SecureClient::connectAtVerify(const char*, uint16_t, bool) { return 0; }
 int SecureClient::connect(const char* host, uint16_t port) {
   (void)host;

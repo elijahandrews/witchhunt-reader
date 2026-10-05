@@ -171,56 +171,13 @@ OVERRIDES = """
 #define NO_FILESYSTEM
 #endif
 
-/* wolfSSL's own session cache, at its smallest: one session (MICRO). SecureClient keeps its own
- * sessions and turns this cache off per CTX, so the static array is never used (with tickets, SMALL
- * cost 6 x 392 B plus a 3.2 KB client index). It cannot go entirely: NO_SESSION_CACHE also compiles
- * out wolfSSL_get1_session() and wolfSSL_set_session() (ssl_sess.c), which resumption is built on. */
+/* No session cache. The reader never resumes a TLS session: every connection runs a full
+ * handshake and verifies the whole chain, so the cache (and its client index) would only hold
+ * copies of sessions nothing reads back. The library's own user_settings.h asks for
+ * MICRO_SESSION_CACHE further down; NO_SESSION_CACHE overrides any cache size (ssl_sess.c). */
 #undef  SMALL_SESSION_CACHE
-#ifndef MICRO_SESSION_CACHE
-#define MICRO_SESSION_CACHE
-#endif
-/* And without its client index (ClientCache, the serverID per session, a pointer per WOLFSSL): it
- * only serves wolfSSL_SetServerID() lookups and wolfSSL_get_session() references, neither used here.
- * The two go together (ssl_sess.c refuses NO_CLIENT_CACHE alone). With NO_SESSION_CACHE_REF,
- * ClientSessionToSession() is the identity and wolfSSL_get_session() returns ssl->session; the calls
- * resumption makes (get1_session, set_session, SESSION_dup/free) never involved the index. */
-#ifndef NO_SESSION_CACHE_REF
-#define NO_SESSION_CACHE_REF
-#endif
-#ifndef NO_CLIENT_CACHE
-#define NO_CLIENT_CACHE
-#endif
-
-/* Experiment switch, to be removed once decided: -DCROSSPOINT_NO_TLS_RESUMPTION in build_flags (or
- * PLATFORMIO_BUILD_FLAGS) builds without session resumption. Build flags reach every compile,
- * wolfSSL's included, so the guard below is all it takes (as CROSSPOINT_TLS_VERIFY_TIMING further
- * down); SecureClient compiles its session cache out under the same flag. */
-#ifndef CROSSPOINT_NO_TLS_RESUMPTION
-/* TLS 1.3 session resumption, client side. A repeat connection to the same host offers the
- * ticket from the previous one; a server that accepts it sends no certificate chain, so nothing
- * is verified (GitHub's chain costs two RSA-4096 checks, which the X3 heap could not afford
- * twice in a row). This define is the whole switch: wolfSSL keeps ticket resumption apart from
- * external PSKs (tls13.c SetupPskKey: HAVE_SESSION_TICKET for resumption, !NO_PSK for external
- * keys), so NO_PSK above stays. */
-#ifndef HAVE_SESSION_TICKET
-#define HAVE_SESSION_TICKET
-#endif
-/* Once tickets are parsed, a NewSessionTicket nonce longer than the 8-byte static buffer is a
- * fatal read error (tls13.c DoTls13NewSessionTicket): a server with longer nonces would cut a
- * response off mid-body. Allocate such a nonce instead. */
-#ifndef WOLFSSL_TICKET_NONCE_MALLOC
-#define WOLFSSL_TICKET_NONCE_MALLOC
-#endif
-#endif /* !CROSSPOINT_NO_TLS_RESUMPTION */
-/* Tickets also switch on wolfSSL's PSK identity buffers, which are sized by MAX_PSK_ID_LEN: 1536
- * under TLS 1.3 (internal.h). That is client_identity + server_hint in every handshake's Arrays
- * and server_hint in every CTX, 4.6 KB per connection held through the handshake; on the X3 that
- * was enough to fail the RSA-4096 chain verification (MEMORY_E). With NO_PSK only the ticket uses
- * any of it: the ticket is the PSK identity, so this also caps the ticket that can be offered back
- * (tls.c TLSX_PopulateExtensions). Tickets measured with openssl, 2026-10-05: GitHub's CDN 160 B,
- * api.github.com 32 B, sync.koreader.rocks 192 B, mayberry.pub 176 B, timeapi.io 240 B. */
-#ifndef MAX_PSK_ID_LEN
-#define MAX_PSK_ID_LEN 512
+#ifndef NO_SESSION_CACHE
+#define NO_SESSION_CACHE
 #endif
 
 /* RFC 6066 max_fragment_length, so SecureClient can ask servers for 2 KB records instead of 16 KB

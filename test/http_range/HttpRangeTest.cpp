@@ -162,7 +162,7 @@ TEST(HttpRangeHeap, RoundsLikeTheC3Heap) {
 }
 
 TEST(HttpRangeHeap, ChunkSizeFollowsTheLargestFreeBlock) {
-  // X3: 16,372 B after a resumed handshake, 12,276 B before the manifest, 4.6-6.1 KB once a long
+  // X3: 16,372 B after a handshake, 12,276 B before the manifest, 4.6-6.1 KB once a long
   // download had fragmented the heap.
   EXPECT_EQ(hr::chunkSizeForLargestBlock(16372), 6144u);
   EXPECT_EQ(hr::chunkSizeForLargestBlock(12276), 6144u);

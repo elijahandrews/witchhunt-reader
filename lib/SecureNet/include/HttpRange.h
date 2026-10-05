@@ -87,7 +87,7 @@ constexpr size_t WIFI_MARGIN = 2 * 1664;
 // Retry a stall (a failure that wrote nothing) this many times in a row; the next one ends it.
 constexpr unsigned MAX_STALLED_RETRIES = 3;
 // Reconnects per file, whatever progress they make: 20, plus one per 64 KB (a 1 MB font: 35). A
-// resumed reconnect costs ~0.3 s on the X3.
+// reconnect (a full handshake, chain check included) costs ~0.7 s on the X3.
 constexpr unsigned MAX_RECONNECTS_BASE = 20;
 constexpr size_t BYTES_PER_EXTRA_RECONNECT = 64 * 1024;
 

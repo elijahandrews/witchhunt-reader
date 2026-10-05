@@ -183,7 +183,7 @@ int chunkedGet(SecureHttpClient& http, const std::string& url, DownloadSink& sin
                 outOfMemory ? " (out of memory)" : (rc >= 0 ? " (empty reply)" : ""));
         return rc < 0 ? rc : C::ERR_TRUNCATED;
       }
-      // Reconnect (a resumed TLS session: no certificate chain) and measure the heap with it in
+      // Reconnect (a full TLS handshake) and measure the heap with the new connection in
       // place, at the top of the loop. A connect that fails counts as another stall.
       http.close();
       while (!http.open(target)) {

@@ -22,7 +22,6 @@ constexpr int FAKE_MEMORY_E = -125;  // wolfSSL MEMORY_E
 
 SecureClient::~SecureClient() { stop(); }
 bool SecureClient::tls13Available() { return false; }
-void SecureClient::clearSessionCache() {}
 int SecureClient::connect(IPAddress, uint16_t) { return 0; }
 int SecureClient::connect(const char* host, uint16_t port) {
   _lastReadErr = 0;
@@ -63,7 +62,7 @@ namespace hr = crosspoint::http_range;
 
 namespace {
 
-size_t g_largest = 16372;  // the X3's largest free block after a resumed handshake
+size_t g_largest = 16372;  // a largest free block the X3 showed after a handshake
 size_t fakeLargest() { return g_largest; }
 
 std::string makeResource(size_t size, char seed = 'a') {
