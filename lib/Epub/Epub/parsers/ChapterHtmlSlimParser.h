@@ -102,6 +102,7 @@ class ChapterHtmlSlimParser final : public Print {
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
+  int16_t pendingBrLineHeight_ = 0;   // captured in the separator's own family/size scope
   int16_t lastBlockMarginBottom = 0;  // tracks previous block's marginBottom for CSS margin collapsing
 
   // Inline image beside paragraph text (CSS float context)
@@ -854,7 +855,7 @@ class ChapterHtmlSlimParser final : public Print {
   // Line height for a block, honoring the taller heading font (residual multiplier on top)
   // or the body-font scale path. Centralizes the layout-time sizing. Defined in the .cpp
   // because it dereferences GfxRenderer, which is only forward-declared here.
-  int effectiveLineHeight(const BlockStyle& bs) const;
+  int effectiveLineHeight(const BlockStyle& bs, uint8_t family = 0, uint8_t sizePct = 100) const;
   // See pageBlock_. wireTextBlock hands currentTextBlock the arena and the hook;
   // wireParagraphLines does the same for any text laid out as a paragraph of the page.
   void wireTextBlock();

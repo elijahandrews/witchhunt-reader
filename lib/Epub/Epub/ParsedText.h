@@ -52,6 +52,7 @@ class ParsedText {
   std::vector<bool> suffixSplitInsertedHyphen_;
   std::vector<int> interWordGaps_;
   std::vector<int> lineIndexForWord_;  // computeLineBreaks' DP tables
+  int maxFloatLineHeight_ = 0;         // upper advance bound for mixed-font float exclusion
   std::vector<int> dp_;
   std::vector<size_t> ans_;
   std::string allText_;
@@ -86,6 +87,7 @@ class ParsedText {
   bool wordGrowthRefused_ = false;
   size_t bionicTransformedUpTo_ = 0;  ///< words[0..bionicTransformedUpTo_) have already been bionic-transformed
 
+  float wordHeight(const GfxRenderer& renderer, int fontId, size_t index) const;
   float wordGap(const GfxRenderer& renderer, int fontId, size_t left, size_t right, bool continued) const;
   void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
   void applyBionicReadingTransform();
@@ -93,8 +95,9 @@ class ParsedText {
   // with the word's own inline size percentage.
   float wordScale(const size_t i) const { return blockStyle.fontSizeMultiplier * (wordSizes[i] / 100.0f); }
   // Returns the available line width at a given 0-based line index, accounting
-  // for any active float zones in blockStyle.  lineHeight==0 is a fast path
-  // (no float zones active) that returns pageWidth unchanged.
+  // for any active float zones in blockStyle. lineHeight is the minimum run
+  // advance; maxFloatLineHeight_ bounds the other end of the possible vertical
+  // interval. Equal bounds give exact uniform-font geometry. A zero upper bound skips floats.
   int widthForLine(int lineIndex, int lineHeight, int16_t blockStartY, int pageWidth) const;
 
   // The three breakers fill `lineBreakIndices` (cleared first) rather than returning a vector,
@@ -120,8 +123,8 @@ class ParsedText {
   // Used only for the page-boundary retry line.
   size_t computeSingleLineBreakNoHyphen(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         const std::vector<uint16_t>& wordWidths, const std::vector<bool>& continuesVec,
-                                        size_t lineStartIndex, int firstLineIndent, int16_t blockStartY = 0,
-                                        int lineHeight = 0) const;
+                                        size_t lineStartIndex, int lineIndex, int firstLineIndent,
+                                        int16_t blockStartY = 0, int lineHeight = 0) const;
   bool hyphenateWordAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                             std::vector<uint16_t>& wordWidths, bool allowFallbackBreaks,
                             bool* outInsertedHyphen = nullptr);
@@ -199,7 +202,7 @@ class ParsedText {
       const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
       const std::function<LineProcessResult(std::unique_ptr<TextBlock>, bool, bool)>& processLine,
       bool includeLastLine = true,
-      int16_t blockStartY = 0,  // currentPageNextY at call site — needed for float zone geometry
-      int lineHeight = 0,       // 0 = no float zones (fast path, existing callers unchanged)
+      int16_t blockStartY = 0,         // currentPageNextY at call site — needed for float zone geometry
+      float floatLineCompression = 0,  // reader spacing; 0 skips float geometry
       bool preserveSource = false);
 };

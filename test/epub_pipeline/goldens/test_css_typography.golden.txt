@@ -1,4 +1,4 @@
-BOOK title=Witch CSS Style Test lang=en spine=10 toc=10 reliableToc=1
+BOOK title=Witch CSS Style Test lang=en spine=12 toc=12 reliableToc=1
 SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=9 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
@@ -510,6 +510,79 @@ SPINE 7 href=OEBPS/ch7.xhtml pages=1 truncated=0 cssFallback=0
    W x=235 s=0 z=100 f=2 ls=29 t=affinity
    W x=345 s=0 z=100 f=2 ls=29 t=café
 SPINE 8 href=OEBPS/ch8.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=15 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=82 s=1 z=100 t=Family
+   W x=183 s=1 z=100 t=line
+   W x=255 s=1 z=100 t=heights
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=BlankSans
+   W x=118 s=0 z=100 f=2 ls=0 t=one
+  LINE y=98 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=BlankSans
+   W x=118 s=0 z=100 f=2 ls=0 t=two
+  LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=BlankSans
+   W x=118 s=0 z=100 f=2 ls=0 t=three
+  LINE y=188 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankSerif
+   W x=100 s=0 z=100 t=one
+  LINE y=236 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankSerif
+   W x=100 s=0 z=100 t=two
+  LINE y=284 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankSerif
+   W x=100 s=0 z=100 t=three
+  LINE y=308 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=HeldSans
+   W x=100 s=0 z=100 f=2 ls=0 t=one
+  LINE y=368 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=HeldSans
+   W x=84 s=0 z=100 t=two
+  LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=HeldSerif
+   W x=85 s=0 z=100 t=one
+  LINE y=440 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=HeldSerif
+   W x=101 s=0 z=100 f=2 ls=0 t=two
+  LINE y=470 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=CrossSans
+   W x=116 s=0 z=100 f=2 ls=0 t=one
+  LINE y=530 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=CrossSans
+   W x=98 s=0 z=100 t=two
+  LINE y=554 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=CrossSerif
+   W x=99 s=0 z=100 t=one
+  LINE y=602 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=CrossSerif
+   W x=118 s=0 z=100 f=2 ls=0 t=two
+SPINE 9 href=OEBPS/ch9.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=7 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=4
+   W x=58 s=1 z=100 t=Family
+   W x=159 s=1 z=100 t=and
+   W x=223 s=1 z=100 t=CSS
+   W x=292 s=1 z=100 t=spacing
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=LooseSans
+   W x=124 s=0 z=100 f=2 ls=0 t=one
+  LINE y=128 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=LooseSans
+   W x=124 s=0 z=100 f=2 ls=0 t=two
+  LINE y=218 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=2 ls=0 t=LooseSans
+   W x=124 s=0 z=100 f=2 ls=0 t=three
+  LINE y=263 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=LooseSerif
+   W x=105 s=0 z=100 t=one
+  LINE y=335 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=LooseSerif
+   W x=105 s=0 z=100 t=two
+  LINE y=407 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=LooseSerif
+   W x=105 s=0 z=100 t=three
+SPINE 10 href=OEBPS/ch10.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=29 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
    W x=55 s=1 z=100 t=Long
@@ -582,7 +655,7 @@ SPINE 8 href=OEBPS/ch8.xhtml pages=1 truncated=0 cssFallback=0
    W x=100 s=0 z=100 t=or
    W x=126 s=0 z=100 t=missing
    W x=194 s=0 z=100 t=text.
-SPINE 9 href=OEBPS/ch9.xhtml pages=1 truncated=0 cssFallback=0
+SPINE 11 href=OEBPS/ch11.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=19 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=5
    W x=27 s=1 z=100 t=Drop

@@ -178,26 +178,26 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=169 x=0 align=2 mult=1.400 hfid=0 words=2
    W x=140 s=1 z=100 t=Echo
    W x=214 s=1 z=100 t=heading
-  LINE y=227 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=237 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=Echo
    W x=49 s=0 z=100 t=body
    W x=89 s=0 z=100 t=text
-  LINE y=251 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=261 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=6.
    W x=27 s=0 z=100 t=BR
    W x=53 s=0 z=100 t=BETWEEN:
-  LINE y=275 x=0 align=2 mult=1.400 hfid=0 words=2
+  LINE y=285 x=0 align=2 mult=1.400 hfid=0 words=2
    W x=122 s=1 z=100 t=Foxtrot
    W x=231 s=1 z=100 t=heading
-  LINE y=333 x=0 align=2 mult=1.000 hfid=0 words=3
+  LINE y=343 x=0 align=2 mult=1.000 hfid=0 words=3
    W x=156 s=0 z=100 t=Foxtrot
    W x=227 s=0 z=100 t=body
    W x=267 s=0 z=100 t=text
-  LINE y=357 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=367 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=7.
    W x=28 s=0 z=100 t=EMPTY
    W x=78 s=0 z=100 t=HEADING:
-  LINE y=381 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=391 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=Golf
    W x=44 s=0 z=100 t=body
    W x=84 s=0 z=100 t=text

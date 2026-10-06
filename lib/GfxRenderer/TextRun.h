@@ -63,7 +63,7 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
       hasInk = true;
     }
   }
-  result.advance = std::max(0, (cursor + 8) >> 4);
+  result.advance = std::max<int32_t>(0, (cursor + 8) >> 4);
   return result;
 }
 }  // namespace textRun

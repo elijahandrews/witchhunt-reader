@@ -965,7 +965,7 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
       const int horizontalInset = splitBlockStyle.totalHorizontalInset();
       const uint16_t effectiveWidth =
           (horizontalInset < viewportWidth) ? static_cast<uint16_t>(viewportWidth - horizontalInset) : viewportWidth;
-      const int splitLineHeight = (splitBlockStyle.floatZoneCount > 0) ? effectiveLineHeight(splitBlockStyle) : 0;
+      const float splitLineCompression = (splitBlockStyle.floatZoneCount > 0) ? lineCompression : 0.0f;
       // Re-anchor only the originating block's zone to the first line; injected
       // zones already carry absolute image coordinates and must not be moved.
       if (splitIsOriginating && splitBlockStyle.floatZoneCount > 0) {
@@ -981,7 +981,7 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
                  const bool suppressHyphenationRetry) {
             return addLineToPage(std::move(textBlock), lineEndsWithHyphenatedWord, suppressHyphenationRetry);
           },
-          false, static_cast<int16_t>(currentPageNextY), splitLineHeight);
+          false, static_cast<int16_t>(currentPageNextY), splitLineCompression);
       // emitPage() clears floatZoneCount mid-layout when the page overflows — that's
       // intentional: lines on the continuation page should not be narrowed for an
       // image that lives on the previous page.
@@ -1478,8 +1478,9 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
         // The empty block was created by a <br> section separator. Inject a full line of
         // blank space before the following paragraph so the scene/section break is visible.
         // This only fires when the <br> block stayed empty (i.e. no inline text was added).
-        const int16_t lineHeight = static_cast<int16_t>(effectiveLineHeight(currentTextBlock->getBlockStyle()));
-        incoming.marginTop = static_cast<int16_t>(incoming.marginTop + lineHeight);
+        // The next element may already have changed the inherited family/size.
+        // Use the separator's own captured advance, not the incoming scope.
+        incoming.marginTop = static_cast<int16_t>(incoming.marginTop + pendingBrLineHeight_);
       }
 
       BlockStyle merged = currentTextBlock->getBlockStyle().getCombinedBlockStyle(incoming);
@@ -2703,6 +2704,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       }
       brStyle.fromBrElement = true;
       self->startNewTextBlock(brStyle);
+      self->pendingBrLineHeight_ = static_cast<int16_t>(self->effectiveLineHeight(
+          self->currentTextBlock->getBlockStyle(), self->inheritedFamily_, self->effectiveSizePct));
     } else {
       self->currentCssStyle = cssStyle;
       auto blockStyle = userAlignmentBlockStyle;
@@ -3911,10 +3914,11 @@ void ChapterHtmlSlimParser::resolveBlockFont(BlockStyle& bs) {
   bs.fontSizeMultiplier = r.residual;
 }
 
-int ChapterHtmlSlimParser::effectiveLineHeight(const BlockStyle& bs) const {
-  return static_cast<int>(renderer.getLineHeight(effectiveFontId(bs)) * lineCompression * bs.fontSizeMultiplier *
-                              bs.lineHeightMultiplier +
-                          0.5f);
+int ChapterHtmlSlimParser::effectiveLineHeight(const BlockStyle& bs, const uint8_t family,
+                                               const uint8_t sizePct) const {
+  const auto f = renderer.resolveTextFont(effectiveFontId(bs), family);
+  const float height = renderer.getLineHeight(f.fontId) * bs.fontSizeMultiplier * (sizePct / 100.0f) * f.scale;
+  return static_cast<int>(height * lineCompression * bs.lineHeightMultiplier + 0.5f);
 }
 
 ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_ptr<TextBlock> line,
@@ -4107,7 +4111,7 @@ void ChapterHtmlSlimParser::makePages() {
   // and the xOffset check in addLineToPage use the same y values. Only the
   // originating block re-anchors (its zone, and the image, snap to the first
   // line top); injected zones already carry absolute image coordinates.
-  const int lineHeightForFloat = (blockStyle.floatZoneCount > 0) ? effectiveLineHeight(blockStyle) : 0;
+  const float floatLineCompression = (blockStyle.floatZoneCount > 0) ? lineCompression : 0.0f;
   if (isOriginatingBlock && blockStyle.floatZoneCount > 0) {
     auto& mbs = currentTextBlock->getBlockStyle();
     for (int zi = 0; zi < mbs.floatZoneCount; ++zi) {
@@ -4126,7 +4130,7 @@ void ChapterHtmlSlimParser::makePages() {
              const bool suppressHyphenationRetry) {
         return addLineToPage(std::move(textBlock), lineEndsWithHyphenatedWord, suppressHyphenationRetry);
       },
-      /*includeLastLine=*/true, static_cast<int16_t>(currentPageNextY), lineHeightForFloat);
+      /*includeLastLine=*/true, static_cast<int16_t>(currentPageNextY), floatLineCompression);
 
   // Fallback: transfer any remaining pending footnotes to current page.
   // Normally addLineToPage handles this via word-index tracking, but this catches
@@ -4635,7 +4639,7 @@ bool ChapterHtmlSlimParser::layoutTableRow(BufferedTableRow& bufRow, const uint8
             }
             return ParsedText::LineProcessResult::Accepted;
           },
-          /*includeLastLine=*/true, /*blockStartY=*/0, /*lineHeight=*/0, /*preserveSource=*/true);
+          /*includeLastLine=*/true, /*blockStartY=*/0, /*floatLineCompression=*/0, /*preserveSource=*/true);
       // A cell that lays out to more lines than the grid can carry used to be TRUNCATED here --
       // silently, with no log and no fallback, so the tail of the cell was simply deleted from
       // the book. Measured on alice-illustrated: 189 words lost from one cell. Fall back to

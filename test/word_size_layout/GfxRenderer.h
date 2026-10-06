@@ -98,9 +98,9 @@ class GfxRenderer {
   int getFontAscenderSizeScaled(int /*fontId*/, const float scale) const {
     return static_cast<int>(ASCENDER * scale + 0.5f);
   }
-  int getLineHeight(int /*fontId*/) const { return LINE_HEIGHT; }
-  int getLineHeightScaled(int /*fontId*/, const float scale) const {
-    return static_cast<int>(LINE_HEIGHT * scale + 0.5f);
+  int getLineHeight(int fontId) const { return fontId == -2000000 ? 30 : LINE_HEIGHT; }
+  int getLineHeightScaled(int fontId, const float scale) const {
+    return static_cast<int>(getLineHeight(fontId) * scale + 0.5f);
   }
   void ensureFontReady(int /*fontId*/, const char* /*utf8Text*/) const {}
 

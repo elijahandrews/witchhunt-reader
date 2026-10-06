@@ -9,11 +9,14 @@
 #include "PipelineRunner.h"
 
 namespace {
-std::string buildTypography(const std::string& tag, const bool embeddedStyle = true, const bool warm = false) {
+std::string buildTypography(const std::string& tag, const bool embeddedStyle = true, const bool warm = false,
+                            const int readerFont = 1, const uint16_t viewportHeight = 760) {
   const auto dir = std::filesystem::temp_directory_path() / "css_typography_test" / tag;
   if (!warm) std::filesystem::remove_all(dir);
   pipeline_harness::Profile profile;
   profile.embeddedStyle = embeddedStyle;
+  profile.fontId = readerFont;
+  profile.viewportHeight = viewportHeight;
   profile.fontSizeNormalization = false;
   std::ostringstream dump;
   EXPECT_TRUE(
@@ -109,4 +112,24 @@ TEST(CssTypography, TrackingIsComputedThenInheritedAcrossDifferentSizes) {
   EXPECT_NE(dump.find("f=0 ls=-14 t=NegativeSpacing"), std::string::npos);
   EXPECT_NE(dump.find("f=2 ls=29 t=SansTracked"), std::string::npos);
   EXPECT_EQ(dump, buildTypography("tracking", true, true));
+}
+
+TEST(CssTypography, BlankLinesKeepTheirCapturedFamilyAndCssSpacing) {
+  for (const int bodyFont : {1, -2000000}) {
+    const std::string tag = "blank-families-" + std::to_string(bodyFont);
+    const auto dump = buildTypography(tag, true, false, bodyFont, 3000);
+    for (const auto& [label, step] : std::vector<std::pair<std::string, int>>{{"BlankSans", 60},
+                                                                              {"BlankSerif", 48},
+                                                                              {"HeldSans", 60},
+                                                                              {"HeldSerif", 48},
+                                                                              {"CrossSans", 60},
+                                                                              {"CrossSerif", 48},
+                                                                              {"LooseSans", 90},
+                                                                              {"LooseSerif", 72}}) {
+      const auto y = linePositions(dump, label);
+      ASSERT_GE(y.size(), 2u) << label;
+      for (size_t i = 1; i < y.size(); ++i) EXPECT_EQ(y[i] - y[i - 1], step) << label << " reader " << bodyFont;
+    }
+    EXPECT_EQ(dump, buildTypography(tag, true, true, bodyFont, 3000));
+  }
 }

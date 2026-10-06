@@ -667,3 +667,94 @@ TEST(WordTypography, FontPrewarmScanDoesNotMeasureGlyphs) {
   ASSERT_EQ(renderer.drawCalls.size(), 2u);
   EXPECT_EQ(renderer.drawCalls[1].fontId, -2000000);
 }
+
+namespace {
+LayoutResult layoutFloat(ParsedText& text, const GfxRenderer& renderer, int bodyFont, float compression = 1.0f) {
+  LayoutResult result;
+  text.layoutAndExtractLines(
+      renderer, bodyFont, 160,
+      [&result](std::unique_ptr<TextBlock> line, bool, bool) {
+        result.lines.push_back(std::move(line));
+        return ParsedText::LineProcessResult::Accepted;
+      },
+      true, 0, compression);
+  return result;
+}
+BlockStyle floatStyle(int top, int bottom, bool right = false) {
+  auto style = noIndentStyle();
+  style.alignment = CssTextAlign::Left;
+  style.floatZoneCount = 1;
+  style.floatZones[0] = {static_cast<int16_t>(top), static_cast<int16_t>(bottom), 70, right};
+  return style;
+}
+void expectSafeFloat(const LayoutResult& result, const GfxRenderer& renderer, int fontId, int top, int bottom,
+                     float spacing = 1.0f, float compression = 1.0f) {
+  int y = 0;
+  for (const auto& line : result.lines) {
+    const int advance = static_cast<int>(line->lineHeight(renderer, fontId) * compression * spacing + 0.5f);
+    const int width = y < bottom && y + advance > top ? 90 : 160;
+    for (uint16_t i = 0; i < line->wordCount(); ++i) {
+      const auto box = line->wordBox(renderer, i, fontId, 0, y);
+      EXPECT_GE(box.x, 0) << "line top " << y;
+      EXPECT_LE(box.x + box.width, width) << "line top " << y << " text " << line->wordText(i);
+    }
+    y += advance;
+  }
+}
+}  // namespace
+
+TEST(WordTypographyFloat, UniformFamiliesUseTheirOwnHeightInBothDirections) {
+  GfxRenderer renderer;
+  // Reader serif20 -> CSS sans30, and reader sans30 -> CSS serif20. A 55px
+  // float occupies exactly two sans lines or three serif lines.
+  for (const auto family : {wordTypography::Serif, wordTypography::SansSerif}) {
+    for (bool hyphenate : {false, true}) {
+      for (bool right : {false, true}) {
+        const int bodyFont = family == wordTypography::Serif ? -2000000 : kFontId;
+        ParsedText text(false, hyphenate, floatStyle(0, 55, right));
+        for (int i = 0; i < 30; ++i)
+          text.addWord("aa", EpdFontFamily::REGULAR, false, false, 100, wordTypography::pack(family, 0));
+        const auto result = layoutFloat(text, renderer, bodyFont);
+        const size_t narrowed = family == wordTypography::Serif ? 3 : 2;
+        ASSERT_GT(result.lines.size(), narrowed);
+        for (size_t i = 0; i < narrowed; ++i) EXPECT_EQ(result.lines[i]->wordCount(), 3u);
+        EXPECT_GT(result.lines[narrowed]->wordCount(), 3u);
+        expectSafeFloat(result, renderer, bodyFont, 0, 55);
+      }
+    }
+  }
+}
+
+TEST(WordTypographyFloat, MixedFamiliesAndSizesConservativelyExcludeEveryOverlap) {
+  GfxRenderer renderer;
+  for (bool hyphenate : {false, true}) {
+    for (bool right : {false, true}) {
+      for (int top : {0, 45}) {
+        auto style = floatStyle(top, 140, right);
+        style.lineHeightMultiplier = 1.25f;
+        ParsedText text(false, hyphenate, style);
+        for (int i = 0; i < 50; ++i) {
+          const auto family = i % 4 == 0 ? wordTypography::SansSerif : wordTypography::Serif;
+          text.addWord("aa", EpdFontFamily::REGULAR, false, false, i % 5 == 0 ? 150 : 100,
+                       wordTypography::pack(family, 0));
+        }
+        const auto result = layoutFloat(text, renderer, kFontId, 0.85f);
+        ASSERT_GT(result.lines.size(), 3u);
+        expectSafeFloat(result, renderer, kFontId, top, 140, 1.25f, 0.85f);
+      }
+    }
+  }
+}
+
+TEST(WordTypographyFloat, NoHyphenationOnlySplitsWordsTooWideForAnEmptyLine) {
+  GfxRenderer renderer;
+  ParsedText text(false, false, floatStyle(0, 55));
+  text.addWord("aa", EpdFontFamily::REGULAR);
+  text.addWord("bbbbbb", EpdFontFamily::REGULAR);
+  text.addWord("cccccc", EpdFontFamily::REGULAR);
+  const auto result = layoutFloat(text, renderer, kFontId);
+  ASSERT_GE(result.lines.size(), 2u);
+  for (const auto& line : result.lines)
+    for (uint16_t i = 0; i < line->wordCount(); ++i)
+      EXPECT_EQ(std::string(line->wordText(i)).find('-'), std::string::npos);
+}

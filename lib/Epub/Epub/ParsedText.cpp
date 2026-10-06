@@ -260,12 +260,17 @@ bool ParsedText::foldUniformWordSizes() {
 // Consumes data to minimize memory usage
 int ParsedText::widthForLine(const int lineIndex, const int lineHeight, const int16_t blockStartY,
                              const int pageWidth) const {
-  if (lineHeight == 0 || blockStyle.floatZoneCount == 0) return pageWidth;
+  if (maxFloatLineHeight_ == 0 || blockStyle.floatZoneCount == 0) return pageWidth;
+  // A line advances by its tallest resolved word. Before breaking, its exact
+  // membership is unknown: min/max word advances bound every possible line.
+  // Keep exclusion while ANY point in the cumulative interval can meet a float.
+  // Uniform font/size runs have equal bounds and use their exact measured height.
   const int lineTop = blockStartY + lineIndex * lineHeight;
+  const int lineBottom = blockStartY + (lineIndex + 1) * maxFloatLineHeight_;
   int indent = 0;
   for (int i = 0; i < blockStyle.floatZoneCount; ++i) {
     const auto& z = blockStyle.floatZones[i];
-    if (lineTop < z.bottom && lineTop + lineHeight > z.top) {
+    if (lineTop < z.bottom && lineBottom > z.top) {
       indent += z.width;
     }
   }
@@ -275,7 +280,8 @@ int ParsedText::widthForLine(const int lineIndex, const int lineHeight, const in
 void ParsedText::layoutAndExtractLines(
     const GfxRenderer& renderer, const int bodyFontId, const uint16_t viewportWidth,
     const std::function<LineProcessResult(std::unique_ptr<TextBlock>, bool, bool)>& processLine,
-    const bool includeLastLine, const int16_t blockStartY, const int lineHeight, const bool preserveSource) {
+    const bool includeLastLine, const int16_t blockStartY, const float floatLineCompression,
+    const bool preserveSource) {
   if (words.empty()) {
     return;
   }
@@ -347,6 +353,20 @@ void ParsedText::layoutAndExtractLines(
     renderer.ensureFontReady(fontId, allText.c_str());
   }
 
+  // One bounded scan, only for active floats. Splitting a word preserves its
+  // family/size, so these extrema also hold after hyphenation and page retries.
+  int lineHeight = 0;
+  maxFloatLineHeight_ = 0;
+  if (floatLineCompression > 0.0f && blockStyle.floatZoneCount > 0) {
+    lineHeight = std::numeric_limits<int>::max();
+    for (size_t i = 0; i < words.size(); ++i) {
+      const int advance = static_cast<int>(
+          wordHeight(renderer, fontId, i) * floatLineCompression * blockStyle.lineHeightMultiplier + 0.5f);
+      lineHeight = std::min(lineHeight, advance);
+      maxFloatLineHeight_ = std::max(maxFloatLineHeight_, advance);
+    }
+  }
+
   const int pageWidth = viewportWidth;
 
   // Compute firstLineIndent once here so all layout helpers use the same value.
@@ -393,8 +413,10 @@ void ParsedText::layoutAndExtractLines(
   lineEndsWithHyphenatedWord.clear();
   splitPrefixWordIndexes.clear();
   splitInsertedHyphen.clear();
-  if (hyphenationEnabled) {
-    // Use greedy layout that can split words mid-loop when a hyphenated prefix fits.
+  if (hyphenationEnabled || maxFloatLineHeight_ > 0) {
+    // Active floats use greedy layout so the line index used for exclusion is
+    // the actual index, not the ordinary DP breaker's estimated line number.
+    // Without hyphenation, only a word too wide for an empty line may split.
     computeHyphenatedLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues, lineEndsWithHyphenatedWord,
                                 splitPrefixWordIndexes, splitInsertedHyphen, firstLineIndent, blockStartY, lineHeight,
                                 lineBreakIndices);
@@ -457,8 +479,9 @@ void ParsedText::layoutAndExtractLines(
 
       // Keep previous lines fixed; recompute only this specific line without hyphenation.
       // Suppression is intentionally line-local.
-      const size_t retryBreak = computeSingleLineBreakNoHyphen(renderer, fontId, pageWidth, wordWidths, wordContinues,
-                                                               lineStart, firstLineIndent, blockStartY, lineHeight);
+      const size_t retryBreak =
+          computeSingleLineBreakNoHyphen(renderer, fontId, pageWidth, wordWidths, wordContinues, lineStart,
+                                         static_cast<int>(i), firstLineIndent, blockStartY, lineHeight);
 
       lineBreakIndices.resize(i + 1);
       lineEndsWithHyphenatedWord.resize(i + 1);
@@ -756,16 +779,16 @@ void ParsedText::computeLineBreaks(const GfxRenderer& renderer, const int fontId
 size_t ParsedText::computeSingleLineBreakNoHyphen(const GfxRenderer& renderer, const int fontId, const int pageWidth,
                                                   const std::vector<uint16_t>& wordWidths,
                                                   const std::vector<bool>& continuesVec, const size_t lineStartIndex,
-                                                  const int firstLineIndent, const int16_t blockStartY,
-                                                  const int lineHeight) const {
+                                                  const int lineIndex, const int firstLineIndent,
+                                                  const int16_t blockStartY, const int lineHeight) const {
   // One-line non-hyphenating breaker used by the page-boundary retry path.
   if (lineStartIndex >= wordWidths.size()) {
     return lineStartIndex;
   }
 
   // lineStartIndex == 0 means this is the first line of the block.
-  const int effectivePageWidth = widthForLine(lineStartIndex == 0 ? 0 : 1, lineHeight, blockStartY, pageWidth) -
-                                 (lineStartIndex == 0 ? firstLineIndent : 0);
+  const int effectivePageWidth =
+      widthForLine(lineIndex, lineHeight, blockStartY, pageWidth) - (lineStartIndex == 0 ? firstLineIndent : 0);
 
   size_t currentIndex = lineStartIndex;
   int lineWidth = 0;
@@ -982,12 +1005,13 @@ void ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const 
       const bool allowFallbackBreaks = isFirstWord;  // Only for first word on line
 
       bool insertedHyphen = false;
-      if (availableWidth > 0 && hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths,
-                                                     allowFallbackBreaks, &insertedHyphen)) {
+      if ((hyphenationEnabled || isFirstWord) && availableWidth > 0 &&
+          hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks,
+                               &insertedHyphen)) {
         // Keep interWordGaps in sync: insert placeholder for the new remainder word.
         // The remainder is always the first word on the next line so this slot is never read.
         interWordGaps.insert(interWordGaps.begin() + currentIndex + 1, 0);
-        lineEndedWithHyphenation = true;
+        lineEndedWithHyphenation = hyphenationEnabled;
         splitPrefixIndex = static_cast<int>(currentIndex);
         splitNeedsInsertedHyphen = insertedHyphen;
         // Prefix now fits; append it to this line and move to next line
@@ -1080,10 +1104,11 @@ void ParsedText::computeHyphenatedLineBreaksFromIndex(
       const bool allowFallbackBreaks = isFirstWord;
 
       bool insertedHyphen = false;
-      if (availableWidth > 0 && hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths,
-                                                     allowFallbackBreaks, &insertedHyphen)) {
+      if ((hyphenationEnabled || isFirstWord) && availableWidth > 0 &&
+          hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks,
+                               &insertedHyphen)) {
         interWordGaps.insert(interWordGaps.begin() + currentIndex + 1, 0);
-        lineEndedWithHyphenation = true;
+        lineEndedWithHyphenation = hyphenationEnabled;
         splitPrefixIndex = static_cast<int>(currentIndex);
         splitNeedsInsertedHyphen = insertedHyphen;
         lineWidth += spacing + wordWidths[currentIndex];
@@ -1338,8 +1363,7 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   if (beforeLine_) {
     float actualHeight = 0.0f;
     for (size_t i = lastBreakAt; i < lineBreak; ++i) {
-      const auto f = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[i]));
-      actualHeight = std::max(actualHeight, renderer.getLineHeight(f.fontId) * wordScale(i) * f.scale);
+      actualHeight = std::max(actualHeight, wordHeight(renderer, fontId, i));
     }
     beforeLine_(actualHeight);
   }
@@ -1352,6 +1376,11 @@ ParsedText::LineProcessResult ParsedText::extractLine(
     return LineProcessResult::Accepted;
   }
   return processLine(std::move(block), lineEndsWithHyphenatedWord, suppressHyphenationRetry);
+}
+
+float ParsedText::wordHeight(const GfxRenderer& renderer, const int fontId, const size_t index) const {
+  const auto f = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[index]));
+  return renderer.getLineHeight(f.fontId) * wordScale(index) * f.scale;
 }
 
 float ParsedText::wordGap(const GfxRenderer& renderer, int fontId, size_t left, size_t right, bool continued) const {

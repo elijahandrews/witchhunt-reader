@@ -88,6 +88,16 @@ CHAPTERS = [
 <p class="tracked">Wrapping text must retain its spacing all the way across each line and down to the next line without crossing the right margin.</p>
 <p class="tracked">intercontinentalabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz</p>
 <p class="sans tracked">SansTracked office affinity café</p>"""),
+("Family line heights", """<h1>Family line heights</h1>
+<p style="font-family:sans-serif;margin:0;text-indent:0">BlankSans one<br/><br/>BlankSans two<br/><br/>BlankSans three</p>
+<p style="font-family:serif;margin:0;text-indent:0">BlankSerif one<br/><br/>BlankSerif two<br/><br/>BlankSerif three</p>
+<p style="margin:0;text-indent:0"><span style="font-family:sans-serif">HeldSans one<br/><br/></span><span style="font-family:serif">HeldSans two</span></p>
+<p style="margin:0;text-indent:0"><span style="font-family:serif">HeldSerif one<br/><br/></span><span style="font-family:sans-serif">HeldSerif two</span></p>
+<p style="font-family:sans-serif;margin:0;text-indent:0">CrossSans one<br/></p><p style="font-family:serif;margin:0;text-indent:0">CrossSans two</p>
+<p style="font-family:serif;margin:0;text-indent:0">CrossSerif one<br/></p><p style="font-family:sans-serif;margin:0;text-indent:0">CrossSerif two</p>"""),
+("Family and CSS spacing", """<h1>Family and CSS spacing</h1>
+<p style="font-family:sans-serif;line-height:2.25;margin:0;text-indent:0">LooseSans one<br/><br/>LooseSans two<br/><br/>LooseSans three</p>
+<p style="font-family:serif;line-height:2.25;margin:0;text-indent:0">LooseSerif one<br/><br/>LooseSerif two<br/><br/>LooseSerif three</p>"""),
 ("Streaming", '<h1>Long transformed word</h1><p class="upper">' + 'caféß' * 180 + '</p><p>All letters above should be uppercase, with no broken UTF-8 or missing text.</p>'),
 ("Chunk boundaries", '<h1>Drop cap overflow and UTF-8</h1>' + ''.join(
     '<p><span style="float:left;font-size:3em;text-transform:uppercase">' + 'a' * count + suffix + 'rest</span></p>'
