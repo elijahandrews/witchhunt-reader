@@ -15,7 +15,8 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-int main() {
+int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
+int main(int argc, char** argv) {
   HalDisplay d;
   GfxRenderer g(d);
   g.begin();
@@ -127,5 +128,5 @@ int main() {
       uint8_t v = d.fb[(479 - x) * 100 + y / 8] & (0x80 >> (y % 8)) ? 255 : 0;
       out.write((char*)&v, 1);
     }
-  return 0;
+  return runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 ? argv[1] : nullptr);
 }

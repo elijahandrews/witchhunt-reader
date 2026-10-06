@@ -23,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo_root", type=Path)
     parser.add_argument("--out", type=Path, default=Path("render-smoke-output"))
+    parser.add_argument("--cpfont", type=Path, help="Local four-style v4 font; never copied into the repository")
     args = parser.parse_args()
     repo = args.repo_root.resolve()
     source = Path(__file__).parent.resolve()
@@ -51,7 +52,7 @@ def main():
         "clang", "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
-    files = [source / "main.cpp", source / "support.cpp", output / "GfxRenderer.cpp"]
+    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (
@@ -69,20 +70,26 @@ def main():
     (output / "build-command.json").write_text(json.dumps([c_command, command], indent=2) + "\n")
     subprocess.run(c_command, check=True)
     subprocess.run(command, check=True)
-    subprocess.run([str(output / "real_render")], cwd=output, check=True)
+    render = subprocess.run(
+        [str(output / "real_render")] + ([str(args.cpfont.resolve())] if args.cpfont else []),
+        cwd=output, check=False,
+    )
 
-    # Standard-library PNG encoding preserves every production framebuffer pixel.
-    pgm = (output / "frame.pgm").read_bytes()
-    header = b"P5\n480 800\n255\n"
-    if not pgm.startswith(header) or len(pgm) != len(header) + 480 * 800:
-        raise RuntimeError("Unexpected framebuffer dimensions or PGM encoding")
-    pixels = pgm[len(header):]
-    scanlines = b"".join(b"\0" + pixels[y * 480:(y + 1) * 480] for y in range(800))
-    png = b"\x89PNG\r\n\x1a\n"
-    png += png_chunk(b"IHDR", struct.pack(">IIBBBBB", 480, 800, 8, 0, 0, 0, 0))
-    png += png_chunk(b"IDAT", zlib.compress(scanlines)) + png_chunk(b"IEND", b"")
-    (output / "frame.png").write_bytes(png)
-    print("Screenshot:", output / "frame.png")
+    # Preserve the framebuffer pixels, including diagnostic images from failing runs.
+    for pgm_path in sorted(output.glob("*.pgm")):
+        pgm = pgm_path.read_bytes()
+        header = b"P5\n480 800\n255\n"
+        if not pgm.startswith(header) or len(pgm) != len(header) + 480 * 800:
+            raise RuntimeError("Unexpected framebuffer dimensions or PGM encoding")
+        pixels = pgm[len(header):]
+        scanlines = b"".join(b"\0" + pixels[y * 480:(y + 1) * 480] for y in range(800))
+        png = b"\x89PNG\r\n\x1a\n"
+        png += png_chunk(b"IHDR", struct.pack(">IIBBBBB", 480, 800, 8, 0, 0, 0, 0))
+        png += png_chunk(b"IDAT", zlib.compress(scanlines)) + png_chunk(b"IEND", b"")
+        png_path = pgm_path.with_suffix(".png")
+        png_path.write_bytes(png)
+        print("Screenshot:", png_path)
+    render.check_returncode()
 
 
 if __name__ == "__main__":

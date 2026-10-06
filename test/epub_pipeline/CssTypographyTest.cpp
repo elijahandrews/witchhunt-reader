@@ -133,3 +133,17 @@ TEST(CssTypography, BlankLinesKeepTheirCapturedFamilyAndCssSpacing) {
     EXPECT_EQ(dump, buildTypography(tag, true, true, bodyFont, 3000));
   }
 }
+
+TEST(CssTypography, ReducedUppercaseRegressionRetainsSizeAndFourFaces) {
+  const auto dump = buildTypography("reduced-uppercase");
+  // A uniform 75% span is promoted to the line multiplier; per-word z remains
+  // 100. Verify the effective scale together with the case and face selection.
+  for (int style = 0; style < 4; ++style) {
+    const std::regex sample("LINE[^\n]*mult=0[.]750[^\n]*\n   W[^\n]*s=" + std::to_string(style) +
+                            " z=100 t=CAPITALS\n");
+    EXPECT_TRUE(std::regex_search(dump, sample));
+  }
+  const std::regex alphabet("LINE[^\n]*mult=0[.]750[^\n]*\n   W[^\n]*s=0 z=100 t=ABCDEFGHIJKLMNOPQRSTUVWXYZ\n");
+  EXPECT_TRUE(std::regex_search(dump, alphabet));
+  EXPECT_EQ(dump, buildTypography("reduced-uppercase", true, true));
+}

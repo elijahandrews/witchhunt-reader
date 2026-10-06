@@ -102,6 +102,18 @@ CHAPTERS = [
 ("Chunk boundaries", '<h1>Drop cap overflow and UTF-8</h1>' + ''.join(
     '<p><span style="float:left;font-size:3em;text-transform:uppercase">' + 'a' * count + suffix + 'rest</span></p>'
     for count, suffix in ((255, 'é'), (254, 'ḿ'), (253, '🦊')))),
+("Reduced uppercase strokes", """<h1>Reduced uppercase strokes</h1>
+<p>Compare this page with Bookerly and Adobe Garamond Pro. Thin strokes in A, M, N, W and R should stay continuous.</p>
+<p>Normal body: capitals and thin strokes.</p>
+<p><span class="small_caps">capitals and thin strokes</span></p>
+<p><span class="small_caps"><b>capitals and thin strokes</b></span></p>
+<p><span class="small_caps"><i>capitals and thin strokes</i></span></p>
+<p><span class="small_caps"><b><i>capitals and thin strokes</i></b></span></p>
+<p><span class="small_caps">abcdefghijklmnopqrstuvwxyz</span></p>
+<p><span class="small_caps">Tuesday, the eighth day of September</span></p>
+<p style="font-variant:small-caps">Small capitals and dates</p>
+<p style="font-size:50%;text-transform:uppercase">Half size: capitals and thin strokes</p>
+<p>All samples should preserve their strokes, with smooth edges when antialiasing is enabled.</p>"""),
 ]
 
 def build(out):

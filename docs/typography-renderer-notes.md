@@ -10,6 +10,6 @@ Float exclusion now uses exact line indices from the greedy breaker for paragrap
 
 Blank separators capture their own resolved family height and CSS spacing when created, so the next element's family cannot change the pending gap. Reviewed case-transform, expanding Unicode, and streaming boundary fixes are integrated. Independent combined review found no remaining actionable defects.
 
-The local production renderer harness in `test/real_renderer` uses the actual font decoder and glyph drawing code. It checks all four faces of both built-in families, small caps, scaling, and signed tracking, and exports a PNG. Hardware, SD-font loading, refresh waveforms, and complete UI behavior are outside that harness.
+The local production renderer harness in `test/real_renderer` uses the actual font decoder and glyph drawing code. It checks all four faces of both built-in families, small caps, scaling, and signed tracking, and exports a PNG. The optional local `.cpfont` fixture also checks SD font bitmaps and grayscale-plane output. Reduced glyphs use area coverage so 75% uppercase text and small caps retain thin strokes. Hardware, SD-font loading, refresh waveforms, and complete UI behavior are outside that harness.
 
 Existing golden changes retain identical word sequences; newly honored family annotations and consistent scaled word-gap measurement account for the differences. The extended typography fixture adds new synthetic content.

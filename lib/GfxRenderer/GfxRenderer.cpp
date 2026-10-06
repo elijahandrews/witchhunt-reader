@@ -1113,22 +1113,22 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
 // straight to the framebuffer). Keeping one copy of the maths is what stops the two from
 // drifting apart — the cached and uncached paths must produce identical pixels.
 //
-// `drawMask` is only consulted when scale >= 1; `minRaw2Bit` only when scale < 1.
+// Every scale uses the same coverage and per-plane mask, including reduced text.
 template <typename Emit>
 static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool is2Bit, const int srcW, const int srcH,
-                                         const int dstW, const int dstH, const float scale, const uint8_t minRaw2Bit,
-                                         const uint8_t drawMask, Emit&& emit) {
+                                         const int dstW, const int dstH, const float scale, const uint8_t drawMask,
+                                         Emit&& emit) {
   // The ESP32-C3 has no FPU — every float op in a per-pixel loop is a soft-float call
-  // costing hundreds of cycles. Both resampling paths therefore run in 16.16 fixed point:
+  // costing hundreds of cycles. The resampler therefore runs in 16.16 fixed point:
   // the ONLY float operation per glyph is the one-time conversion of `scale` into a
   // fixed-point step; the pixel loops are pure integer (the C3's M extension gives a
-  // hardware divider for the one division per upscaled pixel).
+  // hardware divider for the one division per destination pixel).
   constexpr int FP_SHIFT = 16;
   constexpr int32_t FP_ONE = 1 << FP_SHIFT;
   const int32_t invScaleFP = static_cast<int32_t>(FP_ONE / scale + 0.5f);
 
   // Per-source-pixel raw ink level: 2-bit fonts carry 4 AA levels (0..3); 1-bit fonts map
-  // to 0 or 3. Shared by both resampling paths below.
+  // to 0 or 3. Used by the coverage integrator below.
   auto srcRaw = [&](const int sx, const int sy) -> uint8_t {
     const int pos = sy * srcW + sx;
     if (is2Bit) {
@@ -1139,50 +1139,15 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
     return ((byte >> (7 - (pos & 7))) & 1) ? 3 : 0;
   };
 
-  // Downscaling (small-caps fold, sup/sub, shrunken inline sizes) stays on the crisp
-  // nearest-neighbor point-sample: shrinking already suppresses jaggies, and area-averaging
-  // would only blur thin strokes below the 50% threshold and drop them. Downscalers pass
-  // minRaw2Bit=2 to keep only the dark shades. srcX/srcY advance by a fixed-point step
-  // instead of the historical per-pixel float division (identical floor semantics).
-  if (scale < 1.0f) {
-    const uint8_t minRaw1Bit = 1;  // 1-bit fonts: any ink draws
-    int32_t srcYFP = 0;
-    for (int dstY = 0; dstY < dstH; dstY++, srcYFP += invScaleFP) {
-      const int srcY = srcYFP >> FP_SHIFT;
-      if (srcY >= srcH) break;
-      int32_t srcXFP = 0;
-      for (int dstX = 0; dstX < dstW; dstX++, srcXFP += invScaleFP) {
-        const int srcX = srcXFP >> FP_SHIFT;
-        if (srcX >= srcW) break;
-        const uint8_t raw = srcRaw(srcX, srcY);
-        if (raw >= (is2Bit ? minRaw2Bit : minRaw1Bit)) {
-          emit(dstX, dstY);
-        }
-      }
-    }
-    return;
-  }
-
-  // Upscaling (heading scale, e.g. h1=1.6×): area-weighted coverage resampling that preserves the
-  // font's grayscale AA. Nearest-neighbor bloated each source pixel into a scale×scale solid block,
-  // so light-gray AA edge pixels (raw==1, 33% coverage) rendered as full-black blocks — the jagged,
-  // over-bold look.
+  // Integrate ALL source pixels covered by each destination pixel. Point sampling
+  // while shrinking skipped entire thin stems/serifs (notably 75% uppercase and
+  // small caps). Preserve their fractional ink as 2-bit coverage instead of
+  // thresholding it away. This also gives reduced text the same grayscale capture,
+  // staged AA, and darkness behavior as unscaled and enlarged text.
   //
-  // Here each destination pixel integrates the fractional source coverage over the source region it
-  // maps back to (0..1), then re-quantizes that coverage into a 2-bit AA level (0=white .. 3=black).
-  // That reconstructed level feeds the SAME multi-pass machinery body text uses: drawMaskFor2BitMode
-  // decides, per render pass and darkness setting, whether this level draws into the current plane.
-  // In grayscale render modes the enlarged heading therefore emits true gray edge pixels (MSB/LSB
-  // planes) instead of a hard 1-bit threshold; in BW mode every non-white level draws, matching the
-  // body font's weight. (The caller derives the pixel state from the same mask: grayscale passes
-  // clear the bit, only the BW pass honors the caller's pixelState.)
-  //
-  // Area integration in fixed point. Overlap extents are 16.16 and bounded by
-  // invScaleFP <= FP_ONE (scale >= 1); the raw x h x w product needs 64 bits, which
-  // RV32IM handles with a few integer multiplies — still an order of magnitude cheaper
-  // than one soft-float op. Verified pixel-equivalent to the historical float path
-  // (differences only at mathematically exact quantization ties, ~0.2% of AA edge
-  // pixels, where the float result was itself rounding-dependent).
+  // Overlaps are 16.16. Products and area use 64 bits because a destination pixel
+  // covers more than one source pixel when shrinking. Out-of-bitmap area stays
+  // transparent, just as in the enlarged-glyph path.
   const int64_t dstPixelAreaFP = static_cast<int64_t>(invScaleFP) * invScaleFP;
   int32_t srcY0FP = 0;
   for (int dstY = 0; dstY < dstH; dstY++, srcY0FP += invScaleFP) {
@@ -1226,10 +1191,8 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
 // of a hardwired 50% — the SUP/SUB style bits only shift the baseline). It is also the path
 // every word of body text takes when the book's stylesheet sets a font-size on it, which is
 // why the resampled mask is cached (see GfxRenderer::ScaledGlyphEntry).
-// Upscaling (scale > 1.0) uses area-weighted coverage resampling so enlarged headings stay
-// anti-aliased and keep the body font's visual weight instead of the jagged, over-bold look
-// nearest-neighbor produced. Downscaling (scale < 1.0) keeps crisp nearest-neighbor point-
-// sampling.
+// All scales use area-weighted coverage resampling so thin strokes survive shrinking
+// and enlarged headings retain antialiasing rather than solid pixel blocks.
 // Emit one scaled glyph into a full-panel 1-bpp anti-aliasing plane.
 //
 // The unscaled fast path captures the planes at its 2-bit dispatch (see the
@@ -1243,19 +1206,18 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
 //
 // Mirrors the cached/uncached split of the framebuffer path but never consults
 // the strip: the planes are always whole-panel, so there is no band to translate
-// into. Downscaling never reaches here -- it thresholds against minRaw2Bit and
-// has no AA levels to lift in any path, staged or captured.
+// into. Reduced glyphs capture the same reconstructed AA levels as enlarged glyphs.
 static void captureScaledGlyphPlane(const GfxRenderer& renderer, uint8_t* const plane, const uint8_t drawMask,
                                     const uint8_t* const bitmap, const bool is2Bit, const int srcW, const int srcH,
-                                    const int dstW, const int dstH, const float scale, const uint8_t minRaw2Bit,
-                                    const int baseX, const int baseY, const EpdFontData* const fontData,
+                                    const int dstW, const int dstH, const float scale, const int baseX, const int baseY,
+                                    const EpdFontData* const fontData,
                                     const uint32_t cp) {
   if (plane == nullptr || drawMask == 0) return;  // 0x00 == "Maximum" darkness: no grayscale at all
 
   const uint8_t* mask = renderer.findScaledGlyphMask(fontData, cp, scale, drawMask, dstW, dstH);
   if (!mask) {
     if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, drawMask, dstW, dstH)) {
-      emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, minRaw2Bit, drawMask,
+      emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, drawMask,
                             [slot, dstW](const int dstX, const int dstY) {
                               const int bit = dstY * dstW + dstX;
                               slot[bit >> 3] |= static_cast<uint8_t>(0x80 >> (bit & 7));
@@ -1273,7 +1235,7 @@ static void captureScaledGlyphPlane(const GfxRenderer& renderer, uint8_t* const 
 
   // Mask arena exhausted: write the plane bits directly, with the same rotation
   // and clipping drawPixel() applies to the framebuffer.
-  emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, minRaw2Bit, drawMask,
+  emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, drawMask,
                         [&renderer, plane, baseX, baseY](const int dstX, const int dstY) {
                           int phyX = 0;
                           int phyY = 0;
@@ -1288,8 +1250,7 @@ static void captureScaledGlyphPlane(const GfxRenderer& renderer, uint8_t* const 
 
 static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                               const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                              const bool pixelState, const EpdFontFamily::Style style, const float scale,
-                              const uint8_t minRaw2Bit = 1) {
+                              const bool pixelState, const EpdFontFamily::Style style, const float scale) {
   const EpdGlyphRef glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) return;
 
@@ -1309,29 +1270,23 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
   const int baseY = cursorY - static_cast<int>(glyph.top * scale + 0.5f);
   const bool is2Bit = fontData->is2Bit;
 
-  // Downscaling thresholds raw ink levels against minRaw2Bit and always honors the
-  // caller's pixelState; upscaling reconstructs a 2-bit AA level and lets the render
-  // mode's drawMask decide, with grayscale passes always clearing the bit. `sel` is
-  // whichever of the two varies the emitted pixel set, and so belongs in the cache key.
-  uint8_t drawMask = 0x0E;
-  bool writeState = pixelState;
-  if (scale >= 1.0f) {
-    drawMask = drawMaskFor2BitMode(renderMode, renderer.getTextDarkness());
-    if (drawMask == 0) return;  // Maximum darkness suppresses grayscale passes entirely
-    writeState = (drawMask == 0x0E) ? pixelState : false;
-  }
-  const uint8_t sel = (scale < 1.0f) ? minRaw2Bit : drawMask;
+  // The resampler reconstructs 2-bit coverage at every scale. Use the same
+  // plane masks as native glyphs; the mask is also the cache selector.
+  const uint8_t drawMask = drawMaskFor2BitMode(renderMode, renderer.getTextDarkness());
+  if (drawMask == 0) return;  // Maximum darkness suppresses grayscale passes.
+  const bool writeState = (drawMask == 0x0E) ? pixelState : false;
+  const uint8_t sel = drawMask;
 
   // Capture BEFORE the framebuffer draw below: the cached path returns straight
   // out of it, so anything placed after that return runs only on the fallback.
-  if (renderMode == GfxRenderer::BW && scale >= 1.0f && renderer.grayCaptureActive()) {
+  if (renderMode == GfxRenderer::BW && renderer.grayCaptureActive()) {
     const uint8_t darkness = renderer.getTextDarkness();
     captureScaledGlyphPlane(renderer, renderer.grayCaptureMsb(),
                             drawMaskFor2BitMode(GfxRenderer::GRAYSCALE_MSB, darkness), bitmap, is2Bit, srcW, srcH, dstW,
-                            dstH, scale, minRaw2Bit, baseX, baseY, fontData, cp);
+                            dstH, scale, baseX, baseY, fontData, cp);
     captureScaledGlyphPlane(renderer, renderer.grayCaptureLsb(),
                             drawMaskFor2BitMode(GfxRenderer::GRAYSCALE_LSB, darkness), bitmap, is2Bit, srcW, srcH, dstW,
-                            dstH, scale, minRaw2Bit, baseX, baseY, fontData, cp);
+                            dstH, scale, baseX, baseY, fontData, cp);
   }
 
   // Cached path: resample once per distinct (glyph, scale, sel), then draw every
@@ -1344,7 +1299,7 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
     const uint8_t* mask = renderer.findScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH);
     if (!mask) {
       if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH)) {
-        emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, minRaw2Bit, drawMask,
+        emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, drawMask,
                               [slot, dstW](const int dstX, const int dstY) {
                                 const int bit = dstY * dstW + dstX;
                                 slot[bit >> 3] |= static_cast<uint8_t>(0x80 >> (bit & 7));
@@ -1362,7 +1317,7 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
 
   // Uncached fallback: a strip target is active, the glyph is too large to cache, or the
   // arena could not be allocated. Emit straight to the framebuffer, one pixel at a time.
-  emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, minRaw2Bit, drawMask,
+  emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, drawMask,
                         [&renderer, baseX, baseY, writeState](const int dstX, const int dstY) {
                           renderer.drawPixel(baseX + dstX, baseY + dstY, writeState);
                         });
@@ -1646,8 +1601,7 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     }
 
     if (folded) {
-      renderCharAtScale(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style, smallCaps::SCALE,
-                        /*minRaw2Bit=*/2);
+      renderCharAtScale(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style, smallCaps::SCALE);
     } else {
       renderCharImpl<TextRotation::None>(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style);
     }
@@ -1691,9 +1645,6 @@ void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, co
   int32_t cursorFP = x << 4;  // 12.4 fixed-point
 
   const bool smallCapsStyle = (style & EpdFontFamily::SMALL_CAPS) != 0;
-  // Sup/sub glyphs keep the crisp dark-shade threshold the dedicated 50% sampler used:
-  // dropping the light-gray AA level stops small raised/lowered digits going muddy.
-  const bool isSupSub = (style & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0;
   uint32_t cp;
   uint32_t prevCp = 0;
   const char* p = text;
@@ -1715,8 +1666,7 @@ void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, co
     }
 
     const int cursorX = (cursorFP + 8) >> 4;
-    renderCharAtScale(*this, renderModeSnapshot, font, cp, cursorX, yPos, black, style, effScale,
-                      /*minRaw2Bit=*/(folded || isSupSub) ? 2 : 1);
+    renderCharAtScale(*this, renderModeSnapshot, font, cp, cursorX, yPos, black, style, effScale);
 
     const int scaledAdvanceFP = static_cast<int>(glyph.advanceX * effScale + 0.5f);
     cursorFP += scaledAdvanceFP;
@@ -3965,12 +3915,11 @@ void GfxRenderer::drawTextSpaced(int fontId, int x, int y, const char* text, boo
   const int baseline = y + static_cast<int>(std::lround(rawFontAscenderSize(fontId) * scale));
   const auto mode = getRenderMode();
   textRun::walk(
-      it->second, text, style, scale, tracking, [&](uint32_t cp, int dx, int dy, float glyphScale, bool folded) {
+      it->second, text, style, scale, tracking, [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/) {
         if (glyphScale == 1.0f) {
           renderCharImpl<TextRotation::None>(*this, mode, it->second, cp, x + dx, baseline + dy, black, style);
         } else {
-          renderCharAtScale(*this, mode, it->second, cp, x + dx, baseline + dy, black, style, glyphScale,
-                            (folded || (style & (EpdFontFamily::SUP | EpdFontFamily::SUB))) ? 2 : 1);
+          renderCharAtScale(*this, mode, it->second, cp, x + dx, baseline + dy, black, style, glyphScale);
         }
       });
 }

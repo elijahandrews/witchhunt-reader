@@ -1,4 +1,4 @@
-BOOK title=Witch CSS Style Test lang=en spine=12 toc=12 reliableToc=1
+BOOK title=Witch CSS Style Test lang=en spine=13 toc=13 reliableToc=1
 SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=9 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
@@ -699,3 +699,96 @@ SPINE 11 href=OEBPS/ch11.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
   LINE y=464 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=🦊REST
+SPINE 12 href=OEBPS/ch12.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=15 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=37 s=1 z=100 t=Reduced
+   W x=159 s=1 z=100 t=uppercase
+   W x=307 s=1 z=100 t=strokes
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Compare
+   W x=74 s=0 z=100 t=this
+   W x=118 s=0 z=100 t=page
+   W x=163 s=0 z=100 t=with
+   W x=204 s=0 z=100 t=Bookerly
+   W x=286 s=0 z=100 t=and
+   W x=324 s=0 z=100 t=Adobe
+   W x=374 s=0 z=100 t=Garamond
+  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=12
+   W x=0 s=0 z=100 t=Pro.
+   W x=48 s=0 z=100 t=Thin
+   W x=92 s=0 z=100 t=strokes
+   W x=166 s=0 z=100 t=in
+   W x=192 s=0 z=100 t=A,
+   W x=217 s=0 z=100 t=M,
+   W x=240 s=0 z=100 t=N,
+   W x=264 s=0 z=100 t=W
+   W x=282 s=0 z=100 t=and
+   W x=322 s=0 z=100 t=R
+   W x=342 s=0 z=100 t=should
+   W x=412 s=0 z=100 t=stay
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=continuous.
+  LINE y=119 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=Normal
+   W x=64 s=0 z=100 t=body:
+   W x=112 s=0 z=100 t=capitals
+   W x=189 s=0 z=100 t=and
+   W x=226 s=0 z=100 t=thin
+   W x=271 s=0 z=100 t=strokes.
+  LINE y=152 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=0 z=100 t=CAPITALS
+   W x=61 s=0 z=100 t=AND
+   W x=86 s=0 z=100 t=THIN
+   W x=114 s=0 z=100 t=STROKES
+  LINE y=179 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=1 z=100 t=CAPITALS
+   W x=67 s=1 z=100 t=AND
+   W x=94 s=1 z=100 t=THIN
+   W x=125 s=1 z=100 t=STROKES
+  LINE y=206 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=2 z=100 t=CAPITALS
+   W x=61 s=2 z=100 t=AND
+   W x=86 s=2 z=100 t=THIN
+   W x=114 s=2 z=100 t=STROKES
+  LINE y=233 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=3 z=100 t=CAPITALS
+   W x=67 s=3 z=100 t=AND
+   W x=94 s=3 z=100 t=THIN
+   W x=125 s=3 z=100 t=STROKES
+  LINE y=260 x=0 align=0 mult=0.750 hfid=0 words=1
+   W x=0 s=0 z=100 t=ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  LINE y=287 x=0 align=0 mult=0.750 hfid=0 words=6
+   W x=0 s=0 z=100 t=TUESDAY,
+   W x=61 s=0 z=100 t=THE
+   W x=86 s=0 z=100 t=EIGHTH
+   W x=129 s=0 z=100 t=DAY
+   W x=157 s=0 z=100 t=OF
+   W x=173 s=0 z=100 t=SEPTEMBER
+  LINE y=314 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=64 z=100 t=Small
+   W x=58 s=64 z=100 t=capitals
+   W x=135 s=64 z=100 t=and
+   W x=172 s=64 z=100 t=dates
+  LINE y=347 x=0 align=0 mult=0.500 hfid=0 words=6
+   W x=0 s=0 z=100 t=HALF
+   W x=20 s=0 z=100 t=SIZE:
+   W x=50 s=0 z=100 t=CAPITALS
+   W x=90 s=0 z=100 t=AND
+   W x=106 s=0 z=100 t=THIN
+   W x=124 s=0 z=100 t=STROKES
+  LINE y=368 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=All
+   W x=40 s=0 z=100 t=samples
+   W x=118 s=0 z=100 t=should
+   W x=193 s=0 z=100 t=preserve
+   W x=277 s=0 z=100 t=their
+   W x=336 s=0 z=100 t=strokes,
+   W x=423 s=0 z=100 t=with
+  LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=smooth
+   W x=71 s=0 z=100 t=edges
+   W x=123 s=0 z=100 t=when
+   W x=167 s=0 z=100 t=antialiasing
+   W x=288 s=0 z=100 t=is
+   W x=309 s=0 z=100 t=enabled.
