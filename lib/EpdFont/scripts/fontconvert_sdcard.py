@@ -699,6 +699,8 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
                 continue
 
             bitmap = f.glyph.bitmap
+            # FreeType copies the whole bitmap on each buffer property access.
+            bitmap_buffer = bitmap.buffer
 
             # Build 4-bit greyscale bitmap (same logic as fontconvert.py)
             pixels4g = []
@@ -710,7 +712,7 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
                 else:
                     row_offset = (bitmap.rows - 1 - y) * abs_pitch
                 for x in range(bitmap.width):
-                    v = bitmap.buffer[row_offset + x]
+                    v = bitmap_buffer[row_offset + x]
                     if x % 2 == 0:
                         px = (v >> 4)
                     else:
