@@ -587,8 +587,17 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
       style.defined.opacityZero = 0;
     }
   } else if (propNameBuf == "display") {
+    // Block-level values only; inline-block, table-cell, contents and the rest stay Inline, the
+    // layout a <span> already gets.
     const std::string_view displayValue = propValueBuf;
-    style.display = (displayValue == "none") ? CssDisplay::None : CssDisplay::Block;
+    if (displayValue == "none") {
+      style.display = CssDisplay::None;
+    } else if (displayValue == "block" || displayValue == "list-item" || displayValue == "table" ||
+               displayValue == "flex" || displayValue == "grid" || displayValue == "flow-root") {
+      style.display = CssDisplay::Block;
+    } else {
+      style.display = CssDisplay::Inline;
+    }
     style.defined.display = 1;
   } else if (propNameBuf == "vertical-align") {
     const std::string_view va = propValueBuf;
@@ -1770,9 +1779,10 @@ bool CssParser::ensureCacheIndexLoaded() const {
 constexpr size_t kMaxCompressedStyle = 4 + 2 + 11 * 5 + 2 * 4;
 
 // Canonical "which properties are set" mask: 27 defined bits (0-26), then the three boolean
-// VALUES of the invisibility properties in bits 27-29 -- the uint16 of enum values below is
-// full. (By the CssStyle invariant a defined invisibility property is currently always true, so
-// these value bits mirror bits 24-26; they are carried for uniformity, not information.) Bit
+// VALUES of the invisibility properties in bits 27-29 and the high bit of `display` in bit 30 --
+// the uint16 of enum values below is full. (By the CssStyle invariant a defined invisibility
+// property is currently always true, so bits 27-29 mirror bits 24-26; they are carried for
+// uniformity, not information.) Bit
 // order is the pool's dedup key and must stay stable within a build (the pool is rebuilt each
 // load, so it never persists to disk).
 static uint32_t packDefinedMask(const CssPropertyFlags& d) {
@@ -1792,6 +1802,7 @@ static size_t compressStyle(const CssStyle& s, uint8_t* out) {
   if (s.defined.colorTransparent && s.colorTransparent) mask |= 1u << 27;
   if (s.defined.opacityZero && s.opacityZero) mask |= 1u << 28;
   if (s.defined.visibilityHidden && s.visibilityHidden) mask |= 1u << 29;
+  if (s.defined.display && (static_cast<unsigned>(s.display) & 2u)) mask |= 1u << 30;
   std::memcpy(p, &mask, 4);
   p += 4;
   uint16_t enums = 0;
@@ -1884,7 +1895,7 @@ static void decompressStyle(const uint8_t* in, CssStyle& out) {
   if (d.fontStyle) out.fontStyle = static_cast<CssFontStyle>((enums >> 3) & 1u);
   if (d.fontWeight) out.fontWeight = static_cast<CssFontWeight>((enums >> 4) & 1u);
   if (d.textDecoration) out.textDecoration = static_cast<CssTextDecoration>((enums >> 5) & 3u);
-  if (d.display) out.display = static_cast<CssDisplay>((enums >> 7) & 1u);
+  if (d.display) out.display = static_cast<CssDisplay>(((enums >> 7) & 1u) | (((mask >> 30) & 1u) << 1));
   if (d.verticalAlign) out.verticalAlign = static_cast<CssVerticalAlign>((enums >> 8) & 3u);
   if (d.listStyleNone) out.listStyleNone = ((enums >> 10) & 1u) != 0;
   if (d.pageBreakBefore) out.pageBreakBefore = ((enums >> 11) & 1u) != 0;
