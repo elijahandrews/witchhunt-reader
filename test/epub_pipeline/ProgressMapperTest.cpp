@@ -359,6 +359,18 @@ TEST_F(ProgressMapperFixture, ChapterWithNoPageCountUploadsAsItsStart) {
   EXPECT_FLOAT_EQ(ko.percentage, percentageInto(kSectionSpine, 0.0f));
 }
 
+// --- What the comparison sees -------------------------------------------------------------------
+
+TEST_F(ProgressMapperFixture, ASpineFromTheXPathIsTrustedAndOneFromThePercentageIsNot) {
+  EXPECT_TRUE(map("/body/DocFragment[2]/body/section/p[30]/text().0", percentageInto(kSectionSpine, 0.5f))
+                  .hasResolvedSpineIndex);
+  // Still trusted when the resolver fails: the spine is string-derived.
+  EXPECT_TRUE(map("/body/DocFragment[3]/body/p[30]/text().0", percentageInto(kBrokenSpine, 0.4f), kBrokenSpine)
+                  .hasResolvedSpineIndex);
+  EXPECT_FALSE(map("", percentageInto(kFlatSpine, 0.5f)).hasResolvedSpineIndex);
+  EXPECT_FALSE(map("/body/DocFragment[99]/body/p[1]", percentageInto(kFlatSpine, 0.5f)).hasResolvedSpineIndex);
+}
+
 TEST_F(ProgressMapperFixture, UnparseableChapterUploadsAsItsRoot) {
   // The forward mapper cannot count the chapter's text, so all it can say is "this chapter".
   const auto ko = ProgressMapper::toKOReader(epub, {kBrokenSpine, 20, kPagesInSpine});

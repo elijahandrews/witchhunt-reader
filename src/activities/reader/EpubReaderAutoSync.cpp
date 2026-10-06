@@ -5,16 +5,27 @@
 #include <Arduino.h>
 #include <Logging.h>
 
-#include <cmath>
 #include <utility>
 
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
+#include "ProgressComparison.h"
 #include "activities/ActivityManager.h"
 
 namespace {
-constexpr float SAME_PROGRESS_EPSILON = 0.001f;
+// The reader's position as ProgressComparison wants it: the page, and the paragraph LUT at the
+// end of this page and of the one before.
+LocalReadingPosition localReadingPosition(const Section& section, const int spineIndex, const int page) {
+  LocalReadingPosition local;
+  local.spineIndex = spineIndex;
+  local.page = page;
+  local.paragraphAtPageEnd = section.getParagraphIndexForPage(static_cast<uint16_t>(page)).value_or(0);
+  if (page > 0) {
+    local.paragraphAtPreviousPageEnd = section.getParagraphIndexForPage(static_cast<uint16_t>(page - 1)).value_or(0);
+  }
+  return local;
+}
 
 DocumentMatchMethod otherMethod(const DocumentMatchMethod method) {
   return method == DocumentMatchMethod::FILENAME ? DocumentMatchMethod::BINARY : DocumentMatchMethod::FILENAME;
@@ -114,10 +125,19 @@ void EpubReaderActivity::evaluateAutoSyncPull() {
   const bool smart = KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART;
   const std::string path = epub->getPath();
 
+  // What each record says from its XPath alone (spine, body-child paragraph): enough to compare
+  // without inflating a chapter, which only an upload or an apply needs.
+  const int spineCount = epub->getSpineItemsCount();
+  const auto peek = [spineCount](const KOReaderProgress& progress) {
+    return ProgressMapper::peekRemote({progress.progress, progress.percentage}, spineCount);
+  };
+
   KOReaderSyncClient::Error result = job.result;
   KOReaderProgress remote = std::move(job.remote);
   if (smart && job.altResult == KOReaderSyncClient::OK && !job.altHash.empty() &&
-      (result == KOReaderSyncClient::NOT_FOUND || job.altRemote.percentage > remote.percentage)) {
+      (result == KOReaderSyncClient::NOT_FOUND ||
+       selectRemoteRecord(peek(remote), remote.percentage, peek(job.altRemote), job.altRemote.percentage) ==
+           RemoteRecordChoice::Alternate)) {
     const DocumentMatchMethod altMethod = otherMethod(KOReaderAutoSync::effectiveMatchMethod(path));
     LOG_INF("AutoSync", "Wake pull: found remote progress under the alternate id; adopting it");
     KOReaderDocumentId::saveLearnedMatchMethod(path, altMethod);
@@ -142,23 +162,34 @@ void EpubReaderActivity::evaluateAutoSyncPull() {
 
   const int page = section->currentPage;
   const int total = section->estimatedTotalPages();
-  const KOReaderPosition local = currentKoPosition(page, total);
-  const float delta = local.percentage - remote.percentage;
-  if (std::fabs(delta) <= SAME_PROGRESS_EPSILON) {
-    AUTOSYNC_STATE.markSynced(path, currentSpineIndex, page);
-    LOG_DBG("AutoSync", "Wake pull: remote matches local (%.6f); nothing to do", remote.percentage);
-    return;
-  }
-
-  if (smart) {
-    if (delta > 0) {
-      LOG_DBG("AutoSync", "Wake pull: local ahead, uploading silently");
-      silentUploadCurrentPosition();
-    } else {
-      LOG_DBG("AutoSync", "Wake pull: remote ahead, applying silently");
-      silentApplyRemote(remote);
-    }
-    return;
+  // The percentage only. The local XPath costs an inflate and two parses of the chapter, and is
+  // computed by silentUploadCurrentPosition() if an upload turns out to be needed.
+  const float localPercentage = ProgressMapper::percentageFor(epub, currentSpineIndex, page, total);
+  const ProgressComparison comparison = compareProgress(localReadingPosition(*section, currentSpineIndex, page),
+                                                        localPercentage, peek(remote), remote.percentage);
+  switch (comparison) {
+    case ProgressComparison::Synchronized:
+      AUTOSYNC_STATE.markSynced(path, currentSpineIndex, page);
+      LOG_DBG("AutoSync", "Wake pull: remote matches local (%.6f at %s); nothing to do", remote.percentage,
+              remote.progress.c_str());
+      return;
+    case ProgressComparison::LocalAhead:
+      if (smart) {
+        LOG_DBG("AutoSync", "Wake pull: local ahead, uploading silently");
+        silentUploadCurrentPosition();
+        return;
+      }
+      break;
+    case ProgressComparison::RemoteAhead:
+      if (smart) {
+        LOG_DBG("AutoSync", "Wake pull: remote ahead, applying silently");
+        silentApplyRemote(remote);
+        return;
+      }
+      break;
+    case ProgressComparison::Unknown:
+      LOG_DBG("AutoSync", "Wake pull: cannot tell which side is further; asking");
+      break;
   }
 
   autoSyncPullDialogLaunched = handOffToInteractiveSync();
