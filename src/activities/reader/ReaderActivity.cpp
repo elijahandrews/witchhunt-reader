@@ -805,7 +805,7 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
     sync.totalPagesInSpine = 0;
     sync.paragraphIndex = 0;
     sync.hasParagraphIndex = false;
-    sync.xhtmlSeekHint = 0;
+    sync.paragraphIndexBefore = 0;
     sync.intent = KOReaderSyncIntentState::AUTO_PULL;
     sync.outcome = KOReaderSyncOutcomeState::PENDING;
     sync.resultSpineIndex = 0;

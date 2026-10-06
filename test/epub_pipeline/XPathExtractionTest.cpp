@@ -9,6 +9,7 @@
 
 #include "KOReaderSync/ChapterXPathIndexer.h"
 #include "KOReaderSync/ChapterXPathIndexerInternal.h"
+#include "KOReaderSync/ProgressMapper.h"
 
 namespace {
 
@@ -112,6 +113,37 @@ TEST(XPathNormalize, AncestorMeansAProperPrefixOnASegmentBoundary) {
   EXPECT_TRUE(isAncestorPath("/body[1]/div[1]", "/body[1]/div[1]/p[2]"));
   EXPECT_FALSE(isAncestorPath("/body[1]/div[1]", "/body[1]/div[1]"));
   EXPECT_FALSE(isAncestorPath("/body[1]/div[1]", "/body[1]/div[12]/p[2]"));
+}
+
+// --- What a record says without opening the book --------------------------------------------------
+//
+// The reader compares a fetched record against where it is before deciding whether to inflate a
+// chapter for it. That comparison needs the spine and the body-child paragraph, both of which
+// are in the XPath string.
+
+TEST(PeekRemote, ReadsSpineAndBodyChildParagraph) {
+  const auto pos = ProgressMapper::peekRemote({"/body/DocFragment[1]/body/p[25]/text().0", 0.3f}, 3);
+  EXPECT_TRUE(pos.hasResolvedSpineIndex);
+  EXPECT_EQ(pos.spineIndex, 0);
+  EXPECT_TRUE(pos.hasParagraphIndex);
+  EXPECT_EQ(pos.paragraphIndex, 25);
+}
+
+TEST(PeekRemote, NestedParagraphGivesOnlyTheSpine) {
+  const auto pos = ProgressMapper::peekRemote({"/body/DocFragment[2]/body/section/p[30]/text().0", 0.3f}, 3);
+  EXPECT_TRUE(pos.hasResolvedSpineIndex);
+  EXPECT_EQ(pos.spineIndex, 1);
+  EXPECT_FALSE(pos.hasParagraphIndex);
+}
+
+TEST(PeekRemote, SpineOutOfRangeOrMissingIsNotTrusted) {
+  EXPECT_FALSE(ProgressMapper::peekRemote({"/body/DocFragment[9]/body/p[1]", 0.3f}, 3).hasResolvedSpineIndex);
+  EXPECT_FALSE(ProgressMapper::peekRemote({"/body/DocFragment[0]/body/p[1]", 0.3f}, 3).hasResolvedSpineIndex);
+  EXPECT_FALSE(ProgressMapper::peekRemote({"", 0.3f}, 3).hasResolvedSpineIndex);
+}
+
+TEST(PeekRemote, UnknownSpineCountSkipsTheRangeCheck) {
+  EXPECT_TRUE(ProgressMapper::peekRemote({"/body/DocFragment[9]/body/p[1]", 0.3f}, 0).hasResolvedSpineIndex);
 }
 
 }  // namespace

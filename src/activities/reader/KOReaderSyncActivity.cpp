@@ -185,27 +185,17 @@ void KOReaderSyncActivity::applyRemoteAndFinish() {
   requestUpdate(true);
 }
 
-// -1 remote is further, 0 the two agree, +1 local is further.
-int KOReaderSyncActivity::compareLocalToRemote() const {
-  if (remotePosition.spineIndex < 0) {
-    // No usable mapping; percentage is all we have. Tolerate float noise so a rounding
-    // difference doesn't present as a real conflict.
-    static constexpr float SAME_PROGRESS_EPSILON = 0.001f;
-    const float delta = localProgress.percentage - remoteProgress.percentage;
-    if (std::fabs(delta) <= SAME_PROGRESS_EPSILON) return 0;
-    return delta > 0 ? 1 : -1;
-  }
-  if (currentSpineIndex != remotePosition.spineIndex) {
-    return currentSpineIndex > remotePosition.spineIndex ? 1 : -1;
-  }
-  if (currentPage != remotePosition.pageNumber) {
-    return currentPage > remotePosition.pageNumber ? 1 : -1;
-  }
-  if (hasLocalParagraphIndex && remotePosition.hasParagraphIndex &&
-      localParagraphIndex != remotePosition.paragraphIndex) {
-    return localParagraphIndex > remotePosition.paragraphIndex ? 1 : -1;
-  }
-  return 0;
+LocalReadingPosition KOReaderSyncActivity::localReadingPosition() const {
+  LocalReadingPosition local;
+  local.spineIndex = currentSpineIndex;
+  local.page = currentPage;
+  local.paragraphAtPageEnd = hasLocalParagraphIndex ? localParagraphIndex : 0;
+  local.paragraphAtPreviousPageEnd = localParagraphIndexBefore;
+  return local;
+}
+
+ProgressComparison KOReaderSyncActivity::compareLocalToRemote() const {
+  return compareProgress(localReadingPosition(), localProgress.percentage, remotePosition, remoteProgress.percentage);
 }
 
 bool KOReaderSyncActivity::smartSyncEnabled() const {
@@ -234,10 +224,16 @@ bool KOReaderSyncActivity::probeAlternateDocumentId(const bool havePrimaryRecord
 
   // Both ids hold a record, so this is not a missing-book question any more but a
   // which-one-is-live question. Only move if the other device is genuinely further along;
-  // otherwise ours stands and we keep writing where we already were.
-  if (havePrimaryRecord && altProgress.percentage <= remoteProgress.percentage) {
-    LOG_DBG("KOSync", "Alternate %s id is not ahead (%.4f <= %.4f); keeping the %s id", matchMethodName(altMethod),
-            altProgress.percentage, remoteProgress.percentage, matchMethodName(effectiveMatchMethod));
+  // otherwise ours stands and we keep writing where we already were. Judged by spine and
+  // paragraph from the two XPaths before the two percentages, which are in different units.
+  if (havePrimaryRecord &&
+      selectRemoteRecord(ProgressMapper::peekRemote({remoteProgress.progress, remoteProgress.percentage}, spineCount),
+                         remoteProgress.percentage,
+                         ProgressMapper::peekRemote({altProgress.progress, altProgress.percentage}, spineCount),
+                         altProgress.percentage) == RemoteRecordChoice::Primary) {
+    LOG_DBG("KOSync", "Alternate %s id is not ahead (%.4f at %s vs %.4f at %s); keeping the %s id",
+            matchMethodName(altMethod), altProgress.percentage, altProgress.progress.c_str(), remoteProgress.percentage,
+            remoteProgress.progress.c_str(), matchMethodName(effectiveMatchMethod));
     return false;
   }
 
@@ -280,11 +276,22 @@ bool KOReaderSyncActivity::handleAutoPushPreflight() {
     requestUpdate(true);
     return false;
   }
-  // Auto-push must not overwrite progress that is already further along on the server.
-  if (syncIntent == KOReaderSyncIntentState::AUTO_PUSH && warmupResult == KOReaderSyncClient::OK &&
-      warmupProgress.percentage > localProgress.percentage) {
-    LOG_DBG("KOSync", "AUTO_PUSH skipped: remote %.4f >= local %.4f", warmupProgress.percentage,
-            localProgress.percentage);
+  // Auto-push must not overwrite progress that is already further along on the server, and has
+  // nothing to add when the server already holds this page. Judged by spine and paragraph from
+  // the record's XPath before its percentage: a KOReader chapter-start push reads as a higher
+  // percentage than our byte count gives the next ten pages of that chapter.
+  const ProgressComparison againstServer =
+      warmupResult == KOReaderSyncClient::OK
+          ? compareProgress(
+                localReadingPosition(), localProgress.percentage,
+                ProgressMapper::peekRemote({warmupProgress.progress, warmupProgress.percentage}, spineCount),
+                warmupProgress.percentage)
+          : ProgressComparison::Unknown;
+  if (syncIntent == KOReaderSyncIntentState::AUTO_PUSH &&
+      (againstServer == ProgressComparison::RemoteAhead || againstServer == ProgressComparison::Synchronized)) {
+    LOG_DBG("KOSync", "AUTO_PUSH skipped: server is %s (remote %.4f at %s, local %.4f spine=%d page=%d)",
+            againstServer == ProgressComparison::RemoteAhead ? "ahead" : "at this page", warmupProgress.percentage,
+            warmupProgress.progress.c_str(), localProgress.percentage, currentSpineIndex, currentPage);
     KOReaderSyncClient::endPersistentSession();
     // Drop the radio while user reads the result; full teardown happens at silent reboot.
     esp_wifi_stop();
@@ -430,39 +437,45 @@ void KOReaderSyncActivity::performFetchAndCompare() {
   // Local progress was precomputed before network; keep using the cached value.
   releaseEpubForMapping();
 
-  const int comparison = compareLocalToRemote();
+  const ProgressComparison comparison = compareLocalToRemote();
 
   if (smartSyncEnabled()) {
     // Resolve it rather than asking. The chooser only ever had one sensible answer in these
     // cases, and it was already preselected — this just stops making the user confirm it.
-    if (comparison == 0) {
-      LOG_DBG("KOSync", "Smart sync: the two sides agree, nothing to do");
+    // Unknown (neither side has a usable percentage and the XPath settles nothing) is the one
+    // case with no sensible default, so it falls through to the chooser.
+    switch (comparison) {
+      case ProgressComparison::Synchronized:
+        LOG_DBG("KOSync", "Smart sync: the two sides agree, nothing to do");
 #if CROSSPOINT_KOREADER_AUTOSYNC
-      AUTOSYNC_STATE.markSynced(epubPath, currentSpineIndex, currentPage);
+        AUTOSYNC_STATE.markSynced(epubPath, currentSpineIndex, currentPage);
 #endif
-      {
-        RenderLock lock(*this);
-        state = SYNC_COMPLETE;
-        uploadCompleteTime = millis();
-      }
-      requestUpdate(true);
-      return;
+        {
+          RenderLock lock(*this);
+          state = SYNC_COMPLETE;
+          uploadCompleteTime = millis();
+        }
+        requestUpdate(true);
+        return;
+      case ProgressComparison::LocalAhead:
+        LOG_DBG("KOSync", "Smart sync: local is further, uploading");
+        performUpload();
+        return;
+      case ProgressComparison::RemoteAhead:
+        LOG_DBG("KOSync", "Smart sync: remote is further, applying");
+        applyRemoteAndFinish();
+        return;
+      case ProgressComparison::Unknown:
+        LOG_DBG("KOSync", "Smart sync: cannot tell which side is further, asking");
+        break;
     }
-    if (comparison > 0) {
-      LOG_DBG("KOSync", "Smart sync: local is further, uploading");
-      performUpload();
-      return;
-    }
-    LOG_DBG("KOSync", "Smart sync: remote is further, applying");
-    applyRemoteAndFinish();
-    return;
   }
 
   {
     RenderLock lock(*this);
     state = SHOWING_RESULT;
     // Default to the option matching the furthest progress.
-    selectedOption = comparison > 0 ? 1 /* Upload local */ : 0 /* Apply remote */;
+    selectedOption = comparison == ProgressComparison::LocalAhead ? 1 /* Upload local */ : 0 /* Apply remote */;
   }
   requestUpdate(true);
 }
@@ -969,6 +982,7 @@ bool KOReaderSyncActivity::ensureEpubLoadedForMapping() {
     return false;
   }
   epub->setupCacheDir();
+  spineCount = epub->getSpineItemsCount();
   return true;
 }
 
@@ -1015,14 +1029,8 @@ bool KOReaderSyncActivity::computeLocalProgressAndChapter() {
     return false;
   }
 
-  CrossPointPosition localPos = {currentSpineIndex,
-                                 currentPage,
-                                 totalPagesInSpine,
-                                 localParagraphIndex,
-                                 hasLocalParagraphIndex,
-                                 0,  // no list item index
-                                 false,
-                                 localXhtmlSeekHint};
+  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine, localParagraphIndex,
+                                 hasLocalParagraphIndex};
   localProgress = ProgressMapper::toKOReader(epub, localPos);
 
   const int localTocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
@@ -1107,7 +1115,7 @@ void KOReaderSyncActivity::loop() {
         // back and shows what "use furthest" actually resolves to for this book.
         {
           RenderLock lock(*this);
-          selectedOption = compareLocalToRemote() > 0 ? 1 : 0;
+          selectedOption = compareLocalToRemote() == ProgressComparison::LocalAhead ? 1 : 0;
         }
         requestUpdate();
         return;
