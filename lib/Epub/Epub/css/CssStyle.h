@@ -67,6 +67,9 @@ enum class CssVerticalAlign : uint8_t { Baseline = 0, Super = 1, Sub = 2 };
 // Float options — used to detect inline images beside paragraph text
 enum class CssFloat : uint8_t { None = 0, Left = 1, Right = 2 };
 
+// Inherit is kept explicitly so it can cancel an earlier declaration in the cascade.
+enum class CssTextTransform : uint8_t { None = 0, Uppercase = 1, Lowercase = 2, Inherit = 3 };
+
 // Bitmask for tracking which properties have been explicitly set
 struct CssPropertyFlags {
   uint32_t textAlign : 1;
@@ -93,6 +96,7 @@ struct CssPropertyFlags {
   uint32_t fontSizeMultiplier : 1;
   uint32_t cssFloat : 1;
   uint32_t smallCaps : 1;
+  uint32_t textTransform : 1;
   // Invisibility. Three bits, not one: they come from three properties that cascade
   // independently, and a shared bit would let a later `visibility: visible` cancel an
   // `opacity: 0` (or vice versa) purely by declaration order.
@@ -125,6 +129,7 @@ struct CssPropertyFlags {
         fontSizeMultiplier(0),
         cssFloat(0),
         smallCaps(0),
+        textTransform(0),
         colorTransparent(0),
         opacityZero(0),
         visibilityHidden(0) {}
@@ -133,7 +138,8 @@ struct CssPropertyFlags {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
            imageWidth || display || verticalAlign || listStyleNone || pageBreakBefore || pageBreakAfter || lineHeight ||
-           fontSizeMultiplier || cssFloat || smallCaps || colorTransparent || opacityZero || visibilityHidden;
+           fontSizeMultiplier || cssFloat || smallCaps || textTransform || colorTransparent || opacityZero ||
+           visibilityHidden;
   }
 
   void clearAll() {
@@ -142,7 +148,7 @@ struct CssPropertyFlags {
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
     imageHeight = imageWidth = display = verticalAlign = 0;
     listStyleNone = pageBreakBefore = pageBreakAfter = lineHeight = fontSizeMultiplier = cssFloat = 0;
-    smallCaps = colorTransparent = opacityZero = visibilityHidden = 0;
+    smallCaps = textTransform = colorTransparent = opacityZero = visibilityHidden = 0;
   }
 };
 
@@ -176,6 +182,7 @@ struct CssStyle {
   float fontSizeMultiplier = 1.0f;     // font-size multiplier relative to body em size
   CssFloat cssFloat = CssFloat::None;  // float: left/right — signals inline image context
   bool smallCaps = false;              // font-variant: small-caps
+  CssTextTransform textTransform = CssTextTransform::None;
   // Text made invisible while still in the flow. A PDF-to-EPUB conversion emits every OCR word
   // as its own absolutely positioned div with `color: transparent` under a full-page scan; laid
   // out as ordinary text that became eleven pages of single words per scan (Deckhand).
@@ -290,6 +297,10 @@ struct CssStyle {
       cssFloat = base.cssFloat;
       defined.cssFloat = 1;
     }
+    if (base.hasTextTransform()) {
+      textTransform = base.textTransform;
+      defined.textTransform = 1;
+    }
     if (base.hasSmallCaps()) {
       smallCaps = base.smallCaps;
       defined.smallCaps = 1;
@@ -331,6 +342,7 @@ struct CssStyle {
   [[nodiscard]] bool hasListStyleNone() const { return defined.listStyleNone; }
   [[nodiscard]] bool hasCssFloat() const { return defined.cssFloat; }
   [[nodiscard]] bool hasSmallCaps() const { return defined.smallCaps; }
+  [[nodiscard]] bool hasTextTransform() const { return defined.textTransform; }
   [[nodiscard]] bool hasColorTransparent() const { return defined.colorTransparent; }
   [[nodiscard]] bool hasOpacityZero() const { return defined.opacityZero; }
   [[nodiscard]] bool hasVisibilityHidden() const { return defined.visibilityHidden; }
@@ -363,6 +375,7 @@ struct CssStyle {
     fontSizeMultiplier = 1.0f;
     cssFloat = CssFloat::None;
     smallCaps = false;
+    textTransform = CssTextTransform::None;
     colorTransparent = false;
     opacityZero = false;
     visibilityHidden = false;

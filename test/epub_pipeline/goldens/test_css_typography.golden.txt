@@ -1,0 +1,475 @@
+BOOK title=Witch CSS Style Test lang=en spine=8 toc=8 reliableToc=1
+SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=9 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=32 s=1 z=100 t=External
+   W x=180 s=1 z=100 t=CSS
+   W x=249 s=1 z=100 t=percentages
+  LINE y=38 x=0 align=0 mult=1.200 hfid=0 words=5
+   W x=0 s=0 z=100 t=A
+   W x=17 s=0 z=100 t=heading
+   W x=107 s=0 z=100 t=at
+   W x=140 s=0 z=100 t=120
+   W x=177 s=0 z=100 t=percent
+  LINE y=76 x=0 align=0 mult=0.750 hfid=0 words=5
+   W x=0 s=0 z=100 t=MONDAY,
+   W x=49 s=0 z=100 t=THE
+   W x=74 s=0 z=100 t=FIFTH
+   W x=105 s=0 z=100 t=OF
+   W x=121 s=0 z=100 t=OCTOBER
+  LINE y=103 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=The
+   W x=36 s=0 z=100 t=heading
+   W x=114 s=0 z=100 t=should
+   W x=184 s=0 z=100 t=be
+   W x=208 s=0 z=100 t=larger.
+   W x=284 s=0 z=100 t=The
+   W x=320 s=0 z=100 t=date
+   W x=368 s=0 z=100 t=should
+   W x=438 s=0 z=100 t=be
+  LINE y=127 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=smaller
+   W x=72 s=0 z=100 t=and
+   W x=109 s=0 z=100 t=ALL
+   W x=147 s=0 z=100 t=UPPERCASE.
+  LINE y=160 x=0 align=2 mult=1.400 hfid=0 words=3
+   W x=75 s=1 z=100 t=Inline
+   W x=168 s=1 z=100 t=CSS
+   W x=228 s=1 z=100 t=percentages
+  LINE y=194 x=0 align=0 mult=1.200 hfid=0 words=6
+   W x=0 s=0 z=100 t=An
+   W x=30 s=0 z=100 t=inline
+   W x=99 s=0 z=100 t=heading
+   W x=189 s=0 z=100 t=at
+   W x=222 s=0 z=100 t=120
+   W x=259 s=0 z=100 t=percent
+  LINE y=232 x=0 align=0 mult=0.750 hfid=0 words=5
+   W x=0 s=0 z=100 t=MONDAY,
+   W x=49 s=0 z=100 t=THE
+   W x=74 s=0 z=100 t=FIFTH
+   W x=105 s=0 z=100 t=OF
+   W x=121 s=0 z=100 t=OCTOBER
+  LINE y=259 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=This
+   W x=39 s=0 z=100 t=is
+   W x=60 s=0 z=100 t=normal
+   W x=128 s=0 z=100 t=body
+   W x=168 s=0 z=100 t=text
+   W x=210 s=0 z=100 t=for
+   W x=246 s=0 z=100 t=comparison.
+SPINE 1 href=OEBPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=10 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=104 s=1 z=100 t=Case
+   W x=184 s=1 z=100 t=and
+   W x=248 s=1 z=100 t=Unicode
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=MONDAY
+   W x=57 s=0 z=100 t=CAFÉ
+   W x=98 s=0 z=100 t=STRASSE
+   W x=177 s=0 z=100 t=FFI
+  LINE y=71 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Expected:
+   W x=82 s=0 z=100 t=MONDAY
+   W x=139 s=0 z=100 t=CAFÉ
+   W x=180 s=0 z=100 t=STRASSE
+   W x=259 s=0 z=100 t=FFI
+  LINE y=104 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=monday
+   W x=67 s=0 z=100 t=café
+   W x=110 s=0 z=100 t=strasse
+  LINE y=137 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=Expected:
+   W x=82 s=0 z=100 t=monday
+   W x=149 s=0 z=100 t=café
+   W x=192 s=0 z=100 t=strasse
+  LINE y=170 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=64 z=100 t=mixed
+   W x=46 s=64 z=100 t=case
+   W x=89 s=64 z=100 t=small
+   W x=144 s=64 z=100 t=caps
+  LINE y=203 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=The
+   W x=35 s=0 z=100 t=preceding
+   W x=118 s=0 z=100 t=line
+   W x=161 s=0 z=100 t=should
+   W x=230 s=0 z=100 t=appear
+   W x=291 s=0 z=100 t=as
+   W x=320 s=0 z=100 t=small
+   W x=377 s=0 z=100 t=capitals,
+  LINE y=227 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=all
+   W x=36 s=0 z=100 t=the
+   W x=73 s=0 z=100 t=same
+   W x=119 s=0 z=100 t=height.
+  LINE y=260 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=ENTITY:
+   W x=65 s=0 z=100 t=CAFÉ
+   W x=106 s=0 z=100 t=&
+   W x=121 s=0 z=100 t=STRASSE
+  LINE y=293 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Expected:
+   W x=82 s=0 z=100 t=ENTITY:
+   W x=147 s=0 z=100 t=CAFÉ
+   W x=188 s=0 z=100 t=&
+   W x=203 s=0 z=100 t=STRASSE
+SPINE 2 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=14 footnotes=1
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=53 s=1 z=100 t=Inheritance
+   W x=247 s=1 z=100 t=and
+   W x=311 s=1 z=100 t=resets
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=OUTER
+   W x=50 s=0 z=100 t=ALPHA
+   W x=101 s=0 z=100 t=Keep
+   W x=142 s=0 z=100 t=Mixed
+   W x=184 s=0 z=100 t=OUTER
+   W x=234 s=0 z=100 t=BETA
+  LINE y=71 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=lower
+   W x=50 s=0 z=100 t=gamma
+   W x=111 s=1 z=100 t=delta
+  LINE y=104 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=OUTER
+   W x=50 s=0 z=100 t=EPSILON
+  LINE y=137 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Case
+   W x=46 s=2 z=100 t=Stay
+   W x=94 s=2 z=100 t=Mixed
+   W x=136 s=0 z=100 t=OUTER
+   W x=186 s=0 z=100 t=ZETA
+  LINE y=170 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=1 z=100 t=BOLD
+   W x=50 s=1 z=100 t=ALPHA
+   W x=106 s=2 z=100 t=ITALIC
+   W x=166 s=2 z=100 t=BETA
+   W x=207 s=4 z=100 t=UNDERLINED
+   W x=312 s=4 z=100 t=GAMMA
+  LINE y=203 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=4 z=100 t=LINKED
+   W x=68 s=4 z=100 t=DELTA
+  TABLE y=236 x=0 w=460 h=36 cols=2 border=1 rows=1
+   ROW h=34 hdr=0 cells=2
+    CELL 0 hdr=0 span=1 lines=1
+     LN words=2
+      W x=18 s=0 z=100 t=TABLE
+      W x=71 s=0 z=100 t=ALPHA
+    CELL 1 hdr=0 span=1 lines=1
+     LN words=2
+      W x=18 s=0 z=100 t=Table
+      W x=66 s=0 z=100 t=Mixed
+  LINE y=272 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Outside
+   W x=67 s=0 z=100 t=Mixed
+   W x=109 s=0 z=100 t=must
+   W x=155 s=0 z=100 t=stay
+   W x=200 s=0 z=100 t=Mixed.
+  LINE y=305 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=PRE
+   W x=32 s=0 z=100 t=Mixed
+   W x=68 s=0 z=100 t=POST
+  LINE y=338 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=Expected
+   W x=74 s=0 z=100 t=single
+   W x=135 s=0 z=100 t=word:
+   W x=183 s=0 z=100 t=PREMixedPOST
+  LINE y=363 x=0 align=0 mult=3.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=D
+  LINE y=371 x=39 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=rop
+   W x=32 s=0 z=100 t=cap
+   W x=63 s=0 z=100 t=should
+   W x=130 s=0 z=100 t=start
+   W x=185 s=0 z=100 t=with
+   W x=225 s=0 z=100 t=a
+   W x=243 s=0 z=100 t=capital
+   W x=311 s=0 z=100 t=D.
+  LINE y=404 x=39 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=upper
+   W x=46 s=0 z=100 t=Keep
+   W x=87 s=0 z=100 t=Mixed
+   W x=129 s=0 z=100 t=upper
+  FN n=linked Delta href=#target
+SPINE 3 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=22 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=136 s=1 z=100 t=Line
+   W x=213 s=1 z=100 t=spacing
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Each
+   W x=52 s=0 z=100 t=group
+   W x=109 s=0 z=100 t=has
+   W x=151 s=0 z=100 t=three
+   W x=208 s=0 z=100 t=explicit
+   W x=277 s=0 z=100 t=lines.
+   W x=340 s=0 z=100 t=Tight
+   W x=394 s=0 z=100 t=should
+  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=have
+   W x=54 s=0 z=100 t=a
+   W x=75 s=0 z=100 t=smaller
+   W x=150 s=0 z=100 t=line
+   W x=194 s=0 z=100 t=advance
+   W x=274 s=0 z=100 t=than
+   W x=328 s=0 z=100 t=normal;
+   W x=408 s=0 z=100 t=loose
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=should
+   W x=67 s=0 z=100 t=be
+   W x=88 s=0 z=100 t=larger.
+  LINE y=119 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Tight
+   W x=51 s=0 z=100 t=one
+  LINE y=138 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Tight
+   W x=51 s=0 z=100 t=two
+  LINE y=157 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Tight
+   W x=51 s=0 z=100 t=three
+  LINE y=185 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Normal
+   W x=64 s=0 z=100 t=one
+  LINE y=209 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Normal
+   W x=64 s=0 z=100 t=two
+  LINE y=233 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Normal
+   W x=64 s=0 z=100 t=three
+  LINE y=266 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Loose
+   W x=60 s=0 z=100 t=one
+  LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Loose
+   W x=60 s=0 z=100 t=two
+  LINE y=338 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Loose
+   W x=60 s=0 z=100 t=three
+  LINE y=383 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Reset
+   W x=54 s=0 z=100 t=one
+  LINE y=407 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Reset
+   W x=54 s=0 z=100 t=two
+  LINE y=431 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Reset
+   W x=54 s=0 z=100 t=three
+  LINE y=464 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Outside
+   W x=67 s=0 z=100 t=one
+  LINE y=488 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Outside
+   W x=67 s=0 z=100 t=two
+  LINE y=512 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Outside
+   W x=67 s=0 z=100 t=three
+  LINE y=545 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Inherited
+   W x=88 s=0 z=100 t=one
+  LINE y=581 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Inherited
+   W x=88 s=0 z=100 t=two
+  LINE y=617 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Inherited
+   W x=88 s=0 z=100 t=three
+SPINE 4 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=20 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=88 s=1 z=100 t=Review
+   W x=192 s=1 z=100 t=regressions
+  LINE y=47 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Sibling
+   W x=67 s=0 z=100 t=one
+  LINE y=71 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Sibling
+   W x=67 s=0 z=100 t=two
+  LINE y=95 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Sibling
+   W x=67 s=0 z=100 t=three
+  LINE y=128 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=Inside
+  LINE y=200 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Trailing
+   W x=75 s=0 z=100 t=one
+  LINE y=224 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Trailing
+   W x=75 s=0 z=100 t=two
+  LINE y=248 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Trailing
+   W x=75 s=0 z=100 t=three
+  LINE y=281 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Nested
+   W x=58 s=0 z=100 t=one
+  LINE y=305 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Nested
+   W x=58 s=0 z=100 t=two
+  LINE y=329 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Nested
+   W x=58 s=0 z=100 t=three
+  LINE y=362 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=18 s=0 z=100 t=Section
+   W x=91 s=0 z=100 t=one
+  LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Section
+   W x=73 s=0 z=100 t=two
+  LINE y=434 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=Section
+   W x=73 s=0 z=100 t=three
+  LINE y=462 x=0 align=0 mult=3.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=D
+  LINE y=470 x=39 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=rop
+  LINE y=503 x=39 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=2 z=250 t=q
+   W x=18 s=0 z=100 t=uiet
+  LINE y=572 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=250 t=Ϊ́Ϊ́Ϊ́
+   W x=255 s=0 z=100 t=rest
+  LINE y=641 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=ABCDEFGHIJKLMNÉÉÉ
+   W x=159 s=0 z=100 t=rest
+  LINE y=674 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=End
+   W x=37 s=0 z=100 t=review
+   W x=93 s=0 z=100 t=regressions.
+SPINE 5 href=OEBPS/ch5.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=7 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=91 s=1 z=100 t=Blank
+   W x=187 s=1 z=100 t=line
+   W x=259 s=1 z=100 t=spacing
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankLoose
+   W x=109 s=0 z=100 t=one
+  LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankLoose
+   W x=109 s=0 z=100 t=two
+  LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankLoose
+   W x=109 s=0 z=100 t=three
+  LINE y=227 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankTight
+   W x=100 s=0 z=100 t=one
+  LINE y=265 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankTight
+   W x=100 s=0 z=100 t=two
+  LINE y=303 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=BlankTight
+   W x=100 s=0 z=100 t=three
+SPINE 6 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=29 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=55 s=1 z=100 t=Long
+   W x=145 s=1 z=100 t=transformed
+   W x=344 s=1 z=100 t=word
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉS-
+  LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAF
+  LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=ÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS-
+  LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=206 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS
+  LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=254 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=278 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉS-
+  LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAF
+  LINE y=326 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=ÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS-
+  LINE y=350 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=374 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS
+  LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=446 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=470 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉS-
+  LINE y=494 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAF
+  LINE y=518 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=ÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS-
+  LINE y=542 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉ-
+  LINE y=566 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=SSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSC-
+  LINE y=590 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS
+  LINE y=614 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSSCAFÉSS-
+  LINE y=638 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CAFÉSSCAFÉSS
+  LINE y=671 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=All
+   W x=40 s=0 z=100 t=letters
+   W x=118 s=0 z=100 t=above
+   W x=183 s=0 z=100 t=should
+   W x=258 s=0 z=100 t=be
+   W x=287 s=0 z=100 t=uppercase,
+   W x=386 s=0 z=100 t=with
+   W x=434 s=0 z=100 t=no
+  LINE y=695 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=broken
+   W x=60 s=0 z=100 t=UTF-8
+   W x=100 s=0 z=100 t=or
+   W x=126 s=0 z=100 t=missing
+   W x=194 s=0 z=100 t=text.
+SPINE 7 href=OEBPS/ch7.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=19 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=5
+   W x=27 s=1 z=100 t=Drop
+   W x=103 s=1 z=100 t=cap
+   W x=158 s=1 z=100 t=overflow
+   W x=306 s=1 z=100 t=and
+   W x=370 s=1 z=100 t=UTF-8
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=ÉREST
+  LINE y=191 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=215 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=239 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=263 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=287 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=311 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=ḾREST
+  LINE y=344 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=368 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-
+  LINE y=416 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=440 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  LINE y=464 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=🦊REST

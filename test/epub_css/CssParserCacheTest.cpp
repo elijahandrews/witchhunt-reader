@@ -38,8 +38,10 @@
 
 // ASan interposes malloc itself and calls it while initialising, before thread_local storage
 // exists, so a second interposer here segfaults the binary before main() — and ctest's test
-// discovery with it. Under ASan the hooks are compiled out and only the footprint bounds skip.
-#if defined(__SANITIZE_ADDRESS__)
+// discovery with it. On macOS libc++ allocations bypass these ELF-style interposers,
+// producing a misleading zero. Disable only footprint instrumentation on those hosts;
+// all cache correctness tests still run.
+#if defined(__SANITIZE_ADDRESS__) || defined(__APPLE__)
 #define CSS_TEST_HEAP_HOOKS 0
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
@@ -79,8 +81,10 @@ static void* rawAlloc(size_t bytes) {
   if (!realMalloc) {
     realMalloc = reinterpret_cast<malloc_fn_t>(dlsym(RTLD_NEXT, "malloc"));
     if (!realMalloc) {
+#if !defined(__APPLE__)
       extern void* __libc_malloc(size_t) __attribute__((weak));
       realMalloc = __libc_malloc;
+#endif
     }
   }
   return realMalloc ? realMalloc(bytes) : nullptr;
@@ -92,8 +96,10 @@ static void rawFree(void* p) {
   if (!realFree) {
     realFree = reinterpret_cast<free_fn_t>(dlsym(RTLD_NEXT, "free"));
     if (!realFree) {
+#if !defined(__APPLE__)
       extern void __libc_free(void*) __attribute__((weak));
       realFree = __libc_free;
+#endif
     }
   }
   if (realFree) realFree(p);
@@ -484,13 +490,13 @@ bool stylesEqual(const CssStyle& a, const CssStyle& b) {
          a.textDecoration == b.textDecoration && a.display == b.display && a.verticalAlign == b.verticalAlign &&
          a.listStyleNone == b.listStyleNone && a.pageBreakBefore == b.pageBreakBefore &&
          a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.smallCaps == b.smallCaps &&
-         a.lineHeightMultiplier == b.lineHeightMultiplier && a.fontSizeMultiplier == b.fontSizeMultiplier &&
-         len(a.textIndent) == len(b.textIndent) && len(a.marginTop) == len(b.marginTop) &&
-         len(a.marginBottom) == len(b.marginBottom) && len(a.marginLeft) == len(b.marginLeft) &&
-         len(a.marginRight) == len(b.marginRight) && len(a.paddingTop) == len(b.paddingTop) &&
-         len(a.paddingBottom) == len(b.paddingBottom) && len(a.paddingLeft) == len(b.paddingLeft) &&
-         len(a.paddingRight) == len(b.paddingRight) && len(a.imageHeight) == len(b.imageHeight) &&
-         len(a.imageWidth) == len(b.imageWidth);
+         a.textTransform == b.textTransform && a.lineHeightMultiplier == b.lineHeightMultiplier &&
+         a.fontSizeMultiplier == b.fontSizeMultiplier && len(a.textIndent) == len(b.textIndent) &&
+         len(a.marginTop) == len(b.marginTop) && len(a.marginBottom) == len(b.marginBottom) &&
+         len(a.marginLeft) == len(b.marginLeft) && len(a.marginRight) == len(b.marginRight) &&
+         len(a.paddingTop) == len(b.paddingTop) && len(a.paddingBottom) == len(b.paddingBottom) &&
+         len(a.paddingLeft) == len(b.paddingLeft) && len(a.paddingRight) == len(b.paddingRight) &&
+         len(a.imageHeight) == len(b.imageHeight) && len(a.imageWidth) == len(b.imageWidth);
 }
 }  // namespace
 
@@ -744,7 +750,7 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   const std::string css =
       ".a { text-align: center; font-weight: bold; font-style: italic; text-decoration: underline; "
       "margin: 2em; padding-left: 5px; padding-right: 3px; text-indent: 1.5em; line-height: 1.6; "
-      "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; "
+      "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; text-transform: uppercase; "
       "list-style: none; page-break-before: always; page-break-after: always; }\n"
       ".b { margin-top: 3px; text-align: right; }\n"
       ".c { display: none; }\n";
@@ -767,6 +773,10 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   parser.clear();
   ASSERT_TRUE(parser.loadFromCache());
   const std::vector<CssStyle> heapStyles = resolveAll(parser);
+  ASSERT_TRUE(heapStyles[0].hasTextTransform());
+  EXPECT_EQ(heapStyles[0].textTransform, CssTextTransform::Uppercase);
+  ASSERT_TRUE(heapStyles[0].hasLineHeight());
+  EXPECT_NEAR(heapStyles[0].lineHeightMultiplier, 1.6f / 1.5f, 0.00001f);
 
   BuildArena arena(64 * 1024);
   ASSERT_TRUE(arena.valid());

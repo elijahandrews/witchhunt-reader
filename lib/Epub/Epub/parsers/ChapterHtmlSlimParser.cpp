@@ -9,6 +9,7 @@
 #include <Memory.h>
 #include <SaxParser/SaxParser.h>
 #include <Utf8.h>
+#include <Utf8Case.h>
 #include <esp_heap_caps.h>
 
 #include <algorithm>
@@ -893,16 +894,24 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
 
   // flush the buffer — route to table cell text when inside a <td>/<th>
   partWordBuffer[partWordBufferIndex] = '\0';
+  std::string transformed;
+  const char* word = partWordBuffer;
+  if (textTransform_ == CssTextTransform::Uppercase || textTransform_ == CssTextTransform::Lowercase) {
+    transformed = utf8CaseMap(std::string_view(partWordBuffer, partWordBufferIndex),
+                              textTransform_ == CssTextTransform::Uppercase);
+    word = transformed.c_str();
+  }
   if (currentTableCell && currentTableCell->text) {
     // text is null only for a cell already consumed by the streaming path; currentTableCell is
     // cleared alongside that, so this is belt-and-braces against a future reordering.
-    currentTableCell->text->addWord(partWordBuffer, fontStyle, false, nextWordContinues, effectiveSizePct);
+    currentTableCell->text->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct);
     // Charge the word against the row budget. Only a row still headed for the grid accumulates —
     // a degraded cell is drained and freed at </td>.
     if (currentTable && !currentTable->degraded && !currentTable->rowDegraded) {
       currentTable->pendingRowBytes += TABLE_BUFFER_BYTES_PER_WORD;
-      if (static_cast<size_t>(partWordBufferIndex) > TABLE_BUFFER_SSO_CAPACITY) {
-        currentTable->pendingRowBytes += partWordBufferIndex + 1;
+      const size_t wordBytes = transformed.empty() ? static_cast<size_t>(partWordBufferIndex) : transformed.size();
+      if (wordBytes > TABLE_BUFFER_SSO_CAPACITY) {
+        currentTable->pendingRowBytes += wordBytes + 1;
       }
       // A row past the budget cannot wait for the next <td> — a one-cell row has none. Drain here,
       // with the cell still open.
@@ -922,7 +931,7 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
     if (pendingInlineImage_.active && currentTextBlock->isEmpty()) {
       attachPendingFloatImage(currentTextBlock->getBlockStyle());
     }
-    currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues, effectiveSizePct);
+    currentTextBlock->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct);
 
     if (currentTextBlock->size() > 96) {
       if (!ensureHeapForTextLayout("long-block split", currentTextBlock.get())) {
@@ -1216,12 +1225,40 @@ bool ChapterHtmlSlimParser::tryStartDropCapCapture(const CssStyle& cssStyle) {
   return true;
 }
 
+std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail) const {
+  std::string result;
+  const auto append = [&](std::string_view text, CssTextTransform transform) {
+    if (transform == CssTextTransform::Uppercase || transform == CssTextTransform::Lowercase)
+      result += utf8CaseMap(text, transform == CssTextTransform::Uppercase);
+    else
+      result.append(text.data(), text.size());
+  };
+  for (int begin = 0; begin < pendingDropCap_.textLen;) {
+    const auto transform = pendingDropCap_.transforms[begin];
+    int end = begin + 1;
+    while (end < pendingDropCap_.textLen && pendingDropCap_.transforms[end] == transform) ++end;
+    const std::string_view run(pendingDropCap_.text + begin, end - begin);
+    if (end == pendingDropCap_.textLen && !tail.empty() && transform == textTransform_) {
+      // Capture overflow can split a UTF-8 sequence. Rejoin the final run with the
+      // rest of this SAX chunk before mapping it, instead of casing partial bytes.
+      std::string joined(run);
+      joined.append(tail.data(), tail.size());
+      append(joined, transform);
+      tail = {};
+    } else {
+      append(run, transform);
+    }
+    begin = end;
+  }
+  if (!tail.empty()) append(tail, textTransform_);
+  return result;
+}
+
 void ChapterHtmlSlimParser::finalizePendingDropCap() {
   pendingDropCap_.active = false;
-  const int textLen = pendingDropCap_.textLen;
+  const std::string capText = caseMappedDropCapText();
   pendingDropCap_.textLen = 0;
-  if (textLen == 0 || !currentTextBlock) return;
-  pendingDropCap_.text[textLen] = '\0';
+  if (capText.empty() || !currentTextBlock) return;
 
   // Cap font selection. Unlike resolveBlockFont (nearest rung, single aux slot), a drop
   // cap wants the LARGEST real font available: the desired size is far beyond every rung,
@@ -1248,19 +1285,19 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
 
   // Ink metrics: the ascender metric includes internal leading, which at 2-4x scale
   // becomes half a line of blank space. Place and size the cap by actual glyph ink.
-  renderer.ensureFontReady(capEffFontId, pendingDropCap_.text);
+  renderer.ensureFontReady(capEffFontId, capText.c_str());
   int capInkTop = 0;
   int capInkBelow = 0;
   const bool haveInk =
-      renderer.getTextInkMetrics(capEffFontId, pendingDropCap_.text, pendingDropCap_.style, &capInkTop, &capInkBelow);
-  const int capWidth = renderer.getTextWidthScaled(capEffFontId, pendingDropCap_.text, pendingDropCap_.style, capScale);
+      renderer.getTextInkMetrics(capEffFontId, capText.c_str(), pendingDropCap_.style, &capInkTop, &capInkBelow);
+  const int capWidth = renderer.getTextWidthScaled(capEffFontId, capText.c_str(), pendingDropCap_.style, capScale);
 
   // Unusable cap (missing glyphs, or too wide to leave a text column): render the
   // captured text inline at paragraph size instead so no characters are lost.
   if (!haveInk || capInkTop <= 0 || capWidth <= 0 || capWidth + kDropCapGapPx > viewportWidth / 2) {
-    LOG_DBG("EHP", "dropcap '%s': inline fallback (haveInk=%d inkTop=%d width=%d limit=%d)", pendingDropCap_.text,
-            haveInk, capInkTop, capWidth + kDropCapGapPx, viewportWidth / 2);
-    currentTextBlock->addWord(pendingDropCap_.text, pendingDropCap_.style);
+    LOG_DBG("EHP", "dropcap '%s': inline fallback (haveInk=%d inkTop=%d width=%d limit=%d)", capText.c_str(), haveInk,
+            capInkTop, capWidth + kDropCapGapPx, viewportWidth / 2);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
     nextWordContinues = true;  // "A" + "ll" form one visual word
     return;
   }
@@ -1269,8 +1306,8 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   // scaled by the paragraph's own multiplier. The cap's ink top is aligned to this.
   int bodyInkTop = 0;
   int bodyInkBelow = 0;
-  renderer.ensureFontReady(fontId, pendingDropCap_.text);
-  renderer.getTextInkMetrics(fontId, pendingDropCap_.text, EpdFontFamily::REGULAR, &bodyInkTop, &bodyInkBelow);
+  renderer.ensureFontReady(fontId, capText.c_str());
+  renderer.getTextInkMetrics(fontId, capText.c_str(), EpdFontFamily::REGULAR, &bodyInkTop, &bodyInkBelow);
   const float paraMult = currentTextBlock->getBlockStyle().fontSizeMultiplier;
   const int bodyLeading =
       std::max(0, static_cast<int>((renderer.getFontAscenderSize(fontId) - bodyInkTop) * paraMult + 0.5f));
@@ -1294,12 +1331,12 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   capBlockStyle.headingFontId = capFontId;
   capBlockStyle.fontSizeMultiplier = capScale;
   capBlockStyle.fontResolved = true;
-  auto capBlock = makeUniqueNoThrow<TextBlock>(std::vector<std::string>{pendingDropCap_.text}, std::vector<int16_t>{0},
+  auto capBlock = makeUniqueNoThrow<TextBlock>(std::vector<std::string>{capText}, std::vector<int16_t>{0},
                                                std::vector<EpdFontFamily::Style>{pendingDropCap_.style}, capBlockStyle,
                                                std::vector<uint8_t>{});
   if (!capBlock || !capBlock->valid()) {
-    LOG_DBG("EHP", "dropcap '%s': inline fallback (block alloc failed)", pendingDropCap_.text);
-    currentTextBlock->addWord(pendingDropCap_.text, pendingDropCap_.style);
+    LOG_DBG("EHP", "dropcap '%s': inline fallback (block alloc failed)", capText.c_str());
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
     nextWordContinues = true;
     return;
   }
@@ -1312,8 +1349,8 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   dropCapYAdjust_ = static_cast<int16_t>(bodyLeading - capLeadScaled);
   auto capLine = makeUniqueNoThrow<PageLine>(std::move(capBlock), capX, static_cast<int16_t>(top + dropCapYAdjust_));
   if (!capLine) {
-    LOG_DBG("EHP", "dropcap '%s': inline fallback (PageLine alloc failed)", pendingDropCap_.text);
-    currentTextBlock->addWord(pendingDropCap_.text, pendingDropCap_.style);
+    LOG_DBG("EHP", "dropcap '%s': inline fallback (PageLine alloc failed)", capText.c_str());
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
     nextWordContinues = true;
     return;
   }
@@ -1335,7 +1372,7 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   activeFloatBottom_ = static_cast<int16_t>(top + zoneHeight);
   activeFloatWidth_ = static_cast<int16_t>(capWidth + kDropCapGapPx);
   activeFloatIsRight_ = false;
-  LOG_DBG("EHP", "dropcap '%s': placed fontId=%d scale=%.2f zone=%dx%d", pendingDropCap_.text, capFontId, capScale,
+  LOG_DBG("EHP", "dropcap '%s': placed fontId=%d scale=%.2f zone=%dx%d", capText.c_str(), capFontId, capScale,
           capWidth + kDropCapGapPx, zoneHeight);
 }
 
@@ -1416,7 +1453,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
         // The empty block was created by a <br> section separator. Inject a full line of
         // blank space before the following paragraph so the scene/section break is visible.
         // This only fires when the <br> block stayed empty (i.e. no inline text was added).
-        const int16_t lineHeight = static_cast<int16_t>(renderer.getLineHeight(fontId) * lineCompression + 0.5f);
+        const int16_t lineHeight = static_cast<int16_t>(effectiveLineHeight(currentTextBlock->getBlockStyle()));
         incoming.marginTop = static_cast<int16_t>(incoming.marginTop + lineHeight);
       }
 
@@ -1680,6 +1717,26 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     self->depth += 1;
     return;
   }
+
+  if (cssStyle.hasTextTransform() || cssStyle.hasLineHeight()) {
+    if (self->partWordBufferIndex > 0) {
+      const bool endsAtDashBreak = bufferEndsWithBreakableDash(self->partWordBuffer, self->partWordBufferIndex);
+      if (!self->flushPartWordBuffer()) return;
+      if (!isHeaderOrBlock(name) && !endsAtDashBreak) self->nextWordContinues = true;
+    }
+    self->textPropertyScopes_.push_back(
+        {self->depth, self->textTransform_, self->inheritedLineHeight_, self->inheritedLineHeightDefined_});
+    if (cssStyle.hasTextTransform() && cssStyle.textTransform != CssTextTransform::Inherit)
+      self->textTransform_ = cssStyle.textTransform;
+    if (cssStyle.hasLineHeight() && cssStyle.lineHeightMultiplier > 0.0f) {
+      self->inheritedLineHeight_ = cssStyle.lineHeightMultiplier;
+      self->inheritedLineHeightDefined_ = true;
+    }
+  }
+  cssStyle.lineHeightMultiplier = self->inheritedLineHeight_;
+  // This is now a computed value, including the default. Mark it explicit so an
+  // empty, closed sibling cannot donate its spacing through the empty-block merge.
+  cssStyle.defined.lineHeight = 1;
 
   // Transparent text is different: the element stays (structure, images, spacing), only its
   // words are dropped, via the same text-only skip the zero-height spacer uses. `<` rather than
@@ -2487,6 +2544,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
     BlockStyle containerTop = BlockStyle::fromCssStyle(
         CssStyle{}, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth);
+    containerTop.lineHeightMultiplier = userAlignmentBlockStyle.lineHeightMultiplier;
+    containerTop.lineHeightDefined = true;
     containerTop.marginTop = userAlignmentBlockStyle.marginTop;
     containerTop.paddingTop = userAlignmentBlockStyle.paddingTop;
     self->addAncestorInsets(containerTop, emSize);
@@ -2575,6 +2634,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       const BlockStyle& currentStyle = self->currentTextBlock->getBlockStyle();
       BlockStyle brStyle;
       brStyle.alignment = currentStyle.alignment;
+      brStyle.lineHeightMultiplier = currentStyle.lineHeightMultiplier;
+      brStyle.lineHeightDefined = currentStyle.lineHeightDefined;
       brStyle.textAlignDefined = currentStyle.textAlignDefined;
       // The horizontal inset is the enclosing block's, not the <br>'s: a <br> splits one
       // paragraph into several blocks, and all of them sit inside the same containing block.
@@ -2972,16 +3033,29 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         overflow = true;
         break;
       }
-      self->pendingDropCap_.text[self->pendingDropCap_.textLen++] = s[i];
+      const int index = self->pendingDropCap_.textLen++;
+      self->pendingDropCap_.text[index] = s[i];
+      self->pendingDropCap_.transforms[index] = self->textTransform_;
     }
     if (!overflow) return;
     // Too much text for a drop cap — abandon capture and reroute everything captured
     // so far (plus the rest of this chunk) through the normal inline word flow.
     self->pendingDropCap_.active = false;
-    const int captured = self->pendingDropCap_.textLen;
+    const std::string mapped = self->caseMappedDropCapText(std::string_view(s + i, len - i));
     self->pendingDropCap_.textLen = 0;
-    characterData(userData, self->pendingDropCap_.text, captured);
-    characterData(userData, s + i, len - i);
+    const auto transform = self->textTransform_;
+    self->textTransform_ = CssTextTransform::None;  // mapped runs must not be transformed a second time
+    // SAX can cut the chunk inside a codepoint. The mapper preserves those raw
+    // suffix bytes: leave them buffered under the original transform so the next
+    // callback can complete the character before casing or emitting it.
+    const int completeBytes = utf8SafeTruncateBuffer(mapped.data(), static_cast<int>(mapped.size()));
+    characterData(userData, mapped.data(), completeBytes);
+    if (self->partWordBufferIndex > 0) {
+      if (self->flushPartWordBuffer()) self->nextWordContinues = true;
+    }
+    self->textTransform_ = transform;
+    if (completeBytes < static_cast<int>(mapped.size()))
+      characterData(userData, mapped.data() + completeBytes, static_cast<int>(mapped.size()) - completeBytes);
     return;
   }
 
@@ -3160,6 +3234,13 @@ void ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const char* s, 
 void ChapterHtmlSlimParser::endElement(void* userData, const char* name) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
   endElementBody(self, name);
+  while (!self->textPropertyScopes_.empty() && self->textPropertyScopes_.back().depth >= self->depth) {
+    const auto& scope = self->textPropertyScopes_.back();
+    self->textTransform_ = scope.parentTransform;
+    self->inheritedLineHeight_ = scope.parentLineHeight;
+    self->inheritedLineHeightDefined_ = scope.parentLineHeightDefined;
+    self->textPropertyScopes_.pop_back();
+  }
   // A background picture goes in once its element has closed: after the element's own text and,
   // for a table, after the grid </table> has just emitted. Out here because the body returns from
   // a dozen places.
@@ -3188,7 +3269,8 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   const bool willClearStrikethrough = self->strikethroughUntilDepth == self->depth - 1;
 
   const bool styleWillChange =
-      willPopStyleStack || willClearBold || willClearItalic || willClearUnderline || willClearStrikethrough;
+      willPopStyleStack || willClearBold || willClearItalic || willClearUnderline || willClearStrikethrough ||
+      (!self->textPropertyScopes_.empty() && self->textPropertyScopes_.back().depth == self->depth - 1);
   const bool headerOrBlockTag = isHeaderOrBlock(name);
   const bool tableStructuralTag = isTableStructuralTag(name);
 
@@ -3763,7 +3845,9 @@ void ChapterHtmlSlimParser::resolveBlockFont(BlockStyle& bs) {
 }
 
 int ChapterHtmlSlimParser::effectiveLineHeight(const BlockStyle& bs) const {
-  return static_cast<int>(renderer.getLineHeight(effectiveFontId(bs)) * lineCompression * bs.fontSizeMultiplier + 0.5f);
+  return static_cast<int>(renderer.getLineHeight(effectiveFontId(bs)) * lineCompression * bs.fontSizeMultiplier *
+                              bs.lineHeightMultiplier +
+                          0.5f);
 }
 
 ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_ptr<TextBlock> line,

@@ -3,6 +3,7 @@
 #include <string>
 
 #include "../../lib/Epub/Epub/css/CssParser.h"
+#include "../../lib/Utf8/Utf8Case.h"
 
 TEST(CssParserDeclarations, InlineLineThrough) {
   const CssStyle style = CssParser::parseInlineStyle("text-decoration: line-through");
@@ -117,4 +118,44 @@ TEST(CssParserUnits, FontSizeKeywordsAndAbsoluteUnits) {
   // Unknown keyword must leave font-size undefined.
   const CssStyle bogus = CssParser::parseInlineStyle("font-size: enormous");
   EXPECT_FALSE(bogus.hasFontSizeMultiplier());
+}
+
+TEST(CssTextTransform, ParsesAndCascadesResets) {
+  auto style = CssParser::parseInlineStyle("text-transform: uppercase !important");
+  ASSERT_TRUE(style.hasTextTransform());
+  EXPECT_EQ(style.textTransform, CssTextTransform::Uppercase);
+  style.applyOver(CssParser::parseInlineStyle("text-transform: lowercase"));
+  EXPECT_EQ(style.textTransform, CssTextTransform::Lowercase);
+  style.applyOver(CssParser::parseInlineStyle("text-transform: none"));
+  EXPECT_EQ(style.textTransform, CssTextTransform::None);
+  style.applyOver(CssParser::parseInlineStyle("text-transform: inherit"));
+  EXPECT_EQ(style.textTransform, CssTextTransform::Inherit);
+  EXPECT_EQ(CssParser::parseInlineStyle("text-transform: unset").textTransform, CssTextTransform::Inherit);
+  EXPECT_EQ(CssParser::parseInlineStyle("text-transform: initial").textTransform, CssTextTransform::None);
+  EXPECT_FALSE(CssParser::parseInlineStyle("text-transform: unknown").hasTextTransform());
+  EXPECT_EQ(CssParser::parseInlineStyle("text-transform: uppercase; text-transform: unknown").textTransform,
+            CssTextTransform::Uppercase);
+  style.reset();
+  EXPECT_FALSE(style.hasTextTransform());
+}
+
+TEST(CssTextTransform, UnicodeExpansionAndUncasedText) {
+  EXPECT_EQ(utf8CaseMap("Monday café Straße ﬃ Ω Ж 中文 😀", true), "MONDAY CAFÉ STRASSE FFI Ω Ж 中文 😀");
+  EXPECT_EQ(utf8CaseMap("MONDAY CAFÉ STRASSE İ Ω Ж 中文 😀", false), "monday café strasse i̇ ω ж 中文 😀");
+  EXPECT_EQ(utf8CaseMap(std::string(2048, 'a'), true), std::string(2048, 'A'));
+}
+
+TEST(CssTextTransform, PreservesMalformedUtf8WithoutReadingPastEnd) {
+  const std::string bytes = std::string("a") + char(0xe2) + char(0x82);
+  EXPECT_EQ(utf8CaseMap(bytes, true), std::string("A") + char(0xe2) + char(0x82));
+  EXPECT_EQ(utf8CaseMap(std::string("a") + char(0xff) + "b", true), std::string("A") + char(0xff) + "B");
+}
+
+TEST(CssLineHeight, NormalResetsAndMalformedLengthsAreIgnored) {
+  auto style = CssParser::parseInlineStyle("line-height: 1.2em");
+  ASSERT_TRUE(style.hasLineHeight());
+  EXPECT_FLOAT_EQ(style.lineHeightMultiplier, 0.8f);
+  style.applyOver(CssParser::parseInlineStyle("line-height: normal"));
+  EXPECT_FLOAT_EQ(style.lineHeightMultiplier, 1.0f);
+  EXPECT_FALSE(CssParser::parseInlineStyle("line-height: 1.2garbageem").hasLineHeight());
 }

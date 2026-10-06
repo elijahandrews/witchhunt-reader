@@ -101,8 +101,8 @@ constexpr size_t CSS_LENGTH_BYTES = sizeof(float) + sizeof(uint8_t);
 constexpr size_t CSS_FIXED_STYLE_BYTES = 4 * sizeof(uint8_t) + (CSS_LENGTH_FIELD_COUNT * CSS_LENGTH_BYTES) +
                                          sizeof(uint8_t) + sizeof(uint16_t) + 2 * sizeof(uint8_t) + sizeof(uint8_t) +
                                          sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
-                                         sizeof(uint8_t);
-static_assert(CSS_FIXED_STYLE_BYTES == 73,
+                                         sizeof(uint8_t) + sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t);
+static_assert(CSS_FIXED_STYLE_BYTES == 79,
               "style payload layout changed — update read/writeCssStylePayload and bump CSS_CACHE_VERSION");
 
 // Cache file name (version is CssParser::CSS_CACHE_VERSION)
@@ -602,6 +602,16 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
       style.verticalAlign = CssVerticalAlign::Baseline;
       style.defined.verticalAlign = 1;
     }
+  } else if (propNameBuf == "text-transform") {
+    const std::string_view val = propValueBuf;
+    if (val == "uppercase" || val == "lowercase" || val == "none" || val == "initial" || val == "inherit" ||
+        val == "unset") {
+      style.textTransform = (val == "uppercase")                   ? CssTextTransform::Uppercase
+                            : (val == "lowercase")                 ? CssTextTransform::Lowercase
+                            : (val == "inherit" || val == "unset") ? CssTextTransform::Inherit
+                                                                   : CssTextTransform::None;
+      style.defined.textTransform = 1;
+    }
   } else if (propNameBuf == "font-variant" || propNameBuf == "font-variant-caps") {
     const std::string_view val = propValueBuf;
     if (val == "small-caps" || val == "all-small-caps") {
@@ -643,7 +653,13 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
     }
   } else if (propNameBuf == "line-height") {
     const std::string_view val = propValueBuf;
-    if (val != "normal" && val != "inherit" && val != "initial" && val != "unset") {
+    if (val == "normal" || val == "initial") {
+      style.lineHeightMultiplier = 1.0f;
+      style.defined.lineHeight = 1;
+    } else if (val == "inherit" || val == "unset") {
+      style.lineHeightMultiplier = 0.0f;  // explicit inheritance, resolved at the element
+      style.defined.lineHeight = 1;
+    } else {
       // Parse unitless, %, or em. Normalise to a multiplier relative to default y_advance.
       // Base = 1.5 (typical body line-height). Result range clamped to [0.7, 2.0].
       static constexpr float kBase = 1.5f;
@@ -653,7 +669,7 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
         const char* p = val.data();
         char* end = nullptr;
         float v = std::strtof(p, &end);
-        if (end != p) {
+        if (end != p && std::string_view(end) == "%") {
           parsed = v / 100.0f / kBase;
           ok = true;
         }
@@ -661,7 +677,7 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
         const char* p = val.data();
         char* end = nullptr;
         float v = std::strtof(p, &end);
-        if (end != p) {
+        if (end != p && std::string_view(end) == "em") {
           parsed = v / kBase;
           ok = true;
         }
@@ -1435,6 +1451,13 @@ bool CssParser::readCssStylePayload(FsFile& file, CssStyle& style) {
   style.defined.opacityZero = (visibilityFlags & 0x08) != 0 ? 1 : 0;
   style.visibilityHidden = (visibilityFlags & 0x10) != 0;
   style.defined.visibilityHidden = (visibilityFlags & 0x20) != 0 ? 1 : 0;
+  uint8_t transformFlags = 0, lineHeightFlags = 0;
+  if (file.read(&transformFlags, 1) != 1 || file.read(&style.lineHeightMultiplier, sizeof(float)) != sizeof(float) ||
+      file.read(&lineHeightFlags, 1) != 1)
+    return false;
+  style.textTransform = static_cast<CssTextTransform>(transformFlags & 0x3);
+  style.defined.textTransform = (transformFlags & 0x4) != 0;
+  style.defined.lineHeight = (lineHeightFlags & 0x1) != 0;
   return true;
 }
 
@@ -1501,6 +1524,9 @@ void CssParser::writeCssStylePayload(FsFile& file, const CssStyle& style) {
                                   (style.defined.opacityZero ? 0x08 : 0x00) | (style.visibilityHidden ? 0x10 : 0x00) |
                                   (style.defined.visibilityHidden ? 0x20 : 0x00);
   file.write(visibilityFlags);
+  file.write(static_cast<uint8_t>(static_cast<uint8_t>(style.textTransform) | (style.defined.textTransform ? 0x4 : 0)));
+  file.write(reinterpret_cast<const uint8_t*>(&style.lineHeightMultiplier), sizeof(float));
+  file.write(static_cast<uint8_t>(style.defined.lineHeight));
 }
 
 void CssParser::touchHotRule(const std::string& selector) const {
@@ -1767,7 +1793,7 @@ bool CssParser::ensureCacheIndexLoaded() const {
 // (unaligned) records are safe to read on the C3.
 
 // Worst case: 4 (mask) + 2 (packed enums) + 11 lengths * 5 + 2 multipliers * 4 = 69 bytes.
-constexpr size_t kMaxCompressedStyle = 4 + 2 + 11 * 5 + 2 * 4;
+constexpr size_t kMaxCompressedStyle = 4 + 2 + 11 * 5 + 2 * 4 + 1;
 
 // Canonical "which properties are set" mask: 27 defined bits (0-26), then the three boolean
 // VALUES of the invisibility properties in bits 27-29 -- the uint16 of enum values below is
@@ -1782,7 +1808,7 @@ static uint32_t packDefinedMask(const CssPropertyFlags& d) {
          (d.imageWidth << 14) | (d.display << 15) | (d.verticalAlign << 16) | (d.listStyleNone << 17) |
          (d.pageBreakBefore << 18) | (d.pageBreakAfter << 19) | (d.lineHeight << 20) | (d.fontSizeMultiplier << 21) |
          (d.cssFloat << 22) | (d.smallCaps << 23) | (d.colorTransparent << 24) | (d.opacityZero << 25) |
-         (d.visibilityHidden << 26);
+         (d.visibilityHidden << 26) | (d.textTransform << 30);
 }
 
 // Serialize `s` into `out` (>= kMaxCompressedStyle bytes); returns the record length.
@@ -1835,6 +1861,7 @@ static size_t compressStyle(const CssStyle& s, uint8_t* out) {
     std::memcpy(p, &s.fontSizeMultiplier, 4);
     p += 4;
   }
+  if (d.textTransform) *p++ = static_cast<uint8_t>(s.textTransform);
   return static_cast<size_t>(p - out);
 }
 
@@ -1877,6 +1904,7 @@ static void decompressStyle(const uint8_t* in, CssStyle& out) {
   d.colorTransparent = isDefined(24);
   d.opacityZero = isDefined(25);
   d.visibilityHidden = isDefined(26);
+  d.textTransform = isDefined(30);
   if (d.colorTransparent) out.colorTransparent = ((mask >> 27) & 1u) != 0;
   if (d.opacityZero) out.opacityZero = ((mask >> 28) & 1u) != 0;
   if (d.visibilityHidden) out.visibilityHidden = ((mask >> 29) & 1u) != 0;
@@ -1917,6 +1945,7 @@ static void decompressStyle(const uint8_t* in, CssStyle& out) {
     std::memcpy(&out.fontSizeMultiplier, p, 4);
     p += 4;
   }
+  if (d.textTransform) out.textTransform = static_cast<CssTextTransform>(*p++);
 }
 
 // Stream the whole ruleset into the arena as a sorted {hash, styleOff} index plus a pool of

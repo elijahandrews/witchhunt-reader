@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -136,7 +137,8 @@ class ChapterHtmlSlimParser final : public Print {
     int depth = 0;            // parser depth of the drop-cap span (pre-increment)
     float multiplier = 1.0f;  // composed font-size multiplier relative to the body font
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
-    char text[16] = {};  // drop caps are 1 glyph, occasionally with a leading quote
+    char text[16] = {};                    // drop caps are 1 glyph, occasionally with a leading quote
+    CssTextTransform transforms[16] = {};  // case scope at capture time, including nested overrides
     int textLen = 0;
   };
   PendingDropCap pendingDropCap_;
@@ -211,6 +213,18 @@ class ChapterHtmlSlimParser final : public Print {
   };
   std::vector<StyleStackEntry> inlineStyleStack;
   CssStyle currentCssStyle;
+  // Only elements that change inherited text properties need a scope; table cells,
+  // links and semantic tags all share this path rather than relying on inline fast paths.
+  struct TextPropertyScope {
+    int depth;
+    CssTextTransform parentTransform;
+    float parentLineHeight;
+    bool parentLineHeightDefined;
+  };
+  std::vector<TextPropertyScope> textPropertyScopes_;
+  CssTextTransform textTransform_ = CssTextTransform::None;
+  float inheritedLineHeight_ = 1.0f;
+  bool inheritedLineHeightDefined_ = false;
   bool effectiveBold = false;
   bool effectiveItalic = false;
   bool effectiveUnderline = false;
@@ -654,6 +668,7 @@ class ChapterHtmlSlimParser final : public Print {
   bool tryStartDropCapCapture(const CssStyle& cssStyle);
   // Place the captured drop cap: one-word PageLine on the current page plus a FloatZone
   // on the paragraph's block style. Falls back to an inline word when the cap is unusable.
+  std::string caseMappedDropCapText(std::string_view tail = {}) const;
   void finalizePendingDropCap();
   // XML callbacks
   static void startElement(void* userData, const char* name, const char** atts);

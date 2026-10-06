@@ -66,6 +66,8 @@ struct BlockStyle {
   //    is then a small residual (usually 1.0) applied on top, so glyphs stay crisp.
   // h1=1.6, h2=1.4, h3=1.2 are the default desired multipliers when no explicit CSS size.
   float fontSizeMultiplier = 1.0f;
+  float lineHeightMultiplier = 1.0f;  // resolved inherited CSS line spacing; layout only
+  bool lineHeightDefined = false;
   // 32-bit font-id hash (fontIds.h); 0 = use the body font + fontSizeMultiplier. Must be a
   // full int — a uint8_t would truncate the hash and the heading would render nothing.
   int32_t headingFontId = 0;
@@ -135,6 +137,9 @@ struct BlockStyle {
     // fontSizeMultiplier: use child's if != 1.0, else parent's
     combinedBlockStyle.fontSizeMultiplier =
         (child.fontSizeMultiplier != 1.0f) ? child.fontSizeMultiplier : fontSizeMultiplier;
+    combinedBlockStyle.lineHeightMultiplier =
+        child.lineHeightDefined ? child.lineHeightMultiplier : lineHeightMultiplier;
+    combinedBlockStyle.lineHeightDefined = child.lineHeightDefined || lineHeightDefined;
     // headingFontId: use child's if set, else parent's, so inline children of a heading
     // (e.g. <em> inside an <h2>) inherit the taller heading font.
     combinedBlockStyle.headingFontId = (child.headingFontId != 0) ? child.headingFontId : headingFontId;
@@ -175,6 +180,10 @@ struct BlockStyle {
     }
     if (cssStyle.hasFontSizeMultiplier()) {
       blockStyle.fontSizeMultiplier = cssStyle.fontSizeMultiplier;
+    }
+    if (cssStyle.hasLineHeight()) {
+      blockStyle.lineHeightMultiplier = cssStyle.lineHeightMultiplier;
+      blockStyle.lineHeightDefined = true;
     }
     return blockStyle;
   }
