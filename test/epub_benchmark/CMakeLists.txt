@@ -1,3 +1,11 @@
+# The manual heap benchmark interposes malloc/free using glibc private symbols
+# on non-Windows hosts. Darwin's allocator is not supported; parser correctness
+# remains covered by the functional parser and EPUB pipeline tests.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  message(STATUS "Skipping EpubParserBenchmark on macOS: unsupported malloc/free interposer")
+  return()
+endif()
+
 add_executable(EpubParserBenchmark
   EpubParserBenchmark.cpp
   stubs.cpp

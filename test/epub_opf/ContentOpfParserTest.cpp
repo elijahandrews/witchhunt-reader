@@ -423,7 +423,8 @@ TEST(ContentOpfParser, AnInOrderSpineReadsTheItemStoreAboutOnceWithoutTheIndex) 
 
   const ScopedIndexGrowthOom oom;
   BookMetadataCache cache(cacheDir);
-  ContentOpfParser parser(cacheDir, "/book/OEBPS/", xml.size(), &cache);
+  const std::string base = "/book/OEBPS/";  // The parser borrows this string through parseOpfXml.
+  ContentOpfParser parser(cacheDir, base, xml.size(), &cache);
   const size_t bytesReadBefore = FsFile::bytesRead;
   ASSERT_TRUE(parseOpfXml(parser, xml));
   const size_t bytesRead = FsFile::bytesRead - bytesReadBefore;
