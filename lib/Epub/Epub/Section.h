@@ -379,13 +379,6 @@ class Section {
   // the page number; it is NOT an anchor on paragraph 0.
   std::optional<uint16_t> getParagraphIndexForPage(uint16_t page) const;
 
-  // Look up the XHTML byte offset recorded at the page break that started the given page.
-  // This is the Expat byte position within the decompressed spine XHTML file — useful as a
-  // seek hint for findXPathForParagraph to avoid scanning from byte 0 on large chapters.
-  // Returns nullopt if the paragraph LUT is unavailable (old cache format) or offset is 0
-  // (last page, recorded after parse completion).
-  std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
-
  private:
   // Allocates buildState_ and runs Setup. Applies the low-heap embedded-CSS downgrade.
   // requestedHash is the property hash of the params as requested by the caller (before

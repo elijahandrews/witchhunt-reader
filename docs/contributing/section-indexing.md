@@ -92,7 +92,7 @@ The header offsets are written as placeholder zeros at file-open time and patche
 
 ### Paragraph LUT
 
-One 8-byte entry per page. `xhtmlByteOffset` is the Expat byte position within the inflated XHTML at the moment the page break fired — used as a seek hint so KOReader XPath resolution doesn't have to scan from byte 0. `paragraphIndex` is the 1-based `<p>` sibling count; `listItemIndex` is the running `<li>` count. Together they let incoming KOReader XPath strings (`p[N]`, `li[N]`) snap to the correct page.
+One 8-byte entry per page. `xhtmlByteOffset` is the parser's byte position within the inflated XHTML at the moment the page break fired. It was recorded as a seek hint for KOReader XPath resolution; nothing reads it any more, and it stays only because it is part of the entry layout. `paragraphIndex` is the 1-based `<p>` sibling count; `listItemIndex` is the running `<li>` count. Together they let incoming KOReader XPath strings (`p[N]`, `li[N]`) snap to the correct page, and (`paragraphIndex` of a page and of the page before it) tell the sync whether a remote paragraph opens on the current page.
 
 ## Image warm pass
 

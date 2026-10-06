@@ -51,9 +51,6 @@ KOReaderPosition EpubReaderActivity::currentKoPosition(const int page, const int
     if (const auto paragraph = section->getParagraphIndexForPage(static_cast<uint16_t>(page))) {
       pos.paragraphIndex = *paragraph;
       pos.hasParagraphIndex = true;
-      if (const auto hint = section->getXhtmlByteOffsetForPage(static_cast<uint16_t>(page))) {
-        pos.xhtmlSeekHint = *hint;
-      }
     }
   }
   return ProgressMapper::toKOReader(epub, pos);

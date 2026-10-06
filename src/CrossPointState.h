@@ -61,7 +61,6 @@ struct KOReaderSyncSessionState {
   // paragraphIndex it bounds the paragraphs that open on `page`, which is how the sync screen
   // tells "same page" from "ahead" without the section cache (ProgressComparison).
   uint16_t paragraphIndexBefore = 0;
-  uint32_t xhtmlSeekHint = 0;  // byte offset hint for findXPathForParagraph (0 = no hint)
   KOReaderSyncIntentState intent = KOReaderSyncIntentState::COMPARE;
   KOReaderSyncOutcomeState outcome = KOReaderSyncOutcomeState::NONE;
   int resultSpineIndex = 0;
@@ -93,7 +92,6 @@ struct KOReaderSyncSessionState {
     paragraphIndex = 0;
     hasParagraphIndex = false;
     paragraphIndexBefore = 0;
-    xhtmlSeekHint = 0;
     intent = KOReaderSyncIntentState::COMPARE;
     outcome = KOReaderSyncOutcomeState::NONE;
     resultSpineIndex = 0;

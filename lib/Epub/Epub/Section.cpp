@@ -1690,9 +1690,9 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     file.write(reinterpret_cast<const uint8_t*>(label), len);
   });
 
-  // Write per-page paragraph LUT: count + array of {xhtmlByteOffset(u32), paragraphIndex(u16)}.
-  // The byte offset lets findXPathForParagraph seek near the target paragraph without scanning
-  // from the beginning of the XHTML file, reducing SD reads on large chapters.
+  // Write per-page paragraph LUT: count + array of {xhtmlByteOffset(u32), paragraphIndex(u16),
+  // listItemIndex(u16)}. The byte offset was a seek hint for KOReader XPath generation; nothing
+  // reads it any more, it stays as part of the entry layout.
   const uint32_t paragraphLutOffset = file.position();
   const auto& paragraphLut = visitor.getParagraphLutPerPage();
   if (paragraphLut.size() != static_cast<size_t>(pageCount)) {
@@ -2738,33 +2738,4 @@ std::optional<uint16_t> Section::getPageForListItemIndex(const uint16_t liIndex)
 
   f.close();
   return static_cast<uint16_t>(count - 1);
-}
-
-std::optional<uint32_t> Section::getXhtmlByteOffsetForPage(const uint16_t page) const {
-  FsFile f;
-  uint16_t count = 0;
-  uint32_t lutStart = 0;
-  if (!readParagraphLutHeader(f, count, lutStart)) {
-    return std::nullopt;
-  }
-  if (page >= count) {
-    f.close();
-    return std::nullopt;
-  }
-
-  const uint32_t fileSize = f.size();
-  const uint32_t entryOffset = paragraphLutEntryOffset(lutStart, page);
-  const uint64_t requiredOffset = static_cast<uint64_t>(entryOffset) + sizeof(uint32_t);
-  if (requiredOffset > fileSize) {
-    f.close();
-    return std::nullopt;
-  }
-
-  f.seek(entryOffset);
-  uint32_t byteOffset;
-  serialization::readPod(f, byteOffset);
-
-  f.close();
-  // A zero offset means the entry was recorded post-parse (last page), so it's unusable as a hint.
-  return byteOffset > 0 ? std::optional<uint32_t>{byteOffset} : std::nullopt;
 }

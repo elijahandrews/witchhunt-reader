@@ -30,10 +30,6 @@ bool isAncestorPath(const std::string& prefix, const std::string& path);
 
 std::string decompressToTempFile(const std::shared_ptr<Epub>& epub, int spineIndex);
 bool runParse(SaxParser& saxParser, const std::string& path);
-// Like runParse but skips the first seekBytes bytes before feeding data to the parser.
-// Valid only when the parser is freshly created and the seek position is known to be on an XML
-// boundary (e.g. the byte offset recorded at a page break).
-bool runParseFromOffset(SaxParser& saxParser, const std::string& path, uint32_t seekBytes);
 bool isEntityRef(const char* text, int len);
 size_t countTotalTextBytes(const std::string& tmpPath);
 

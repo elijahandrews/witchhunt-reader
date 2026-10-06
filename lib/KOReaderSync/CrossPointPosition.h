@@ -16,7 +16,6 @@ struct CrossPointPosition {
   bool hasParagraphIndex = false;  // True when paragraphIndex is valid
   uint16_t listItemIndex = 0;      // 1-based running <li> count when target XPath ends in /li[N]
   bool hasListItemIndex = false;   // True when listItemIndex is valid
-  uint32_t xhtmlSeekHint = 0;      // Byte offset hint for findXPathForParagraph (0 = no hint)
   // True when spineIndex came from the record's own DocFragment (or from local state), not from
   // the percentage. A percentage-derived spine is an estimate that must not outrank one.
   bool hasResolvedSpineIndex = false;

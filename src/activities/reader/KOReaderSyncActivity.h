@@ -38,7 +38,7 @@ class KOReaderSyncActivity final : public Activity {
   explicit KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& epubPath,
                                 int currentSpineIndex, int currentPage, int totalPagesInSpine,
                                 uint16_t paragraphIndex = 0, bool hasParagraphIndex = false,
-                                uint16_t paragraphIndexBefore = 0, uint32_t xhtmlSeekHint = 0,
+                                uint16_t paragraphIndexBefore = 0,
                                 KOReaderSyncIntentState syncIntent = KOReaderSyncIntentState::COMPARE)
       : Activity("KOReaderSync", renderer, mappedInput),
         epubPath(epubPath),
@@ -48,7 +48,6 @@ class KOReaderSyncActivity final : public Activity {
         localParagraphIndex(paragraphIndex),
         hasLocalParagraphIndex(hasParagraphIndex),
         localParagraphIndexBefore(paragraphIndexBefore),
-        localXhtmlSeekHint(xhtmlSeekHint),
         syncIntent(syncIntent),
         remoteProgress{},
         remotePosition{},
@@ -90,7 +89,6 @@ class KOReaderSyncActivity final : public Activity {
   uint16_t localParagraphIndex;
   bool hasLocalParagraphIndex;
   uint16_t localParagraphIndexBefore;
-  uint32_t localXhtmlSeekHint;
   KOReaderSyncIntentState syncIntent = KOReaderSyncIntentState::COMPARE;
   // Known once the Epub was loaded for local mapping; 0 until then. Lets a fetched record's
   // DocFragment be range-checked after the Epub has been released for TLS.
