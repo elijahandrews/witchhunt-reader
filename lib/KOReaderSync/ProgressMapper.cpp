@@ -175,11 +175,14 @@ CrossPointPosition ProgressMapper::toCrossPoint(const std::shared_ptr<Epub>& epu
         result.hasListItemIndex = true;
       }
 
-      // KOReader's text-node indexing can differ across renderers/parsers in some
-      // XHTML shapes. When an XPath-resolved position disagrees materially with
-      // KOReader's percentage but points to the same spine, use percentage-derived
-      // intra-spine progress as a safer tie-breaker.
-      if (std::isfinite(koPos.percentage) && resolvedIntraSpineProgress >= 0.0f) {
+      // An inexact match (an ancestor, or a sibling with another index) is only a stand-in for
+      // the element KOReader named, and a text-less ancestor is matched at its END tag. When
+      // such a position disagrees materially with KOReader's percentage but points to the same
+      // spine, use percentage-derived intra-spine progress as a safer tie-breaker.
+      // An exact match is never overridden: KOReader's percentage is rendered pages, ours is
+      // XHTML bytes, and a gap over 1% between them is normal. Overriding an exact chapter-start
+      // match pushed the reader a dozen pages into the chapter (#268).
+      if (!xpathExactMatch && std::isfinite(koPos.percentage) && resolvedIntraSpineProgress >= 0.0f) {
         const float sanitizedPercentage = std::clamp(koPos.percentage, 0.0f, 1.0f);
         const float mappedPercentage = epub->calculateProgress(result.spineIndex, resolvedIntraSpineProgress);
         const float delta = std::fabs(mappedPercentage - sanitizedPercentage);
@@ -295,9 +298,11 @@ CrossPointPosition ProgressMapper::toCrossPoint(const std::shared_ptr<Epub>& epu
           result.spineIndex, resolvedIntraSpineProgress, result.hasParagraphIndex ? "yes" : "no", result.paragraphIndex,
           result.hasListItemIndex ? "yes" : "no", result.listItemIndex);
 
-  LOG_DBG("ProgressMapper", "KOReader -> CrossPoint: %.2f%% at %s -> spine=%d, page=%d (%s, exact=%s)",
-          koPos.percentage * 100, koPos.xpath.c_str(), result.spineIndex, result.pageNumber, mappingSource,
-          xpathExactMatch ? "yes" : "no");
+  // INF, not DBG: release builds log at INF, and a sync that lands on the wrong page is
+  // undiagnosable from a user's log without the mapping source.
+  LOG_INF("ProgressMapper", "KOReader -> CrossPoint: %.2f%% at %s -> spine=%d, page=%d/%d (%s, exact=%s)",
+          koPos.percentage * 100, koPos.xpath.c_str(), result.spineIndex, result.pageNumber, result.totalPages,
+          mappingSource, xpathExactMatch ? "yes" : "no");
 
   return result;
 }
