@@ -1,13 +1,15 @@
 #pragma once
 
+#include <WordTypography.h>
+
 #include <cstdint>
 
 // Matches order of PARAGRAPH_ALIGNMENT in CrossPointSettings
 enum class CssTextAlign : uint8_t { Justify = 0, Left = 1, Center = 2, Right = 3, None = 4 };
 // Auto is not a length: it is the marker for an explicit `width: auto` / `height: auto`, which
-// must beat a length set earlier in the cascade rather than be ignored as unparseable. Only
-// imageWidth/imageHeight carry it (see CssStyle::hasImageWidth/hasImageHeight, which report the
-// property as unset when it is present); toPixels() never sees it.
+// must beat a length set earlier in the cascade rather than be ignored as unparseable.
+// imageWidth/imageHeight report it as unset; letterSpacing uses it as the explicit
+// inherit/unset marker. The element resolver handles it before toPixels().
 enum class CssUnit : uint8_t { Pixels = 0, Em = 1, Rem = 2, Points = 3, Percent = 4, Auto = 5 };
 
 // Represents a CSS length value with its unit, allowing deferred resolution to pixels
@@ -97,6 +99,8 @@ struct CssPropertyFlags {
   uint32_t cssFloat : 1;
   uint32_t smallCaps : 1;
   uint32_t textTransform : 1;
+  uint32_t fontFamily : 1;
+  uint32_t letterSpacing : 1;
   // Invisibility. Three bits, not one: they come from three properties that cascade
   // independently, and a shared bit would let a later `visibility: visible` cancel an
   // `opacity: 0` (or vice versa) purely by declaration order.
@@ -130,6 +134,8 @@ struct CssPropertyFlags {
         cssFloat(0),
         smallCaps(0),
         textTransform(0),
+        fontFamily(0),
+        letterSpacing(0),
         colorTransparent(0),
         opacityZero(0),
         visibilityHidden(0) {}
@@ -138,8 +144,8 @@ struct CssPropertyFlags {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
            imageWidth || display || verticalAlign || listStyleNone || pageBreakBefore || pageBreakAfter || lineHeight ||
-           fontSizeMultiplier || cssFloat || smallCaps || textTransform || colorTransparent || opacityZero ||
-           visibilityHidden;
+           fontSizeMultiplier || cssFloat || smallCaps || textTransform || fontFamily || letterSpacing ||
+           colorTransparent || opacityZero || visibilityHidden;
   }
 
   void clearAll() {
@@ -148,7 +154,7 @@ struct CssPropertyFlags {
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
     imageHeight = imageWidth = display = verticalAlign = 0;
     listStyleNone = pageBreakBefore = pageBreakAfter = lineHeight = fontSizeMultiplier = cssFloat = 0;
-    smallCaps = textTransform = colorTransparent = opacityZero = visibilityHidden = 0;
+    fontFamily = letterSpacing = smallCaps = textTransform = colorTransparent = opacityZero = visibilityHidden = 0;
   }
 };
 
@@ -183,6 +189,8 @@ struct CssStyle {
   CssFloat cssFloat = CssFloat::None;  // float: left/right — signals inline image context
   bool smallCaps = false;              // font-variant: small-caps
   CssTextTransform textTransform = CssTextTransform::None;
+  uint8_t fontFamily = wordTypography::Reader;
+  CssLength letterSpacing;  // Auto is the explicit inherit/unset marker. Percent is invalid for this property.
   // Text made invisible while still in the flow. A PDF-to-EPUB conversion emits every OCR word
   // as its own absolutely positioned div with `color: transparent` under a full-page scan; laid
   // out as ordinary text that became eleven pages of single words per scan (Deckhand).
@@ -297,6 +305,14 @@ struct CssStyle {
       cssFloat = base.cssFloat;
       defined.cssFloat = 1;
     }
+    if (base.hasFontFamily()) {
+      fontFamily = base.fontFamily;
+      defined.fontFamily = 1;
+    }
+    if (base.hasLetterSpacing()) {
+      letterSpacing = base.letterSpacing;
+      defined.letterSpacing = 1;
+    }
     if (base.hasTextTransform()) {
       textTransform = base.textTransform;
       defined.textTransform = 1;
@@ -342,6 +358,8 @@ struct CssStyle {
   [[nodiscard]] bool hasListStyleNone() const { return defined.listStyleNone; }
   [[nodiscard]] bool hasCssFloat() const { return defined.cssFloat; }
   [[nodiscard]] bool hasSmallCaps() const { return defined.smallCaps; }
+  [[nodiscard]] bool hasFontFamily() const { return defined.fontFamily; }
+  [[nodiscard]] bool hasLetterSpacing() const { return defined.letterSpacing; }
   [[nodiscard]] bool hasTextTransform() const { return defined.textTransform; }
   [[nodiscard]] bool hasColorTransparent() const { return defined.colorTransparent; }
   [[nodiscard]] bool hasOpacityZero() const { return defined.opacityZero; }
@@ -376,6 +394,8 @@ struct CssStyle {
     cssFloat = CssFloat::None;
     smallCaps = false;
     textTransform = CssTextTransform::None;
+    fontFamily = wordTypography::Reader;
+    letterSpacing = CssLength();
     colorTransparent = false;
     opacityZero = false;
     visibilityHidden = false;

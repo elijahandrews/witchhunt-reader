@@ -33,7 +33,12 @@ std::string normalizePath(const std::string& path, const std::string& cacheDir) 
 void dumpWords(std::ostream& out, const TextBlock& block, const char* indent) {
   for (uint16_t w = 0; w < block.wordCount(); ++w) {
     out << indent << "W x=" << block.wordXpos(w) << " s=" << static_cast<int>(block.wordStyle(w))
-        << " z=" << static_cast<int>(block.wordSizePct(w)) << " t=" << block.wordText(w) << "\n";
+        << " z=" << static_cast<int>(block.wordSizePct(w));
+    if (block.hasMixedTypography() || wordTypography::family(block.wordTypography(w)) == wordTypography::SansSerif ||
+        wordTypography::tracking(block.wordTypography(w)) != 0)
+      out << " f=" << static_cast<int>(wordTypography::family(block.wordTypography(w)))
+          << " ls=" << wordTypography::tracking(block.wordTypography(w));
+    out << " t=" << block.wordText(w) << "\n";
   }
 }
 

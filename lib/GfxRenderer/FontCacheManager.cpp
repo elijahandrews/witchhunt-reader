@@ -160,7 +160,13 @@ void FontCacheManager::PrewarmScope::endScanAndPrewarm() {
   std::sort(order.begin(), order.end(),
             [](const PrewarmItem& a, const PrewarmItem& b) { return a.text->size() > b.text->size(); });
 
+  uint8_t builtinSlots = 0;
   for (const auto& item : order) {
+    // Prewarming a fifth built-in face evicts the first (dominant) face. Stop at
+    // the slot budget; less-used faces retain the bounded per-glyph fallback.
+    if (manager_->sdCardFonts_.count(item.fontId) == 0 && manager_->sdCardFontAliases_.count(item.fontId) == 0 &&
+        builtinSlots++ >= FontDecompressor::MAX_PAGE_SLOTS)
+      continue;
     manager_->prewarmCache(item.fontId, item.text->c_str(), static_cast<uint8_t>(1u << item.style));
   }
 

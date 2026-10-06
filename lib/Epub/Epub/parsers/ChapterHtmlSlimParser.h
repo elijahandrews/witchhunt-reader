@@ -137,6 +137,8 @@ class ChapterHtmlSlimParser final : public Print {
     int depth = 0;            // parser depth of the drop-cap span (pre-increment)
     float multiplier = 1.0f;  // composed font-size multiplier relative to the body font
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
+    uint32_t typography = 0;
+    bool inlineFallback = false;
     char text[16] = {};                    // drop caps are 1 glyph, occasionally with a leading quote
     CssTextTransform transforms[16] = {};  // case scope at capture time, including nested overrides
     int textLen = 0;
@@ -222,6 +224,16 @@ class ChapterHtmlSlimParser final : public Print {
     bool parentLineHeightDefined;
   };
   std::vector<TextPropertyScope> textPropertyScopes_;
+  struct TypographyScope {
+    int depth;
+    uint8_t family;
+    int16_t tracking;
+    float fontScale;
+  };
+  std::vector<TypographyScope> typographyScopes_;
+  uint8_t inheritedFamily_ = wordTypography::Reader;
+  int16_t inheritedTracking_ = 0;
+  float typographyFontScale_ = 1.0f;
   CssTextTransform textTransform_ = CssTextTransform::None;
   float inheritedLineHeight_ = 1.0f;
   bool inheritedLineHeightDefined_ = false;
@@ -670,6 +682,7 @@ class ChapterHtmlSlimParser final : public Print {
   // on the paragraph's block style. Falls back to an inline word when the cap is unusable.
   std::string caseMappedDropCapText(std::string_view tail = {}) const;
   void finalizePendingDropCap();
+  void emitCapturedDropCapRun();
   // XML callbacks
   static void startElement(void* userData, const char* name, const char** atts);
   static void characterData(void* userData, const char* s, int len);
@@ -846,7 +859,7 @@ class ChapterHtmlSlimParser final : public Print {
   // wireParagraphLines does the same for any text laid out as a paragraph of the page.
   void wireTextBlock();
   void wireParagraphLines(ParsedText& text);
-  void beforeLineHook(uint8_t maxSizePct);
+  void beforeLineHook(float actualHeight);
   void ensurePageBlock();
   void releasePageBlock();
 };

@@ -1,14 +1,14 @@
 BOOK title=Test: br Section Break lang=en spine=6 toc=6 reliableToc=1
 SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=12 footnotes=0
-  LINE y=9 x=0 align=2 mult=1.600 hfid=0 words=5
-   W x=-6 s=1 z=100 t=Ch
-   W x=42 s=1 z=100 t=1:
-   W x=78 s=1 z=100 t=Standalone
-   W x=274 s=1 z=100 t=<br>
-   W x=348 s=1 z=100 t=Section
-  LINE y=47 x=0 align=2 mult=1.600 hfid=0 words=1
-   W x=189 s=1 z=100 t=Break
+  LINE y=9 x=0 align=2 mult=1.600 hfid=0 words=4
+   W x=58 s=1 z=100 t=Ch
+   W x=106 s=1 z=100 t=1:
+   W x=142 s=1 z=100 t=Standalone
+   W x=338 s=1 z=100 t=<br>
+  LINE y=47 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=125 s=1 z=100 t=Section
+   W x=253 s=1 z=100 t=Break
   LINE y=94 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=PASS:
    W x=82 s=0 z=100 t=A
@@ -164,14 +164,14 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=126 s=0 z=100 t=aliqua.
 SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=17 footnotes=0
-  LINE y=9 x=0 align=2 mult=1.600 hfid=0 words=5
-   W x=-8 s=1 z=100 t=Ch
-   W x=40 s=1 z=100 t=3:
-   W x=79 s=1 z=100 t=Multiple
-   W x=207 s=1 z=100 t=Consecutive
-   W x=404 s=1 z=100 t=<br>
-  LINE y=47 x=0 align=2 mult=1.600 hfid=0 words=1
-   W x=160 s=1 z=100 t=Elements
+  LINE y=9 x=0 align=2 mult=1.600 hfid=0 words=4
+   W x=29 s=1 z=100 t=Ch
+   W x=77 s=1 z=100 t=3:
+   W x=116 s=1 z=100 t=Multiple
+   W x=244 s=1 z=100 t=Consecutive
+  LINE y=47 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=123 s=1 z=100 t=<br>
+   W x=197 s=1 z=100 t=Elements
   LINE y=94 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=PASS:
    W x=77 s=0 z=100 t=Two

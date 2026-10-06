@@ -80,3 +80,33 @@ TEST(CssTypography, EmbeddedStyleOffPreservesSourceCase) {
   EXPECT_NE(dump.find("t=outer"), std::string::npos);
   EXPECT_EQ(dump.find("t=OUTER"), std::string::npos);
 }
+
+TEST(CssTypography, GenericFamiliesAreScopedAndSurvivePageCache) {
+  const auto dump = buildTypography("families");
+  EXPECT_NE(dump.find("f=1 ls=0 t=SerifBody"), std::string::npos);
+  EXPECT_NE(dump.find("f=2 ls=0 t=SansInline"), std::string::npos);
+  EXPECT_NE(dump.find("s=1 z=100 f=2 ls=0 t=SansBold"), std::string::npos);
+  EXPECT_NE(dump.find("s=2 z=100 f=2 ls=0 t=SansItalic"), std::string::npos);
+  EXPECT_NE(dump.find("f=1 ls=0 t=SerifOverride"), std::string::npos);
+  EXPECT_NE(dump.find("f=2 ls=0 t=SansRestored"), std::string::npos);
+  EXPECT_NE(dump.find("z=100 t=ReaderDefault"), std::string::npos);
+  EXPECT_NE(dump.find("f=2 ls=0 t=SansCell"), std::string::npos);
+  EXPECT_NE(dump.find("f=2 ls=0 t=N\n"), std::string::npos);
+  EXPECT_NE(dump.find("z=250 f=2 ls=0 t=Q\n"), std::string::npos);
+  EXPECT_NE(dump.find("ROW h=40"), std::string::npos);
+  EXPECT_EQ(dump, buildTypography("families", true, true));
+  EXPECT_EQ(buildTypography("families-disabled", false).find(" f="), std::string::npos);
+}
+TEST(CssTypography, TrackingIsComputedThenInheritedAcrossDifferentSizes) {
+  const auto dump = buildTypography("tracking");
+  EXPECT_NE(dump.find("f=0 ls=29 t=TrackedInline"), std::string::npos);
+  EXPECT_NE(dump.find("z=100 f=0 ls=0 t=ResetInline"), std::string::npos);
+  EXPECT_NE(dump.find("f=0 ls=29 t=TrackedAgain"), std::string::npos);
+  EXPECT_NE(dump.find("z=100 f=0 ls=0 t=NormalAfter"), std::string::npos);
+  EXPECT_NE(dump.find("f=0 ls=32 t=FixedTracking"), std::string::npos);
+  EXPECT_NE(dump.find("z=150 f=0 ls=32 t=LargerInherited"), std::string::npos);
+  EXPECT_NE(dump.find("f=0 ls=32 t=SameTracking"), std::string::npos);
+  EXPECT_NE(dump.find("f=0 ls=-14 t=NegativeSpacing"), std::string::npos);
+  EXPECT_NE(dump.find("f=2 ls=29 t=SansTracked"), std::string::npos);
+  EXPECT_EQ(dump, buildTypography("tracking", true, true));
+}

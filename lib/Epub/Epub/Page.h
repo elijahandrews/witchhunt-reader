@@ -90,6 +90,7 @@ struct TableCell {
   // Number of grid columns this cell occupies. A row's spans always sum to the fragment's
   // columnCount (layout pads short rows), so the renderer can walk cells and accumulate.
   uint8_t colSpan = 1;
+  uint16_t lineAdvance = 0;  // persisted grid advance, including family metrics and reader/CSS spacing
 };
 
 struct TableRow {

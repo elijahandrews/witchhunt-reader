@@ -57,6 +57,8 @@ uint32_t packDefined(const CssPropertyFlags& d) {
   set(d.cssFloat);
   set(d.smallCaps);
   set(d.textTransform);
+  set(d.fontFamily);
+  set(d.letterSpacing);
   return b;
 }
 
@@ -88,6 +90,8 @@ void unpackDefined(uint32_t b, CssPropertyFlags& d) {
   d.cssFloat = get();
   d.smallCaps = get();
   d.textTransform = get();
+  d.fontFamily = get();
+  d.letterSpacing = get();
 }
 
 void writeStyle(FsFile& f, const CssStyle& s) {
@@ -116,6 +120,9 @@ void writeStyle(FsFile& f, const CssStyle& s) {
   writePod(f, static_cast<uint8_t>(s.cssFloat));
   writePod(f, static_cast<uint8_t>(s.smallCaps));
   writePod(f, static_cast<uint8_t>(s.textTransform));
+  writePod(f, s.fontFamily);
+  writePod(f, s.letterSpacing.value);
+  writePod(f, static_cast<uint8_t>(s.letterSpacing.unit));
   writePod(f, packDefined(s.defined));
 }
 
@@ -158,6 +165,10 @@ void readStyle(FsFile& f, CssStyle& s) {
   s.smallCaps = e != 0;
   readPod(f, e);
   s.textTransform = static_cast<CssTextTransform>(e);
+  readPod(f, s.fontFamily);
+  readPod(f, s.letterSpacing.value);
+  readPod(f, e);
+  s.letterSpacing.unit = static_cast<CssUnit>(e);
   uint32_t defined = 0;
   readPod(f, defined);
   unpackDefined(defined, s.defined);
@@ -306,13 +317,15 @@ bool styleEquals(const CssStyle& a, const CssStyle& b) {
          a.textDecoration == b.textDecoration && a.display == b.display && a.verticalAlign == b.verticalAlign &&
          a.listStyleNone == b.listStyleNone && a.pageBreakBefore == b.pageBreakBefore &&
          a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.smallCaps == b.smallCaps &&
-         a.textTransform == b.textTransform && a.lineHeightMultiplier == b.lineHeightMultiplier &&
-         a.fontSizeMultiplier == b.fontSizeMultiplier && lenEq(a.textIndent, b.textIndent) &&
-         lenEq(a.marginTop, b.marginTop) && lenEq(a.marginBottom, b.marginBottom) &&
-         lenEq(a.marginLeft, b.marginLeft) && lenEq(a.marginRight, b.marginRight) &&
-         lenEq(a.paddingTop, b.paddingTop) && lenEq(a.paddingBottom, b.paddingBottom) &&
-         lenEq(a.paddingLeft, b.paddingLeft) && lenEq(a.paddingRight, b.paddingRight) &&
-         lenEq(a.imageHeight, b.imageHeight) && lenEq(a.imageWidth, b.imageWidth) && definedEq(a.defined, b.defined);
+         a.fontFamily == b.fontFamily && a.letterSpacing.value == b.letterSpacing.value &&
+         a.letterSpacing.unit == b.letterSpacing.unit && a.textTransform == b.textTransform &&
+         a.lineHeightMultiplier == b.lineHeightMultiplier && a.fontSizeMultiplier == b.fontSizeMultiplier &&
+         lenEq(a.textIndent, b.textIndent) && lenEq(a.marginTop, b.marginTop) &&
+         lenEq(a.marginBottom, b.marginBottom) && lenEq(a.marginLeft, b.marginLeft) &&
+         lenEq(a.marginRight, b.marginRight) && lenEq(a.paddingTop, b.paddingTop) &&
+         lenEq(a.paddingBottom, b.paddingBottom) && lenEq(a.paddingLeft, b.paddingLeft) &&
+         lenEq(a.paddingRight, b.paddingRight) && lenEq(a.imageHeight, b.imageHeight) &&
+         lenEq(a.imageWidth, b.imageWidth) && definedEq(a.defined, b.defined);
 }
 
 uint16_t internStyle(CompiledContent& content, const CssStyle& style) {

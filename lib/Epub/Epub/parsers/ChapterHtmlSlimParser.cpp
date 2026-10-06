@@ -211,7 +211,7 @@ constexpr size_t MAX_TABLE_ROW_BUFFER_BYTES = EHP_TABLE_BUFFER_BUDGET_BYTES;
 // the geometric growth headroom all four carry. Deliberately a fixed constant rather than
 // sizeof(std::string) so host goldens and device builds make the SAME switch decision -- a
 // host-derived width (32 B) would charge more per word and trip earlier than the device.
-constexpr size_t TABLE_BUFFER_BYTES_PER_WORD = 48;
+constexpr size_t TABLE_BUFFER_BYTES_PER_WORD = 52;
 // Words past the SSO capacity additionally allocate their own heap block.
 constexpr size_t TABLE_BUFFER_SSO_CAPACITY = 15;
 // One buffered cell: BufferedTableCell (two std::string members, colSpan/isHeader, the owning
@@ -904,7 +904,8 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
   if (currentTableCell && currentTableCell->text) {
     // text is null only for a cell already consumed by the streaming path; currentTableCell is
     // cleared alongside that, so this is belt-and-braces against a future reordering.
-    currentTableCell->text->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct);
+    currentTableCell->text->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct,
+                                    wordTypography::pack(inheritedFamily_, inheritedTracking_));
     // Charge the word against the row budget. Only a row still headed for the grid accumulates —
     // a degraded cell is drained and freed at </td>.
     if (currentTable && !currentTable->degraded && !currentTable->rowDegraded) {
@@ -931,7 +932,8 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
     if (pendingInlineImage_.active && currentTextBlock->isEmpty()) {
       attachPendingFloatImage(currentTextBlock->getBlockStyle());
     }
-    currentTextBlock->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct);
+    currentTextBlock->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct,
+                              wordTypography::pack(inheritedFamily_, inheritedTracking_));
 
     if (currentTextBlock->size() > 96) {
       if (!ensureHeapForTextLayout("long-block split", currentTextBlock.get())) {
@@ -1058,21 +1060,19 @@ void ChapterHtmlSlimParser::wireTextBlock() {
 void ChapterHtmlSlimParser::wireParagraphLines(ParsedText& text) {
   text.setLineArena(buildArena_);
   if (buildArena_) {
-    text.setBeforeLineHook([this](const uint8_t maxSizePct) { beforeLineHook(maxSizePct); });
+    text.setBeforeLineHook([this](const float actualHeight) { beforeLineHook(actualHeight); });
   } else {
     text.setBeforeLineHook(nullptr);
   }
 }
 
-void ChapterHtmlSlimParser::beforeLineHook(const uint8_t maxSizePct) {
+void ChapterHtmlSlimParser::beforeLineHook(const float actualHeight) {
   // The page-fit test of addLineToPage, run before the line is materialised (see
   // ParsedText::beforeLine_): the same arithmetic, so addLineToPage's own test then finds the
   // line fits and everything after it (anchors, footnotes, the hyphenation retry) is unchanged.
   if (currentPage && currentTextBlock) {
-    int lineHeight = effectiveLineHeight(currentTextBlock->getBlockStyle());
-    if (maxSizePct != 100) {
-      lineHeight = lineHeight * maxSizePct / 100;
-    }
+    int lineHeight = static_cast<int>(
+        actualHeight * lineCompression * currentTextBlock->getBlockStyle().lineHeightMultiplier + 0.5f);
     if (currentPageNextY + lineHeight > viewportHeight) {
       emitPage(lastBodyChildByteOffset);
     }
@@ -1218,9 +1218,11 @@ bool ChapterHtmlSlimParser::tryStartDropCapCapture(const CssStyle& cssStyle) {
   if (isItalic) capStyle = static_cast<EpdFontFamily::Style>(capStyle | EpdFontFamily::ITALIC);
 
   pendingDropCap_.active = true;
+  pendingDropCap_.inlineFallback = false;
   pendingDropCap_.depth = depth;
   pendingDropCap_.multiplier = mult;
   pendingDropCap_.style = capStyle;
+  pendingDropCap_.typography = wordTypography::pack(inheritedFamily_, inheritedTracking_);
   pendingDropCap_.textLen = 0;
   return true;
 }
@@ -1254,8 +1256,23 @@ std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail) 
   return result;
 }
 
+void ChapterHtmlSlimParser::emitCapturedDropCapRun() {
+  if (pendingDropCap_.textLen <= 0 || !currentTextBlock) return;
+  const std::string capText = caseMappedDropCapText();
+  const float blockScale = std::max(0.01f, currentTextBlock->getBlockStyle().fontSizeMultiplier);
+  const auto size = static_cast<uint8_t>(std::min(250.0f, pendingDropCap_.multiplier * 100 / blockScale));
+  currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, nextWordContinues, size,
+                            pendingDropCap_.typography);
+  pendingDropCap_.textLen = 0;
+  nextWordContinues = true;
+}
+
 void ChapterHtmlSlimParser::finalizePendingDropCap() {
   pendingDropCap_.active = false;
+  if (pendingDropCap_.inlineFallback) {
+    emitCapturedDropCapRun();
+    return;
+  }
   const std::string capText = caseMappedDropCapText();
   pendingDropCap_.textLen = 0;
   if (capText.empty() || !currentTextBlock) return;
@@ -1281,7 +1298,11 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
       if (auxFontId_ == 0) auxFontId_ = capFontId;
     }
   }
-  const int capEffFontId = capFontId != 0 ? capFontId : fontId;
+  const auto familyFont =
+      renderer.resolveTextFont(capFontId != 0 ? capFontId : fontId, wordTypography::family(pendingDropCap_.typography));
+  capFontId = familyFont.fontId;
+  capScale *= familyFont.scale;
+  const int capEffFontId = capFontId;
 
   // Ink metrics: the ascender metric includes internal leading, which at 2-4x scale
   // becomes half a line of blank space. Place and size the cap by actual glyph ink.
@@ -1290,14 +1311,15 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   int capInkBelow = 0;
   const bool haveInk =
       renderer.getTextInkMetrics(capEffFontId, capText.c_str(), pendingDropCap_.style, &capInkTop, &capInkBelow);
-  const int capWidth = renderer.getTextWidthScaled(capEffFontId, capText.c_str(), pendingDropCap_.style, capScale);
+  const int capWidth = renderer.getTextWidthSpaced(capEffFontId, capText.c_str(), pendingDropCap_.style, capScale,
+                                                   wordTypography::tracking(pendingDropCap_.typography));
 
   // Unusable cap (missing glyphs, or too wide to leave a text column): render the
   // captured text inline at paragraph size instead so no characters are lost.
   if (!haveInk || capInkTop <= 0 || capWidth <= 0 || capWidth + kDropCapGapPx > viewportWidth / 2) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (haveInk=%d inkTop=%d width=%d limit=%d)", capText.c_str(), haveInk,
             capInkTop, capWidth + kDropCapGapPx, viewportWidth / 2);
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
     nextWordContinues = true;  // "A" + "ll" form one visual word
     return;
   }
@@ -1333,10 +1355,11 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   capBlockStyle.fontResolved = true;
   auto capBlock = makeUniqueNoThrow<TextBlock>(std::vector<std::string>{capText}, std::vector<int16_t>{0},
                                                std::vector<EpdFontFamily::Style>{pendingDropCap_.style}, capBlockStyle,
-                                               std::vector<uint8_t>{});
+                                               std::vector<uint8_t>{}, std::vector<bool>{},
+                                               std::vector<uint32_t>{pendingDropCap_.typography});
   if (!capBlock || !capBlock->valid()) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (block alloc failed)", capText.c_str());
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
     nextWordContinues = true;
     return;
   }
@@ -1350,7 +1373,7 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   auto capLine = makeUniqueNoThrow<PageLine>(std::move(capBlock), capX, static_cast<int16_t>(top + dropCapYAdjust_));
   if (!capLine) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (PageLine alloc failed)", capText.c_str());
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
     nextWordContinues = true;
     return;
   }
@@ -1378,7 +1401,9 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
 
 void ChapterHtmlSlimParser::emitPendingListMarker() {
   if (pendingListMarker_[0] == '\0') return;
-  if (currentTextBlock) currentTextBlock->addWord(pendingListMarker_, EpdFontFamily::REGULAR);
+  if (currentTextBlock)
+    currentTextBlock->addWord(pendingListMarker_, EpdFontFamily::REGULAR, false, false, effectiveSizePct,
+                              wordTypography::pack(inheritedFamily_, inheritedTracking_));
   pendingListMarker_[0] = '\0';
 }
 
@@ -1764,6 +1789,31 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
 
   self->observeFontSizeBaseline(name, cssStyle);
   cssStyle = self->normalizeFontSizeForElement(name, cssStyle);
+
+  // Inherited run typography has its own element scopes. Compute em tracking at
+  // its declaration: a nested larger span inherits the same absolute spacing.
+  const bool heading = strcmp(name, "h1") == 0 || strcmp(name, "h2") == 0 || strcmp(name, "h3") == 0;
+  if (cssStyle.hasFontFamily() || cssStyle.hasLetterSpacing() || cssStyle.hasFontSizeMultiplier() || heading) {
+    if (self->partWordBufferIndex > 0) {
+      const bool dash = bufferEndsWithBreakableDash(self->partWordBuffer, self->partWordBufferIndex);
+      if (!self->flushPartWordBuffer()) return;
+      if (!isHeaderOrBlock(name) && !dash) self->nextWordContinues = true;
+    }
+    self->typographyScopes_.push_back(
+        {self->depth, self->inheritedFamily_, self->inheritedTracking_, self->typographyFontScale_});
+    if (cssStyle.hasFontSizeMultiplier())
+      self->typographyFontScale_ *= cssStyle.fontSizeMultiplier;
+    else if (heading)
+      self->typographyFontScale_ *= kHeadingMultiplier[name[1] - '1'];
+    if (cssStyle.hasFontFamily() && cssStyle.fontFamily != wordTypography::Inherit)
+      self->inheritedFamily_ = cssStyle.fontFamily;
+    if (cssStyle.hasLetterSpacing() && cssStyle.letterSpacing.unit != CssUnit::Auto) {
+      const float bodyEm = self->renderer.getFontAscenderSize(self->fontId);
+      const float em = cssStyle.letterSpacing.unit == CssUnit::Rem ? bodyEm : bodyEm * self->typographyFontScale_;
+      const float px = cssStyle.letterSpacing.toPixels(em);
+      self->inheritedTracking_ = static_cast<int16_t>(std::lround(std::max(-2048.0f, std::min(2047.0f, px)) * 16));
+    }
+  }
 
   // Track an explicit CSS width on a wrapping block (e.g. <div style="width:100px">).
   // A percentage image width inside resolves against the innermost such width, so a
@@ -3029,6 +3079,14 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         i += ignorableLen - 1;
         continue;
       }
+      const uint32_t runTypography = wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_);
+      if (self->pendingDropCap_.textLen > 0 && self->pendingDropCap_.typography != runTypography) {
+        // A floated single-font box cannot express differently styled quote/letter
+        // runs. Keep their formatting as enlarged inline runs instead of flattening it.
+        self->pendingDropCap_.inlineFallback = true;
+        self->emitCapturedDropCapRun();
+      }
+      if (self->pendingDropCap_.textLen == 0) self->pendingDropCap_.typography = runTypography;
       if (self->pendingDropCap_.textLen >= static_cast<int>(sizeof(self->pendingDropCap_.text)) - 1) {
         overflow = true;
         break;
@@ -3086,7 +3144,8 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         // empty line.  Add a single space so the block is non-empty and makePages()
         // will produce a line of the correct height instead of reusing the empty block.
         if (self->currentTextBlock->isEmpty()) {
-          self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR);
+          self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR, false, false, self->effectiveSizePct,
+                                          wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_));
         }
         self->startNewTextBlock(self->currentTextBlock->getBlockStyle());
         self->nextWordContinues = false;
@@ -3241,6 +3300,13 @@ void ChapterHtmlSlimParser::endElement(void* userData, const char* name) {
     self->inheritedLineHeightDefined_ = scope.parentLineHeightDefined;
     self->textPropertyScopes_.pop_back();
   }
+  while (!self->typographyScopes_.empty() && self->typographyScopes_.back().depth >= self->depth) {
+    const auto scope = self->typographyScopes_.back();
+    self->inheritedFamily_ = scope.family;
+    self->inheritedTracking_ = scope.tracking;
+    self->typographyFontScale_ = scope.fontScale;
+    self->typographyScopes_.pop_back();
+  }
   // A background picture goes in once its element has closed: after the element's own text and,
   // for a table, after the grid </table> has just emitted. Out here because the body returns from
   // a dozen places.
@@ -3269,6 +3335,7 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   const bool willClearStrikethrough = self->strikethroughUntilDepth == self->depth - 1;
 
   const bool styleWillChange =
+      (!self->typographyScopes_.empty() && self->typographyScopes_.back().depth == self->depth - 1) ||
       willPopStyleStack || willClearBold || willClearItalic || willClearUnderline || willClearStrikethrough ||
       (!self->textPropertyScopes_.empty() && self->textPropertyScopes_.back().depth == self->depth - 1);
   const bool headerOrBlockTag = isHeaderOrBlock(name);
@@ -3864,11 +3931,8 @@ ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_p
 
   // Lines carrying inline-sized words advance by the tallest word on the line
   // (microreader semantics); uniform lines keep the block line height exactly.
-  int lineHeight = effectiveLineHeight(lineStyle);
-  const uint8_t maxPct = line->maxSizePct();
-  if (maxPct != 100) {
-    lineHeight = lineHeight * maxPct / 100;
-  }
+  int lineHeight =
+      static_cast<int>(line->lineHeight(renderer, fontId) * lineCompression * lineStyle.lineHeightMultiplier + 0.5f);
 
   if (!currentPage) {
     currentPage.reset(new Page());
@@ -4593,7 +4657,15 @@ bool ChapterHtmlSlimParser::layoutTableRow(BufferedTableRow& bufRow, const uint8
       cell.image = buildCellImage(bufCell.imageSrc, bufCell.imageAlt, cellImageMaxWidth, cellImageMaxHeight);
     }
 
-    uint16_t contentHeight = static_cast<uint16_t>(cell.lines.size() * lineHeight);
+    cell.lineAdvance = lineHeight;
+    if (bufCell.text) {
+      const float spacing = lineCompression * bufCell.text->getBlockStyle().lineHeightMultiplier;
+      int tallest = 0;
+      for (const auto& line : cell.lines)
+        tallest = std::max(tallest, static_cast<int>(line->lineHeight(renderer, fontId) * spacing + 0.5f));
+      if (tallest > 0) cell.lineAdvance = tallest;
+    }
+    uint16_t contentHeight = static_cast<uint16_t>(cell.lines.size() * cell.lineAdvance);
     if (cell.image) contentHeight = static_cast<uint16_t>(contentHeight + cell.image->getRenderedHeight());
     // A cell taller than the whole viewport can never be a grid row on any device, so the
     // fragment packer would emit a row that cannot be displayed. Adopted from CrossInk,

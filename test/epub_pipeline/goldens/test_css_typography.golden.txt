@@ -1,4 +1,4 @@
-BOOK title=Witch CSS Style Test lang=en spine=8 toc=8 reliableToc=1
+BOOK title=Witch CSS Style Test lang=en spine=10 toc=10 reliableToc=1
 SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=9 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
@@ -174,7 +174,7 @@ SPINE 2 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
    W x=74 s=0 z=100 t=single
    W x=135 s=0 z=100 t=word:
    W x=183 s=0 z=100 t=PREMixedPOST
-  LINE y=363 x=0 align=0 mult=3.000 hfid=0 words=1
+  LINE y=363 x=0 align=0 mult=3.000 hfid=1 words=1
    W x=0 s=0 z=100 t=D
   LINE y=371 x=39 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=rop
@@ -315,7 +315,7 @@ SPINE 4 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=434 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Section
    W x=73 s=0 z=100 t=three
-  LINE y=462 x=0 align=0 mult=3.000 hfid=0 words=1
+  LINE y=462 x=0 align=0 mult=3.000 hfid=1 words=1
    W x=0 s=0 z=100 t=D
   LINE y=470 x=39 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=rop
@@ -357,6 +357,159 @@ SPINE 5 href=OEBPS/ch5.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=BlankTight
    W x=100 s=0 z=100 t=three
 SPINE 6 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=13 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=4
+   W x=74 s=1 z=100 t=Serif
+   W x=164 s=1 z=100 t=and
+   W x=228 s=1 z=100 t=sans
+   W x=310 s=1 z=100 t=serif
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=1 ls=0 t=SerifBody
+   W x=121 s=0 z=100 f=1 ls=0 t=with
+   W x=194 s=0 z=100 f=2 ls=0 t=SansInline
+   W x=352 s=1 z=100 f=2 ls=0 t=SansBold
+  LINE y=68 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=2 z=100 f=2 ls=0 t=SansItalic
+   W x=122 s=0 z=100 f=1 ls=0 t=SerifAgain.
+  LINE y=107 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=2 ls=0 t=SansLetter
+   W x=160 s=0 z=100 f=2 ls=0 t=should
+   W x=271 s=0 z=100 f=2 ls=0 t=look
+   W x=358 s=0 z=100 f=2 ls=0 t=distinctly
+  LINE y=137 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 f=2 ls=0 t=different
+   W x=103 s=0 z=100 f=2 ls=0 t=from
+   W x=157 s=0 z=100 f=2 ls=0 t=the
+   W x=200 s=0 z=100 f=2 ls=0 t=serif
+   W x=256 s=0 z=100 f=2 ls=0 t=body.
+  LINE y=176 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=2 ls=0 t=SansInherited
+   W x=157 s=0 z=100 f=1 ls=0 t=SerifOverride
+   W x=276 s=0 z=100 f=2 ls=0 t=SansRestored
+  LINE y=215 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=ReaderDefault
+   W x=135 s=0 z=100 t=follows
+   W x=208 s=0 z=100 t=the
+   W x=245 s=0 z=100 t=selected
+   W x=321 s=0 z=100 t=reader
+   W x=381 s=0 z=100 t=font.
+  LINE y=248 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=2 ls=0 t=Joined
+   W x=67 s=0 z=100 f=1 ls=0 t=Middle
+   W x=113 s=0 z=100 f=2 ls=0 t=End
+  LINE y=279 x=0 align=0 mult=3.000 hfid=-2000000 words=1
+   W x=0 s=0 z=100 f=2 ls=0 t=N
+  LINE y=287 x=31 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=ested
+   W x=51 s=0 z=100 t=cap
+   W x=82 s=0 z=100 t=uses
+   W x=126 s=0 z=100 t=sans
+   W x=173 s=0 z=100 t=serif.
+  LINE y=320 x=31 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=250 f=0 ls=0 t=“
+   W x=20 s=0 z=250 f=2 ls=0 t=Q
+   W x=50 s=0 z=100 f=0 ls=0 t=uoted
+   W x=109 s=0 z=100 f=0 ls=0 t=cap
+   W x=143 s=0 z=100 f=0 ls=0 t=preserves
+   W x=231 s=0 z=100 f=0 ls=0 t=each
+   W x=280 s=0 z=100 f=0 ls=0 t=family
+   W x=344 s=0 z=100 f=0 ls=0 t=as
+   W x=374 s=0 z=100 f=0 ls=0 t=inline
+  LINE y=395 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=runs.
+  TABLE y=428 x=0 w=460 h=42 cols=2 border=1 rows=1
+   ROW h=40 hdr=0 cells=2
+    CELL 0 hdr=0 span=1 lines=1
+     LN words=1
+      W x=18 s=0 z=100 f=2 ls=0 t=SansCell
+    CELL 1 hdr=0 span=1 lines=1
+     LN words=1
+      W x=18 s=0 z=100 t=SerifCell
+SPINE 7 href=OEBPS/ch7.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=20 footnotes=0
+  LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=119 s=1 z=100 t=Letter
+   W x=231 s=1 z=100 t=spacing
+  LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=CHAPTER
+   W x=70 s=0 z=100 t=FORTY
+   W x=118 s=0 z=100 t=TWO
+  LINE y=71 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=0 ls=29 t=CHAPTER
+   W x=85 s=0 z=100 f=0 ls=29 t=FORTY
+   W x=144 s=0 z=100 f=0 ls=29 t=TWO
+  LINE y=104 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Above:
+   W x=61 s=0 z=100 t=same
+   W x=107 s=0 z=100 t=words,
+   W x=164 s=0 z=100 t=with
+   W x=204 s=0 z=100 t=the
+   W x=241 s=0 z=100 t=second
+   W x=303 s=0 z=100 t=line
+   W x=344 s=0 z=100 t=visibly
+   W x=406 s=0 z=100 t=spaced
+  LINE y=128 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=farther
+   W x=75 s=0 z=100 t=apart.
+  LINE y=161 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=0 ls=0 t=NormalBefore
+   W x=168 s=0 z=100 f=0 ls=29 t=TrackedInline
+   W x=356 s=0 z=100 f=0 ls=0 t=ResetInline
+  LINE y=185 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=0 ls=29 t=TrackedAgain
+   W x=134 s=0 z=100 f=0 ls=0 t=NormalAfter
+  LINE y=218 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=0 ls=32 t=FixedTracking
+   W x=196 s=0 z=150 f=0 ls=32 t=LargerInherited
+  LINE y=254 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=32 t=SameTracking
+  LINE y=287 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=21 t=PointSpacing
+  LINE y=320 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=-14 t=NegativeSpacing
+  LINE y=353 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=0 ls=29 t=Joined
+   W x=67 s=0 z=100 f=0 ls=0 t=Center
+   W x=124 s=0 z=100 f=0 ls=29 t=Tail
+  LINE y=386 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 f=0 ls=29 t=Wrapping
+   W x=97 s=0 z=100 f=0 ls=29 t=text
+   W x=153 s=0 z=100 f=0 ls=29 t=must
+   W x=213 s=0 z=100 f=0 ls=29 t=retain
+   W x=293 s=0 z=100 f=0 ls=29 t=its
+   W x=337 s=0 z=100 f=0 ls=29 t=spacing
+   W x=425 s=0 z=100 f=0 ls=29 t=all
+  LINE y=410 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 f=0 ls=29 t=the
+   W x=55 s=0 z=100 f=0 ls=29 t=way
+   W x=105 s=0 z=100 f=0 ls=29 t=across
+   W x=191 s=0 z=100 f=0 ls=29 t=each
+   W x=256 s=0 z=100 f=0 ls=29 t=line
+   W x=316 s=0 z=100 f=0 ls=29 t=and
+   W x=371 s=0 z=100 f=0 ls=29 t=down
+   W x=433 s=0 z=100 f=0 ls=29 t=to
+  LINE y=434 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 f=0 ls=29 t=the
+   W x=50 s=0 z=100 f=0 ls=29 t=next
+   W x=107 s=0 z=100 f=0 ls=29 t=line
+   W x=162 s=0 z=100 f=0 ls=29 t=without
+   W x=255 s=0 z=100 f=0 ls=29 t=crossing
+   W x=356 s=0 z=100 f=0 ls=29 t=the
+   W x=406 s=0 z=100 f=0 ls=29 t=right
+  LINE y=458 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=29 t=margin.
+  LINE y=491 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=29 t=intercontinentalabcdefghijklmnopqrstuvwxy-
+  LINE y=515 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=29 t=zabcdefghijklmnopqrstuvwxyzabcde-
+  LINE y=539 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=0 ls=29 t=fghijklmnopqrstuvwxyz
+  LINE y=572 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=2 ls=29 t=SansTracked
+   W x=151 s=0 z=100 f=2 ls=29 t=office
+   W x=235 s=0 z=100 f=2 ls=29 t=affinity
+   W x=345 s=0 z=100 f=2 ls=29 t=café
+SPINE 8 href=OEBPS/ch8.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=29 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
    W x=55 s=1 z=100 t=Long
@@ -429,7 +582,7 @@ SPINE 6 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
    W x=100 s=0 z=100 t=or
    W x=126 s=0 z=100 t=missing
    W x=194 s=0 z=100 t=text.
-SPINE 7 href=OEBPS/ch7.xhtml pages=1 truncated=0 cssFallback=0
+SPINE 9 href=OEBPS/ch9.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=19 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=5
    W x=27 s=1 z=100 t=Drop

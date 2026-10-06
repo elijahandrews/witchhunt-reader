@@ -92,7 +92,7 @@ class CssParser {
   //      next to the rule cache (see backgroundImageFor). A v19 compile never looked for it, so
   //      a book whose picture is a CSS background (Alice's rabbit hole) kept showing none.
   // v21: persist text-transform and line-height; older caches discarded both.
-  static constexpr uint8_t CSS_CACHE_VERSION = 21;
+  static constexpr uint8_t CSS_CACHE_VERSION = 22;
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;

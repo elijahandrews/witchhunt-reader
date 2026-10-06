@@ -11,6 +11,7 @@
 #include <TextTruncation.h>
 #include <TouchTransform.h>
 #include <Utf8.h>
+#include <WordTypography.h>
 #include <esp_heap_caps.h>
 
 #include <algorithm>
@@ -18,6 +19,7 @@
 #include <cstring>
 
 #include "FontCacheManager.h"
+#include "TextRun.h"
 
 const uint8_t* GfxRenderer::getGlyphBitmap(const EpdFontData* fontData, const EpdGlyphRef& glyph) const {
   if (fontData->groups != nullptr) {
@@ -3912,4 +3914,63 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
     LOG_INF("GFX", "Viewable insets: profile T%d R%d B%d L%d +pad %d, orientation=%d -> screen T%d R%d B%d L%d", top,
             right, bottom, left, pad, static_cast<int>(getOrientation()), *outTop, *outRight, *outBottom, *outLeft);
   }
+}
+
+GfxRenderer::TextFont GfxRenderer::resolveTextFont(const int fontId, const uint8_t family) const {
+  if (family != wordTypography::Serif && family != wordTypography::SansSerif) return {fontId, 1.0f};
+  for (uint8_t i = 0; i < readerFontPairCount_; ++i) {
+    const auto& p = readerFontPairs_[i];
+    if (fontId == p.serif || fontId == p.sans) return {family == wordTypography::Serif ? p.serif : p.sans, 1.0f};
+  }
+  // An SD face is the user's serif preference. Sans uses a built-in face at the
+  // nearest ascender, scaled to match, without loading another SD family.
+  if (family == wordTypography::Serif || readerFontPairCount_ == 0) return {fontId, 1.0f};
+  const int height = getFontAscenderSize(fontId);
+  int best = readerFontPairs_[0].sans;
+  for (uint8_t i = 1; i < readerFontPairCount_; ++i) {
+    const int candidate = readerFontPairs_[i].sans;
+    if (std::abs(getFontAscenderSize(candidate) - height) < std::abs(getFontAscenderSize(best) - height))
+      best = candidate;
+  }
+  const int targetHeight = getFontAscenderSize(best);
+  return {best, targetHeight > 0 ? static_cast<float>(height) / targetHeight : 1.0f};
+}
+
+int GfxRenderer::getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                                       int16_t tracking) const {
+  const auto it = fontMap.find(fontId);
+  if (it == fontMap.end() || !text) return 0;
+  return textRun::walk(it->second, text, style, scale * fontBaseScale(fontId), tracking,
+                       [](uint32_t, int, int, float, bool) {})
+      .advance;
+}
+int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                                    int16_t tracking) const {
+  const auto it = fontMap.find(fontId);
+  if (it == fontMap.end() || !text) return 0;
+  const auto m = textRun::walk(it->second, text, style, scale * fontBaseScale(fontId), tracking,
+                               [](uint32_t, int, int, float, bool) {});
+  return std::max(m.advance, m.right) - std::min(0, m.left);
+}
+void GfxRenderer::drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
+                                 float scale, int16_t tracking) const {
+  if (!text || !*text) return;
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) {
+    fontCacheManager_->recordText(text, fontId, style);
+    return;
+  }
+  const auto it = fontMap.find(fontId);
+  if (it == fontMap.end()) return;
+  scale *= fontBaseScale(fontId);
+  const int baseline = y + static_cast<int>(std::lround(rawFontAscenderSize(fontId) * scale));
+  const auto mode = getRenderMode();
+  textRun::walk(
+      it->second, text, style, scale, tracking, [&](uint32_t cp, int dx, int dy, float glyphScale, bool folded) {
+        if (glyphScale == 1.0f) {
+          renderCharImpl<TextRotation::None>(*this, mode, it->second, cp, x + dx, baseline + dy, black, style);
+        } else {
+          renderCharAtScale(*this, mode, it->second, cp, x + dx, baseline + dy, black, style, glyphScale,
+                            (folded || (style & (EpdFontFamily::SUP | EpdFontFamily::SUB))) ? 2 : 1);
+        }
+      });
 }

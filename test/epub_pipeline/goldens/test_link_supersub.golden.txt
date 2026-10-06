@@ -167,7 +167,7 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
    W x=288 s=0 z=100 t=branch.
   FN n=3 href=notes.xhtml#n3
 SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
- PAGE 0 elements=6 footnotes=1
+ PAGE 0 elements=5 footnotes=1
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=4
    W x=61 s=1 z=100 t=Cancelled
    W x=220 s=1 z=100 t=Inside
@@ -184,42 +184,41 @@ SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
    W x=330 s=0 z=100 t=inside
    W x=387 s=0 z=100 t=a
    W x=407 s=0 z=100 t=raised
-  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=13
+  LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=15
    W x=0 s=0 z=100 t=run
    W x=30 s=16 z=50 t=lifted
-   W x=67 s=4 z=50 t=4
-   W x=83 s=18 z=50 t=(The
-   W x=113 s=18 z=50 t=fourth
-   W x=156 s=18 z=50 t=note,
-   W x=192 s=18 z=50 t=whose
-   W x=227 s=18 z=50 t=caller
-   W x=265 s=18 z=50 t=cancels
-   W x=308 s=18 z=50 t=the
-   W x=335 s=18 z=50 t=surrounding
-   W x=399 s=18 z=50 t=sup.)
-   W x=434 s=16 z=50 t=back
-  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=16 z=50 t=down
-   W x=31 s=0 z=100 t=must
-   W x=86 s=0 z=100 t=drop
-   W x=135 s=0 z=100 t=back
-   W x=183 s=0 z=100 t=to
-   W x=220 s=0 z=100 t=the
-   W x=266 s=0 z=100 t=baseline
-   W x=352 s=0 z=100 t=instead
-   W x=432 s=0 z=100 t=of
+   W x=61 s=4 z=50 t=4
+   W x=71 s=18 z=50 t=(The
+   W x=95 s=18 z=50 t=fourth
+   W x=132 s=18 z=50 t=note,
+   W x=162 s=18 z=50 t=whose
+   W x=191 s=18 z=50 t=caller
+   W x=223 s=18 z=50 t=cancels
+   W x=260 s=18 z=50 t=the
+   W x=281 s=18 z=50 t=surrounding
+   W x=339 s=18 z=50 t=sup.)
+   W x=368 s=16 z=50 t=back
+   W x=390 s=16 z=50 t=down
+   W x=414 s=0 z=100 t=must
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=drop
+   W x=47 s=0 z=100 t=back
+   W x=93 s=0 z=100 t=to
+   W x=128 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=baseline
+   W x=256 s=0 z=100 t=instead
+   W x=334 s=0 z=100 t=of
+   W x=369 s=0 z=100 t=inheriting
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=inheriting
-   W x=98 s=0 z=100 t=the
-   W x=137 s=0 z=100 t=sup,
-   W x=179 s=0 z=100 t=which
-   W x=230 s=0 z=100 t=is
-   W x=253 s=0 z=100 t=what
-   W x=301 s=0 z=100 t=an
-   W x=332 s=0 z=100 t=explicit
-   W x=400 s=0 z=100 t=cancel
-  LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=1
-   W x=0 s=0 z=100 t=means.
+   W x=0 s=0 z=100 t=the
+   W x=37 s=0 z=100 t=sup,
+   W x=77 s=0 z=100 t=which
+   W x=126 s=0 z=100 t=is
+   W x=147 s=0 z=100 t=what
+   W x=193 s=0 z=100 t=an
+   W x=222 s=0 z=100 t=explicit
+   W x=288 s=0 z=100 t=cancel
+   W x=349 s=0 z=100 t=means.
   FN n=4 href=notes.xhtml#n4
 SPINE 4 href=OEBPS/notes.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=7 footnotes=0

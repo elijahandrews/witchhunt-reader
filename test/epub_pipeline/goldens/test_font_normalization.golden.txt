@@ -178,7 +178,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=300 s=0 z=111 t=percent
    W x=367 s=0 z=100 t=,
    W x=388 s=0 z=100 t=normal.
-  LINE y=540 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=541 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=These
    W x=51 s=0 z=100 t=survive
    W x=124 s=0 z=100 t=under
@@ -186,7 +186,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=203 s=0 z=100 t=and
    W x=240 s=0 z=100 t=ON
    W x=261 s=0 z=100 t=alike.
-  LINE y=564 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=565 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=4.
    W x=50 s=0 z=100 t=DISTINCT:
    W x=141 s=0 z=100 t=normal,
@@ -195,7 +195,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=341 s=0 z=80 t=footnote
    W x=422 s=0 z=80 t=size
    W x=448 s=0 z=100 t=,
-  LINE y=588 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=589 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=normal,
    W x=86 s=0 z=70 t=seventy
    W x=148 s=0 z=70 t=percent
@@ -204,12 +204,12 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=286 s=0 z=100 t=,
    W x=310 s=0 z=100 t=normal.
    W x=398 s=0 z=100 t=Neither
-  LINE y=612 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=613 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=setting
    W x=72 s=0 z=100 t=may
    W x=108 s=0 z=100 t=flatten
    W x=185 s=0 z=100 t=these.
-  LINE y=636 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=637 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=5.
    W x=54 s=0 z=100 t=MID-LINE:
    W x=153 s=0 z=100 t=plain
@@ -217,7 +217,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=280 s=0 z=95 t=then
    W x=336 s=0 z=95 t=a
    W x=363 s=0 z=95 t=ninety-five
-  LINE y=660 x=0 align=0 mult=1.000 hfid=0 words=11
+  LINE y=661 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=95 t=percent
    W x=68 s=0 z=95 t=run
    W x=108 s=0 z=95 t=in
@@ -229,7 +229,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=339 s=0 z=100 t=,
    W x=358 s=0 z=100 t=then
    W x=411 s=0 z=100 t=plain
-  LINE y=684 x=0 align=0 mult=1.000 hfid=0 words=10
+  LINE y=685 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=words
    W x=55 s=0 z=100 t=again
    W x=113 s=0 z=100 t=—
@@ -240,7 +240,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=323 s=0 z=100 t=run
    W x=365 s=0 z=100 t=joins
    W x=422 s=0 z=100 t=the
-  LINE y=708 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=709 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=body
    W x=47 s=0 z=100 t=baseline
    W x=131 s=0 z=100 t=without
@@ -248,7 +248,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=299 s=0 z=100 t=the
    W x=343 s=0 z=100 t=runs
    W x=395 s=0 z=100 t=around
-  LINE y=732 x=0 align=0 mult=1.000 hfid=0 words=1
+  LINE y=733 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=it.
  PAGE 1 elements=28 footnotes=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=8
@@ -269,13 +269,13 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=326 s=0 z=94 t=a
    W x=350 s=0 z=94 t=half
    W x=403 s=0 z=94 t=percent
-  LINE y=47 x=0 align=0 mult=1.000 hfid=0 words=5
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=105 t=back
    W x=41 s=0 z=105 t=to
    W x=70 s=0 z=105 t=outer
    W x=128 s=0 z=100 t=and
    W x=165 s=0 z=100 t=normal.
-  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=73 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=7.
    W x=46 s=0 z=100 t=GRADIENT
    W x=123 s=0 z=100 t=(steps
@@ -285,23 +285,23 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=296 s=0 z=100 t=band
    W x=339 s=0 z=100 t=collapse,
    W x=426 s=0 z=100 t=the
-  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=97 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=wide
    W x=35 s=0 z=100 t=ones
    W x=82 s=0 z=100 t=remain):
-  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=1
+  LINE y=121 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=18 s=0 z=100 t=ninety-eight
-  LINE y=144 x=0 align=0 mult=0.950 hfid=0 words=1
+  LINE y=145 x=0 align=0 mult=0.950 hfid=0 words=1
    W x=0 s=0 z=100 t=ninety-five
-  LINE y=167 x=0 align=0 mult=0.920 hfid=0 words=1
+  LINE y=168 x=0 align=0 mult=0.920 hfid=0 words=1
    W x=0 s=0 z=100 t=ninety-two
-  LINE y=189 x=0 align=0 mult=0.890 hfid=0 words=1
+  LINE y=190 x=0 align=0 mult=0.890 hfid=0 words=1
    W x=0 s=0 z=100 t=eighty-nine
-  LINE y=210 x=0 align=0 mult=0.800 hfid=0 words=1
+  LINE y=211 x=0 align=0 mult=0.800 hfid=0 words=1
    W x=0 s=0 z=100 t=eighty
-  LINE y=229 x=0 align=0 mult=0.700 hfid=0 words=1
+  LINE y=230 x=0 align=0 mult=0.700 hfid=0 words=1
    W x=0 s=0 z=100 t=seventy
-  LINE y=246 x=0 align=0 mult=0.920 hfid=0 words=9
+  LINE y=247 x=0 align=0 mult=0.920 hfid=0 words=9
    W x=17 s=0 z=100 t=8.
    W x=38 s=0 z=100 t=BLOCK
    W x=90 s=0 z=100 t=LEVEL:
@@ -311,7 +311,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=311 s=0 z=100 t=on
    W x=338 s=0 z=100 t=the
    W x=373 s=0 z=100 t=paragraph
-  LINE y=268 x=0 align=0 mult=0.920 hfid=0 words=10
+  LINE y=269 x=0 align=0 mult=0.920 hfid=0 words=10
    W x=0 s=0 z=100 t=itself
    W x=57 s=0 z=100 t=rather
    W x=119 s=0 z=100 t=than
@@ -322,31 +322,31 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=325 s=0 z=100 t=so
    W x=352 s=0 z=100 t=this
    W x=394 s=0 z=100 t=travels
-  LINE y=290 x=0 align=0 mult=0.920 hfid=0 words=3
+  LINE y=291 x=0 align=0 mult=0.920 hfid=0 words=3
    W x=0 s=0 z=100 t=the
    W x=35 s=0 z=100 t=block-style
    W x=129 s=0 z=100 t=path.
-  LINE y=312 x=0 align=0 mult=0.800 hfid=0 words=9
+  LINE y=313 x=0 align=0 mult=0.800 hfid=0 words=10
    W x=14 s=0 z=100 t=8b.
-   W x=41 s=0 z=100 t=BLOCK
-   W x=90 s=0 z=100 t=LEVEL
-   W x=144 s=0 z=100 t=DISTINCT:
-   W x=215 s=0 z=100 t=an
-   W x=242 s=0 z=100 t=eighty
-   W x=296 s=0 z=100 t=percent
-   W x=353 s=0 z=100 t=block,
-   W x=402 s=0 z=100 t=outside
-  LINE y=331 x=0 align=0 mult=0.800 hfid=0 words=9
-   W x=0 s=0 z=100 t=both
-   W x=37 s=0 z=100 t=bands,
-   W x=85 s=0 z=100 t=which
-   W x=124 s=0 z=100 t=must
-   W x=161 s=0 z=100 t=keep
-   W x=192 s=0 z=100 t=its
-   W x=217 s=0 z=100 t=size
-   W x=248 s=0 z=100 t=either
-   W x=296 s=0 z=100 t=way.
-  LINE y=350 x=0 align=0 mult=1.100 hfid=0 words=9
+   W x=37 s=0 z=100 t=BLOCK
+   W x=82 s=0 z=100 t=LEVEL
+   W x=132 s=0 z=100 t=DISTINCT:
+   W x=199 s=0 z=100 t=an
+   W x=222 s=0 z=100 t=eighty
+   W x=272 s=0 z=100 t=percent
+   W x=325 s=0 z=100 t=block,
+   W x=370 s=0 z=100 t=outside
+   W x=427 s=0 z=100 t=both
+  LINE y=332 x=0 align=0 mult=0.800 hfid=0 words=8
+   W x=0 s=0 z=100 t=bands,
+   W x=48 s=0 z=100 t=which
+   W x=87 s=0 z=100 t=must
+   W x=124 s=0 z=100 t=keep
+   W x=155 s=0 z=100 t=its
+   W x=180 s=0 z=100 t=size
+   W x=211 s=0 z=100 t=either
+   W x=259 s=0 z=100 t=way.
+  LINE y=351 x=0 align=0 mult=1.100 hfid=0 words=9
    W x=20 s=0 z=100 t=9.
    W x=47 s=0 z=100 t=BLOCK
    W x=110 s=0 z=100 t=EDGE:
@@ -356,7 +356,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=305 s=0 z=100 t=of
    W x=337 s=0 z=100 t=prose
    W x=393 s=0 z=100 t=stated
-  LINE y=376 x=0 align=0 mult=1.100 hfid=0 words=8
+  LINE y=377 x=0 align=0 mult=1.100 hfid=0 words=8
    W x=0 s=0 z=100 t=at
    W x=34 s=0 z=100 t=one
    W x=79 s=0 z=100 t=hundred
@@ -365,7 +365,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=282 s=0 z=100 t=on
    W x=317 s=0 z=100 t=the
    W x=361 s=0 z=100 t=paragraph
-  LINE y=402 x=0 align=0 mult=1.100 hfid=0 words=9
+  LINE y=403 x=0 align=0 mult=1.100 hfid=0 words=9
    W x=0 s=0 z=100 t=class,
    W x=70 s=0 z=100 t=which
    W x=128 s=0 z=100 t=is
@@ -375,7 +375,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=335 s=0 z=100 t=edge
    W x=387 s=0 z=100 t=of
    W x=422 s=0 z=100 t=the
-  LINE y=428 x=0 align=0 mult=1.100 hfid=0 words=10
+  LINE y=429 x=0 align=0 mult=1.100 hfid=0 words=10
    W x=0 s=0 z=100 t=ON
    W x=29 s=0 z=100 t=band.
    W x=93 s=0 z=100 t=It
@@ -386,7 +386,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=321 s=0 z=100 t=under
    W x=385 s=0 z=100 t=ON,
    W x=422 s=0 z=100 t=and
-  LINE y=454 x=0 align=0 mult=1.100 hfid=0 words=8
+  LINE y=455 x=0 align=0 mult=1.100 hfid=0 words=8
    W x=0 s=0 z=80 t=this
    W x=44 s=0 z=80 t=nested
    W x=104 s=0 z=80 t=eighty
@@ -395,7 +395,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=265 s=0 z=100 t=must
    W x=322 s=0 z=100 t=then
    W x=381 s=0 z=100 t=measure
-  LINE y=480 x=0 align=0 mult=1.100 hfid=0 words=9
+  LINE y=481 x=0 align=0 mult=1.100 hfid=0 words=9
    W x=0 s=0 z=100 t=eighty
    W x=74 s=0 z=100 t=percent
    W x=152 s=0 z=100 t=of
@@ -405,10 +405,10 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=300 s=0 z=100 t=of
    W x=336 s=0 z=100 t=the
    W x=382 s=0 z=100 t=hundred
-  LINE y=506 x=0 align=0 mult=1.100 hfid=0 words=2
+  LINE y=507 x=0 align=0 mult=1.100 hfid=0 words=2
    W x=0 s=0 z=100 t=and
    W x=41 s=0 z=100 t=ten.
-  LINE y=532 x=0 align=2 mult=1.060 hfid=0 words=7
+  LINE y=533 x=0 align=2 mult=1.060 hfid=0 words=7
    W x=24 s=1 z=100 t=10.
    W x=63 s=1 z=100 t=HEADING
    W x=142 s=1 z=100 t=EDGE:
@@ -416,7 +416,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=249 s=1 z=100 t=hundred
    W x=333 s=1 z=100 t=six
    W x=365 s=1 z=100 t=percent
-  LINE y=557 x=0 align=0 mult=1.000 hfid=0 words=10
+  LINE y=558 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 t=A
    W x=36 s=0 z=100 t=heading
    W x=115 s=0 z=100 t=sized
@@ -427,7 +427,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=338 s=0 z=100 t=keeps
    W x=389 s=0 z=100 t=its
    W x=424 s=0 z=100 t=size
-  LINE y=581 x=0 align=0 mult=1.000 hfid=0 words=10
+  LINE y=582 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=under
    W x=57 s=0 z=100 t=both
    W x=107 s=0 z=100 t=settings
@@ -438,7 +438,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=356 s=0 z=100 t=body
    W x=400 s=0 z=100 t=text
    W x=446 s=0 z=100 t=a
-  LINE y=605 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=606 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=scale
    W x=56 s=0 z=100 t=nobody
    W x=123 s=0 z=100 t=asked
@@ -448,6 +448,6 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=301 s=0 z=100 t=not
    W x=344 s=0 z=100 t=flatten
    W x=425 s=0 z=100 t=the
-  LINE y=629 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=630 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=page's
    W x=63 s=0 z=100 t=hierarchy.

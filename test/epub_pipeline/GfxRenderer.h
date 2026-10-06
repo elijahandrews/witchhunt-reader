@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include <EpdFontFamily.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -27,6 +28,33 @@ enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 
 
 class GfxRenderer {
  public:
+  struct TextFont {
+    int fontId;
+    float scale;
+  };
+  TextFont resolveTextFont(int fontId, uint8_t family) const {
+    return {family == 2 ? -2000000 : (family == 1 ? -1000000 : fontId), 1.0f};
+  }
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                            int16_t tracking) const {
+    int count = 0;
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
+      if ((*p & 0xc0) != 0x80) ++count;
+    const float familyScale = fontId == -2000000 ? 1.2f : 1.0f;
+    const int width =
+        text[0] == ' ' && text[1] == 0 ? getSpaceWidth(fontId, style) : getTextAdvanceX(fontId, text, style);
+    return std::max(
+        0, static_cast<int>(std::lround(width * scale * familyScale + std::max(0, count - 1) * tracking / 16.0f)));
+  }
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                         int16_t tracking) const {
+    return getTextAdvanceXSpaced(fontId, text, style, scale, tracking);
+  }
+  void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
+                      int16_t) const {
+    drawTextScaled(fontId, x, y, text, black, style, scale);
+  }
+
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
   enum Orientation { Portrait, LandscapeClockwise, PortraitInverted, LandscapeCounterClockwise };
 
@@ -83,8 +111,8 @@ class GfxRenderer {
   int getSpaceWidth(int, EpdFontFamily::Style = EpdFontFamily::REGULAR) const { return 6; }
   int getSpaceAdvance(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 6; }
   int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 0; }
-  int getLineHeight(int) const { return 24; }
-  int getLineHeightScaled(int, float scale) const { return static_cast<int>(24 * scale); }
+  int getLineHeight(int fontId) const { return fontId == -2000000 ? 30 : 24; }
+  int getLineHeightScaled(int fontId, float scale) const { return static_cast<int>(getLineHeight(fontId) * scale); }
   // Test seam for the image-header heap recovery. 0 (the default) models a host build with
   // no cache manager at all, so callers are told nothing was released. When set, this models
   // the real thing — dropping the SD-font glyph caches frees heap — by reporting success and

@@ -115,7 +115,7 @@ void PageTableFragment::render(GfxRenderer& renderer, const int fontId, const in
       int lineY = rowY + TABLE_CELL_PADDING;
       for (const auto& line : cell.lines) {
         line->render(renderer, fontId, colX[col] + TABLE_CELL_PADDING, lineY);
-        lineY += lineHeight;
+        lineY += cell.lineAdvance ? cell.lineAdvance : lineHeight;
       }
       // In-cell graphic, drawn below the cell text. Always 1-bit (BW) thumbnails:
       // the decode/cache machinery lives in ImageBlock; the BW cache is built during
@@ -200,6 +200,7 @@ bool PageTableFragment::serialize(FsFile& file) {
     for (const auto& cell : row.cells) {
       serialization::writePod(file, cell.isHeader);
       serialization::writePod(file, cell.colSpan);
+      serialization::writePod(file, cell.lineAdvance);
       const uint8_t lineCount = static_cast<uint8_t>(cell.lines.size());
       serialization::writePod(file, lineCount);
       for (const auto& line : cell.lines) {
@@ -256,6 +257,7 @@ std::unique_ptr<PageTableFragment> PageTableFragment::deserialize(FsFile& file, 
       TableCell cell;
       serialization::readPod(file, cell.isHeader);
       serialization::readPod(file, cell.colSpan);
+      serialization::readPod(file, cell.lineAdvance);
       if (cell.colSpan == 0 || cell.colSpan > columnCount) {
         LOG_ERR("PGE", "TableFragment: invalid colSpan %u at row %u cell %u", cell.colSpan, r, c);
         return nullptr;

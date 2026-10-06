@@ -13,12 +13,44 @@
 
 #include <EpdFontFamily.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 class GfxRenderer {
  public:
+  bool scanning = false;
+  mutable int spacedMeasurements = 0;
+  struct TextFont {
+    int fontId;
+    float scale;
+  };
+  TextFont resolveTextFont(int fontId, uint8_t family) const {
+    return {family == 2 ? -2000000 : (family == 1 ? -1000000 : fontId), 1.0f};
+  }
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                            int16_t tracking) const {
+    ++spacedMeasurements;
+    int count = 0;
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
+      if ((*p & 0xc0) != 0x80) ++count;
+    const float familyScale = fontId == -2000000 ? 1.2f : 1.0f;
+    const int width =
+        text[0] == ' ' && text[1] == 0 ? getSpaceWidth(fontId, style) : getTextAdvanceX(fontId, text, style);
+    return std::max(
+        0, static_cast<int>(std::lround(width * scale * familyScale + std::max(0, count - 1) * tracking / 16.0f)));
+  }
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                         int16_t tracking) const {
+    return getTextAdvanceXSpaced(fontId, text, style, scale, tracking);
+  }
+  void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
+                      int16_t) const {
+    drawTextScaled(fontId, x, y, text, black, style, scale);
+  }
+
   static constexpr int GLYPH_W = 10;
   static constexpr int SPACE_W = 5;
   static constexpr int ASCENDER = 16;
@@ -73,7 +105,7 @@ class GfxRenderer {
   void ensureFontReady(int /*fontId*/, const char* /*utf8Text*/) const {}
 
   // --- Render surface used by TextBlock ---
-  bool isFontCacheScanning() const { return false; }
+  bool isFontCacheScanning() const { return scanning; }
   int getTextWidth(int fontId, const char* text, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const {
     return getTextAdvanceX(fontId, text, style);
   }

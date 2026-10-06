@@ -1020,3 +1020,36 @@ TEST(CssParserBackground, ABookWithoutPicturesLeavesNoSideFile) {
   std::error_code rmEc;
   std::filesystem::remove(cssPath, rmEc);
 }
+
+TEST(CssParserTypography, FamilyAndTrackingSurviveColdDiskAndResidentArena) {
+  const std::string css =
+      ".sans { font-family: 'Unknown', sans-serif; letter-spacing: .1em }\n.reset { font-family: inherit; "
+      "letter-spacing: unset }";
+  std::string cssPath;
+  ASSERT_TRUE(writeTempCssFile(std::vector<uint8_t>(css.begin(), css.end()), cssPath));
+  const std::string cacheDir = makeTempDir();
+  {
+    CssParser parser(cacheDir);
+    ASSERT_TRUE(compileCache(parser, cssPath));
+  }
+  for (int pass = 0; pass < 2; ++pass) {
+    BuildArena arena(8192);
+    CssParser parser(cacheDir);
+    if (pass) {
+      parser.setIndexArena(&arena);
+      parser.setLeanResolve(true);
+    }
+    ASSERT_TRUE(parser.loadFromCache());
+    const auto s = parser.resolveStyle("span", "sans");
+    EXPECT_TRUE(s.hasFontFamily());
+    EXPECT_EQ(s.fontFamily, wordTypography::SansSerif);
+    EXPECT_TRUE(s.hasLetterSpacing());
+    EXPECT_FLOAT_EQ(s.letterSpacing.value, .1f);
+    EXPECT_EQ(s.letterSpacing.unit, CssUnit::Em);
+    const auto reset = parser.resolveStyle("span", "reset");
+    EXPECT_EQ(reset.fontFamily, wordTypography::Inherit);
+    EXPECT_EQ(reset.letterSpacing.unit, CssUnit::Auto);
+  }
+  removePath(cacheDir);
+  std::filesystem::remove(cssPath);
+}

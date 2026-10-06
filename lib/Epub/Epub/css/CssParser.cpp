@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <new>
 #include <string_view>
@@ -101,8 +102,8 @@ constexpr size_t CSS_LENGTH_BYTES = sizeof(float) + sizeof(uint8_t);
 constexpr size_t CSS_FIXED_STYLE_BYTES = 4 * sizeof(uint8_t) + (CSS_LENGTH_FIELD_COUNT * CSS_LENGTH_BYTES) +
                                          sizeof(uint8_t) + sizeof(uint16_t) + 2 * sizeof(uint8_t) + sizeof(uint8_t) +
                                          sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
-                                         sizeof(uint8_t) + sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t);
-static_assert(CSS_FIXED_STYLE_BYTES == 79,
+                                         sizeof(uint8_t) + sizeof(uint8_t) + sizeof(float) + sizeof(uint8_t) + 6;
+static_assert(CSS_FIXED_STYLE_BYTES == 85,
               "style payload layout changed — update read/writeCssStylePayload and bump CSS_CACHE_VERSION");
 
 // Cache file name (version is CssParser::CSS_CACHE_VERSION)
@@ -601,6 +602,62 @@ void CssParser::parseDeclarationIntoStyle(const std::string_view decl, CssStyle&
     } else if (va == "baseline") {
       style.verticalAlign = CssVerticalAlign::Baseline;
       style.defined.verticalAlign = 1;
+    }
+  } else if (propNameBuf == "font-family") {
+    const std::string& val = propValueBuf;
+    if (val == "inherit" || val == "unset") {
+      style.fontFamily = wordTypography::Inherit;
+      style.defined.fontFamily = 1;
+    } else if (val == "initial") {
+      style.fontFamily = wordTypography::Reader;
+      style.defined.fontFamily = 1;
+    } else {
+      size_t start = 0;
+      while (start < val.size()) {
+        size_t end = start;
+        char quote = 0;
+        for (; end < val.size(); ++end) {
+          const char c = val[end];
+          if (c == '\\' && end + 1 < val.size()) {
+            ++end;
+            continue;
+          }
+          if (quote) {
+            if (c == quote) quote = 0;
+          } else if (c == '\'' || c == '"')
+            quote = c;
+          else if (c == ',')
+            break;
+        }
+        size_t a = start, b = end;
+        while (a < b && isCssWhitespace(val[a])) ++a;
+        while (b > a && isCssWhitespace(val[b - 1])) --b;
+        const std::string_view name(val.data() + a, b - a);
+        if (name == "serif" || name == "sans-serif") {
+          style.fontFamily = name == "serif" ? wordTypography::Serif : wordTypography::SansSerif;
+          style.defined.fontFamily = 1;
+          break;
+        }
+        start = end + 1;
+      }
+    }
+  } else if (propNameBuf == "letter-spacing") {
+    const std::string& val = propValueBuf;
+    if (val == "normal" || val == "initial") {
+      style.letterSpacing = CssLength();
+      style.defined.letterSpacing = 1;
+    } else if (val == "inherit" || val == "unset") {
+      style.letterSpacing = CssLength(0, CssUnit::Auto);
+      style.defined.letterSpacing = 1;
+    } else {
+      char* end = nullptr;
+      const float number = strtof(val.c_str(), &end);
+      const std::string_view unit(end ? end : "");
+      if (end != val.c_str() && std::isfinite(number) &&
+          (unit == "em" || unit == "rem" || unit == "px" || unit == "pt" || (unit.empty() && number == 0))) {
+        style.letterSpacing = interpretLength(val);
+        style.defined.letterSpacing = 1;
+      }
     }
   } else if (propNameBuf == "text-transform") {
     const std::string_view val = propValueBuf;
@@ -1458,6 +1515,14 @@ bool CssParser::readCssStylePayload(FsFile& file, CssStyle& style) {
   style.textTransform = static_cast<CssTextTransform>(transformFlags & 0x3);
   style.defined.textTransform = (transformFlags & 0x4) != 0;
   style.defined.lineHeight = (lineHeightFlags & 0x1) != 0;
+  uint8_t familyFlags = 0, spacingFlags = 0;
+  if (file.read(&familyFlags, 1) != 1 || file.read(&style.letterSpacing.value, 4) != 4 ||
+      file.read(&spacingFlags, 1) != 1)
+    return false;
+  style.fontFamily = familyFlags & 3;
+  style.defined.fontFamily = (familyFlags & 4) != 0;
+  style.letterSpacing.unit = static_cast<CssUnit>(spacingFlags & 7);
+  style.defined.letterSpacing = (spacingFlags & 8) != 0;
   return true;
 }
 
@@ -1527,6 +1592,9 @@ void CssParser::writeCssStylePayload(FsFile& file, const CssStyle& style) {
   file.write(static_cast<uint8_t>(static_cast<uint8_t>(style.textTransform) | (style.defined.textTransform ? 0x4 : 0)));
   file.write(reinterpret_cast<const uint8_t*>(&style.lineHeightMultiplier), sizeof(float));
   file.write(static_cast<uint8_t>(style.defined.lineHeight));
+  file.write(static_cast<uint8_t>(style.fontFamily | (style.defined.fontFamily ? 4 : 0)));
+  file.write(reinterpret_cast<const uint8_t*>(&style.letterSpacing.value), 4);
+  file.write(static_cast<uint8_t>(style.letterSpacing.unit) | (style.defined.letterSpacing ? 8 : 0));
 }
 
 void CssParser::touchHotRule(const std::string& selector) const {
@@ -1793,7 +1861,7 @@ bool CssParser::ensureCacheIndexLoaded() const {
 // (unaligned) records are safe to read on the C3.
 
 // Worst case: 4 (mask) + 2 (packed enums) + 11 lengths * 5 + 2 multipliers * 4 = 69 bytes.
-constexpr size_t kMaxCompressedStyle = 4 + 2 + 11 * 5 + 2 * 4 + 1;
+constexpr size_t kMaxCompressedStyle = 4 + 2 + 11 * 5 + 2 * 4 + 1 + 7;
 
 // Canonical "which properties are set" mask: 27 defined bits (0-26), then the three boolean
 // VALUES of the invisibility properties in bits 27-29 -- the uint16 of enum values below is
@@ -1862,6 +1930,9 @@ static size_t compressStyle(const CssStyle& s, uint8_t* out) {
     p += 4;
   }
   if (d.textTransform) *p++ = static_cast<uint8_t>(s.textTransform);
+  *p++ = (d.fontFamily ? 1 : 0) | (d.letterSpacing ? 2 : 0);
+  if (d.fontFamily) *p++ = s.fontFamily;
+  putLen(d.letterSpacing, s.letterSpacing);
   return static_cast<size_t>(p - out);
 }
 
@@ -1946,6 +2017,11 @@ static void decompressStyle(const uint8_t* in, CssStyle& out) {
     p += 4;
   }
   if (d.textTransform) out.textTransform = static_cast<CssTextTransform>(*p++);
+  const uint8_t typographyFlags = *p++;
+  d.fontFamily = (typographyFlags & 1) != 0;
+  d.letterSpacing = (typographyFlags & 2) != 0;
+  if (d.fontFamily) out.fontFamily = *p++;
+  getLen(d.letterSpacing, out.letterSpacing);
 }
 
 // Stream the whole ruleset into the arena as a sorted {hash, styleOff} index plus a pool of

@@ -159,3 +159,26 @@ TEST(CssLineHeight, NormalResetsAndMalformedLengthsAreIgnored) {
   EXPECT_FLOAT_EQ(style.lineHeightMultiplier, 1.0f);
   EXPECT_FALSE(CssParser::parseInlineStyle("line-height: 1.2garbageem").hasLineHeight());
 }
+
+TEST(CssParserDeclarations, GenericFamilyFallbackAndResets) {
+  const auto s = CssParser::parseInlineStyle("font-family: 'Unknown font', Helvetica, sans-serif");
+  EXPECT_TRUE(s.hasFontFamily());
+  EXPECT_EQ(s.fontFamily, wordTypography::SansSerif);
+  EXPECT_FALSE(CssParser::parseInlineStyle("font-family: monospace").hasFontFamily());
+  EXPECT_FALSE(CssParser::parseInlineStyle("font-family: \"named, sans-serif, font\"").hasFontFamily());
+  EXPECT_FALSE(CssParser::parseInlineStyle("font-family: 'serif'").hasFontFamily());
+  EXPECT_EQ(CssParser::parseInlineStyle("font-family: serif; font-family: inherit").fontFamily,
+            wordTypography::Inherit);
+  EXPECT_EQ(CssParser::parseInlineStyle("font-family: sans-serif; font-family: initial").fontFamily,
+            wordTypography::Reader);
+}
+TEST(CssParserDeclarations, TrackingAcceptsLengthsAndRejectsInvalidValues) {
+  for (const auto* value : {".1em", "-.05em", "2px", "1pt", ".2rem", "0"}) {
+    const auto s = CssParser::parseInlineStyle(std::string("letter-spacing:") + value);
+    EXPECT_TRUE(s.hasLetterSpacing()) << value;
+  }
+  for (const auto* value : {"10%", "1", "2vw", "nan", "infinity", "garbage", "calc(1em + 1px)"})
+    EXPECT_FALSE(CssParser::parseInlineStyle(std::string("letter-spacing:") + value).hasLetterSpacing()) << value;
+  EXPECT_EQ(CssParser::parseInlineStyle("letter-spacing:1em;letter-spacing:normal").letterSpacing.value, 0);
+  EXPECT_EQ(CssParser::parseInlineStyle("letter-spacing:unset").letterSpacing.unit, CssUnit::Auto);
+}

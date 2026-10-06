@@ -732,6 +732,15 @@ void setupDisplayAndFonts(bool seamless = false, bool skipSdFontDiscovery = fals
   renderer.insertFont(FIT_SMALL_FONT_ID, smallFontFamily);
   renderer.insertFont(FIT_BODY_FONT_ID, ui10FontFamily);
   renderer.insertFont(FIT_TITLE_FONT_ID, ui12FontFamily);
+  renderer.registerReaderFontPair(BOOKERLY_10_FONT_ID, NOTOSANS_10_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_12_FONT_ID, NOTOSANS_12_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_14_FONT_ID, NOTOSANS_14_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_16_FONT_ID, NOTOSANS_16_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_18_FONT_ID, NOTOSANS_18_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_20_FONT_ID, NOTOSANS_20_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_22_FONT_ID, NOTOSANS_22_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_24_FONT_ID, NOTOSANS_24_FONT_ID);
+  renderer.registerReaderFontPair(BOOKERLY_26_FONT_ID, NOTOSANS_26_FONT_ID);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);

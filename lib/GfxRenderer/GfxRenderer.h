@@ -20,6 +20,12 @@ class SdCardFont;
 enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 0x0A, Black = 0x10 };
 
 class GfxRenderer {
+  struct ReaderFontPair {
+    int serif, sans;
+  };
+  ReaderFontPair readerFontPairs_[9]{};
+  uint8_t readerFontPairCount_ = 0;
+
  public:
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
 
@@ -609,6 +615,20 @@ class GfxRenderer {
                       float scale) const;
   void drawCenteredText(int fontId, int y, const char* text, bool black = true,
                         EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+  struct TextFont {
+    int fontId;
+    float scale;
+  };
+  // At most the nine shipped reader sizes. No font data or second SD font is loaded.
+  void registerReaderFontPair(int serif, int sans) {
+    if (readerFontPairCount_ < 9) readerFontPairs_[readerFontPairCount_++] = {serif, sans};
+  }
+  TextFont resolveTextFont(int fontId, uint8_t genericFamily) const;
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
+                            int16_t tracking) const;
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking) const;
+  void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
+                      int16_t tracking) const;
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;

@@ -61,18 +61,19 @@ class ParsedText {
   // (without the hook: the row is placed as a whole inside a block of its own). A cell laid out
   // as a fallback paragraph keeps the heap.
   BuildArena* lineArena_ = nullptr;
-  // Called with the line's largest word-size percent just before the line is materialised.
+  // Called with the line's actual font height just before the line is materialised.
   // The parser uses it to run its page-fit test BEFORE the allocation: a line that does not
   // fit is then allocated from the page it lands on, not from the block of the page it
   // overflowed -- with page-scoped arena blocks, allocating first would leave page N+1 holding
   // bytes that die with page N.
-  std::function<void(uint8_t maxSizePct)> beforeLine_;
+  std::function<void(float lineHeight)> beforeLine_;
   std::vector<EpdFontFamily::Style> wordStyles;
   std::vector<bool> wordContinues;  // true = word attaches to previous (no space before it)
   // Per-word font size, percent of the block font size (100 = block size). Kept in
   // lockstep with `words` through every insert/erase; the sizes are handed to each
   // TextBlock line so inline font-size spans survive into the page cache.
   std::vector<uint8_t> wordSizes;
+  std::vector<uint32_t> wordTypography_;
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
   bool hyphenationEnabled;
@@ -85,6 +86,7 @@ class ParsedText {
   bool wordGrowthRefused_ = false;
   size_t bionicTransformedUpTo_ = 0;  ///< words[0..bionicTransformedUpTo_) have already been bionic-transformed
 
+  float wordGap(const GfxRenderer& renderer, int fontId, size_t left, size_t right, bool continued) const;
   void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
   void applyBionicReadingTransform();
   // Effective measurement scale of words[i]: the block-level multiplier combined
@@ -157,7 +159,7 @@ class ParsedText {
   void releaseLayoutScratch();
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
-               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT);
+               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0);
   // True once addWord had to drop a word because the word vectors could not grow (see
   // wordGrowthRefused_). ChapterHtmlSlimParser::ensureHeapForTextLayout turns it into a
   // partial-cache abort.
@@ -172,7 +174,7 @@ class ParsedText {
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   // See lineArena_ / beforeLine_. Both survive reset().
   void setLineArena(BuildArena* arena) { lineArena_ = arena; }
-  void setBeforeLineHook(std::function<void(uint8_t maxSizePct)> hook) { beforeLine_ = std::move(hook); }
+  void setBeforeLineHook(std::function<void(float lineHeight)> hook) { beforeLine_ = std::move(hook); }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }
   bool isEmpty() const { return words.empty(); }

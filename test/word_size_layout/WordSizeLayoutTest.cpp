@@ -597,3 +597,73 @@ TEST_F(GuideDotsRender, SingleWordLineGetsNoDot) {
 
   EXPECT_EQ(renderer.fillRectCalls.size(), 0u);
 }
+
+TEST(WordTypography, FamilyAndTrackingAffectWidthsAndSurviveHyphenation) {
+  GfxRenderer renderer;
+  ParsedText text(false, true, noIndentStyle());
+  const auto annotation = wordTypography::pack(wordTypography::SansSerif, 16);
+  text.addWord("ABCDEFGHIJKLMN", EpdFontFamily::REGULAR, false, false, 100, annotation);
+  const auto result = layout(text, renderer, 80);
+  ASSERT_GE(result.lines.size(), 2u);
+  for (const auto& line : result.lines) {
+    for (uint16_t i = 0; i < line->wordCount(); ++i) {
+      EXPECT_EQ(line->wordTypography(i), annotation);
+      const auto box = line->wordBox(renderer, i, kFontId, 0, 0);
+      EXPECT_EQ(box.fontId, -2000000);
+      EXPECT_LE(box.x + box.width, 80);
+    }
+  }
+}
+TEST(WordTypography, JoinedRunsHaveTrackingAtTheJoinAndRoundTrip) {
+  GfxRenderer renderer;
+  ParsedText text(false, false, noIndentStyle());
+  const auto annotation = wordTypography::pack(wordTypography::SansSerif, 16);
+  text.addWord("AB", EpdFontFamily::REGULAR, false, false, 100, annotation);
+  text.addWord("CD", EpdFontFamily::REGULAR, false, true, 100, annotation);
+  text.addWord("plain", EpdFontFamily::REGULAR);
+  auto result = layout(text, renderer, 400);
+  ASSERT_EQ(result.lines.size(), 1u);
+  auto& line = *result.lines[0];
+  EXPECT_EQ(line.wordXpos(1), 26);  // 2*12 px + one interior and one boundary tracking pixel
+  FsFile file = HalFile::forReadWrite();
+  ASSERT_TRUE(line.serialize(file));
+  ASSERT_TRUE(file.seek(0));
+  auto restored = TextBlock::deserialize(file);
+  ASSERT_NE(restored, nullptr);
+  EXPECT_EQ(restored->wordTypography(0), annotation);
+  EXPECT_EQ(restored->wordTypography(1), annotation);
+  EXPECT_EQ(restored->wordTypography(2), 0u);
+  EXPECT_TRUE(restored->wordContinues(1));
+}
+TEST(WordTypography, BionicAndPreserveSourceKeepAnnotations) {
+  GfxRenderer renderer;
+  ParsedText text(false, false, noIndentStyle(), true);
+  const auto annotation = wordTypography::pack(wordTypography::SansSerif, 8);
+  text.addWord("reading", EpdFontFamily::REGULAR, false, false, 100, annotation);
+  auto collect = [&](bool preserve) {
+    std::vector<uint32_t> annotations;
+    text.layoutAndExtractLines(
+        renderer, kFontId, 400,
+        [&](std::unique_ptr<TextBlock> line, bool, bool) {
+          for (uint16_t i = 0; i < line->wordCount(); ++i) annotations.push_back(line->wordTypography(i));
+          return ParsedText::LineProcessResult::Accepted;
+        },
+        true, 0, 0, preserve);
+    return annotations;
+  };
+  const auto first = collect(true);
+  ASSERT_GE(first.size(), 2u);
+  for (auto value : first) EXPECT_EQ(value, annotation);
+  EXPECT_EQ(collect(false), first);
+}
+
+TEST(WordTypography, FontPrewarmScanDoesNotMeasureGlyphs) {
+  GfxRenderer renderer;
+  renderer.scanning = true;
+  TextBlock line({"plain", "sans"}, {0, 60}, {EpdFontFamily::REGULAR, EpdFontFamily::ITALIC}, BlockStyle(), {}, {},
+                 {0, wordTypography::pack(wordTypography::SansSerif, 16)});
+  line.render(renderer, kFontId, 0, 0);
+  EXPECT_EQ(renderer.spacedMeasurements, 0);
+  ASSERT_EQ(renderer.drawCalls.size(), 2u);
+  EXPECT_EQ(renderer.drawCalls[1].fontId, -2000000);
+}

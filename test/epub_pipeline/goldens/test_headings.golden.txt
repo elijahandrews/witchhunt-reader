@@ -1,13 +1,13 @@
 BOOK title=Heading Font Size Test lang=en spine=1 toc=1 reliableToc=1
 SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
  PAGE 0 elements=25 footnotes=0
-  LINE y=14 x=0 align=2 mult=1.600 hfid=0 words=4
-   W x=-1 s=1 z=100 t=H1
-   W x=35 s=1 z=100 t=Heading
-   W x=160 s=1 z=100 t=(default
-   W x=311 s=1 z=100 t=multiplier
-  LINE y=52 x=0 align=2 mult=1.600 hfid=0 words=1
-   W x=189 s=1 z=100 t=1.6x)
+  LINE y=14 x=0 align=2 mult=1.600 hfid=0 words=3
+   W x=79 s=1 z=100 t=H1
+   W x=115 s=1 z=100 t=Heading
+   W x=240 s=1 z=100 t=(default
+  LINE y=52 x=0 align=2 mult=1.600 hfid=0 words=2
+   W x=109 s=1 z=100 t=multiplier
+   W x=269 s=1 z=100 t=1.6x)
   LINE y=97 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=This
    W x=60 s=0 z=100 t=paragraph

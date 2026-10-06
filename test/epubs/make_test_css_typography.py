@@ -19,6 +19,11 @@ p { margin: 0 0 0.5em; text-indent: 0; }
 .tight { line-height: 1.2em; }
 .loose { line-height: 2.25; }
 .normal { line-height: normal; }
+.serif { font-family: "Bembo Std", Georgia, serif; }
+.sans { font-family: "Eurostile LT Std Ext Two", Helvetica, sans-serif; }
+.tracked { letter-spacing: 0.1em; }
+.tracking-reset { letter-spacing: normal; }
+
 """
 CHAPTERS = [
 ("Percentage sizes", """<h1>External CSS percentages</h1><p class="heading">A heading at 120 percent</p>
@@ -63,6 +68,26 @@ CHAPTERS = [
 ("Blank lines", """<h1>Blank line spacing</h1>
 <p class="loose">BlankLoose one<br/><br/>BlankLoose two<br/><br/>BlankLoose three</p>
 <p class="tight">BlankTight one<br/><br/>BlankTight two<br/><br/>BlankTight three</p>"""),
+("Font families", """<h1>Serif and sans serif</h1>
+<p class="serif">SerifBody with <span class="sans">SansInline <b>SansBold</b> <i>SansItalic</i></span> SerifAgain.</p>
+<p class="sans">SansLetter should look distinctly different from the serif body.</p>
+<div class="sans"><p>SansInherited <span class="serif">SerifOverride</span> SansRestored</p></div>
+<p>ReaderDefault follows the selected reader font.</p>
+<p class="sans">Joined<span class="serif">Middle</span>End</p>
+<p><span style="float:left;font-size:3em"><span class="sans">N</span></span>ested cap uses sans serif.</p>
+<p><span style="float:left;font-size:3em">“<span class="sans">Q</span></span>uoted cap preserves each family as inline runs.</p>
+<table><tr><td class="sans">SansCell</td><td class="serif">SerifCell</td></tr></table>"""),
+("Letter spacing", """<h1>Letter spacing</h1>
+<p style="text-align:center">CHAPTER FORTY TWO</p>
+<p class="tracked" style="text-align:center;text-transform:uppercase">chapter forty two</p>
+<p>Above: same words, with the second line visibly spaced farther apart.</p>
+<p>NormalBefore <span class="tracked">TrackedInline <span class="tracking-reset">ResetInline</span> TrackedAgain</span> NormalAfter</p>
+<div style="letter-spacing:2px"><p>FixedTracking <span style="font-size:150%">LargerInherited</span> SameTracking</p></div>
+<p style="letter-spacing:1pt">PointSpacing</p><p style="letter-spacing:-0.05em">NegativeSpacing</p>
+<p style="letter-spacing:.1em">Joined<span style="letter-spacing:normal">Center</span>Tail</p>
+<p class="tracked">Wrapping text must retain its spacing all the way across each line and down to the next line without crossing the right margin.</p>
+<p class="tracked">intercontinentalabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz</p>
+<p class="sans tracked">SansTracked office affinity café</p>"""),
 ("Streaming", '<h1>Long transformed word</h1><p class="upper">' + 'caféß' * 180 + '</p><p>All letters above should be uppercase, with no broken UTF-8 or missing text.</p>'),
 ("Chunk boundaries", '<h1>Drop cap overflow and UTF-8</h1>' + ''.join(
     '<p><span style="float:left;font-size:3em;text-transform:uppercase">' + 'a' * count + suffix + 'rest</span></p>'
@@ -82,7 +107,7 @@ def build(out):
       manifest += f'<item id="c{i}" href="ch{i}.xhtml" media-type="application/xhtml+xml"/>'
       spine += f'<itemref idref="c{i}"/>'
       nav += f'<navPoint id="c{i}" playOrder="{i+1}"><navLabel><text>{escape(title)}</text></navLabel><content src="ch{i}.xhtml"/></navPoint>'
-    files['OEBPS/content.opf'] = f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-css-typography-test-v1</dc:identifier><dc:title>Witch CSS Style Test</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
+    files['OEBPS/content.opf'] = f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-css-typography-test-v2</dc:identifier><dc:title>Witch CSS Style Test</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
     files['OEBPS/toc.ncx'] = f'<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head/><docTitle><text>Witch CSS Style Test</text></docTitle><navMap>{nav}</navMap></ncx>'
     with ZipFile(out, 'w') as z:
       for name, text in files.items():
