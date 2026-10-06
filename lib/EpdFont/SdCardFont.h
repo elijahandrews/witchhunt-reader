@@ -26,7 +26,7 @@ class SdCardFont {
   ~SdCardFont();
 
   // Load .cpfont file: reads header + intervals into RAM, records file layout offsets.
-  // Supports v4 (multi-style) format.
+  // Supports v4 and v5 (multi-style, optional 2x raster density).
   // Returns true on success.
   bool load(const char* path);
 
@@ -44,8 +44,9 @@ class SdCardFont {
   // styleMask: bitmask of styles to prewarm (bit 0=regular, 1=bold, 2=italic, 3=bolditalic).
   // Default 0x0F = all present styles.
   // When metadataOnly=true, only glyph metrics are loaded (no bitmap data).
-  // If loadKernLigatureData=true, kern/ligature metadata is also loaded so layout
-  // measurement calls that use applyLigatures()/getKerning() produce correct results.
+  // If loadKernLigatureData=true, layout gets the same ligature and kerning
+  // adjustments as rendering. SD kerning covers all cumulative cached glyphs
+  // (bounded by MAX_PAGE_GLYPHS); mmap layout reads full tables without copying.
   // Returns number of glyphs that couldn't be loaded (0 on full success).
   int prewarm(const char* utf8Text, uint8_t styleMask = 0x0F, bool metadataOnly = false,
               bool loadKernLigatureData = false);
@@ -105,6 +106,8 @@ class SdCardFont {
   // Content hash of the file header + style TOC entries (computed during load).
   // Used to generate deterministic font IDs for section cache invalidation.
   uint32_t contentHash() const { return contentHash_; }
+  uint8_t rasterDensity() const { return rasterDensity_; }
+  float rasterScale() const { return 1.0f / rasterDensity_; }
 
  private:
   // Per-style metadata (parsed from file header/TOC)
@@ -199,7 +202,8 @@ class SdCardFont {
     // prewarm). miniKernLeftClasses/miniKernRightClasses map ONLY the codepoints
     // used on the current page to renumbered class IDs (1..miniKern*ClassCount).
     // miniKernMatrix is a small miniKernLeftClassCount × miniKernRightClassCount
-    // flat matrix. Typical Latin page: ~25×25 matrix = ~625 bytes per style vs
+    // flat matrix (one byte per entry in V4, two in V5). A typical Latin page
+    // uses ~25×25 entries (~625 V4 bytes or ~1250 V5 bytes) per style versus
     // ~36KB for the full Literata matrix — ~50× reduction.
     EpdKernClassEntry* miniKernLeftClasses = nullptr;
     EpdKernClassEntry* miniKernRightClasses = nullptr;
@@ -208,6 +212,10 @@ class SdCardFont {
     uint8_t miniKernLeftClassCount = 0;
     uint8_t miniKernRightClassCount = 0;
     int8_t* miniKernMatrix = nullptr;
+    // True after a successful build, including a cache with no applicable
+    // pairs. Cleared with the glyph cache or mini tables; permits cheap repeated
+    // metadata-only queries and retry after a failed allocation/read.
+    bool miniKernReady = false;
 
     // The EpdFont whose data pointer we manage
     EpdFont epdFont{&stubData};
@@ -242,6 +250,7 @@ class SdCardFont {
 
   Stats stats_;
   uint32_t contentHash_ = 0;
+  uint8_t rasterDensity_ = 1;
   bool loaded_ = false;
 
   // True when persistent metadata (fullIntervals, kernLeft/RightClasses,
@@ -265,7 +274,8 @@ class SdCardFont {
   int8_t findIdenticalIntervals(uint8_t styleIdx, HalFile& file);
   int8_t findIdenticalIntervals(uint8_t styleIdx, const uint8_t* records);
   bool buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, uint32_t cpCount, HalFile& file);
-  void applyKernLigaturePointers(const PerStyle& s, EpdFontData& data) const;
+  bool ensureCachedKernMatrix(PerStyle& s, HalFile& file);
+  void applyKernLigaturePointers(const PerStyle& s, EpdFontData& data, bool mapped = false) const;
   void applyGlyphMissCallback(uint8_t styleIdx);
   int32_t findGlobalGlyphIndex(const PerStyle& s, uint32_t codepoint) const;
   int prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint32_t cpCount, bool metadataOnly,
@@ -274,7 +284,7 @@ class SdCardFont {
   // Global helpers
   void freeAll();
   void clearOverflow();
-  static void computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset);
+  bool computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset, size_t fileSize) const;
 
   // Static callback for EpdFontData::glyphMissHandler (per-style via OverflowContext)
   static const EpdGlyph* onGlyphMiss(void* ctx, uint32_t codepoint);

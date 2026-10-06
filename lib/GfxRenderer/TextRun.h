@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "GlyphScale.h"
+
 // One glyph walk for the EPUB draw and metric paths. Tracking is in display-pixel
 // sixteenths, already computed at the CSS declaration (it does not scale again).
 // All positions accumulate in fixed point; measurement never rounds per word and
@@ -36,14 +38,12 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
       if (!combining) previous = 0;
       continue;
     }
-    // Match the raster bearing convention, including negative side bearings.
-    const int left = glyphScale == 1.0f ? glyph.left : static_cast<int>(glyph.left * glyphScale + 0.5f);
-    const int width = round(glyph.width * glyphScale);
-    const int top = round(glyph.top * glyphScale);
+    const auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale);
+    const int left = bounds.left, width = bounds.width, top = -bounds.top;
     int x, y = 0;
     if (combining) {
       x = lastX + lastLeft + (lastWidth - width) / 2 - left;
-      const int height = round(glyph.height * glyphScale);
+      const int height = bounds.height;
       if (top - height < lastTop) y -= lastTop - (top - height);
     } else {
       if (previous) cursor += tracking + round(font.getKerning(previous, cp, style) * glyphScale);

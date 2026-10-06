@@ -71,15 +71,32 @@ constexpr int raiseAboveBase(int markTop, int markHeight, int baseTop) {
 /// SD-card fonts memory-map this array straight out of the file (SdCardFont.cpp asserts the
 /// size), so the layout is frozen: changing it would invalidate every .cpfont already on a
 /// user's card. Built-in fonts use EpdGlyphPacked below, which is half the size.
-typedef struct {
+typedef struct __attribute__((packed)) EpdGlyph {
   uint8_t width;        ///< Bitmap dimensions in pixels
   uint8_t height;       ///< Bitmap dimensions in pixels
   uint16_t advanceX;    ///< Distance to advance cursor (x axis), 12.4 fixed-point in pixels
   int16_t left;         ///< X dist from cursor pos to UL corner
   int16_t top;          ///< Y dist from cursor pos to UL corner
   uint16_t dataLength;  ///< Size of the font data.
-  uint32_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
+  // V4 reserved padding; V5 stores the high dimension bytes here. A V4 font
+  // ignores them, so its on-disk record and mmap layout remain unchanged.
+  uint8_t widthHigh;
+  uint8_t heightHigh;
+  uint32_t dataOffset;  ///< Pointer into bitmap (or within-group offset)
+
+  EpdGlyph() = default;
+  constexpr EpdGlyph(uint16_t w, uint16_t h, uint16_t advance, int16_t l, int16_t t, uint16_t length, uint32_t offset)
+      : width(static_cast<uint8_t>(w)),
+        height(static_cast<uint8_t>(h)),
+        advanceX(advance),
+        left(l),
+        top(t),
+        dataLength(length),
+        widthHigh(static_cast<uint8_t>(w >> 8)),
+        heightHigh(static_cast<uint8_t>(h >> 8)),
+        dataOffset(offset) {}
 } EpdGlyph;
+static_assert(sizeof(EpdGlyph) == 16 && alignof(EpdGlyph) == 1, "SD glyph records must allow unaligned mmap access");
 
 /// The same information for a BUILT-IN font, in half the bytes.
 ///
@@ -162,10 +179,10 @@ struct EpdGlyphRef {
   /// subtracting the array base from the returned pointer, which a packed array would break.
   /// uint16 because no shipped face has more than ~1,200 glyphs.
   uint16_t index;
-  uint8_t width;
-  uint8_t height;
-  int8_t left;
-  int8_t top;
+  uint16_t width;
+  uint16_t height;
+  int16_t left;  // SD dense rasters can extend beyond signed 8-bit bearings.
+  int16_t top;
   /// The ONLY field a default-constructed ref sets, so `return {}` stays cheap.
   bool valid = false;
 
@@ -310,12 +327,24 @@ typedef struct {
   /// Context pointer for glyphMissHandler (typically SdCardFont*).  Also used by
   /// GfxRenderer::getGlyphBitmap() to retrieve overflow bitmaps via SdCardFont.
   void* glyphMissCtx;
+  // V5 SD fonts reuse the reserved glyph bytes for high dimension bits and
+  // carry LE int16 kerning. Appended so existing built-in initializers default
+  // these to false/null without changing their packed storage.
+  bool wideGlyphs;
+  const uint8_t* kernMatrixWide;
 } EpdFontData;
 
 /// Reads glyph `index` out of whichever representation `data` carries.
 ///
 /// The single place that knows EpdGlyph and EpdGlyphPacked both exist. Inline because it runs
 /// once per glyph in the layout and render loops.
+inline EpdGlyphRef epdResolveSdGlyph(const EpdGlyph* glyph, uint16_t index, bool wide) {
+  const auto& g = *glyph;
+  const uint16_t width = g.width | (wide ? uint16_t(g.widthHigh) << 8 : 0);
+  const uint16_t height = g.height | (wide ? uint16_t(g.heightHigh) << 8 : 0);
+  return EpdGlyphRef{glyph, g.advanceX, index, width, height, g.left, g.top, true};
+}
+
 inline EpdGlyphRef epdResolveGlyph(const EpdFontData* data, const uint32_t index) {
   // One aggregate construction per branch, in declaration order. Deliberately NOT a default
   // construction followed by assignments: that wrote every field twice and cost +59% on
@@ -324,11 +353,7 @@ inline EpdGlyphRef epdResolveGlyph(const EpdFontData* data, const uint32_t index
     const EpdGlyphPacked& g = data->glyphPacked[index];
     return EpdGlyphRef{nullptr, g.advanceX, static_cast<uint16_t>(index), g.width, g.height, g.left, g.top, true};
   }
-  const EpdGlyph& g = data->glyph[index];
-  return EpdGlyphRef{&g,  // SD-card fonts only: the overflow-ring checks key on this pointer
-                     g.advanceX, static_cast<uint16_t>(index), g.width,
-                     g.height,   static_cast<int8_t>(g.left),  static_cast<int8_t>(g.top),
-                     true};
+  return epdResolveSdGlyph(&data->glyph[index], static_cast<uint16_t>(index), data->wideGlyphs);
 }
 
 /// Byte offset of a glyph's bitmap within EpdFontData::bitmap.

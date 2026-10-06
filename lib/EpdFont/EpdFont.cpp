@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "GlyphFallback.h"
+#include "GlyphScale.h"
 #include "SmallCaps.h"
 
 // Scale a 12.4 fixed-point advance by the small-caps factor, rounding to nearest.
@@ -49,11 +50,12 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
       continue;
     }
 
-    // Folded glyphs are drawn at smallCaps::SCALE, so all their metrics scale to match.
-    const int glyphLeft = folded ? static_cast<int>(glyph.left * smallCaps::SCALE) : glyph.left;
-    const int glyphWidth = folded ? static_cast<int>(glyph.width * smallCaps::SCALE + 0.5f) : glyph.width;
-    const int glyphTop = folded ? static_cast<int>(glyph.top * smallCaps::SCALE) : glyph.top;
-    const int glyphHeight = folded ? static_cast<int>(glyph.height * smallCaps::SCALE + 0.5f) : glyph.height;
+    // Match both the native and scaled raster paths, including fractional
+    // negative bearings and partially covered edge pixels on small caps.
+    const auto bounds =
+        glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, folded ? smallCaps::SCALE : 1.0f);
+    const int glyphLeft = bounds.left, glyphWidth = bounds.width;
+    const int glyphTop = -bounds.top, glyphHeight = bounds.height;
 
     const int raiseBy = isCombining ? combiningMark::raiseAboveBase(glyphTop, glyphHeight, lastBaseTop) : 0;
 
@@ -125,8 +127,8 @@ static uint8_t lookupKernClass(const EpdKernClassEntry* entries, const uint16_t 
   return 0;
 }
 
-int8_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const {
-  if (!data->kernMatrix && !data->kernRowOffsets) {
+int16_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const {
+  if (!data->kernMatrix && !data->kernMatrixWide && !data->kernRowOffsets) {
     return 0;
   }
   if (!data->kernLeftClasses && !data->kernLeftCodepoints) {
@@ -168,7 +170,12 @@ int8_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const 
     return 0;
   }
 
-  // Dense (SD-card fonts, mapped straight out of the .cpfont).
+  // V5 uses byte reads: the packed file need not align its wide matrix.
+  if (data->kernMatrixWide) {
+    const auto* p = data->kernMatrixWide + 2 * ((lc - 1) * data->kernRightClassCount + (rc - 1));
+    return static_cast<int16_t>(uint16_t(p[0]) | (uint16_t(p[1]) << 8));
+  }
+  // Dense V4 SD-card fonts.
   return data->kernMatrix[(lc - 1) * data->kernRightClassCount + (rc - 1)];
 }
 
@@ -242,14 +249,7 @@ EpdGlyphRef EpdFont::findGlyph(const uint32_t cp) const {
     if (const EpdGlyph* loaded = data->glyphMissHandler(data->glyphMissCtx, cp)) {
       // A ring entry, not an array one: there is no index to report, and the pointer is what
       // SdCardFont::isOverflowGlyph() recognises it by.
-      return EpdGlyphRef{loaded,
-                         loaded->advanceX,
-                         0,  // no array index: this glyph is not in the array
-                         loaded->width,
-                         loaded->height,
-                         static_cast<int8_t>(loaded->left),
-                         static_cast<int8_t>(loaded->top),
-                         true};
+      return epdResolveSdGlyph(loaded, 0, data->wideGlyphs);
     }
   }
   return {};

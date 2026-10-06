@@ -3,7 +3,11 @@
 
 Outputs binary .cpfont files containing glyph metadata and uncompressed
 2-bit bitmaps, matching the EpdFontData/EpdGlyph/EpdUnicodeInterval struct
-layout on the ESP32-C3 (little-endian, RISC-V).
+layout on the supported devices (little-endian).
+
+The default density preserves v4 output. --raster-density 2 writes v5
+with a 2x LIGHT-hinted outline raster for baseline-aligned resampling.
+See docs/cpfont-format.md for the byte layout and metric units.
 
 Usage:
     # Single file with specific presets
@@ -166,9 +170,10 @@ def norm_ceil(val):
 #               12 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Encoded from FreeType's 16.16 linearHoriAdvance.
 #
-#   kernMatrix  4.4 signed fixed-point (int8_t).
+#   kernMatrix  v4: 4.4 signed fixed-point (int8_t).
 #               4 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Range: -8.0 to +7.9375 pixels.
+#               v5: 12.4 signed fixed-point (int16_t), in raster pixels.
 #               Encoded from font design-unit kerning values.
 #
 # Both share 4 fractional bits so the renderer can add them directly into a
@@ -178,14 +183,52 @@ def fp4_from_ft16_16(val):
     """Convert FreeType 16.16 fixed-point to 12.4 fixed-point with rounding."""
     return (val + (1 << 11)) >> 12
 
-def fp4_from_design_units(du, scale):
-    """Convert a font design-unit value to 4.4 fixed-point, clamped to int8_t.
+def fp4_from_design_units(du, scale, wide=False):
+    """Round design units to raster pixels with four fractional bits.
 
-    Multiplies by scale (ppem / units_per_em) and shifts into 4 fractional
-    bits.  The result is rounded to nearest and clamped to [-128, 127].
+    v4 retains its historical int8 clamp. wide=True validates the int16 v5
+    range and preserves spacing rather than silently clipping adjustments.
     """
     raw = round(du * scale * 16)
+    if wide:
+        validate_integer("kerning adjustment", raw, -32768, 32767)
+        return raw
     return max(-128, min(127, raw))
+
+
+def validate_integer(label, value, minimum, maximum):
+    """Reject values that cannot be represented instead of wrapping on disk."""
+    if not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ValueError(f"{label} {value} is outside [{minimum}, {maximum}]")
+
+
+def validate_raster_density(raster_density):
+    if raster_density not in (1, 2):
+        raise ValueError("raster density must be 1 (v4) or 2 (v5)")
+
+
+def quantize_coverage(value, raster_density=1):
+    """Map FreeType coverage to four levels; density 1 retains the v4 thresholds."""
+    return value // 64 if raster_density == 1 else (value * 3 + 127) // 255
+
+
+def pack_freetype_bitmap(bitmap, raster_density=1):
+    """Pack row-major pixels continuously, including FreeType's signed row pitch."""
+    if bitmap.width == 0 or bitmap.rows == 0:
+        return b""
+    if bitmap.pixel_mode != freetype.FT_PIXEL_MODE_GRAY or bitmap.num_grays != 256:
+        raise ValueError("expected an 8-bit FreeType grayscale bitmap")
+    # freetype-py copies the whole bitmap on every buffer property access.
+    buffer = bitmap.buffer
+    pitch = abs(bitmap.pitch)
+    if pitch < bitmap.width or len(buffer) < pitch * bitmap.rows:
+        raise ValueError("FreeType bitmap pitch or buffer is shorter than its dimensions")
+    pixels = bytearray(bitmap.width * bitmap.rows)
+    for y in range(bitmap.rows):
+        row = y if bitmap.pitch >= 0 else bitmap.rows - 1 - y
+        for x in range(bitmap.width):
+            pixels[y * bitmap.width + x] = quantize_coverage(buffer[row * pitch + x], raster_density)
+    return pack_2bit_bitmap(bitmap.width, bitmap.rows, pixels)
 
 
 def write_png_gray(path, width, height, pixels):
@@ -378,12 +421,12 @@ def _extract_pairpos_subtable(subtable, glyph_to_cp, raw_kern):
                         raw_kern[key] = raw_kern.get(key, 0) + xa
 
 
-def extract_kerning_fonttools(font_path, codepoints, ppem):
+def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False):
     """Extract kerning pairs from a font file using fonttools.
 
     Returns dict of {(leftCp, rightCp): pixel_adjust} for the given
-    codepoints.  Values are scaled from font design units to integer
-    pixels at ppem.
+    codepoints. Values have four fractional bits in raster pixels at ppem.
+    v4 clamps to int8 for compatibility; v5 validates int16 without clamping.
     """
     font = TTFont(font_path)
     units_per_em = font['head'].unitsPerEm
@@ -444,23 +487,29 @@ def extract_kerning_fonttools(font_path, codepoints, ppem):
     # pairs for all codepoint combinations.
     scale = ppem / units_per_em
     result = {}  # (leftCp, rightCp) -> 4.4 fixed-point adjust
+    clamped_pairs = 0
     for (lg, rg), du in raw_kern.items():
-        adjust = fp4_from_design_units(du, scale)
+        adjust = fp4_from_design_units(du, scale, wide=wide)
+        if not wide and adjust != round(du * scale * 16):
+            clamped_pairs += 1
         if adjust != 0:
             for lcp in glyph_to_cps[lg]:
                 for rcp in glyph_to_cps[rg]:
                     result[(lcp, rcp)] = adjust
+    if clamped_pairs:
+        print(f"  WARNING: v4 clamped {clamped_pairs} glyph kerning pairs to int8; "
+              "--raster-density 2 uses the wider v5 matrix", file=sys.stderr)
     return result
 
 
-def derive_kern_classes(kern_map):
+def derive_kern_classes(kern_map, strict=False):
     """Derive class-based kerning from a pair map.
 
     Returns (kern_left_classes, kern_right_classes, kern_matrix,
              kern_left_class_count, kern_right_class_count) where:
     - kern_left_classes: sorted list of (codepoint, classId) tuples
     - kern_right_classes: sorted list of (codepoint, classId) tuples
-    - kern_matrix: flat list of int8 values (left_class_count * right_class_count)
+    - kern_matrix: flat list of signed fixed-point values (left_class_count * right_class_count)
     - kern_left_class_count: number of distinct left classes
     - kern_right_class_count: number of distinct right classes
     """
@@ -499,6 +548,9 @@ def derive_kern_classes(kern_map):
     kern_right_class_count = right_class_id - 1
 
     if kern_left_class_count > 255 or kern_right_class_count > 255:
+        if strict:
+            raise ValueError(f"kerning class count exceeds uint8 range: "
+                             f"left={kern_left_class_count}, right={kern_right_class_count}")
         print(f"WARNING: kerning class count exceeds uint8_t range "
               f"(left={kern_left_class_count}, right={kern_right_class_count}), "
               f"dropping kerning for this style",
@@ -633,23 +685,32 @@ def extract_ligatures_fonttools(font_path, codepoints):
     return pairs
 
 
-def rasterize_font_style(fontfile, size, intervals, style_id=0):
+def rasterize_font_style(fontfile, size, intervals, style_id=0, raster_density=1):
     """Rasterize all glyphs for one font style. Returns StyleRasterData."""
+    validate_raster_density(raster_density)
+    validate_integer("logical point size", size, 1, 65535)
     style_label = STYLE_LABELS.get(style_id, str(style_id))
+    raster_size = size * raster_density
 
     face = freetype.Face(fontfile)
     # Set font size at 150 DPI (matching fontconvert.py) BEFORE any glyph load
     # — load_glyph() with FT_LOAD_RENDER renders at the active size, so calling
     # it before set_char_size() would waste work at the default size and risk
     # Invalid_Size_Handle on some fonts.
-    face.set_char_size(size << 6, size << 6, 150, 150)
+    face.set_char_size(raster_size << 6, raster_size << 6, 150, 150)
 
-    # Always auto-hint, matching fontconvert.py — see the long comment there. Without
+    # Default v4 output always auto-hints, matching fontconvert.py — see the long comment there. Without
     # grid-fitting, a stem's subpixel phase decides whether it quantises to a 3px or a
     # 4px ink footprint, so otherwise identical letters ship at different weights
     # (issue #149). advanceX comes from linearHoriAdvance (unhinted), so this changes
     # ink boxes only and never reflows text.
     load_flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_FORCE_AUTOHINT
+    if raster_density == 2:
+        # LIGHT avoids horizontal grid fitting before later downsampling; NO_BITMAP
+        # ensures an embedded strike cannot bypass the outline rasterization.
+        # https://freetype.org/freetype2/docs/reference/ft2-glyph_retrieval.html#ft_load_target_xxx
+        load_flags = (freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_LIGHT |
+                      freetype.FT_LOAD_NO_BITMAP)
 
     def load_glyph(code_point):
         glyph_index = face.get_char_index(code_point)
@@ -699,55 +760,7 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
                 continue
 
             bitmap = f.glyph.bitmap
-            # FreeType copies the whole bitmap on each buffer property access.
-            bitmap_buffer = bitmap.buffer
-
-            # Build 4-bit greyscale bitmap (same logic as fontconvert.py)
-            pixels4g = []
-            px = 0
-            abs_pitch = abs(bitmap.pitch)
-            for y in range(bitmap.rows):
-                if bitmap.pitch >= 0:
-                    row_offset = y * abs_pitch
-                else:
-                    row_offset = (bitmap.rows - 1 - y) * abs_pitch
-                for x in range(bitmap.width):
-                    v = bitmap_buffer[row_offset + x]
-                    if x % 2 == 0:
-                        px = (v >> 4)
-                    else:
-                        px = px | (v & 0xF0)
-                        pixels4g.append(px)
-                        px = 0
-                if bitmap.width % 2 > 0:
-                    pixels4g.append(px)
-                    px = 0
-
-            # Downsample to 2-bit bitmap
-            pixels2b = []
-            px = 0
-            pitch = (bitmap.width // 2) + (bitmap.width % 2)
-            for y in range(bitmap.rows):
-                for x in range(bitmap.width):
-                    px = px << 2
-                    bm = pixels4g[y * pitch + (x // 2)]
-                    bm = (bm >> ((x % 2) * 4)) & 0xF
-
-                    if bm >= 12:
-                        px += 3
-                    elif bm >= 8:
-                        px += 2
-                    elif bm >= 4:
-                        px += 1
-
-                    if (y * bitmap.width + x) % 4 == 3:
-                        pixels2b.append(px)
-                        px = 0
-            if (bitmap.width * bitmap.rows) % 4 != 0:
-                px = px << ((4 - (bitmap.width * bitmap.rows) % 4) * 2)
-                pixels2b.append(px)
-
-            packed = bytes(pixels2b)
+            packed = pack_freetype_bitmap(bitmap, raster_density)
             glyph = GlyphProps(
                 width=bitmap.width,
                 height=bitmap.rows,
@@ -772,20 +785,20 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
     print(f"  [{style_label}] Bitmap: {total_bitmap_size} bytes ({total_bitmap_size / 1024:.1f} KB)", file=sys.stderr)
 
     # --- Extract kerning and ligatures ---
-    ppem = size * 150.0 / 72.0
+    ppem = raster_size * 150.0 / 72.0
     all_cps = set(g.code_point for g, _ in all_glyphs)
 
-    kern_map = extract_kerning_fonttools(fontfile, all_cps, ppem)
+    kern_map = extract_kerning_fonttools(fontfile, all_cps, ppem, wide=raster_density == 2)
     # SMP codepoints (> U+FFFF) cannot be stored in the uint16 kern codepoint
     # field; drop them before class derivation to avoid struct.error.
     kern_map = {(lcp, rcp): v for (lcp, rcp), v in kern_map.items() if lcp <= 0xFFFF and rcp <= 0xFFFF}
     print(f"  [{style_label}] Kerning: {len(kern_map)} pairs extracted", file=sys.stderr)
 
     (kern_left_classes, kern_right_classes, kern_matrix,
-     kern_left_class_count, kern_right_class_count) = derive_kern_classes(kern_map)
+     kern_left_class_count, kern_right_class_count) = derive_kern_classes(kern_map, strict=raster_density == 2)
 
     if kern_map:
-        matrix_size = kern_left_class_count * kern_right_class_count
+        matrix_size = kern_left_class_count * kern_right_class_count * (2 if raster_density == 2 else 1)
         entries_size = (len(kern_left_classes) + len(kern_right_classes)) * 3
         print(f"  [{style_label}] Kerning classes: {kern_left_class_count} left, {kern_right_class_count} right, "
               f"{matrix_size + entries_size} bytes", file=sys.stderr)
@@ -795,6 +808,8 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
     # entry returned here is already 16-bit safe.
     ligature_pairs = extract_ligatures_fonttools(fontfile, all_cps)
     if len(ligature_pairs) > 255:
+        if raster_density == 2:
+            raise ValueError(f"[{style_label}] {len(ligature_pairs)} ligature pairs exceed uint8 range")
         print(f"  [{style_label}] WARNING: {len(ligature_pairs)} ligature pairs exceeds uint8_t max (255), truncating",
               file=sys.stderr)
         ligature_pairs = ligature_pairs[:255]
@@ -821,45 +836,101 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0):
 
 # EpdGlyph struct: 16 bytes, little-endian
 GLYPH_STRUCT_FORMAT = "<BBHhhH2xI"
-assert struct.calcsize(GLYPH_STRUCT_FORMAT) == 16
+GLYPH_V5_STRUCT_FORMAT = "<BBHhhHBBI"
+assert struct.calcsize(GLYPH_STRUCT_FORMAT) == struct.calcsize(GLYPH_V5_STRUCT_FORMAT) == 16
 
 
-def pack_style_sections(sd):
+def pack_style_sections(sd, raster_density=1):
     """Pack one StyleRasterData into binary section bytearrays.
     Returns (intervals_data, glyphs_data, kern_left, kern_right, kern_matrix, ligatures, bitmaps)."""
+    validate_raster_density(raster_density)
+    validate_integer("style ID", sd.style_id, 0, 3)
+    validate_integer("interval count", len(sd.intervals), 1, 0xFFFFFFFF)
+    validate_integer("glyph count", len(sd.all_glyphs), 1, 0xFFFFFFFF)
+    validate_integer("line advance", sd.advanceY, 0, 255)
+    validate_integer("ascender", sd.ascender, -32768, 32767)
+    validate_integer("descender", sd.descender, -32768, 32767)
+    validate_integer("left kerning entries", len(sd.kern_left_classes), 0, 65535)
+    validate_integer("right kerning entries", len(sd.kern_right_classes), 0, 65535)
+    validate_integer("left kerning classes", sd.kern_left_class_count, 0, 255)
+    validate_integer("right kerning classes", sd.kern_right_class_count, 0, 255)
+    validate_integer("ligature count", len(sd.ligature_pairs), 0, 255)
+    if len(sd.kern_matrix) != sd.kern_left_class_count * sd.kern_right_class_count:
+        raise ValueError("kerning matrix dimensions do not match its class counts")
     intervals_data = bytearray()
     offset = 0
+    previous_end = -1
     for i_start, i_end in sd.intervals:
+        validate_integer("interval start", i_start, previous_end + 1, 0x10FFFF)
+        validate_integer("interval end", i_end, i_start, 0x10FFFF)
+        previous_end = i_end
         intervals_data += struct.pack("<III", i_start, i_end, offset)
         offset += i_end - i_start + 1
 
+    if offset != len(sd.all_glyphs):
+        raise ValueError("interval coverage does not match glyph count")
     glyphs_data = bytearray()
+    bitmap_offset = 0
+    max_dimension = 255 if raster_density == 1 else 65535
     for glyph, packed in sd.all_glyphs:
-        glyphs_data += struct.pack(GLYPH_STRUCT_FORMAT,
-                                   glyph.width, glyph.height, glyph.advance_x,
-                                   glyph.left, glyph.top,
-                                   glyph.data_length, glyph.data_offset)
+        label = f"style {sd.style_id} U+{glyph.code_point:04X}"
+        for field in ("width", "height"):
+            validate_integer(f"{label} {field}", getattr(glyph, field), 0, max_dimension)
+        validate_integer(f"{label} advance", glyph.advance_x, 0, 65535)
+        validate_integer(f"{label} left bearing", glyph.left, -32768, 32767)
+        validate_integer(f"{label} top bearing", glyph.top, -32768, 32767)
+        validate_integer(f"{label} bitmap length", glyph.data_length, 0, 65535)
+        validate_integer(f"{label} bitmap offset", glyph.data_offset, 0, 0xFFFFFFFF)
+        expected_length = (glyph.width * glyph.height + 3) // 4
+        if glyph.data_length != len(packed) or glyph.data_length != expected_length:
+            raise ValueError(f"{label} bitmap length does not match its dimensions")
+        if glyph.data_offset != bitmap_offset:
+            raise ValueError(f"{label} bitmap offset is not contiguous")
+        bitmap_offset += len(packed)
+        if raster_density == 1:
+            glyphs_data += struct.pack(GLYPH_STRUCT_FORMAT,
+                                      glyph.width, glyph.height, glyph.advance_x,
+                                      glyph.left, glyph.top,
+                                      glyph.data_length, glyph.data_offset)
+        else:
+            # Keep every v4 field at its original offset; use the old padding
+            # for the high dimension bytes, interpreted only for v5 records.
+            glyphs_data += struct.pack(GLYPH_V5_STRUCT_FORMAT,
+                                      glyph.width & 255, glyph.height & 255, glyph.advance_x,
+                                      glyph.left, glyph.top, glyph.data_length,
+                                      glyph.width >> 8, glyph.height >> 8, glyph.data_offset)
 
     kern_left_data = bytearray()
     for cp, cls in sd.kern_left_classes:
+        validate_integer("left kerning codepoint", cp, 0, 65535)
+        validate_integer("left kerning class", cls, 1, sd.kern_left_class_count)
         kern_left_data += struct.pack("<HB", cp, cls)
 
     kern_right_data = bytearray()
     for cp, cls in sd.kern_right_classes:
+        validate_integer("right kerning codepoint", cp, 0, 65535)
+        validate_integer("right kerning class", cls, 1, sd.kern_right_class_count)
         kern_right_data += struct.pack("<HB", cp, cls)
 
     kern_matrix_data = bytearray()
     if sd.kern_matrix:
-        kern_matrix_data = bytearray(struct.pack(f"<{len(sd.kern_matrix)}b", *sd.kern_matrix))
+        minimum, maximum = (-128, 127) if raster_density == 1 else (-32768, 32767)
+        for value in sd.kern_matrix:
+            validate_integer("kerning adjustment", value, minimum, maximum)
+        element_format = "b" if raster_density == 1 else "h"
+        kern_matrix_data = bytearray(struct.pack(f"<{len(sd.kern_matrix)}{element_format}", *sd.kern_matrix))
 
     ligature_data = bytearray()
     for packed_pair, lig_cp in sd.ligature_pairs:
+        validate_integer("ligature pair", packed_pair, 0, 0xFFFFFFFF)
+        validate_integer("ligature codepoint", lig_cp, 0, 65535)
         ligature_data += struct.pack("<II", packed_pair, lig_cp)
 
     bitmap_data = bytearray()
     for glyph, packed in sd.all_glyphs:
         bitmap_data += packed
-    assert len(bitmap_data) == sd.total_bitmap_size
+    if len(bitmap_data) != sd.total_bitmap_size:
+        raise ValueError("style bitmap size does not match its glyph data")
 
     return (intervals_data, glyphs_data, kern_left_data, kern_right_data,
             kern_matrix_data, ligature_data, bitmap_data)
@@ -873,17 +944,21 @@ def style_sections_total_size(sections):
 # --- File writers ---
 
 def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
-                               synthetic_bold=False, debug_images=False):
-    """Generate a multi-style v4 .cpfont file.
+                               synthetic_bold=False, debug_images=False, raster_density=1):
+    """Generate a multi-style v4 (density 1) or v5 (density 2) .cpfont file.
 
     style_fonts: dict of {style_id: fontfile_path} e.g. {0: "Regular.ttf", 2: "Italic.ttf"}
     """
     MAGIC = b"CPFONT\x00\x00"
-    VERSION = 4
+    validate_raster_density(raster_density)
+    VERSION = 4 if raster_density == 1 else 5
     HEADER_SIZE = 32
     STYLE_TOC_ENTRY_SIZE = 32
     flags = 1  # always 2-bit greyscale
     style_count = len(style_fonts)
+    validate_integer("style count", style_count, 1, 4)
+    for style_id in style_fonts:
+        validate_integer("style ID", style_id, 0, 3)
 
     # Rasterize each style
     raster_data = {}  # style_id -> StyleRasterData
@@ -891,7 +966,7 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
         fontfile = style_fonts[style_id]
         print(f"  Rasterizing style {style_id}...", file=sys.stderr)
         raster_data[style_id] = rasterize_font_style(
-            fontfile, size, intervals, style_id=style_id)
+            fontfile, size, intervals, style_id=style_id, raster_density=raster_density)
 
     if synthetic_bold:
         # If a bold-style output is identical to its base style, apply a synthetic
@@ -914,7 +989,7 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
     # Pack binary sections for each style
     packed_sections = {}  # style_id -> tuple of section bytearrays
     for style_id, sd in raster_data.items():
-        packed_sections[style_id] = pack_style_sections(sd)
+        packed_sections[style_id] = pack_style_sections(sd, raster_density=raster_density)
 
     # Calculate data offsets (after header + TOC)
     data_start = HEADER_SIZE + style_count * STYLE_TOC_ENTRY_SIZE
@@ -924,11 +999,7 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
     for style_id in sorted(packed_sections.keys()):
         style_offsets[style_id] = current_offset
         current_offset += style_sections_total_size(packed_sections[style_id])
-
-    # Build global header
-    # V4 header: magic(8) + version(2) + flags(2) + styleCount(1) + reserved(19) = 32
-    header = struct.pack("<8sHHB19s", MAGIC, VERSION, flags, style_count, bytes(19))
-    assert len(header) == HEADER_SIZE
+        validate_integer("file size", current_offset, 0, 0xFFFFFFFF)
 
     # Build style TOC entries
     # Each entry: styleId(1) + pad(3) + intervalCount(4) + glyphCount(4) +
@@ -940,12 +1011,6 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
     toc_data = bytearray()
     for style_id in sorted(raster_data.keys()):
         sd = raster_data[style_id]
-        if sd.advanceY > 255:
-            print(f"ERROR: advanceY ({sd.advanceY}) exceeds uint8 range for "
-                  f"style {style_id} size {size}. This likely means the font "
-                  f"size is too large for this format.",
-                  file=sys.stderr)
-            sys.exit(1)
         toc_data += struct.pack(STYLE_TOC_FORMAT,
                                 style_id,
                                 len(sd.intervals), len(sd.all_glyphs),
@@ -954,6 +1019,19 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
                                 sd.kern_left_class_count, sd.kern_right_class_count,
                                 len(sd.ligature_pairs),
                                 style_offsets[style_id])
+
+    # The v5 payload CRC covers the exact TOC and section bytes in file order.
+    # It also changes the cache identity when outlines or conversion settings change.
+    if VERSION == 4:
+        header = struct.pack("<8sHHB19s", MAGIC, VERSION, flags, style_count, bytes(19))
+    else:
+        payload_crc = zlib.crc32(toc_data)
+        for style_id in sorted(packed_sections):
+            for section in packed_sections[style_id]:
+                payload_crc = zlib.crc32(section, payload_crc)
+        header = struct.pack("<8sHHBBI14s", MAGIC, VERSION, flags, style_count,
+                             raster_density, payload_crc & 0xFFFFFFFF, bytes(14))
+    assert len(header) == HEADER_SIZE
 
     # Write output
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
@@ -967,7 +1045,7 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
         total_file_size = f.tell()
 
     # Print summary
-    print(f"  Output: {output_path} (v4, {style_count} styles)", file=sys.stderr)
+    print(f"  Output: {output_path} (v{VERSION}, {style_count} styles, raster density {raster_density})", file=sys.stderr)
     print(f"    Header+TOC: {HEADER_SIZE + len(toc_data)} bytes", file=sys.stderr)
     for style_id in sorted(raster_data.keys()):
         sd = raster_data[style_id]
@@ -998,6 +1076,9 @@ def main():
                         help="Single font size to generate.")
     parser.add_argument("--sizes", dest="sizes",
                         help="Comma-separated sizes (e.g., '12,14,16,18').")
+    parser.add_argument("--raster-density", type=int, choices=(1, 2), default=1,
+                        help="Raster pixels per logical pixel: 1 preserves v4; 2 writes v5 "
+                             "with LIGHT-hinted outlines for higher quality resampling.")
     parser.add_argument("--style", dest="style", default="regular",
                         choices=["regular", "bold", "italic", "bolditalic"],
                         help="Font style for single-style mode (default: regular).")
@@ -1014,9 +1095,9 @@ def main():
     parser.add_argument("--list-presets", action="store_true",
                         help="List available interval presets and exit.")
 
-    # Multi-style mode: per-style font file arguments (generates v4 .cpfont)
+    # Multi-style mode: per-style font file arguments
     parser.add_argument("--regular", dest="font_regular",
-                        help="Font file for regular style (enables multi-style v4 mode).")
+                        help="Font file for regular style (enables multi-style mode).")
     parser.add_argument("--bold", dest="font_bold",
                         help="Font file for bold style.")
     parser.add_argument("--italic", dest="font_italic",
@@ -1092,11 +1173,11 @@ def main():
         font_name = base
 
     if not is_multistyle:
-        # Single font file provided: wrap as a single-style v4 font
+        # Single font file provided: wrap as a single-style font
         style_map = {"regular": 0, "bold": 1, "italic": 2, "bolditalic": 3}
         style_fonts[style_map[args.style]] = fontfile
 
-    # Always generate v4 format
+    # Filenames keep the logical size, regardless of raster density.
     if args.output and len(sizes) != 1:
         print("Error: --output can only be used with a single size", file=sys.stderr)
         sys.exit(1)
@@ -1108,13 +1189,18 @@ def main():
         else:
             filename = f"{font_name}_{sz}.cpfont"
             output_path = os.path.join(output_dir, filename)
-        print(f"Generating {output_path} (size {sz}, {len(style_fonts)} style(s), v4)...", file=sys.stderr)
+        print(f"Generating {output_path} (logical size {sz}, {len(style_fonts)} style(s), "
+              f"raster density {args.raster_density})...", file=sys.stderr)
         total_size += generate_cpfont_multistyle(
             style_fonts, sz, intervals, output_path,
             synthetic_bold=args.synthetic_bold,
-            debug_images=args.debug_images)
+            debug_images=args.debug_images, raster_density=args.raster_density)
     print(f"\nTotal: {len(sizes)} files, {total_size / 1024 / 1024:.2f} MB", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(1)

@@ -699,8 +699,8 @@ SPINE 11 href=OEBPS/ch11.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
   LINE y=464 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=🦊REST
-SPINE 12 href=OEBPS/ch12.xhtml pages=1 truncated=0 cssFallback=0
- PAGE 0 elements=15 footnotes=0
+SPINE 12 href=OEBPS/ch12.xhtml pages=2 truncated=0 cssFallback=0
+ PAGE 0 elements=26 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
    W x=37 s=1 z=100 t=Reduced
    W x=159 s=1 z=100 t=uppercase
@@ -792,3 +792,91 @@ SPINE 12 href=OEBPS/ch12.xhtml pages=1 truncated=0 cssFallback=0
    W x=167 s=0 z=100 t=antialiasing
    W x=288 s=0 z=100 t=is
    W x=309 s=0 z=100 t=enabled.
+  LINE y=425 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=Baseline
+   W x=80 s=0 z=100 t=reference:
+   W x=174 s=0 z=100 t=HNT
+   W x=201 s=0 z=100 t=HINTING
+   W x=260 s=0 z=100 t=NTHHE
+   W x=307 s=0 z=100 t=ANMT
+  LINE y=458 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=0 z=100 t=HNT
+   W x=21 s=0 z=100 t=HINTING
+   W x=66 s=0 z=100 t=NTHHE
+   W x=102 s=0 z=100 t=ANMT
+  LINE y=485 x=0 align=0 mult=0.900 hfid=0 words=4
+   W x=0 s=0 z=100 t=HNT
+   W x=24 s=0 z=100 t=HINTING
+   W x=77 s=0 z=100 t=NTHHE
+   W x=119 s=0 z=100 t=ANMT
+  LINE y=516 x=0 align=0 mult=1.200 hfid=0 words=4
+   W x=0 s=0 z=100 t=HNT
+   W x=32 s=0 z=100 t=HINTING
+   W x=103 s=0 z=100 t=NTHHE
+   W x=159 s=0 z=100 t=ANMT
+  LINE y=554 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=0 z=100 f=0 ls=17 t=HNT
+   W x=25 s=0 z=100 f=0 ls=17 t=HINTING
+   W x=78 s=0 z=100 f=0 ls=17 t=NTHHE
+   W x=120 s=0 z=100 f=0 ls=17 t=ANMT
+  LINE y=581 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Stroke
+   W x=65 s=0 z=100 t=joins:
+   W x=124 s=0 z=100 t=fT
+   W x=146 s=0 z=100 t=office
+   W x=206 s=0 z=100 t=affinity
+   W x=285 s=0 z=100 t=AVATAR
+   W x=340 s=0 z=100 t=P.
+   W x=365 s=0 z=100 t=P,
+  LINE y=614 x=0 align=0 mult=0.750 hfid=0 words=6
+   W x=0 s=2 z=100 t=fT
+   W x=17 s=2 z=100 t=office
+   W x=63 s=2 z=100 t=affinity
+   W x=123 s=2 z=100 t=AVATAR
+   W x=165 s=2 z=100 t=P.
+   W x=184 s=2 z=100 t=P,
+  LINE y=641 x=0 align=0 mult=0.750 hfid=0 words=4
+   W x=0 s=2 z=100 f=0 ls=-11 t=fT
+   W x=14 s=2 z=100 f=0 ls=-11 t=office
+   W x=54 s=2 z=100 f=0 ls=-11 t=affinity
+   W x=107 s=2 z=100 f=0 ls=-11 t=AVATAR
+  LINE y=668 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Wide
+   W x=38 s=0 z=100 t=punctuation:
+   W x=159 s=0 z=100 t=—
+   W x=172 s=0 z=100 t=⸻
+   W x=189 s=0 z=100 t=—
+  LINE y=701 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Solid
+   W x=53 s=0 z=100 t=strokes
+   W x=124 s=0 z=100 t=must
+   W x=170 s=0 z=100 t=stay
+   W x=215 s=0 z=100 t=dark
+   W x=257 s=0 z=100 t=where
+   W x=307 s=0 z=100 t=letters
+   W x=377 s=0 z=100 t=overlap.
+  LINE y=734 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Garamond
+   W x=91 s=0 z=100 t=has
+   W x=135 s=0 z=100 t=contrasting
+   W x=253 s=0 z=100 t=strokes
+   W x=329 s=0 z=100 t=and
+   W x=371 s=0 z=100 t=a
+   W x=394 s=0 z=100 t=T
+   W x=411 s=0 z=100 t=that
+ PAGE 1 elements=2 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=extends
+   W x=72 s=0 z=100 t=above
+   W x=132 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=usual
+   W x=233 s=0 z=100 t=capital
+   W x=304 s=0 z=100 t=height.
+   W x=383 s=0 z=100 t=Preserve
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=these
+   W x=55 s=0 z=100 t=shapes
+   W x=118 s=0 z=100 t=without
+   W x=191 s=0 z=100 t=extra
+   W x=243 s=0 z=100 t=pixel
+   W x=286 s=0 z=100 t=shifts.

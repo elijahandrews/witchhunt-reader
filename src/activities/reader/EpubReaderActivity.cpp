@@ -1262,7 +1262,8 @@ void EpubReaderActivity::runDeferredGrayscalePass() {
           planeAborted = true;
           return;
         }
-        pagePtr->renderImagesFromGrayscaleCache(renderer, marginLeft, contentTop);
+        if (!renderer.isErasingOpaqueGlyphs())
+          pagePtr->renderImagesFromGrayscaleCache(renderer, marginLeft, contentTop);
       },
       [&] { return planeAborted || aaPreemptedByNavigation(); });
   logReaderMemSnapshot("aa_after_planes");
@@ -5497,7 +5498,8 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
             planeAborted = true;
             return;
           }
-          pagePtr->renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
+          if (!renderer.isErasingOpaqueGlyphs())
+            pagePtr->renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
         },
         // Re-checked here because the up-front gate can only see the gesture as it stands when
         // the render begins; the pass itself is ~1 s long, so most presses during a burst land

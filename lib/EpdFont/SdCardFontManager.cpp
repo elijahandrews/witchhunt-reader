@@ -3,12 +3,14 @@
 #include <EpdFontFamily.h>
 #include <FlashFontPartition.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <Logging.h>
 #include <SdCardFont.h>
 #include <SdCardFontRegistry.h>
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 SdCardFontManager::~SdCardFontManager() {
   if (renderer_) {
@@ -33,6 +35,26 @@ int SdCardFontManager::computeFontId(uint32_t contentHash, const char* familyNam
   hash *= FNV_PRIME;
   int id = static_cast<int>(hash);
   return id != 0 ? id : 1;
+}
+
+// A regenerated font can retain its family and point size. Compare the source
+// header too, or a cached v4 bitmap can silently replace a new v5 dense master.
+static bool cachedFontMatches(const SdCardFontFamilyInfo& family, const SdCardFontFileInfo& source) {
+  if (!FlashFontPartition::hasEntry(family.name.c_str(), source.pointSize)) return false;
+  FsFile file;
+  uint8_t header[32];
+  if (!Storage.openFileForRead("SDMGR", source.path.c_str(), file) || !file) return false;
+  const size_t sourceSize = file.fileSize();
+  const bool read = file.read(header, sizeof(header)) == sizeof(header);
+  file.close();
+  if (!read) return false;
+  const uint8_t* cached = nullptr;
+  size_t cachedSize = 0;
+  if (!FlashFontPartition::mmap(family.name.c_str(), source.pointSize, &cached, &cachedSize)) return false;
+  const bool same =
+      cachedSize == sourceSize && cachedSize >= sizeof(header) && std::memcmp(cached, header, sizeof(header)) == 0;
+  FlashFontPartition::unmap();
+  return same;
 }
 
 // Try to write the whole family (all sizes) to the flash partition.
@@ -101,6 +123,14 @@ static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPoi
   // Single-file fallback: only write the requested size.
   const SdCardFontFileInfo* fi = family.findFile(requestedPointSize);
   if (!fi) return false;
+  // Dense outline masters can exceed the flash partition. Keep the existing
+  // cache intact and go straight to SD instead of erasing it on every load.
+  FsFile source;
+  if (!Storage.openFileForRead("SDMGR", fi->path.c_str(), source) || !source) return false;
+  const size_t bytes = source.fileSize();
+  source.close();
+  const size_t capacity = FlashFontPartition::fontUsableSize();
+  if (capacity <= FlashFontPartition::HEADER_BYTES || bytes > capacity - FlashFontPartition::HEADER_BYTES) return false;
   if (!FlashFontPartition::beginWrite(family.name.c_str())) return false;
   if (!FlashFontPartition::appendFile(fi->path.c_str(), family.name.c_str(), requestedPointSize)) {
     FlashFontPartition::finaliseWrite();
@@ -135,7 +165,7 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
   {
     if (FlashFontPartition::isMapped()) FlashFontPartition::unmap();
 
-    const bool alreadyCached = FlashFontPartition::hasEntry(family.name.c_str(), selected->pointSize);
+    const bool alreadyCached = cachedFontMatches(family, *selected);
 
     bool readyToMmap = alreadyCached;
     if (!alreadyCached && policy == FlashCachePolicy::ReadOnly) {
@@ -195,7 +225,7 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
           font->styleCount(), targetPtSize);
 
   EpdFontFamily fontFamily(font->getEpdFont(0), font->getEpdFont(1), font->getEpdFont(2), font->getEpdFont(3));
-  renderer.insertFont(fontId, fontFamily);
+  renderer.insertScaledFont(fontId, fontFamily, font->rasterScale());
 
   loadedFamilyName_ = family.name;
   loadedPointSize_ = selected->pointSize;
@@ -231,7 +261,8 @@ bool SdCardFontManager::ensureSizeAlias(GfxRenderer& renderer, const uint8_t tar
   EpdFontFamily fontFamily(lf.font->getEpdFont(0), lf.font->getEpdFont(1), lf.font->getEpdFont(2),
                            lf.font->getEpdFont(3));
   renderer.registerSdCardFontAlias(aliasId, lf.font);
-  renderer.insertScaledFont(aliasId, fontFamily, static_cast<float>(targetPtSize) / loadedPointSize_);
+  renderer.insertScaledFont(aliasId, fontFamily,
+                            static_cast<float>(targetPtSize) / loadedPointSize_ * lf.font->rasterScale());
   aliasFontId_ = aliasId;
   aliasPointSize_ = targetPtSize;
   LOG_INF("SDMGR", "%s: %u pt served by the %u pt face scaled %u/%u (id=%d)", loadedFamilyName_.c_str(), targetPtSize,

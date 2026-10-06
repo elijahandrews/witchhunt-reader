@@ -23,7 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo_root", type=Path)
     parser.add_argument("--out", type=Path, default=Path("render-smoke-output"))
-    parser.add_argument("--cpfont", type=Path, help="Local four-style v4 font; never copied into the repository")
+    parser.add_argument("--cpfont", type=Path, help="Local four-style v4/v5 font; never copied into the repository")
     args = parser.parse_args()
     repo = args.repo_root.resolve()
     source = Path(__file__).parent.resolve()
@@ -52,7 +52,7 @@ def main():
         "clang", "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
-    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", output / "GfxRenderer.cpp"]
+    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (
@@ -90,6 +90,8 @@ def main():
         png_path.write_bytes(png)
         print("Screenshot:", png_path)
     render.check_returncode()
+    import driver_audit
+    driver_audit.run(repo, output / "driver-audit")
 
 
 if __name__ == "__main__":

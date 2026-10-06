@@ -600,7 +600,7 @@ class GfxRenderer {
   int rawLineHeight(int fontId) const;
   int rawFontAscenderSize(int fontId) const;
   void drawTextAtScale(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
-                       float totalScale) const;
+                       float totalScale, int16_t tracking = 0) const;
   int getTextWidthScaled(int fontId, const char* text, EpdFontFamily::Style style, float scale) const;
   // Ink extents of `text` relative to its baseline, from glyph bitmap metrics:
   // aboveBaseline = tallest glyph ink top, belowBaseline = deepest ink below the
@@ -701,6 +701,19 @@ class GfxRenderer {
   // Armed by beginGrayCapture(); mutable because the whole render path is const.
   mutable uint8_t* grayCapLsb_ = nullptr;
   mutable uint8_t* grayCapMsb_ = nullptr;
+  bool grayOpaqueErase_ = false;
+  bool isErasingOpaqueGlyphs() const { return grayOpaqueErase_; }
+  // Complete a staged plane with opaque black ink: glyphs, underlines, rules,
+  // and borders remove gray fringes regardless of draw order or run boundaries.
+  // White backgrounds and images do not repaint this finalization pass.
+  // Uses the current plane as scratch: no full-page allocation on C3.
+  template <typename RenderFn>
+  void eraseOpaqueGlyphs(RenderFn renderFn) {
+    const bool previous = grayOpaqueErase_;
+    grayOpaqueErase_ = true;
+    renderFn();
+    grayOpaqueErase_ = previous;
+  }
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
   // Same, from a caller-owned panel-native plane rather than the framebuffer —
@@ -783,6 +796,9 @@ class GfxRenderer {
   // Deferred form: see HalDisplay::triggerGrayscaleFrame. Caller owes completeDisplay().
   void triggerGrayscaleFrame(HalDisplay::RefreshMode mode) const;
 
+  // Staged glyph AA composes black ink on the B/W page; callbacks must draw
+  // text with black=true and omit white background fills. White text uses
+  // ordinary BW or an absolute-plane pass.
   // Render both grayscale planes sequentially into the BW framebuffer, streaming
   // each plane to the controller immediately after rendering it. No extra allocation
   // needed — the BW framebuffer is the scratch pad for both passes.
@@ -793,7 +809,7 @@ class GfxRenderer {
   // left there before the grayscale pass began. This is the correct differential
   // baseline for the next fast refresh.
   //
-  // renderFn is called twice (LSB, MSB). The RenderMode argument tells it which
+  // renderFn runs a normal and opaque-ink finalization pass per plane. The argument tells it which
   // pass is running. The caller sets setFastGrayscaleLut() before calling.
   //
   // Returns wall-clock timings for each of the three phases.
@@ -807,6 +823,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_LSB);
     renderFn(GRAYSCALE_LSB);
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_LSB); });
     if (shouldAbort()) {
       return abandonGrayscalePass(millis() - t0);
     }
@@ -815,6 +833,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_MSB);
     renderFn(GRAYSCALE_MSB);
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_MSB); });
     // The MSB render is as long as the LSB one and can bail just as late, so it needs its own
     // gate: without it a plane abandoned part-way was still copied and flushed, putting a
     // half-drawn overlay on screen (seen on X3 as a COMPLETED pass with planes=545ms against a
@@ -863,6 +883,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_LSB);
     renderFn(GRAYSCALE_LSB);
+    const bool lsbAborted = shouldAbort();
+    if (!lsbAborted) eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_LSB); });
     const unsigned long tLsbDone = millis();
 
     // Waveform still running: sleep out the remainder (power hooks active).
@@ -873,7 +895,7 @@ class GfxRenderer {
     // fully on screen, and the LSB render just spent was paid for out of the waveform wait
     // rather than out of the page-turn budget — so dropping the pass here reclaims the entire
     // net cost of the AA and forfeits nothing that was actually charged to the user.
-    if (shouldAbort()) {
+    if (lsbAborted || shouldAbort()) {
       return abandonGrayscalePass(tLsbDone - t0);
     }
 
@@ -881,6 +903,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_MSB);
     renderFn(GRAYSCALE_MSB);
+    if (shouldAbort()) return abandonGrayscalePass((tLsbDone - t0) + (millis() - tWaveDone));
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_MSB); });
     // Second gate, same reason as in the sequential pass: an MSB render that bailed part-way
     // must never be copied or flushed. Checked before the copy.
     if (shouldAbort()) {

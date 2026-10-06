@@ -113,7 +113,18 @@ CHAPTERS = [
 <p><span class="small_caps">Tuesday, the eighth day of September</span></p>
 <p style="font-variant:small-caps">Small capitals and dates</p>
 <p style="font-size:50%;text-transform:uppercase">Half size: capitals and thin strokes</p>
-<p>All samples should preserve their strokes, with smooth edges when antialiasing is enabled.</p>"""),
+<p>All samples should preserve their strokes, with smooth edges when antialiasing is enabled.</p>
+<p>Baseline reference: HNT HINTING NTHHE ANMT</p>
+<p style="font-size:75%">HNT HINTING NTHHE ANMT</p>
+<p style="font-size:90%">HNT HINTING NTHHE ANMT</p>
+<p style="font-size:120%">HNT HINTING NTHHE ANMT</p>
+<p style="font-size:75%;letter-spacing:.08em">HNT HINTING NTHHE ANMT</p>
+<p>Stroke joins: fT office affinity AVATAR P. P,</p>
+<p style="font-size:75%;font-style:italic">fT office affinity AVATAR P. P,</p>
+<p style="font-size:75%;font-style:italic;letter-spacing:-.05em">fT office affinity AVATAR</p>
+<p>Wide punctuation: — ⸻ —</p>
+<p>Solid strokes must stay dark where letters overlap.</p>
+<p>Garamond has contrasting strokes and a T that extends above the usual capital height. Preserve these shapes without extra pixel shifts.</p>"""),
 ]
 
 def build(out):
