@@ -206,17 +206,17 @@ constexpr size_t MIN_MAX_ALLOC_FOR_TEXT_LAYOUT_HARD_ARENA_BIONIC = EHP_TEXT_LAYO
 // the whole-table budget it replaces, and it fires far more rarely.
 constexpr size_t MAX_TABLE_ROW_BUFFER_BYTES = EHP_TABLE_BUFFER_BUDGET_BYTES;
 
-// Attributed cost of one buffered word: the std::string header in ParsedText::words (24 B under
-// 32-bit libstdc++) plus the parallel per-word vectors (wordStyles, wordSizes, wordContinues) and
-// the geometric growth headroom all four carry. Deliberately a fixed constant rather than
-// sizeof(std::string) so host goldens and device builds make the SAME switch decision -- a
-// host-derived width (32 B) would charge more per word and trip earlier than the device.
-constexpr size_t TABLE_BUFFER_BYTES_PER_WORD = 52;
+// Conservative attributed cost on the 32-bit device: retain the old 52 B allowance,
+// then budget two copies of the typography 4 B and source 12 B records for geometric
+// growth. Historical 52 already charged one typography copy; keeping that slack
+// avoids understating the six parallel vectors. Fixed constants keep host and
+// device fallback decisions identical despite different std::string sizes.
+constexpr size_t TABLE_BUFFER_BYTES_PER_WORD = 84;
 // Words past the SSO capacity additionally allocate their own heap block.
 constexpr size_t TABLE_BUFFER_SSO_CAPACITY = 15;
-// One buffered cell: BufferedTableCell (two std::string members, colSpan/isHeader, the owning
-// pointer) plus the heap-allocated ParsedText and its four empty vectors.
-constexpr size_t TABLE_BUFFER_BYTES_PER_CELL = 128;
+// The old 128 B cell allowance predates both typography and source vector headers.
+// Each header is 12 B on the 32-bit device: 128 + 2*12, covering all six word vectors.
+constexpr size_t TABLE_BUFFER_BYTES_PER_CELL = 152;
 
 // The separate 96-word bound on a single cell is gone. It existed only because the old whole-table
 // budget could not act with a cell open, so a one-cell table -- X3 alice spine 2's
@@ -1023,7 +1023,7 @@ uint32_t ChapterHtmlSlimParser::characterOrigin(int index) const {
   if (sourceSynthetic_) return UINT32_MAX;
   if (sourceOverride_) return sourceOverride_[index];
   const uint32_t origin = saxParser_.characterSourceOffset(index + sourceOriginIndex_);
-  return sourceLiteralEntity_ && origin != UINT32_MAX ? origin + index : origin;
+  return sourceLiteralEntity_ && origin != UINT32_MAX ? origin + index + sourceOriginIndex_ : origin;
 }
 
 void ChapterHtmlSlimParser::noteSourceLine(const TextBlock& line) {

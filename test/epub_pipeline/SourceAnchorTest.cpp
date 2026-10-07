@@ -311,4 +311,13 @@ TEST_F(SourceAnchorTest, LutGrowthFailureStopsWithoutEmittingOrAppendingStalePag
   EXPECT_EQ(completed, 16u);
 }
 
+TEST_F(SourceAnchorTest, LiteralEntityDropCapOverflowRetainsOriginalByteOffsets) {
+  makeBook("<p>PAD</p><p><span class=\"cap\">&abcdefghijklmnopqrst;</span>AFTER</p>",
+           ".cap{float:left;font-size:300%;text-transform:uppercase}");
+  const auto origin = xhtml.find("&abcdefghijklmnopqrst;");
+  auto section = build(45, {static_cast<uint32_t>(origin + 20), 0}, 48);
+  ASSERT_TRUE(section->sourceLookupPage());
+  EXPECT_NE(textAt(*section, *section->sourceLookupPage()).find('T'), std::string::npos);
+}
+
 }  // namespace
