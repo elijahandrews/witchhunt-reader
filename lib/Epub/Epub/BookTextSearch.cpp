@@ -62,32 +62,94 @@ bool block(std::string_view name) {
     if (name == candidate) return true;
   return false;
 }
+bool asciiEqual(std::string_view text, std::string_view expected) {
+  if (text.size() != expected.size()) return false;
+  for (size_t i = 0; i < text.size(); ++i) {
+    const char c = text[i] >= 'A' && text[i] <= 'Z' ? static_cast<char>(text[i] + 32) : text[i];
+    if (c != expected[i]) return false;
+  }
+  return true;
+}
+std::string_view trim(std::string_view text) {
+  auto space = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f'; };
+  while (!text.empty() && space(text.front())) text.remove_prefix(1);
+  while (!text.empty() && space(text.back())) text.remove_suffix(1);
+  return text;
+}
+bool displayValue(std::string_view value) {
+  static constexpr const char* values[] = {"none",
+                                           "block",
+                                           "inline",
+                                           "run-in",
+                                           "flow",
+                                           "flow-root",
+                                           "table",
+                                           "flex",
+                                           "grid",
+                                           "ruby",
+                                           "list-item",
+                                           "inline-block",
+                                           "inline-table",
+                                           "inline-flex",
+                                           "inline-grid",
+                                           "table-row-group",
+                                           "table-header-group",
+                                           "table-footer-group",
+                                           "table-row",
+                                           "table-cell",
+                                           "table-column-group",
+                                           "table-column",
+                                           "table-caption",
+                                           "ruby-base",
+                                           "ruby-text",
+                                           "ruby-base-container",
+                                           "ruby-text-container",
+                                           "contents",
+                                           "inherit",
+                                           "initial",
+                                           "unset",
+                                           "revert",
+                                           "revert-layer"};
+  for (const auto* candidate : values)
+    if (asciiEqual(value, candidate)) return true;
+  // Common modern two-keyword values, e.g. inline flow-root or block flex.
+  const size_t separator = value.find_first_of(" \t\r\n\f");
+  if (separator == std::string_view::npos) return false;
+  const auto outer = value.substr(0, separator);
+  const auto inner = trim(value.substr(separator));
+  if (!asciiEqual(outer, "block") && !asciiEqual(outer, "inline") && !asciiEqual(outer, "run-in")) return false;
+  return asciiEqual(inner, "flow") || asciiEqual(inner, "flow-root") || asciiEqual(inner, "table") ||
+         asciiEqual(inner, "flex") || asciiEqual(inner, "grid") || asciiEqual(inner, "ruby");
+}
 bool hidden(const char** atts) {
+  bool displayNone = false;
+  bool importantDisplay = false;
   for (size_t i = 0; atts && atts[i]; i += 2) {
     if (std::strcmp(atts[i], "hidden") == 0) return true;
-    // Honor the unambiguous inline hide directive. The search is independent of reader CSS
-    // settings; external stylesheet visibility is deliberately not a second style resolver.
-    if (std::strcmp(atts[i], "style") == 0) {
-      std::string_view style(atts[i + 1]);
-      size_t pos = 0;
-      while (pos < style.size()) {
-        const size_t end = style.find(';', pos);
-        auto declaration = style.substr(pos, end == std::string_view::npos ? end : end - pos);
-        char compact[32]{};
-        size_t length = 0;
-        for (char c : declaration) {
-          if (c == ' ' || c == '\t' || c == '\r' || c == '\n') continue;
-          if (length + 1 >= sizeof(compact)) break;
-          compact[length++] = c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : c;
+    // Honor the inline cascade without building a second external CSS resolver.
+    if (std::strcmp(atts[i], "style") != 0) continue;
+    const std::string_view style(atts[i + 1]);
+    size_t pos = 0;
+    while (pos < style.size()) {
+      const size_t end = style.find(';', pos);
+      const auto declaration = style.substr(pos, end == std::string_view::npos ? end : end - pos);
+      const size_t colon = declaration.find(':');
+      if (colon != std::string_view::npos && asciiEqual(trim(declaration.substr(0, colon)), "display")) {
+        auto value = trim(declaration.substr(colon + 1));
+        const size_t bang = value.find('!');
+        const bool important = bang != std::string_view::npos && asciiEqual(trim(value.substr(bang + 1)), "important");
+        const bool validPriority = bang == std::string_view::npos || important;
+        if (important) value = trim(value.substr(0, bang));
+        if (validPriority && displayValue(value) && (!importantDisplay || important)) {
+          displayNone = asciiEqual(value, "none");
+          importantDisplay = important;
         }
-        if (std::strcmp(compact, "display:none") == 0 || std::strcmp(compact, "display:none!important") == 0)
-          return true;
-        if (end == std::string_view::npos) break;
-        pos = end + 1;
       }
+      if (end == std::string_view::npos) break;
+      pos = end + 1;
     }
   }
-  return false;
+  return displayNone;
 }
 }  // namespace
 

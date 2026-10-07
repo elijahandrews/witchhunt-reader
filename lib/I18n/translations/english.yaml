@@ -948,7 +948,6 @@ STR_MOVE_NAME_TAKEN: "A file of that name is already there"
 STR_MOVE_SAME_FOLDER: "It is already in that folder"
 STR_SHOW_BUSY_INDICATOR: "Show Busy Indicator"
 
-# In-book phrase search
 STR_FIND_IN_BOOK: "Find in book"
 STR_BOOK_SEARCH_AGAIN: "Search again"
 STR_BOOK_SEARCH_ENTER_TEXT: "Enter a word or phrase"

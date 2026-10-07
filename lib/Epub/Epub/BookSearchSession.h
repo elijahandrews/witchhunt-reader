@@ -50,6 +50,7 @@ class BookSearchSession {
   uint32_t count_ = 0;
   int spine_ = 0;
   int failedSections_ = 0;
+  bool ownsResults_ = false;
   bool done_ = false;
   bool failed_ = false;
   bool limited_ = false;

@@ -327,3 +327,31 @@ TEST(BookSearchSession, ResultReadFailureIsReported) {
   EXPECT_FALSE(read);
   EXPECT_TRUE(session.failed());
 }
+
+TEST(BookTextSearch, InlineDisplayUsesLastValidDeclarationAndImportantPrecedence) {
+  for (const auto& style : {"display:none;display:block", "display:none!important;display:block!important",
+                            "display:block!important;display:none", "display:none;display:inline flow-root",
+                            "display:block;display:bogus", "display:block;display:n one"}) {
+    EXPECT_EQ(findMatches("visible", document(std::string("<p style='") + style + "'>visible</p>")).size(), 1u)
+        << style;
+  }
+  for (const auto& style : {"display:block;display:none", "display:none!important;display:block",
+                            "display:block!important;display:none!important", "display:none;display:bogus",
+                            "display:none;display:block!bogus"}) {
+    EXPECT_TRUE(findMatches("hidden", document(std::string("<p style='") + style + "'>hidden</p>")).empty()) << style;
+  }
+}
+TEST(BookSearchSession, UnstartedOrInvalidSessionDoesNotRemoveAnotherSessionsResults) {
+  auto epub = makeBook("ownership", {"<p>lantern</p>"});
+  BookSearchSession owner(epub, "lantern");
+  ASSERT_TRUE(owner.begin());
+  finish(owner);
+  {
+    BookSearchSession neverStarted(epub, "lantern");
+    BookSearchSession invalid(epub, "  ");
+    EXPECT_FALSE(invalid.begin());
+  }
+  EXPECT_TRUE(std::filesystem::exists(epub->getCachePath() + "/search-results.tmp"));
+  BookSearchSession::Hit hit;
+  EXPECT_TRUE(owner.readHit(0, hit));
+}

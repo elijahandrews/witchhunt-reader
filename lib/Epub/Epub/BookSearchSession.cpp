@@ -19,6 +19,7 @@ bool BookSearchSession::begin() {
     failed_ = done_ = true;
     return false;
   }
+  ownsResults_ = true;
   epub_->primeZip(zip_);
   return true;
 }
@@ -32,7 +33,10 @@ void BookSearchSession::cancel() {
   entry_.close();
   if (output_) output_.close();
   if (input_) input_.close();
-  Storage.remove(resultsPath_.c_str());
+  if (ownsResults_) {
+    Storage.remove(resultsPath_.c_str());
+    ownsResults_ = false;
+  }
   done_ = true;
 }
 void BookSearchSession::step(size_t byteBudget) {
