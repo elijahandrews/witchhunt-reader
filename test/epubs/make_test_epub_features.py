@@ -63,6 +63,35 @@ NEXTLINE</p>
 ("Local head styles one", '<p class="shared">SharedOne</p><p class="fromglobal">Nn</p><p style="font-family:Chapter Face,serif">Hh</p><p id="priority">PriorityOne</p>'),
 ("Local head styles two", '<p class="shared">SHAREDTWO</p><p class="fromglobal">Tt</p><p style="font-family:Chapter Face,serif">Nn</p><p id="priority">PriorityTwo</p>'),
 ]
+
+# Original on-device navigation specimens. These deliberately use long paragraphs
+# and inline boundaries so search and reflow can share stable source positions.
+def numbered_paragraph():
+    sentences = []
+    for index in range(1, 97):
+        number = f"<em>{index:04d}</em>" if index % 8 == 0 else f"{index:04d}"
+        sentences.append(
+            f"Marker {number}: a clear path crosses the orchard before reaching a low stone wall."
+        )
+    return "<p>" + " ".join(sentences) + "</p>"
+
+CHAPTERS += [
+    ("Search passages", """<p>A silver lantern stood beside the gate.</p>
+<p>We carried a <em>silver</em> <strong>lantern</strong> through the garden.</p>
+<p>At dusk, the SILVER&#160;LANTERN was lit.</p>
+<p>The cabinet was labeled copper &amp; stone.</p>
+<p>The sign read Café Straße beside a quiet courtyard.</p>
+<p>A note described inter<span>leaved</span> characters and a soft&#173;hyphen.</p>
+<pre>At the window, rain
+returns to the glass.</pre>
+<p>End of the short search specimens.</p>"""),
+    ("Long paragraph navigation", """<p>Choose a numbered passage below, change font size several
+ times, then return to the original size. The same passage should remain visible.</p>"""
+     + numbered_paragraph()),
+    ("Nested paragraph navigation", """<p>This paragraph is inside nested containers. Its numbered
+ passages should remain reachable after changing font size or selecting a search result.</p>
+<section><div>""" + numbered_paragraph() + "</div></section>"),
+]
 def build(output):
     files = {
       "mimetype":"application/epub+zip",
@@ -90,7 +119,7 @@ def build(output):
         manifest+=f'<item id="c{i}" href="{path}" media-type="application/xhtml+xml"/>'
         spine+=f'<itemref idref="c{i}"/>'
         nav+=f'<navPoint id="c{i}" playOrder="{i+1}"><navLabel><text>{title}</text></navLabel><content src="{path}"/></navPoint>'
-    files["OPS/content.opf"]=f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-feature-fixture-v1</dc:identifier><dc:title>EPUB Feature Specimens</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
+    files["OPS/content.opf"]=f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-feature-fixture-v2</dc:identifier><dc:title>EPUB Feature Specimens</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
     files["OPS/toc.ncx"]=f'<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head/><docTitle><text>EPUB Feature Specimens</text></docTitle><navMap>{nav}</navMap></ncx>'
     with ZipFile(output,"w") as archive:
         for path,data in files.items():

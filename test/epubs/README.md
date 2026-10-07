@@ -57,3 +57,20 @@ head scan and local selector limits are reported as simplified content; local
 rules never become book-wide selectors. MathML image fallback does not implement
 mathematical typesetting or inline equation baseline placement. Preformatted
 layout in table cells remains a separate layout limitation.
+
+
+## Search and reading-position checks
+
+`test_epub_features.epub` also includes original navigation specimens:
+
+- Searching for `silver lantern` should find three passages, including split
+  emphasis tags, uppercase text and a nonbreaking space.
+- `copper & stone`, `CAFÉ STRASSE`, `interleaved`, `softhyphen` and `rain returns`
+  exercise entities, Unicode case conversion, joined inline text, discretionary
+  hyphens and whitespace normalization.
+- Search for `marker 0048` to reach the middle of the long and nested paragraph
+  chapters. Change font size from 14 to 20 to 10 and back to 14 without turning
+  pages; the selected passage should remain visible. Repeat after a normal page
+  turn to check that deliberate navigation updates the reading position.
+
+These checks use original synthetic text. No personal library content is included.

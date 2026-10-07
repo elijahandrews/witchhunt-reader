@@ -77,7 +77,12 @@ struct Allowance {
   int ahead;
 };
 
-Allowance allowedDrift(const std::string& book) {
+Allowance allowedDrift(const std::string& book, int spine) {
+  // The navigation fixture's two new 5-page, single-paragraph chapters deliberately
+  // exceed paragraph-level sync precision. The in-reader source-position tests cover
+  // exact reflow/search there; KOReader sync still names the paragraph's beginning.
+  // Scope this measured allowance to those new chapters, preserving the old corpus bound.
+  if (fs::path(book).filename() == "test_epub_features.epub" && (spine == 7 || spine == 8)) return {4, 0};
   static const std::map<std::string, Allowance> known = {
       {"test_table_cell_overflow.epub", {2, 0}},
       {"test_spine_toc_edges.epub", {2, 1}},
@@ -137,12 +142,12 @@ struct RoundTripFixture : testing::TestWithParam<std::string> {
 };
 
 TEST_P(RoundTripFixture, EveryPageComesBackOnOrShortlyBeforeItself) {
-  const Allowance allowed = allowedDrift(GetParam());
   const int spineCount = epub->getSpineItemsCount();
   ASSERT_GT(spineCount, 0);
   int worstBehind = 0;
   int worstAhead = 0;
   for (int spine = 0; spine < spineCount; ++spine) {
+    const Allowance allowed = allowedDrift(GetParam(), spine);
     const auto section = build(spine);
     const int pages = section->pageCount;
     ASSERT_GT(pages, 0) << "spine " << spine;
@@ -170,9 +175,9 @@ TEST_P(RoundTripFixture, LastPageDoesNotFallToTheChapterStart) {
   // The failure that matters here is not a page of drift but a fall to page 0: the two passes
   // of the forward mapper counting the chapter's text differently would make the end of the
   // chapter unreachable, and the upload would name the chapter's root instead.
-  const int allowed = allowedDrift(GetParam()).behind;
   const int spineCount = epub->getSpineItemsCount();
   for (int spine = 0; spine < spineCount; ++spine) {
+    const int allowed = allowedDrift(GetParam(), spine).behind;
     const auto section = build(spine);
     const int pages = section->pageCount;
     if (pages < 2) continue;

@@ -1,4 +1,4 @@
-BOOK title=EPUB Feature Specimens lang=en spine=6 toc=6 reliableToc=1
+BOOK title=EPUB Feature Specimens lang=en spine=9 toc=9 reliableToc=1
 SPINE 0 href=OPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=7 footnotes=0
   LINE y=0 x=0 align=1 mult=1.000 hfid=0 words=3
@@ -135,3 +135,3171 @@ SPINE 5 href=OPS/Heads/ch5.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 f=7 ls=0 t=Nn
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=1 z=100 t=PriorityTwo
+SPINE 6 href=OPS/Heads/ch6.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=10 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=A
+   W x=14 s=0 z=100 t=silver
+   W x=73 s=0 z=100 t=lantern
+   W x=149 s=0 z=100 t=stood
+   W x=206 s=0 z=100 t=beside
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=gate.
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=We
+   W x=24 s=0 z=100 t=carried
+   W x=88 s=0 z=100 t=a
+   W x=106 s=2 z=100 t=silver
+   W x=165 s=1 z=100 t=lantern
+   W x=248 s=0 z=100 t=through
+   W x=330 s=0 z=100 t=the
+   W x=367 s=0 z=100 t=garden.
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=At
+   W x=24 s=0 z=100 t=dusk,
+   W x=74 s=0 z=100 t=the
+   W x=111 s=0 z=100 t=SILVER
+   W x=175 s=0 z=100 t= 
+   W x=181 s=0 z=100 t=LANTERN
+   W x=250 s=0 z=100 t=was
+   W x=283 s=0 z=100 t=lit.
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=The
+   W x=33 s=0 z=100 t=cabinet
+   W x=100 s=0 z=100 t=was
+   W x=133 s=0 z=100 t=labeled
+   W x=201 s=0 z=100 t=copper
+   W x=255 s=0 z=100 t=&
+   W x=270 s=0 z=100 t=stone.
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=The
+   W x=33 s=0 z=100 t=sign
+   W x=76 s=0 z=100 t=read
+   W x=119 s=0 z=100 t=Café
+   W x=165 s=0 z=100 t=Straße
+   W x=234 s=0 z=100 t=beside
+   W x=287 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=quiet
+   W x=354 s=0 z=100 t=courtyard.
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=A
+   W x=24 s=0 z=100 t=note
+   W x=82 s=0 z=100 t=described
+   W x=168 s=0 z=100 t=interleaved
+   W x=287 s=0 z=100 t=characters
+   W x=397 s=0 z=100 t=and
+   W x=444 s=0 z=100 t=a
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=softhyphen.
+  LINE y=168 x=0 align=1 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=4 ls=0 t=At 
+   W x=27 s=0 z=100 f=4 ls=0 t=the 
+   W x=63 s=0 z=100 f=4 ls=0 t=window, 
+   W x=135 s=0 z=100 f=4 ls=0 t=rain
+  LINE y=192 x=0 align=1 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=4 ls=0 t=returns 
+   W x=72 s=0 z=100 f=4 ls=0 t=to 
+   W x=99 s=0 z=100 f=4 ls=0 t=the 
+   W x=135 s=0 z=100 f=4 ls=0 t=glass.
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=End
+   W x=37 s=0 z=100 t=of
+   W x=65 s=0 z=100 t=the
+   W x=102 s=0 z=100 t=short
+   W x=159 s=0 z=100 t=search
+   W x=222 s=0 z=100 t=specimens.
+SPINE 7 href=OPS/Heads/ch7.xhtml pages=6 truncated=0 cssFallback=0
+ PAGE 0 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Choose
+   W x=72 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=numbered
+   W x=172 s=0 z=100 t=passage
+   W x=248 s=0 z=100 t=below,
+   W x=306 s=0 z=100 t=change
+   W x=376 s=0 z=100 t=font
+   W x=427 s=0 z=100 t=size
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=several
+   W x=78 s=0 z=100 t=times,
+   W x=140 s=0 z=100 t=then
+   W x=192 s=0 z=100 t=return
+   W x=259 s=0 z=100 t=to
+   W x=291 s=0 z=100 t=the
+   W x=332 s=0 z=100 t=original
+   W x=417 s=0 z=100 t=size.
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=The
+   W x=33 s=0 z=100 t=same
+   W x=79 s=0 z=100 t=passage
+   W x=153 s=0 z=100 t=should
+   W x=220 s=0 z=100 t=remain
+   W x=282 s=0 z=100 t=visible.
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0001:
+   W x=129 s=0 z=100 t=a
+   W x=155 s=0 z=100 t=clear
+   W x=214 s=0 z=100 t=path
+   W x=268 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0002:
+   W x=448 s=0 z=100 t=a
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0003:
+   W x=272 s=0 z=100 t=a
+   W x=293 s=0 z=100 t=clear
+   W x=347 s=0 z=100 t=path
+   W x=396 s=0 z=100 t=crosses
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0004:
+   W x=132 s=0 z=100 t=a
+   W x=158 s=0 z=100 t=clear
+   W x=217 s=0 z=100 t=path
+   W x=271 s=0 z=100 t=crosses
+   W x=348 s=0 z=100 t=the
+   W x=393 s=0 z=100 t=orchard
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=63 s=0 z=100 t=reaching
+   W x=148 s=0 z=100 t=a
+   W x=169 s=0 z=100 t=low
+   W x=205 s=0 z=100 t=stone
+   W x=265 s=0 z=100 t=wall.
+   W x=320 s=0 z=100 t=Marker
+   W x=380 s=0 z=100 t=0005:
+   W x=443 s=0 z=100 t=a
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=35 s=0 z=100 t=stone
+   W x=94 s=0 z=100 t=wall.
+   W x=148 s=0 z=100 t=Marker
+   W x=207 s=0 z=100 t=0006:
+   W x=270 s=0 z=100 t=a
+   W x=290 s=0 z=100 t=clear
+   W x=343 s=0 z=100 t=path
+   W x=391 s=0 z=100 t=crosses
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=64 s=0 z=100 t=0007:
+   W x=133 s=0 z=100 t=a
+   W x=158 s=0 z=100 t=clear
+   W x=216 s=0 z=100 t=path
+   W x=269 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=389 s=0 z=100 t=orchard
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=2 z=100 t=0008
+   W x=429 s=0 z=100 t=:
+   W x=447 s=0 z=100 t=a
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0009:
+   W x=271 s=0 z=100 t=a
+   W x=292 s=0 z=100 t=clear
+   W x=346 s=0 z=100 t=path
+   W x=395 s=0 z=100 t=crosses
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0010:
+   W x=129 s=0 z=100 t=a
+   W x=155 s=0 z=100 t=clear
+   W x=214 s=0 z=100 t=path
+   W x=268 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0011:
+   W x=441 s=0 z=100 t=a
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=37 s=0 z=100 t=stone
+   W x=98 s=0 z=100 t=wall.
+   W x=154 s=0 z=100 t=Marker
+   W x=215 s=0 z=100 t=0012:
+   W x=270 s=0 z=100 t=a
+   W x=292 s=0 z=100 t=clear
+   W x=347 s=0 z=100 t=path
+   W x=397 s=0 z=100 t=crosses
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0013:
+   W x=109 s=0 z=100 t=a
+   W x=127 s=0 z=100 t=clear
+   W x=178 s=0 z=100 t=path
+   W x=224 s=0 z=100 t=crosses
+   W x=293 s=0 z=100 t=the
+   W x=330 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0014:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0015:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0016
+   W x=41 s=0 z=100 t=:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0017:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+ PAGE 1 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0018:
+   W x=228 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=424 s=0 z=100 t=the
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0019:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0020:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0021:
+   W x=229 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=353 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0022:
+   W x=60 s=0 z=100 t=a
+   W x=86 s=0 z=100 t=clear
+   W x=145 s=0 z=100 t=path
+   W x=199 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=321 s=0 z=100 t=orchard
+   W x=402 s=0 z=100 t=before
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0023:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=2 z=100 t=0024
+   W x=215 s=0 z=100 t=:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0025:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0026:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0027:
+   W x=231 s=0 z=100 t=a
+   W x=251 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=423 s=0 z=100 t=the
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0028:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=82 s=0 z=100 t=a
+   W x=100 s=0 z=100 t=low
+   W x=133 s=0 z=100 t=stone
+   W x=190 s=0 z=100 t=wall.
+   W x=242 s=0 z=100 t=Marker
+   W x=299 s=0 z=100 t=0029:
+   W x=351 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=clear
+   W x=420 s=0 z=100 t=path
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=crosses
+   W x=74 s=0 z=100 t=the
+   W x=116 s=0 z=100 t=orchard
+   W x=194 s=0 z=100 t=before
+   W x=259 s=0 z=100 t=reaching
+   W x=346 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=low
+   W x=407 s=0 z=100 t=stone
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=wall.
+   W x=52 s=0 z=100 t=Marker
+   W x=109 s=0 z=100 t=0030:
+   W x=167 s=0 z=100 t=a
+   W x=185 s=0 z=100 t=clear
+   W x=236 s=0 z=100 t=path
+   W x=282 s=0 z=100 t=crosses
+   W x=351 s=0 z=100 t=the
+   W x=388 s=0 z=100 t=orchard
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0031:
+   W x=443 s=0 z=100 t=a
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=2 z=100 t=0032
+   W x=250 s=0 z=100 t=:
+   W x=267 s=0 z=100 t=a
+   W x=288 s=0 z=100 t=clear
+   W x=342 s=0 z=100 t=path
+   W x=391 s=0 z=100 t=crosses
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0033:
+   W x=111 s=0 z=100 t=a
+   W x=129 s=0 z=100 t=clear
+   W x=180 s=0 z=100 t=path
+   W x=226 s=0 z=100 t=crosses
+   W x=295 s=0 z=100 t=the
+   W x=332 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0034:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0035:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0036:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+ PAGE 2 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0037:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0038:
+   W x=230 s=0 z=100 t=a
+   W x=251 s=0 z=100 t=clear
+   W x=305 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=426 s=0 z=100 t=the
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0039:
+   W x=61 s=0 z=100 t=a
+   W x=87 s=0 z=100 t=clear
+   W x=146 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=277 s=0 z=100 t=the
+   W x=322 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=2 z=100 t=0040
+   W x=368 s=0 z=100 t=:
+   W x=386 s=0 z=100 t=a
+   W x=408 s=0 z=100 t=clear
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0041:
+   W x=231 s=0 z=100 t=a
+   W x=252 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=355 s=0 z=100 t=crosses
+   W x=427 s=0 z=100 t=the
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0042:
+   W x=62 s=0 z=100 t=a
+   W x=88 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=201 s=0 z=100 t=crosses
+   W x=278 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0043:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0044:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0045:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0046:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0047:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0048
+   W x=39 s=0 z=100 t=:
+   W x=61 s=0 z=100 t=a
+   W x=87 s=0 z=100 t=clear
+   W x=146 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=277 s=0 z=100 t=the
+   W x=322 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0049:
+   W x=388 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0050:
+   W x=234 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=355 s=0 z=100 t=crosses
+   W x=426 s=0 z=100 t=the
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0051:
+   W x=62 s=0 z=100 t=a
+   W x=88 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=201 s=0 z=100 t=crosses
+   W x=278 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0052:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0053:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0054:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0055:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+ PAGE 3 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=2 z=100 t=0056
+   W x=217 s=0 z=100 t=:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0057:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0058:
+   W x=388 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0059:
+   W x=233 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=308 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=429 s=0 z=100 t=the
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0060:
+   W x=68 s=0 z=100 t=a
+   W x=93 s=0 z=100 t=clear
+   W x=151 s=0 z=100 t=path
+   W x=204 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0061:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0062:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0063:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=2 z=100 t=0064
+   W x=373 s=0 z=100 t=:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0065:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0066:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0067:
+   W x=388 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0068:
+   W x=233 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=308 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=429 s=0 z=100 t=the
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0069:
+   W x=64 s=0 z=100 t=a
+   W x=90 s=0 z=100 t=clear
+   W x=149 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=325 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0070:
+   W x=389 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0071:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0072
+   W x=43 s=0 z=100 t=:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0073:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+ PAGE 4 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0074:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0075:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0076:
+   W x=388 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0077:
+   W x=236 s=0 z=100 t=a
+   W x=256 s=0 z=100 t=clear
+   W x=309 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0078:
+   W x=64 s=0 z=100 t=a
+   W x=90 s=0 z=100 t=clear
+   W x=149 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=325 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0079:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=2 z=100 t=0080
+   W x=214 s=0 z=100 t=:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0081:
+   W x=58 s=0 z=100 t=a
+   W x=84 s=0 z=100 t=clear
+   W x=143 s=0 z=100 t=path
+   W x=197 s=0 z=100 t=crosses
+   W x=274 s=0 z=100 t=the
+   W x=319 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=82 s=0 z=100 t=a
+   W x=100 s=0 z=100 t=low
+   W x=133 s=0 z=100 t=stone
+   W x=190 s=0 z=100 t=wall.
+   W x=242 s=0 z=100 t=Marker
+   W x=299 s=0 z=100 t=0082:
+   W x=350 s=0 z=100 t=a
+   W x=368 s=0 z=100 t=clear
+   W x=419 s=0 z=100 t=path
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=crosses
+   W x=74 s=0 z=100 t=the
+   W x=116 s=0 z=100 t=orchard
+   W x=194 s=0 z=100 t=before
+   W x=259 s=0 z=100 t=reaching
+   W x=346 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=low
+   W x=407 s=0 z=100 t=stone
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=wall.
+   W x=53 s=0 z=100 t=Marker
+   W x=111 s=0 z=100 t=0083:
+   W x=164 s=0 z=100 t=a
+   W x=183 s=0 z=100 t=clear
+   W x=235 s=0 z=100 t=path
+   W x=282 s=0 z=100 t=crosses
+   W x=352 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0084:
+   W x=444 s=0 z=100 t=a
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0085:
+   W x=268 s=0 z=100 t=a
+   W x=289 s=0 z=100 t=clear
+   W x=343 s=0 z=100 t=path
+   W x=392 s=0 z=100 t=crosses
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0086:
+   W x=112 s=0 z=100 t=a
+   W x=130 s=0 z=100 t=clear
+   W x=181 s=0 z=100 t=path
+   W x=227 s=0 z=100 t=crosses
+   W x=296 s=0 z=100 t=the
+   W x=333 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0087:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=2 z=100 t=0088
+   W x=211 s=0 z=100 t=:
+   W x=228 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=424 s=0 z=100 t=the
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0089:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0090:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0091:
+   W x=229 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=353 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0092:
+   W x=60 s=0 z=100 t=a
+   W x=86 s=0 z=100 t=clear
+   W x=145 s=0 z=100 t=path
+   W x=199 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=321 s=0 z=100 t=orchard
+   W x=402 s=0 z=100 t=before
+ PAGE 5 elements=8 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0093:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0094:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0095:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=2 z=100 t=0096
+   W x=371 s=0 z=100 t=:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=stone
+   W x=57 s=0 z=100 t=wall.
+SPINE 8 href=OPS/Heads/ch8.xhtml pages=6 truncated=0 cssFallback=0
+ PAGE 0 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=This
+   W x=47 s=0 z=100 t=paragraph
+   W x=148 s=0 z=100 t=is
+   W x=177 s=0 z=100 t=inside
+   W x=240 s=0 z=100 t=nested
+   W x=310 s=0 z=100 t=containers.
+   W x=429 s=0 z=100 t=Its
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=numbered
+   W x=84 s=0 z=100 t=passages
+   W x=173 s=0 z=100 t=should
+   W x=246 s=0 z=100 t=remain
+   W x=314 s=0 z=100 t=reachable
+   W x=410 s=0 z=100 t=after
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=changing
+   W x=87 s=0 z=100 t=font
+   W x=136 s=0 z=100 t=size
+   W x=175 s=0 z=100 t=or
+   W x=201 s=0 z=100 t=selecting
+   W x=288 s=0 z=100 t=a
+   W x=306 s=0 z=100 t=search
+   W x=369 s=0 z=100 t=result.
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0001:
+   W x=129 s=0 z=100 t=a
+   W x=155 s=0 z=100 t=clear
+   W x=214 s=0 z=100 t=path
+   W x=268 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0002:
+   W x=448 s=0 z=100 t=a
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0003:
+   W x=272 s=0 z=100 t=a
+   W x=293 s=0 z=100 t=clear
+   W x=347 s=0 z=100 t=path
+   W x=396 s=0 z=100 t=crosses
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0004:
+   W x=132 s=0 z=100 t=a
+   W x=158 s=0 z=100 t=clear
+   W x=217 s=0 z=100 t=path
+   W x=271 s=0 z=100 t=crosses
+   W x=348 s=0 z=100 t=the
+   W x=393 s=0 z=100 t=orchard
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=63 s=0 z=100 t=reaching
+   W x=148 s=0 z=100 t=a
+   W x=169 s=0 z=100 t=low
+   W x=205 s=0 z=100 t=stone
+   W x=265 s=0 z=100 t=wall.
+   W x=320 s=0 z=100 t=Marker
+   W x=380 s=0 z=100 t=0005:
+   W x=443 s=0 z=100 t=a
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=35 s=0 z=100 t=stone
+   W x=94 s=0 z=100 t=wall.
+   W x=148 s=0 z=100 t=Marker
+   W x=207 s=0 z=100 t=0006:
+   W x=270 s=0 z=100 t=a
+   W x=290 s=0 z=100 t=clear
+   W x=343 s=0 z=100 t=path
+   W x=391 s=0 z=100 t=crosses
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=64 s=0 z=100 t=0007:
+   W x=133 s=0 z=100 t=a
+   W x=158 s=0 z=100 t=clear
+   W x=216 s=0 z=100 t=path
+   W x=269 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=389 s=0 z=100 t=orchard
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=2 z=100 t=0008
+   W x=429 s=0 z=100 t=:
+   W x=447 s=0 z=100 t=a
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0009:
+   W x=271 s=0 z=100 t=a
+   W x=292 s=0 z=100 t=clear
+   W x=346 s=0 z=100 t=path
+   W x=395 s=0 z=100 t=crosses
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Marker
+   W x=65 s=0 z=100 t=0010:
+   W x=129 s=0 z=100 t=a
+   W x=155 s=0 z=100 t=clear
+   W x=214 s=0 z=100 t=path
+   W x=268 s=0 z=100 t=crosses
+   W x=345 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0011:
+   W x=441 s=0 z=100 t=a
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=37 s=0 z=100 t=stone
+   W x=98 s=0 z=100 t=wall.
+   W x=154 s=0 z=100 t=Marker
+   W x=215 s=0 z=100 t=0012:
+   W x=270 s=0 z=100 t=a
+   W x=292 s=0 z=100 t=clear
+   W x=347 s=0 z=100 t=path
+   W x=397 s=0 z=100 t=crosses
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0013:
+   W x=109 s=0 z=100 t=a
+   W x=127 s=0 z=100 t=clear
+   W x=178 s=0 z=100 t=path
+   W x=224 s=0 z=100 t=crosses
+   W x=293 s=0 z=100 t=the
+   W x=330 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0014:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0015:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0016
+   W x=41 s=0 z=100 t=:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0017:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+ PAGE 1 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0018:
+   W x=228 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=424 s=0 z=100 t=the
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0019:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0020:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0021:
+   W x=229 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=353 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0022:
+   W x=60 s=0 z=100 t=a
+   W x=86 s=0 z=100 t=clear
+   W x=145 s=0 z=100 t=path
+   W x=199 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=321 s=0 z=100 t=orchard
+   W x=402 s=0 z=100 t=before
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0023:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=2 z=100 t=0024
+   W x=215 s=0 z=100 t=:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0025:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0026:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0027:
+   W x=231 s=0 z=100 t=a
+   W x=251 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=423 s=0 z=100 t=the
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0028:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=82 s=0 z=100 t=a
+   W x=100 s=0 z=100 t=low
+   W x=133 s=0 z=100 t=stone
+   W x=190 s=0 z=100 t=wall.
+   W x=242 s=0 z=100 t=Marker
+   W x=299 s=0 z=100 t=0029:
+   W x=351 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=clear
+   W x=420 s=0 z=100 t=path
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=crosses
+   W x=74 s=0 z=100 t=the
+   W x=116 s=0 z=100 t=orchard
+   W x=194 s=0 z=100 t=before
+   W x=259 s=0 z=100 t=reaching
+   W x=346 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=low
+   W x=407 s=0 z=100 t=stone
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=wall.
+   W x=52 s=0 z=100 t=Marker
+   W x=109 s=0 z=100 t=0030:
+   W x=167 s=0 z=100 t=a
+   W x=185 s=0 z=100 t=clear
+   W x=236 s=0 z=100 t=path
+   W x=282 s=0 z=100 t=crosses
+   W x=351 s=0 z=100 t=the
+   W x=388 s=0 z=100 t=orchard
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0031:
+   W x=443 s=0 z=100 t=a
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=2 z=100 t=0032
+   W x=250 s=0 z=100 t=:
+   W x=267 s=0 z=100 t=a
+   W x=288 s=0 z=100 t=clear
+   W x=342 s=0 z=100 t=path
+   W x=391 s=0 z=100 t=crosses
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0033:
+   W x=111 s=0 z=100 t=a
+   W x=129 s=0 z=100 t=clear
+   W x=180 s=0 z=100 t=path
+   W x=226 s=0 z=100 t=crosses
+   W x=295 s=0 z=100 t=the
+   W x=332 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0034:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0035:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0036:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+ PAGE 2 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0037:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0038:
+   W x=230 s=0 z=100 t=a
+   W x=251 s=0 z=100 t=clear
+   W x=305 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=426 s=0 z=100 t=the
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0039:
+   W x=61 s=0 z=100 t=a
+   W x=87 s=0 z=100 t=clear
+   W x=146 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=277 s=0 z=100 t=the
+   W x=322 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=2 z=100 t=0040
+   W x=368 s=0 z=100 t=:
+   W x=386 s=0 z=100 t=a
+   W x=408 s=0 z=100 t=clear
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0041:
+   W x=231 s=0 z=100 t=a
+   W x=252 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=355 s=0 z=100 t=crosses
+   W x=427 s=0 z=100 t=the
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0042:
+   W x=62 s=0 z=100 t=a
+   W x=88 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=201 s=0 z=100 t=crosses
+   W x=278 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0043:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0044:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0045:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0046:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0047:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0048
+   W x=39 s=0 z=100 t=:
+   W x=61 s=0 z=100 t=a
+   W x=87 s=0 z=100 t=clear
+   W x=146 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=277 s=0 z=100 t=the
+   W x=322 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0049:
+   W x=388 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0050:
+   W x=234 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=355 s=0 z=100 t=crosses
+   W x=426 s=0 z=100 t=the
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0051:
+   W x=62 s=0 z=100 t=a
+   W x=88 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=201 s=0 z=100 t=crosses
+   W x=278 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0052:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0053:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0054:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0055:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+ PAGE 3 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=2 z=100 t=0056
+   W x=217 s=0 z=100 t=:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0057:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0058:
+   W x=388 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0059:
+   W x=233 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=308 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=429 s=0 z=100 t=the
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0060:
+   W x=68 s=0 z=100 t=a
+   W x=93 s=0 z=100 t=clear
+   W x=151 s=0 z=100 t=path
+   W x=204 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=404 s=0 z=100 t=before
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0061:
+   W x=389 s=0 z=100 t=a
+   W x=412 s=0 z=100 t=clear
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0062:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0063:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=2 z=100 t=0064
+   W x=373 s=0 z=100 t=:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0065:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0066:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0067:
+   W x=388 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0068:
+   W x=233 s=0 z=100 t=a
+   W x=254 s=0 z=100 t=clear
+   W x=308 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=429 s=0 z=100 t=the
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0069:
+   W x=64 s=0 z=100 t=a
+   W x=90 s=0 z=100 t=clear
+   W x=149 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=325 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0070:
+   W x=389 s=0 z=100 t=a
+   W x=411 s=0 z=100 t=clear
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0071:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=2 z=100 t=0072
+   W x=43 s=0 z=100 t=:
+   W x=64 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=147 s=0 z=100 t=path
+   W x=200 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0073:
+   W x=392 s=0 z=100 t=a
+   W x=415 s=0 z=100 t=clear
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+ PAGE 4 elements=31 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0074:
+   W x=233 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=306 s=0 z=100 t=path
+   W x=354 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0075:
+   W x=67 s=0 z=100 t=a
+   W x=92 s=0 z=100 t=clear
+   W x=150 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=323 s=0 z=100 t=orchard
+   W x=403 s=0 z=100 t=before
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=86 s=0 z=100 t=a
+   W x=108 s=0 z=100 t=low
+   W x=145 s=0 z=100 t=stone
+   W x=206 s=0 z=100 t=wall.
+   W x=262 s=0 z=100 t=Marker
+   W x=323 s=0 z=100 t=0076:
+   W x=388 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=0 z=100 t=0077:
+   W x=236 s=0 z=100 t=a
+   W x=256 s=0 z=100 t=clear
+   W x=309 s=0 z=100 t=path
+   W x=357 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0078:
+   W x=64 s=0 z=100 t=a
+   W x=90 s=0 z=100 t=clear
+   W x=149 s=0 z=100 t=path
+   W x=203 s=0 z=100 t=crosses
+   W x=280 s=0 z=100 t=the
+   W x=325 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0079:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=59 s=0 z=100 t=wall.
+   W x=113 s=0 z=100 t=Marker
+   W x=172 s=2 z=100 t=0080
+   W x=214 s=0 z=100 t=:
+   W x=230 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=351 s=0 z=100 t=crosses
+   W x=422 s=0 z=100 t=the
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0081:
+   W x=58 s=0 z=100 t=a
+   W x=84 s=0 z=100 t=clear
+   W x=143 s=0 z=100 t=path
+   W x=197 s=0 z=100 t=crosses
+   W x=274 s=0 z=100 t=the
+   W x=319 s=0 z=100 t=orchard
+   W x=400 s=0 z=100 t=before
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=82 s=0 z=100 t=a
+   W x=100 s=0 z=100 t=low
+   W x=133 s=0 z=100 t=stone
+   W x=190 s=0 z=100 t=wall.
+   W x=242 s=0 z=100 t=Marker
+   W x=299 s=0 z=100 t=0082:
+   W x=350 s=0 z=100 t=a
+   W x=368 s=0 z=100 t=clear
+   W x=419 s=0 z=100 t=path
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=crosses
+   W x=74 s=0 z=100 t=the
+   W x=116 s=0 z=100 t=orchard
+   W x=194 s=0 z=100 t=before
+   W x=259 s=0 z=100 t=reaching
+   W x=346 s=0 z=100 t=a
+   W x=369 s=0 z=100 t=low
+   W x=407 s=0 z=100 t=stone
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=wall.
+   W x=53 s=0 z=100 t=Marker
+   W x=111 s=0 z=100 t=0083:
+   W x=164 s=0 z=100 t=a
+   W x=183 s=0 z=100 t=clear
+   W x=235 s=0 z=100 t=path
+   W x=282 s=0 z=100 t=crosses
+   W x=352 s=0 z=100 t=the
+   W x=390 s=0 z=100 t=orchard
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=before
+   W x=64 s=0 z=100 t=reaching
+   W x=150 s=0 z=100 t=a
+   W x=172 s=0 z=100 t=low
+   W x=209 s=0 z=100 t=stone
+   W x=270 s=0 z=100 t=wall.
+   W x=326 s=0 z=100 t=Marker
+   W x=387 s=0 z=100 t=0084:
+   W x=444 s=0 z=100 t=a
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=clear
+   W x=55 s=0 z=100 t=path
+   W x=105 s=0 z=100 t=crosses
+   W x=178 s=0 z=100 t=the
+   W x=219 s=0 z=100 t=orchard
+   W x=296 s=0 z=100 t=before
+   W x=360 s=0 z=100 t=reaching
+   W x=446 s=0 z=100 t=a
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=low
+   W x=36 s=0 z=100 t=stone
+   W x=96 s=0 z=100 t=wall.
+   W x=151 s=0 z=100 t=Marker
+   W x=211 s=0 z=100 t=0085:
+   W x=268 s=0 z=100 t=a
+   W x=289 s=0 z=100 t=clear
+   W x=343 s=0 z=100 t=path
+   W x=392 s=0 z=100 t=crosses
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=44 s=0 z=100 t=orchard
+   W x=124 s=0 z=100 t=before
+   W x=191 s=0 z=100 t=reaching
+   W x=280 s=0 z=100 t=a
+   W x=305 s=0 z=100 t=low
+   W x=345 s=0 z=100 t=stone
+   W x=409 s=0 z=100 t=wall.
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Marker
+   W x=57 s=0 z=100 t=0086:
+   W x=112 s=0 z=100 t=a
+   W x=130 s=0 z=100 t=clear
+   W x=181 s=0 z=100 t=path
+   W x=227 s=0 z=100 t=crosses
+   W x=296 s=0 z=100 t=the
+   W x=333 s=0 z=100 t=orchard
+   W x=406 s=0 z=100 t=before
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0087:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=2 z=100 t=0088
+   W x=211 s=0 z=100 t=:
+   W x=228 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=clear
+   W x=303 s=0 z=100 t=path
+   W x=352 s=0 z=100 t=crosses
+   W x=424 s=0 z=100 t=the
+  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0089:
+   W x=59 s=0 z=100 t=a
+   W x=85 s=0 z=100 t=clear
+   W x=144 s=0 z=100 t=path
+   W x=198 s=0 z=100 t=crosses
+   W x=275 s=0 z=100 t=the
+   W x=320 s=0 z=100 t=orchard
+   W x=401 s=0 z=100 t=before
+  LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0090:
+   W x=391 s=0 z=100 t=a
+   W x=414 s=0 z=100 t=clear
+  LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0091:
+   W x=229 s=0 z=100 t=a
+   W x=250 s=0 z=100 t=clear
+   W x=304 s=0 z=100 t=path
+   W x=353 s=0 z=100 t=crosses
+   W x=425 s=0 z=100 t=the
+  LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0092:
+   W x=60 s=0 z=100 t=a
+   W x=86 s=0 z=100 t=clear
+   W x=145 s=0 z=100 t=path
+   W x=199 s=0 z=100 t=crosses
+   W x=276 s=0 z=100 t=the
+   W x=321 s=0 z=100 t=orchard
+   W x=402 s=0 z=100 t=before
+ PAGE 5 elements=8 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=0 z=100 t=0093:
+   W x=387 s=0 z=100 t=a
+   W x=410 s=0 z=100 t=clear
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=stone
+   W x=60 s=0 z=100 t=wall.
+   W x=115 s=0 z=100 t=Marker
+   W x=175 s=0 z=100 t=0094:
+   W x=232 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=clear
+   W x=307 s=0 z=100 t=path
+   W x=356 s=0 z=100 t=crosses
+   W x=428 s=0 z=100 t=the
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=orchard
+   W x=77 s=0 z=100 t=before
+   W x=141 s=0 z=100 t=reaching
+   W x=227 s=0 z=100 t=a
+   W x=249 s=0 z=100 t=low
+   W x=286 s=0 z=100 t=stone
+   W x=347 s=0 z=100 t=wall.
+   W x=403 s=0 z=100 t=Marker
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=0095:
+   W x=63 s=0 z=100 t=a
+   W x=89 s=0 z=100 t=clear
+   W x=148 s=0 z=100 t=path
+   W x=202 s=0 z=100 t=crosses
+   W x=279 s=0 z=100 t=the
+   W x=324 s=0 z=100 t=orchard
+   W x=405 s=0 z=100 t=before
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=reaching
+   W x=87 s=0 z=100 t=a
+   W x=110 s=0 z=100 t=low
+   W x=148 s=0 z=100 t=stone
+   W x=210 s=0 z=100 t=wall.
+   W x=267 s=0 z=100 t=Marker
+   W x=329 s=2 z=100 t=0096
+   W x=371 s=0 z=100 t=:
+   W x=390 s=0 z=100 t=a
+   W x=413 s=0 z=100 t=clear
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=path
+   W x=52 s=0 z=100 t=crosses
+   W x=127 s=0 z=100 t=the
+   W x=170 s=0 z=100 t=orchard
+   W x=249 s=0 z=100 t=before
+   W x=315 s=0 z=100 t=reaching
+   W x=403 s=0 z=100 t=a
+   W x=427 s=0 z=100 t=low
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=stone
+   W x=57 s=0 z=100 t=wall.
