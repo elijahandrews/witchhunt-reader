@@ -99,13 +99,12 @@ class ChapterHtmlSlimParser final : public Print {
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
   // One bounded word's decoded-byte origins; layout retains only its span/fragment anchor.
-  uint32_t partWordSources_[MAX_WORD_SIZE + 1];
+  uint32_t partWordSources_[MAX_WORD_SIZE + 1] = {};
   SourceAnchor sourceLookupTarget_;
   SourceAnchor pageSourceAnchor_;
   uint32_t pageSourceMin_ = UINT32_MAX, pageSourceEnd_ = 0;
   bool pageSourceHasText_ = false, pageSourceProbe_ = false;
   const uint32_t* sourceOverride_ = nullptr;
-  int sourceOriginIndex_ = 0;
   bool sourceSynthetic_ = false, sourceLiteralEntity_ = false;
   uint32_t characterOrigin(int index) const;
   void noteSourceLine(const TextBlock& line);
@@ -743,7 +742,8 @@ class ChapterHtmlSlimParser final : public Print {
   bool tryStartDropCapCapture(const CssStyle& cssStyle);
   // Place the captured drop cap: one-word PageLine on the current page plus a FloatZone
   // on the paragraph's block style. Falls back to an inline word when the cap is unusable.
-  std::string caseMappedDropCapText(std::string_view tail = {}) const;
+  std::string caseMappedDropCapText(std::string_view tail = {}, std::vector<uint32_t>* origins = nullptr,
+                                    int tailIndex = 0) const;
   void finalizePendingDropCap();
   void emitCapturedDropCapRun();
   // XML callbacks

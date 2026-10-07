@@ -1022,8 +1022,8 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
 uint32_t ChapterHtmlSlimParser::characterOrigin(int index) const {
   if (sourceSynthetic_) return UINT32_MAX;
   if (sourceOverride_) return sourceOverride_[index];
-  const uint32_t origin = saxParser_.characterSourceOffset(index + sourceOriginIndex_);
-  return sourceLiteralEntity_ && origin != UINT32_MAX ? origin + index + sourceOriginIndex_ : origin;
+  const uint32_t origin = saxParser_.characterSourceOffset(index);
+  return sourceLiteralEntity_ && origin != UINT32_MAX ? origin + index : origin;
 }
 
 void ChapterHtmlSlimParser::noteSourceLine(const TextBlock& line) {
@@ -1365,13 +1365,38 @@ bool ChapterHtmlSlimParser::tryStartDropCapCapture(const CssStyle& cssStyle) {
   return true;
 }
 
-std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail) const {
+std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail, std::vector<uint32_t>* origins,
+                                                         const int tailIndex) const {
   std::string result;
-  const auto append = [&](std::string_view text, CssTextTransform transform) {
-    if (transform == CssTextTransform::Uppercase || transform == CssTextTransform::Lowercase)
-      result += utf8CaseMap(text, transform == CssTextTransform::Uppercase);
-    else
-      result.append(text.data(), text.size());
+  const auto append = [&](std::string_view text, CssTextTransform transform, int rawBegin) {
+    const bool caseMap = transform == CssTextTransform::Uppercase || transform == CssTextTransform::Lowercase;
+    if (!origins) {
+      if (caseMap)
+        result += utf8CaseMap(text, transform == CssTextTransform::Uppercase);
+      else
+        result.append(text.data(), text.size());
+      return;
+    }
+    // Unicode case mapping is codepoint-local. Carry every expansion's original
+    // byte origins through the same mapping; the normal word path then owns NFC
+    // composition, joining and splitting exactly as it does for ordinary text.
+    for (size_t byte = 0; byte < text.size();) {
+      const auto lead = static_cast<unsigned char>(text[byte]);
+      const size_t codepointBytes = lead >= 0xc2 && lead <= 0xdf   ? 2
+                                    : lead >= 0xe0 && lead <= 0xef ? 3
+                                    : lead >= 0xf0 && lead <= 0xf4 ? 4
+                                                                   : 1;
+      const size_t count = std::min(codepointBytes, text.size() - byte);
+      const std::string_view cp = text.substr(byte, count);
+      const std::string mapped = caseMap ? utf8CaseMap(cp, transform == CssTextTransform::Uppercase) : std::string(cp);
+      result += mapped;
+      for (size_t n = 0; n < mapped.size(); ++n) {
+        const int raw = rawBegin + static_cast<int>(byte + std::min(n, count - 1));
+        origins->push_back(raw < pendingDropCap_.textLen ? pendingDropCap_.sources[raw]
+                                                         : characterOrigin(tailIndex + raw - pendingDropCap_.textLen));
+      }
+      byte += count;
+    }
   };
   for (int begin = 0; begin < pendingDropCap_.textLen;) {
     const auto transform = pendingDropCap_.transforms[begin];
@@ -1383,14 +1408,14 @@ std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail) 
       // rest of this SAX chunk before mapping it, instead of casing partial bytes.
       std::string joined(run);
       joined.append(tail.data(), tail.size());
-      append(joined, transform);
+      append(joined, transform, begin);
       tail = {};
     } else {
-      append(run, transform);
+      append(run, transform, begin);
     }
     begin = end;
   }
-  if (!tail.empty()) append(tail, textTransform_);
+  if (!tail.empty()) append(tail, textTransform_, pendingDropCap_.textLen);
   return result;
 }
 
@@ -3325,30 +3350,30 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
     // Too much text for a drop cap — abandon capture and reroute everything captured
     // so far (plus the rest of this chunk) through the normal inline word flow.
     self->pendingDropCap_.active = false;
-    // A SAX chunk may end in a partial UTF-8 codepoint. Keep those raw suffix
-    // bytes in the ordinary buffer; case mapping waits for the following bytes.
-    const int complete = utf8SafeTruncateBuffer(self->pendingDropCap_.text, self->pendingDropCap_.textLen);
-    char suffix[4];
-    uint32_t origins[4];
-    const int suffixBytes = self->pendingDropCap_.textLen - complete;
-    for (int n = 0; n < suffixBytes; ++n) {
-      suffix[n] = self->pendingDropCap_.text[complete + n];
-      origins[n] = self->pendingDropCap_.sources[complete + n];
+    std::vector<uint32_t> origins;
+    // Capture is at most 15 bytes and a SAX chunk at most 256. The case table's
+    // largest byte expansion is 3x, so one <=3252-byte origin allocation
+    // covers this rare fallback without reallocating in the mapping loop.
+    origins.reserve((self->pendingDropCap_.textLen + len - i) * 3);
+    const std::string mapped = self->caseMappedDropCapText(std::string_view(s + i, len - i), &origins, i);
+    self->pendingDropCap_.textLen = 0;
+    const auto transform = self->textTransform_;
+    const uint32_t* previousOrigins = self->sourceOverride_;
+    self->sourceOverride_ = origins.data();
+    self->textTransform_ = CssTextTransform::None;  // captured runs have already been mapped
+    // Keep captured bytes and the callback tail in the same word. A partial
+    // codepoint remains raw until the next SAX callback completes it.
+    const int completeBytes = utf8SafeTruncateBuffer(mapped.data(), static_cast<int>(mapped.size()));
+    characterData(userData, mapped.data(), completeBytes);
+    if (self->partWordBufferIndex > 0) {
+      if (self->flushPartWordBuffer()) self->nextWordContinues = true;
     }
-    self->pendingDropCap_.textLen = complete;
-    const float capMultiplier = self->pendingDropCap_.multiplier;
-    self->pendingDropCap_.multiplier =
-        self->currentTextBlock ? self->currentTextBlock->getBlockStyle().fontSizeMultiplier : 1.0f;
-    self->emitCapturedDropCapRun();
-    self->pendingDropCap_.multiplier = capMultiplier;
-    for (int n = 0; n < suffixBytes; ++n) {
-      self->partWordSources_[self->partWordBufferIndex] = origins[n];
-      self->partWordBuffer[self->partWordBufferIndex++] = suffix[n];
+    self->textTransform_ = transform;
+    if (completeBytes < static_cast<int>(mapped.size())) {
+      self->sourceOverride_ = origins.data() + completeBytes;
+      characterData(userData, mapped.data() + completeBytes, static_cast<int>(mapped.size()) - completeBytes);
     }
-    const int previous = self->sourceOriginIndex_;
-    self->sourceOriginIndex_ += i;
-    characterData(userData, s + i, len - i);
-    self->sourceOriginIndex_ = previous;
+    self->sourceOverride_ = previousOrigins;
     return;
   }
 
