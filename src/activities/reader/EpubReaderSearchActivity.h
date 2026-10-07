@@ -30,6 +30,7 @@ class EpubReaderSearchActivity final : public Activity {
   std::string query_;
   int selected_ = 0;
   int shownSection_ = -1;
+  unsigned long lastProgressPaint_ = 0;
   bool invalidQuery_ = false;
   bool startFailed_ = false;
   void editQuery();

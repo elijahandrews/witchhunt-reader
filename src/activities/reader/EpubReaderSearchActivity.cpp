@@ -43,6 +43,7 @@ void EpubReaderSearchActivity::editQuery() {
                            if (invalidQuery_ || startFailed_) session_.reset();
                            selected_ = 0;
                            shownSection_ = -1;
+                           lastProgressPaint_ = millis();
                            requestUpdate();
                          });
 }
@@ -80,8 +81,12 @@ void EpubReaderSearchActivity::loop() {
   if (session_ && !session_->done()) {
     RenderLock lock(*this);
     session_->step();
-    if (shownSection_ != session_->sectionsScanned() || session_->done()) {
+    // Hundreds of tiny spine items must not each force an e-ink refresh. Input and
+    // the scan still advance every loop; only the progress repaint is throttled.
+    const auto now = millis();
+    if (session_->done() || (shownSection_ != session_->sectionsScanned() && now - lastProgressPaint_ >= 1000)) {
       shownSection_ = session_->sectionsScanned();
+      lastProgressPaint_ = now;
       if (session_->done() && session_->count()) selected_ = 1;
       requestUpdate();
     }
