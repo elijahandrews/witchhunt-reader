@@ -732,7 +732,7 @@ class ChapterHtmlSlimParser final : public Print {
   // Emit currentPage to the consumer while keeping paragraphLutPerPage and completedPageCount
   // in lockstep. Every page break MUST go through this helper; open-coded completePageFn
   // calls risk desynchronising paragraphLutPerPage and failing the size check in Section.cpp.
-  void emitPage(uint32_t xhtmlByteOffset);
+  bool emitPage(uint32_t xhtmlByteOffset);
   void recordPageBreakLabel(const std::string& label);
   // Attach the pending inline float image to `bs` and place it on the current page.
   // Clears pendingInlineImage_ on return.  No-op if pendingInlineImage_ is not active.

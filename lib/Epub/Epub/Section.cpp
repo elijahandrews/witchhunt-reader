@@ -1719,7 +1719,8 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
 
   // Write per-page paragraph LUT: count + array of {xhtmlByteOffset(u32), paragraphIndex(u16),
   // listItemIndex(u16)}. The byte offset was a seek hint for KOReader XPath generation; nothing
-  // reads it any more, it stays as part of the entry layout.
+  // reads it any more, it stays as part of the entry layout. Source anchoring adds
+  // preferred u32+u16 plus u32 min/end (22 bytes total per entry).
   const uint32_t paragraphLutOffset = file.position();
   const auto& paragraphLut = visitor.getParagraphLutPerPage();
   if (paragraphLut.size() != static_cast<size_t>(pageCount)) {

@@ -9,6 +9,7 @@
 #include "Epub.h"
 #include "Epub/Page.h"
 #include "Epub/Section.h"
+#include "Epub/parsers/ChapterHtmlSlimParser.h"
 #include "GfxRenderer.h"
 #include "StoredZipWriter.h"
 
@@ -258,6 +259,56 @@ TEST_F(SourceAnchorTest, ReusingSectionDoesNotKeepAStaleExactProbe) {
   section->setSourceLookupTarget({UINT32_MAX - 1, 0});
   ASSERT_TRUE(section->createSectionFile(params(200), {}, true));
   EXPECT_FALSE(section->sourceLookupPage());
+}
+
+TEST_F(SourceAnchorTest, WrappedDropCapFallbackProbesTheTargetFragment) {
+  makeBook("<p>PAD</p><p><span class=\"cap\">abcdefghijklmno</span>suffix AFTER</p>",
+           ".cap{float:left;font-size:300%;text-transform:uppercase}");
+  const auto word = xhtml.find("abcdefghijklmno");
+  auto first = build(45, {static_cast<uint32_t>(word), 0}, 48);
+  auto later = build(45, {static_cast<uint32_t>(word + 12), 0}, 48);
+  ASSERT_TRUE(first->sourceLookupPage());
+  ASSERT_TRUE(later->sourceLookupPage());
+  EXPECT_GT(*later->sourceLookupPage(), *first->sourceLookupPage());
+  const auto text = textAt(*later, *later->sourceLookupPage());
+  EXPECT_NE(text.find('M'), std::string::npos) << text;
+  const auto anchor = later->getSourceAnchorForPage(*later->sourceLookupPage());
+  ASSERT_TRUE(anchor);
+  ASSERT_GT(anchor->characterOffset, 0);
+  for (int width : {70, 30, 45}) {
+    auto resized = build(width, *anchor, 48);
+    ASSERT_TRUE(resized->sourceLookupPage());
+    if (width == 45) EXPECT_EQ(*resized->sourceLookupPage(), *later->sourceLookupPage());
+  }
+}
+
+TEST_F(SourceAnchorTest, LutGrowthFailureStopsWithoutEmittingOrAppendingStalePage) {
+  makeBook("<p>" + numberedWords(1000) + "</p>");
+  const auto saved = ESP.getMaxAllocHeap();
+  struct RestoreHeap {
+    uint32_t value;
+    ~RestoreHeap() { ESP.setMaxAllocHeap(value); }
+  } restore{saved};
+  size_t completed = 0;
+  auto parser = std::make_unique<ChapterHtmlSlimParser>(
+      book, renderer, 0, 1.0f, false, 0, 100, 24, false, false, false,
+      [&](std::unique_ptr<Page> page) {
+        ASSERT_TRUE(page);
+        ++completed;
+        // The first allocation has16 entries. Drop contiguous space exactly after
+        // completing them, while this word batch still has many lines to lay out.
+        if (completed == 16) ESP.setMaxAllocHeap(700);
+      },
+      false, "", book->getCachePath());
+  ASSERT_TRUE(parser->setup(0));  // no reserve hint, so the first LUT growth is16
+  parser->write(reinterpret_cast<const uint8_t*>(xhtml.data()), xhtml.size());
+  parser->finalize();
+  EXPECT_FALSE(parser->streamSucceeded());
+  EXPECT_EQ(completed, 16u);
+  EXPECT_EQ(parser->getParagraphLutPerPage().size(), completed);
+  // Further feeds after refusal cannot append the retained, uncompleted page.
+  parser->write(reinterpret_cast<const uint8_t*>(xhtml.data()), xhtml.size());
+  EXPECT_EQ(completed, 16u);
 }
 
 }  // namespace
