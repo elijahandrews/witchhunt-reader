@@ -3,18 +3,30 @@
 #include <Utf8.h>
 
 #include <algorithm>
+#include <cmath>
 
+#include "../OutlineFont/EpdOutlineFontCallbacks.h"
 #include "GlyphFallback.h"
 #include "GlyphScale.h"
 #include "SmallCaps.h"
 
+// Internal glyph keys have a 16-bit glyph ID and must never wrap to another
+// outline glyph when passed through a public font metric/shaping API.
+static uint16_t outlineGlyphId(const EpdFontData* data, uint32_t cp) {
+  if (cp >= EPD_ALTERNATE_GLYPH_BASE) {
+    const uint32_t gid = cp - EPD_ALTERNATE_GLYPH_BASE;
+    return gid < 65536 ? static_cast<uint16_t>(gid) : 0;
+  }
+  return data->outline->glyphId(data->outlineCtx, cp, 0);
+}
+
 // Scale a 12.4 fixed-point advance by the small-caps factor, rounding to nearest.
 static inline int32_t scaleAdvanceFP(const int32_t advanceFP) {
-  return static_cast<int32_t>(advanceFP * smallCaps::SCALE + 0.5f);
+  return static_cast<int32_t>(std::lround(advanceFP * smallCaps::SCALE));
 }
 
 void EpdFont::getTextBounds(const char* string, const int startX, const int startY, int* minX, int* minY, int* maxX,
-                            int* maxY, const bool useSmallCaps) const {
+                            int* maxY, const uint8_t capsMode) const {
   *minX = startX;
   *minY = startY;
   *maxX = startX;
@@ -35,12 +47,14 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&string)))) {
     const bool isCombining = utf8IsCombiningMark(cp);
 
-    if (!isCombining) {
+    if (!isCombining && capsMode == 0) {
       cp = applyLigatures(cp, string);
     }
 
     // Small-caps: fold lowercase to uppercase and mark this glyph for scaled metrics.
-    const bool folded = useSmallCaps && !isCombining && smallCaps::fold(cp);
+    float capsScale = 1.0f;
+    if (!isCombining) cp = resolveCaps(cp, capsMode, capsScale);
+    const bool folded = capsScale != 1.0f;
 
     const EpdGlyphRef glyph = getGlyph(cp);
     if (!glyph) {
@@ -86,10 +100,10 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   }
 }
 
-void EpdFont::getTextDimensions(const char* string, int* w, int* h, const bool useSmallCaps) const {
+void EpdFont::getTextDimensions(const char* string, int* w, int* h, const uint8_t capsMode) const {
   int minX = 0, minY = 0, maxX = 0, maxY = 0;
 
-  getTextBounds(string, 0, 0, &minX, &minY, &maxX, &maxY, useSmallCaps);
+  getTextBounds(string, 0, 0, &minX, &minY, &maxX, &maxY, capsMode);
 
   *w = maxX - minX;
   *h = maxY - minY;
@@ -128,6 +142,12 @@ static uint8_t lookupKernClass(const EpdKernClassEntry* entries, const uint16_t 
 }
 
 int16_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const {
+  if (data->outline) {
+    const auto left = outlineGlyphId(data, leftCp), right = outlineGlyphId(data, rightCp);
+    return left && right ? data->outline->kerning(data->outlineCtx, left, right) : 0;
+  }
+  if ((leftCp >= EPD_ALTERNATE_GLYPH_BASE || rightCp >= EPD_ALTERNATE_GLYPH_BASE) && data->alternateKerning)
+    return data->alternateKerning(data->glyphMissCtx, leftCp, rightCp);
   if (!data->kernMatrix && !data->kernMatrixWide && !data->kernRowOffsets) {
     return 0;
   }
@@ -180,6 +200,12 @@ int16_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const
 }
 
 uint32_t EpdFont::getLigature(const uint32_t leftCp, const uint32_t rightCp) const {
+  if (data->outline) {
+    const uint16_t pair[] = {outlineGlyphId(data, leftCp), outlineGlyphId(data, rightCp)};
+    if (!pair[0] || !pair[1]) return 0;
+    const auto lig = data->outline->ligature(data->outlineCtx, pair, 2);
+    return lig ? EPD_ALTERNATE_GLYPH_BASE + lig : 0;
+  }
   const auto* pairs = data->ligaturePairs;
   const auto count = data->ligaturePairCount;
   if (!pairs || count == 0 || leftCp > 0xFFFF || rightCp > 0xFFFF) {
@@ -202,7 +228,32 @@ uint32_t EpdFont::getLigature(const uint32_t leftCp, const uint32_t rightCp) con
 }
 
 uint32_t EpdFont::applyLigatures(uint32_t cp, const char*& text) const {
-  if (!data->ligaturePairs || data->ligaturePairCount == 0) {
+  if (data->outline) {
+    const char* original = text;
+    const char* afterSecond = text;
+    uint16_t gids[3] = {outlineGlyphId(data, cp), 0, 0};
+    if (!gids[0]) return cp;
+    const uint32_t second = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&afterSecond));
+    if (!second) return cp;
+    gids[1] = outlineGlyphId(data, second);
+    if (!gids[1]) return cp;
+    const char* afterThird = afterSecond;
+    const uint32_t third = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&afterThird));
+    if (third) {
+      gids[2] = outlineGlyphId(data, third);
+      if (const auto lig = data->outline->ligature(data->outlineCtx, gids, 3)) {
+        text = afterThird;
+        return EPD_ALTERNATE_GLYPH_BASE + lig;
+      }
+    }
+    if (const auto lig = data->outline->ligature(data->outlineCtx, gids, 2)) {
+      text = afterSecond;
+      return EPD_ALTERNATE_GLYPH_BASE + lig;
+    }
+    text = original;
+    return cp;
+  }
+  if (!data->outline && (!data->ligaturePairs || data->ligaturePairCount == 0)) {
     return cp;
   }
   while (true) {
@@ -223,6 +274,12 @@ uint32_t EpdFont::applyLigatures(uint32_t cp, const char*& text) const {
 // installs. No fallbacks -- getGlyph() layers those on top, so a fallback can
 // never recurse back into another fallback.
 EpdGlyphRef EpdFont::findGlyph(const uint32_t cp) const {
+  if (data->outline) {
+    if (cp >= EPD_ALTERNATE_GLYPH_BASE + 65536u) return {};
+    const uint16_t gid = cp >= EPD_ALTERNATE_GLYPH_BASE ? static_cast<uint16_t>(cp - EPD_ALTERNATE_GLYPH_BASE)
+                                                        : data->outline->glyphId(data->outlineCtx, cp, 0);
+    return gid ? data->outline->metrics(data->outlineCtx, gid) : EpdGlyphRef{};
+  }
   const int count = data->intervalCount;
   if (count == 0 && !data->glyphMissHandler) return {};
 
@@ -265,6 +322,7 @@ EpdGlyphRef EpdFont::getGlyphSlow(const uint32_t cp) const {
   // otherwise a row of identical rectangles. See GlyphFallback.h; this only
   // runs once the real glyph has been ruled out, so a font that has the
   // character is never second-guessed.
+  if (cp >= EPD_ALTERNATE_GLYPH_BASE) return {};
   const uint32_t substitute = fallbackGlyphCodepoint(cp);
   if (substitute != cp) {
     if (const EpdGlyphRef glyph = findGlyph(substitute)) return glyph;
@@ -272,4 +330,23 @@ EpdGlyphRef EpdFont::getGlyphSlow(const uint32_t cp) const {
 
   if (cp != REPLACEMENT_GLYPH) return findGlyph(REPLACEMENT_GLYPH);
   return {};
+}
+
+uint32_t EpdFont::resolveCaps(uint32_t cp, uint8_t mode, float& scale) const {
+  scale = 1.0f;
+  if (!mode || cp >= EPD_ALTERNATE_GLYPH_BASE) return cp;
+  const auto alternate = [this, cp](uint8_t feature) -> uint32_t {
+    if (data->outline) {
+      const auto gid = data->outline->glyphId(data->outlineCtx, cp, feature);
+      return gid ? EPD_ALTERNATE_GLYPH_BASE + gid : 0;
+    }
+    return data->capsGlyph ? data->capsGlyph(data->glyphMissCtx, cp, feature) : 0;
+  };
+  if (mode == 2) {
+    if (const auto key = alternate(2)) return key;
+  }
+  if (const auto key = alternate(1)) return key;
+  const bool uppercase = mode == 2 && smallCaps::isUppercase(cp);
+  if (smallCaps::fold(cp) || uppercase) scale = smallCaps::SCALE;
+  return cp;
 }

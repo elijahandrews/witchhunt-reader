@@ -6,8 +6,31 @@ Contains original test text only. The same file can be used for on-device QA.
 from pathlib import Path
 from zipfile import ZipFile, ZipInfo, ZIP_STORED, ZIP_DEFLATED
 from html import escape
+import argparse
+import importlib.util
+import json
+import tempfile
+
+from typography_font_fixture import embedded_fonts, STYLE_NAMES
 
 CSS = """
+@font-face { font-family: "Fixture Forms"; src: url("fonts/FixtureForms-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "Fixture Forms"; src: url("fonts/FixtureForms-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "Fixture Forms"; src: url("fonts/FixtureForms-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "Fixture Forms"; src: url("fonts/FixtureForms-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; }
+@font-face { font-family: "Fixture Wide"; src: url("fonts/FixtureWide-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Fixture Optical"; src: url("fonts/FixtureOptical-Variable.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "Fixture Optical"; src: url("fonts/FixtureOptical-Variable.ttf") format("truetype"); font-weight: 700; }
+@font-face { font-family: "Fixture Optical"; src: url("fonts/FixtureOptical-Variable.ttf") format("truetype"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "Fixture Optical"; src: url("fonts/FixtureOptical-Variable.ttf") format("truetype"); font-weight: 700; font-style: italic; }
+@font-face { font-family: "Fixture CFF"; src: url("fonts/FixtureCff-Regular.otf") format("opentype"); }
+.fixture-cff { font-family: "Fixture CFF", serif; }
+.fixture { font-family: "Fixture Forms", serif; }
+.fixture-wide { font-family: "Fixture Wide", serif; }
+.fixture-fallback { font-family: "Missing Fixture", "Fixture Forms", serif; }
+.fixture-optical { font-family: "Fixture Optical", serif; }
+.genuine-small { font-variant-caps: small-caps; }
+.genuine-all { font-variant-caps: all-small-caps; }
 p { margin: 0 0 0.5em; text-indent: 0; }
 .small_caps { font-size: 75%; text-transform: uppercase; }
 .heading { font-size: 120%; }
@@ -26,6 +49,42 @@ p { margin: 0 0 0.5em; text-indent: 0; }
 
 """
 CHAPTERS = [
+("Embedded original fonts", """<h1>Embedded original fonts</h1>
+<p>These diagnostic outlines were drawn for this test. Only the specimens use the embedded font; labels use the reader font.</p>
+<p>Regular: <span class="fixture">HNT IF hnt if</span></p>
+<p>Bold: <b class="fixture">HNT IF hnt if</b></p>
+<p>Italic: <i class="fixture">HNT IF hnt if</i></p>
+<p>Bold italic: <b class="fixture"><i>HNT IF hnt if</i></b></p>
+<p>The bold stems should be heavier; italic stems should lean to the right. Bold italic must do both.</p>
+<p>Forms: <span class="fixture">HNT HNT</span></p>
+<p>Same outlines in CFF: <span class="fixture-cff">HNT HNT</span></p>
+<p>The CFF sample must match the Forms size; a much larger sample indicates a raster scaling fault.</p>
+<p>Wide family: <span class="fixture-wide">HNT HNT</span></p>
+<p>Missing first family: <span class="fixture-fallback">HNT HNT</span></p>
+<p>The wide sample should be wider. The missing-family sample should match Forms.</p>"""),
+("Authored small capitals", """<h1>Authored small capitals</h1>
+<p>Normal: <span class="fixture">HNT hnt IF if</span></p>
+<p>Small caps: <span class="fixture genuine-small">HNT hnt IF if</span></p>
+<p>All small caps: <span class="fixture genuine-all">HNT hnt IF if</span></p>
+<p>Small caps keep the initial capitals tall. All small caps make both groups use the same authored small-cap outlines. Their stems must stay stronger than reduced full capitals.</p>
+<p>Legacy CSS: <span class="fixture" style="font-variant:small-caps">HNT hnt IF if</span></p>
+<p>Bold: <b class="fixture genuine-small">HNT hnt IF if</b></p>
+<p>Italic: <i class="fixture genuine-all">HNT hnt IF if</i></p>
+<p>Normal ligature: <span class="fixture">fi fi</span></p>
+<p>Small-cap letters: <span class="fixture genuine-small">fi fi</span></p>
+<p>Small caps must resolve the individual letters before the ordinary fi ligature.</p>
+<p>Spacing: <span class="fixture genuine-small">HT ht Ht hT</span></p>"""),
+("Variable optical size", """<h1>Variable optical size</h1>
+<p>This embedded original variable font has optical-size and weight axes. Optical size follows the actual displayed point size, including CSS scaling.</p>
+<p><span class="fixture-optical" style="font-size:80%">HNT hnt IF if</span></p>
+<p><span class="fixture-optical">HNT hnt IF if</span></p>
+<p><span class="fixture-optical" style="font-size:160%">HNT hnt IF if</span></p>
+<p><span class="fixture-optical" style="font-size:200%">HNT hnt IF if</span></p>
+<p>At larger optical sizes the design has relatively finer strokes and narrower letters; it should not just enlarge the default design. Raster density must not double the optical design size.</p>
+<p>Regular variable: <span class="fixture-optical">HNT hnt</span></p>
+<p>Bold variable: <b class="fixture-optical">HNT hnt</b></p>
+<p>Italic variable: <i class="fixture-optical">HNT hnt</i></p>
+<p>Bold italic variable: <b class="fixture-optical"><i>HNT hnt</i></b></p>"""),
 ("Percentage sizes", """<h1>External CSS percentages</h1><p class="heading">A heading at 120 percent</p>
 <p class="small_caps">Monday, the fifth of October</p>
 <p>The heading should be larger. The date should be smaller and ALL UPPERCASE.</p>
@@ -127,25 +186,61 @@ CHAPTERS = [
 <p>Garamond has contrasting strokes and a T that extends above the usual capital height. Preserve these shapes without extra pixel shifts.</p>"""),
 ]
 
-def build(out):
+def build(out, preview_dir=None):
     files = {
       "mimetype": "application/epub+zip",
       "META-INF/container.xml": '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
       "OEBPS/style.css": CSS,
     }
     manifest = '<item id="css" href="style.css" media-type="text/css"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+    fonts = embedded_fonts()
+    for i, (name, data) in enumerate(fonts.items()):
+      files['OEBPS/fonts/' + name] = data
+      media_type = "font/otf" if name.endswith(".otf") else "font/ttf"
+      manifest += f'<item id="font{i}" href="fonts/{name}" media-type="{media_type}"/>'
     spine = ''; nav = ''
     for i, (title, body) in enumerate(CHAPTERS):
       files[f"OEBPS/ch{i}.xhtml"] = f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body>{body}</body></html>'
       manifest += f'<item id="c{i}" href="ch{i}.xhtml" media-type="application/xhtml+xml"/>'
       spine += f'<itemref idref="c{i}"/>'
       nav += f'<navPoint id="c{i}" playOrder="{i+1}"><navLabel><text>{escape(title)}</text></navLabel><content src="ch{i}.xhtml"/></navPoint>'
-    files['OEBPS/content.opf'] = f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-css-typography-test-v2</dc:identifier><dc:title>Witch CSS Style Test</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
+    files['OEBPS/content.opf'] = f'<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">witch-css-typography-test-v3</dc:identifier><dc:title>Witch CSS Style Test</dc:title><dc:creator>Test Suite</dc:creator><dc:language>en</dc:language></metadata><manifest>{manifest}</manifest><spine toc="ncx">{spine}</spine></package>'
     files['OEBPS/toc.ncx'] = f'<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><head/><docTitle><text>Witch CSS Style Test</text></docTitle><navMap>{nav}</navMap></ncx>'
     with ZipFile(out, 'w') as z:
       for name, text in files.items():
         info = ZipInfo(name, (2026, 10, 5, 0, 0, 0)); info.compress_type = ZIP_STORED if name == 'mimetype' else ZIP_DEFLATED
-        z.writestr(info, text.encode('utf-8'))
+        z.writestr(info, text if isinstance(text, bytes) else text.encode('utf-8'))
+
+    if preview_dir is not None:
+      write_v6_preview(Path(preview_dir), fonts)
+
+
+def write_v6_preview(directory, fonts):
+    """Optional original-font cpfont and summary for the production render harness."""
+    converter_path = Path(__file__).resolve().parents[2] / 'lib/EpdFont/scripts/fontconvert_sdcard.py'
+    spec = importlib.util.spec_from_file_location('fixture_fontconvert', converter_path)
+    converter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(converter)
+    directory.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='typography-preview-') as temporary:
+      sources = {}
+      for style, name in enumerate(STYLE_NAMES):
+        path = Path(temporary) / f'{name}.ttf'
+        path.write_bytes(fonts[f'FixtureForms-{name}.ttf'])
+        sources[style] = str(path)
+      output = directory / 'FixtureForms_14.cpfont'
+      converter.generate_cpfont_multistyle(sources, 14, [(32, 126), (0xFB01, 0xFB01), (0xFFFD, 0xFFFD)],
+        str(output), raster_density=2, small_caps=True)
+      (directory / 'expected.json').write_text(json.dumps({
+        'format': 6, 'density': 2, 'styles': 4, 'smcp_sources': list('fhint'),
+        'c2sc_sources': list('FHINT'), 'alternate_count_per_style': 5,
+        'sample': 'HNT hnt IF if', 'source': 'Original geometric outlines generated by typography_font_fixture.py'
+      }, indent=2) + '\n')
+
 
 if __name__ == '__main__':
-    build(Path(__file__).with_name('test_css_typography.epub'))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, default=Path(__file__).with_name('test_css_typography.epub'))
+    parser.add_argument('--preview-dir', type=Path, help='Optional original-font v6 cpfont and expected-data JSON.')
+    args = parser.parse_args()
+    build(args.output, args.preview_dir)

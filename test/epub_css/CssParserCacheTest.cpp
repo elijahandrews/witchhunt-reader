@@ -489,14 +489,15 @@ bool stylesEqual(const CssStyle& a, const CssStyle& b) {
   return a.textAlign == b.textAlign && a.fontStyle == b.fontStyle && a.fontWeight == b.fontWeight &&
          a.textDecoration == b.textDecoration && a.display == b.display && a.verticalAlign == b.verticalAlign &&
          a.listStyleNone == b.listStyleNone && a.pageBreakBefore == b.pageBreakBefore &&
-         a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.smallCaps == b.smallCaps &&
-         a.textTransform == b.textTransform && a.lineHeightMultiplier == b.lineHeightMultiplier &&
-         a.fontSizeMultiplier == b.fontSizeMultiplier && len(a.textIndent) == len(b.textIndent) &&
-         len(a.marginTop) == len(b.marginTop) && len(a.marginBottom) == len(b.marginBottom) &&
-         len(a.marginLeft) == len(b.marginLeft) && len(a.marginRight) == len(b.marginRight) &&
-         len(a.paddingTop) == len(b.paddingTop) && len(a.paddingBottom) == len(b.paddingBottom) &&
-         len(a.paddingLeft) == len(b.paddingLeft) && len(a.paddingRight) == len(b.paddingRight) &&
-         len(a.imageHeight) == len(b.imageHeight) && len(a.imageWidth) == len(b.imageWidth);
+         a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.whiteSpace == b.whiteSpace &&
+         a.smallCaps == b.smallCaps && a.textTransform == b.textTransform &&
+         a.lineHeightMultiplier == b.lineHeightMultiplier && a.fontSizeMultiplier == b.fontSizeMultiplier &&
+         len(a.textIndent) == len(b.textIndent) && len(a.marginTop) == len(b.marginTop) &&
+         len(a.marginBottom) == len(b.marginBottom) && len(a.marginLeft) == len(b.marginLeft) &&
+         len(a.marginRight) == len(b.marginRight) && len(a.paddingTop) == len(b.paddingTop) &&
+         len(a.paddingBottom) == len(b.paddingBottom) && len(a.paddingLeft) == len(b.paddingLeft) &&
+         len(a.paddingRight) == len(b.paddingRight) && len(a.imageHeight) == len(b.imageHeight) &&
+         len(a.imageWidth) == len(b.imageWidth);
 }
 }  // namespace
 
@@ -1042,7 +1043,7 @@ TEST(CssParserTypography, FamilyAndTrackingSurviveColdDiskAndResidentArena) {
     ASSERT_TRUE(parser.loadFromCache());
     const auto s = parser.resolveStyle("span", "sans");
     EXPECT_TRUE(s.hasFontFamily());
-    EXPECT_EQ(s.fontFamily, wordTypography::SansSerif);
+    EXPECT_EQ(parser.fontCatalog().fallbackFamily(s.fontFamily), wordTypography::SansSerif);
     EXPECT_TRUE(s.hasLetterSpacing());
     EXPECT_FLOAT_EQ(s.letterSpacing.value, .1f);
     EXPECT_EQ(s.letterSpacing.unit, CssUnit::Em);

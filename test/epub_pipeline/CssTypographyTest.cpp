@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "Epub/css/CssFontCatalog.h"
 #include "PipelineRunner.h"
 
 namespace {
@@ -29,6 +30,34 @@ std::vector<int> linePositions(const std::string& dump, const std::string& label
   for (auto i = std::sregex_iterator(dump.begin(), dump.end(), pattern); i != std::sregex_iterator(); ++i)
     result.push_back(std::stoi((*i)[1]));
   return result;
+}
+// The page cache now stores named fallback-stack IDs. Verify their identity/order and
+// generic fallback rather than treating them as the old two-bit generic enum.
+int namedFamily(const std::string& dump, const std::string& tag, const std::string& label,
+                const uint8_t expectedFallback) {
+  std::smatch match;
+  const std::regex word("W[^\\n]* f=([0-9]+) ls=[^ ]+ t=" + label + "(\\n| )");
+  EXPECT_TRUE(std::regex_search(dump, match, word)) << label;
+  if (match.empty()) return -1;
+  const int id = std::stoi(match[1]);
+  EXPECT_GE(id, CssFontCatalog::FIRST_NAMED_ID);
+  const auto root = std::filesystem::temp_directory_path() / "css_typography_test" / tag;
+  bool found = false;
+  for (const auto& directory : std::filesystem::directory_iterator(root)) {
+    if (!directory.is_directory()) continue;
+    CssFontCatalog catalog;
+    if (!catalog.load(directory.path().string())) continue;
+    const auto* stack = catalog.stack(id);
+    EXPECT_NE(stack, nullptr);
+    EXPECT_EQ(catalog.fallbackFamily(id), expectedFallback);
+    if (stack) {
+      EXPECT_GE(stack->families.size(), 2u);
+      EXPECT_EQ(stack->families.back().generic, expectedFallback);
+    }
+    found = true;
+  }
+  EXPECT_TRUE(found);
+  return id;
 }
 }  // namespace
 
@@ -86,16 +115,16 @@ TEST(CssTypography, EmbeddedStyleOffPreservesSourceCase) {
 
 TEST(CssTypography, GenericFamiliesAreScopedAndSurvivePageCache) {
   const auto dump = buildTypography("families");
-  EXPECT_NE(dump.find("f=1 ls=0 t=SerifBody"), std::string::npos);
-  EXPECT_NE(dump.find("f=2 ls=0 t=SansInline"), std::string::npos);
-  EXPECT_NE(dump.find("s=1 z=100 f=2 ls=0 t=SansBold"), std::string::npos);
-  EXPECT_NE(dump.find("s=2 z=100 f=2 ls=0 t=SansItalic"), std::string::npos);
-  EXPECT_NE(dump.find("f=1 ls=0 t=SerifOverride"), std::string::npos);
-  EXPECT_NE(dump.find("f=2 ls=0 t=SansRestored"), std::string::npos);
+  const int serif = namedFamily(dump, "families", "SerifBody", wordTypography::Serif);
+  const int sans = namedFamily(dump, "families", "SansInline", wordTypography::SansSerif);
+  EXPECT_NE(serif, sans);
+  EXPECT_EQ(namedFamily(dump, "families", "SerifOverride", wordTypography::Serif), serif);
+  for (const auto* label : {"SansBold", "SansItalic", "SansRestored", "SansCell", "N", "Q"})
+    EXPECT_EQ(namedFamily(dump, "families", label, wordTypography::SansSerif), sans) << label;
+  EXPECT_NE(dump.find("s=1 z=100 f=" + std::to_string(sans) + " ls=0 t=SansBold"), std::string::npos);
+  EXPECT_NE(dump.find("s=2 z=100 f=" + std::to_string(sans) + " ls=0 t=SansItalic"), std::string::npos);
+  EXPECT_NE(dump.find("z=250 f=" + std::to_string(sans) + " ls=0 t=Q\n"), std::string::npos);
   EXPECT_NE(dump.find("z=100 t=ReaderDefault"), std::string::npos);
-  EXPECT_NE(dump.find("f=2 ls=0 t=SansCell"), std::string::npos);
-  EXPECT_NE(dump.find("f=2 ls=0 t=N\n"), std::string::npos);
-  EXPECT_NE(dump.find("z=250 f=2 ls=0 t=Q\n"), std::string::npos);
   EXPECT_NE(dump.find("ROW h=40"), std::string::npos);
   EXPECT_EQ(dump, buildTypography("families", true, true));
   EXPECT_EQ(buildTypography("families-disabled", false).find(" f="), std::string::npos);
@@ -110,7 +139,8 @@ TEST(CssTypography, TrackingIsComputedThenInheritedAcrossDifferentSizes) {
   EXPECT_NE(dump.find("z=150 f=0 ls=32 t=LargerInherited"), std::string::npos);
   EXPECT_NE(dump.find("f=0 ls=32 t=SameTracking"), std::string::npos);
   EXPECT_NE(dump.find("f=0 ls=-14 t=NegativeSpacing"), std::string::npos);
-  EXPECT_NE(dump.find("f=2 ls=29 t=SansTracked"), std::string::npos);
+  const int sans = namedFamily(dump, "tracking", "SansTracked", wordTypography::SansSerif);
+  EXPECT_NE(dump.find("f=" + std::to_string(sans) + " ls=29 t=SansTracked"), std::string::npos);
   EXPECT_EQ(dump, buildTypography("tracking", true, true));
 }
 

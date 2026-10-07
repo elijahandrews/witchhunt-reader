@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// V5 retains the V4 section layout. Metrics are in raster pixels; density
+// V5/V6 retain the V4 section layout. Metrics are in raster pixels; density
 // converts them back to the logical point size advertised by the font catalog.
 namespace cpfont {
 constexpr size_t HEADER_SIZE = 32;
@@ -12,7 +12,7 @@ inline uint32_t u32(const uint8_t* p) {
 inline uint8_t rasterDensity(const uint8_t* header) {
   const unsigned version = header[8] | (unsigned(header[9]) << 8);
   if (version == 4) return 1;
-  if (version != 5 || header[10] != 1 || header[11] != 0 || header[13] != 2) return 0;
+  if ((version != 5 && version != 6) || header[10] != 1 || header[11] != 0 || header[13] != 2) return 0;
   for (size_t i = 18; i < HEADER_SIZE; ++i)
     if (header[i]) return 0;
   return 2;

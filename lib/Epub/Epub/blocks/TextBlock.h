@@ -137,7 +137,7 @@ class TextBlock final : public Block {
   }
 
  public:
-  // Spare high bit of the packed style byte: EpdFontFamily::Style only uses bits 0-6.
+  // Continuation retains bit7; ALL_SMALL_CAPS is stored in typography bit24.
   static constexpr uint8_t WORD_CONTINUES_BIT = 0x80;
 
   // Flatten-on-construct: copies the layout-time vectors into the arena; the
@@ -197,7 +197,9 @@ class TextBlock final : public Block {
   }
   int16_t wordXpos(const uint16_t i) const { return xposArr[i]; }
   EpdFontFamily::Style wordStyle(const uint16_t i) const {
-    return static_cast<EpdFontFamily::Style>(stylesArr[i] & ~WORD_CONTINUES_BIT);
+    return static_cast<EpdFontFamily::Style>(
+        (stylesArr[i] & ~WORD_CONTINUES_BIT) |
+        ((wordTypography(i) & wordTypography::ALL_SMALL_CAPS) ? EpdFontFamily::ALL_SMALL_CAPS : 0));
   }
   // True when word i is glued to word i-1 with no space between them: the two halves of a
   // bionic-reading word, an attached punctuation token, a styled run that changes mid-word.

@@ -6,6 +6,7 @@
 class SdCardFont;
 class GfxRenderer {
  public:
+  void registerFontPointSize(int, float) {}
   std::map<int, EpdFontFamily> fonts;
   std::map<int, float> scales;
   std::map<int, SdCardFont*> native, aliases;

@@ -415,8 +415,9 @@ TEST(SmallCapsFold, LatinExtendedAPairs) {
   EXPECT_TRUE(smallCaps::fold(cp));
   EXPECT_EQ(cp, 0x0100u);  // Ā
 
-  cp = 0x0131;  // ı dotless i — intentionally not folded
-  EXPECT_FALSE(smallCaps::fold(cp));
+  cp = 0x0131;  // ı has the Unicode one-to-one uppercase mapping I
+  EXPECT_TRUE(smallCaps::fold(cp));
+  EXPECT_EQ(cp, 0x0049u);
 }
 
 // Uppercase letters render full-size even under small-caps, so width is unchanged.

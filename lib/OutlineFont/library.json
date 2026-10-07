@@ -1,0 +1,15 @@
+{
+  "name": "OutlineFont",
+  "version": "0.1.0",
+  "dependencies": {
+    "WitchFreeType": "*"
+  },
+  "build": {
+    "flags": [
+      "-I ../EpdFont",
+      "-I ../FreeType/config",
+      "-I ../FreeType/third_party/freetype/include",
+      "-DWITCH_FONT_AUTOHINT=1"
+    ]
+  }
+}

@@ -94,6 +94,11 @@ void FontCacheManager::resetStats() {
 bool FontCacheManager::isScanning() const { return scanMode_ == ScanMode::Scanning; }
 
 void FontCacheManager::recordText(const char* text, int fontId, EpdFontFamily::Style style) {
+  // Runtime outlines own their metric/raster caches and have no compressed
+  // groups to prewarm. Do not spend internal scan RAM or built-in page slots
+  // on them; real built-in and SD fallback registrations still scan normally.
+  const auto found = fontMap_.find(fontId);
+  if (found != fontMap_.end() && found->second.getData(style)->outline) return;
   // Bounded: this is every drawn string of a page, concatenated per (font, style), and it used
   // to grow by doubling for as long as the page had text (audit §4.4). A page's distinct glyphs
   // fit in far less than this; text past the cap is simply not prewarmed and loads on demand.

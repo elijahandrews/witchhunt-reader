@@ -1,3 +1,4 @@
+#include <EpdOutlineFontCallbacks.h>
 #include <GfxRenderer.h>
 
 #include <algorithm>
@@ -302,6 +303,53 @@ int runOverlapChecks(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily&
     ++checks;
     if (g.truncatedText(13, "AAAA", fittingWidth) != "AAAA") ++failures;
     g.removeFont(13);
+  }
+  // Independent authored metrics make caps measurement mistakes visible: lower
+  // x-height3, capitals10, designed small capitals6, and distinct space kerning.
+  {
+    const EpdOutlineFontCallbacks callbacks{
+        [](void*, uint32_t cp, uint8_t mode) -> uint16_t {
+          if ((mode == 1 && cp == 'a') || (mode == 2 && cp == 'A')) return 4;
+          if (mode) return 0;
+          return cp == 'A' || cp == 'H' ? 1 : cp == 'a' ? 2 : cp == ' ' ? 3 : 0;
+        },
+        [](void*, uint16_t gid) -> EpdGlyphRef {
+          if (!gid || gid > 4) return {};
+          const uint16_t h = gid == 1 ? 10 : gid == 2 ? 3 : gid == 4 ? 6 : 0;
+          return {nullptr, uint16_t(gid == 3 ? 160 : 192), gid, uint16_t(h ? 8 : 0), h, 0, int16_t(h), true};
+        },
+        nullptr,
+        [](void*, uint16_t a, uint16_t b) -> int16_t {
+          return a == 4 && b == 3 ? -16 : a == 3 && b == 4 ? -32 : a == 4 && b == 4 ? -48 : a == 1 && b == 1 ? -12 : 0;
+        },
+        nullptr};
+    EpdFontData data{};
+    data.outline = &callbacks;
+    EpdFont font(&data);
+    g.insertFont(14, EpdFontFamily(&font));
+    int above = 0, below = 0;
+    for (auto style : {EpdFontFamily::SMALL_CAPS, EpdFontFamily::ALL_SMALL_CAPS}) {
+      ++checks;
+      if (!g.getTextInkMetrics(14, "a", style, &above, &below) || above != 6 || below != 0 ||
+          g.getSpaceAdvance(14, 'a', 'a', style) != 7 || g.getKerning(14, 'a', 'a', style) != -3)
+        ++failures;
+    }
+    ++checks;
+    if (!g.getTextInkMetrics(14, "A", EpdFontFamily::ALL_SMALL_CAPS, &above, &below) || above != 6) ++failures;
+    ++checks;
+    if (g.getTextInkMetrics(14, " ", EpdFontFamily::REGULAR, &above, &below)) ++failures;
+    // Synthetic 0.75 scaling keeps negative fixed-point kerning negative.
+    ++checks;
+    const int advance = g.getTextAdvanceX(14, "hh", EpdFontFamily::SMALL_CAPS);
+    const int inkWidth = g.getTextWidth(14, "hh", EpdFontFamily::SMALL_CAPS);
+    // Spaced width includes the full cursor advance, including trailing sidebearing.
+    const int spacedWidth = g.getTextWidthSpaced(14, "hh", EpdFontFamily::SMALL_CAPS, 1, 0);
+    if (advance != 17 || inkWidth != 14 || spacedWidth != 17) {
+      ++failures;
+      std::cerr << "Synthetic caps negative kerning: advance=" << advance << " ink=" << inkWidth
+                << " spaced=" << spacedWidth << '\n';
+    }
+    g.removeFont(14);
   }
   g.setOrientation(savedOrientation);
   g.setRenderMode(GfxRenderer::BW);

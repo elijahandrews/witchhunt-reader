@@ -56,6 +56,8 @@ class Epub {
   bool parseTocNavFile() const;
   bool parsePageMapFile() const;
   void parseCssFiles() const;
+  bool compileDocumentStyles() const;
+  bool documentStyleCachesValid() const;
   void discoverCssFilesFromZip();
 
   // Session cache for the source ZIP's content fingerprint (one central-directory
@@ -195,6 +197,9 @@ class Epub {
   bool clearCache(bool preserveThumbs = false) const;
   void setupCacheDir() const;
   const std::string& getCachePath() const;
+  // Empty path means this spine declares no head stylesheet. False means its required
+  // sidecar/index is missing or corrupt, so section layout must be marked degraded.
+  bool documentStyleCache(int spineIndex, std::string& path, bool& truncated) const;
   // Per-spine caches (section layouts, inflated XHTML, anchor spills) live in buckets of
   // SPINE_CACHE_BUCKET_SIZE spine items: <cache>/spines/<spineIndex / 32>/. A FAT open scans its
   // directory linearly, and the one flat sections/ directory older firmware used held two files
@@ -295,6 +300,8 @@ class Epub {
   // extraction into a failed one. See docs/memory-allocation-strategy.md §4 (class D).
   bool extractItemToFile(const std::string& itemHref, const std::string& destPath, BuildArena* arena = nullptr) const;
   bool getItemSize(const std::string& itemHref, size_t* size) const;
+  // Authored uncompressed payload CRC from the ZIP central directory.
+  bool getItemCrc32(const std::string& itemHref, uint32_t* crc32) const;
   // Byte range of an item's raw data inside the EPUB, valid ONLY when the ZIP stores that entry
   // uncompressed (method 0). Lets a decoder read the entry in place instead of extracting it to
   // SD first -- worth ~3.4 s on an 857 KB cover, which is pure copying at ~255 KB/s.

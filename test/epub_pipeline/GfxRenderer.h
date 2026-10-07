@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -32,8 +33,11 @@ class GfxRenderer {
     int fontId;
     float scale;
   };
-  TextFont resolveTextFont(int fontId, uint8_t family) const {
-    return {family == 2 ? -2000000 : (family == 1 ? -1000000 : fontId), 1.0f};
+  uint32_t bookFontFailureEpoch() const { return 0; }
+  std::function<uint8_t(uint8_t)> familyFallback;
+  TextFont resolveTextFont(int fontId, uint8_t family, float = 1.0f) const {
+    if (family >= 5 && familyFallback) family = familyFallback(family);
+    return {family == 2 ? -2000000 : (family == 1 ? -1000000 : (family == 4 ? -3000000 : fontId)), 1.0f};
   }
   int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
                             int16_t tracking) const {
@@ -99,17 +103,19 @@ class GfxRenderer {
   int getTextWidthScaled(int fontId, const char* text, EpdFontFamily::Style style, float scale) const {
     return static_cast<int>(getTextWidth(fontId, text, style) * scale);
   }
-  int getTextAdvanceX(int /*fontId*/, const char* text, EpdFontFamily::Style style) const {
+  int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style style) const {
     int w = 0;
     for (const uint8_t* p = reinterpret_cast<const uint8_t*>(text); *p;) {
       uint32_t cp;
       p = decodeUtf8(p, cp);
-      w += advance(cp, style);
+      w += fontId == -3000000 ? 9 : advance(cp, style);
     }
     return w;
   }
-  int getSpaceWidth(int, EpdFontFamily::Style = EpdFontFamily::REGULAR) const { return 6; }
-  int getSpaceAdvance(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 6; }
+  int getSpaceWidth(int fontId, EpdFontFamily::Style = EpdFontFamily::REGULAR) const {
+    return fontId == -3000000 ? 9 : 6;
+  }
+  int getSpaceAdvance(int fontId, uint32_t, uint32_t, EpdFontFamily::Style) const { return fontId == -3000000 ? 9 : 6; }
   int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 0; }
   int getLineHeight(int fontId) const { return fontId == -2000000 ? 30 : 24; }
   int getLineHeightScaled(int fontId, float scale) const { return static_cast<int>(getLineHeight(fontId) * scale); }

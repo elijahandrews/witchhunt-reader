@@ -4,6 +4,10 @@
 #pragma once
 #include <cstdint>
 
+struct EpdOutlineFontCallbacks;
+// Opaque glyph keys never enter UTF-8 text or the EPUB cache.
+inline constexpr uint32_t EPD_ALTERNATE_GLYPH_BASE = 0x110000;
+
 /// Font metrics use "fixed-point 4" (4 fractional bits, i.e. 1/16-pixel
 /// resolution).  Both the 12.4 glyph advances (uint16_t) and the 4.4 kern
 /// values (int8_t) share the same 4 fractional bits, so they can be freely
@@ -332,6 +336,13 @@ typedef struct {
   // these to false/null without changing their packed storage.
   bool wideGlyphs;
   const uint8_t* kernMatrixWide;
+  // Optional runtime outline face. Null for built-in and converted bitmap fonts.
+  const EpdOutlineFontCallbacks* outline;
+  void* outlineCtx;
+  // Converted font v6 features; maps Unicode to an opaque alternate glyph key.
+  // Mode 1 is smcp, mode 2 is c2sc; zero means no substitution.
+  uint32_t (*capsGlyph)(void* ctx, uint32_t cp, uint8_t mode);
+  int16_t (*alternateKerning)(void* ctx, uint32_t left, uint32_t right);
 } EpdFontData;
 
 /// Reads glyph `index` out of whichever representation `data` carries.

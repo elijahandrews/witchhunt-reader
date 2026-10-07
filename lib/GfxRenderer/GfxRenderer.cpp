@@ -1,6 +1,7 @@
 #include "GfxRenderer.h"
 
 #include <BoardConfig.h>
+#include <EpdOutlineFontCallbacks.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <HalGPIO.h>
@@ -24,6 +25,12 @@
 #include "TextRun.h"
 
 const uint8_t* GfxRenderer::getGlyphBitmap(const EpdFontData* fontData, const EpdGlyphRef& glyph) const {
+  if (fontData->outline) {
+    size_t bytes = 0;
+    const auto* bitmap = fontData->outline->bitmap(fontData->outlineCtx, glyph.index, &bytes);
+    const size_t required = (size_t(glyph.width) * glyph.height + 3) / 4;
+    return bytes >= required ? bitmap : nullptr;
+  }
   if (fontData->groups != nullptr) {
     auto* fd = fontCacheManager_ ? fontCacheManager_->getDecompressor() : nullptr;
     if (!fd) {
@@ -1479,16 +1486,15 @@ bool GfxRenderer::getTextInkMetrics(const int fontId, const char* text, const Ep
   if (fontIt == fontMap.end()) return false;
 
   bool any = false;
-  uint32_t cp;
-  const char* p = text;
-  while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&p)))) {
-    const EpdGlyphRef glyph = fontIt->second.getGlyph(cp, style);
-    if (!glyph) continue;
-    const auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, fontBaseScale(fontId));
-    *aboveBaseline = std::max(*aboveBaseline, -bounds.top);
-    *belowBaseline = std::max(*belowBaseline, bounds.top + bounds.height);
+  const auto& font = fontIt->second;
+  textRun::walk(font, text, style, fontBaseScale(fontId), 0, [&](uint32_t cp, int, int y, float scale, bool) {
+    const auto glyph = font.getGlyph(cp, style);
+    if (!glyph || glyph.width == 0 || glyph.height == 0) return;
+    const auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, scale);
+    *aboveBaseline = std::max(*aboveBaseline, -(y + bounds.top));
+    *belowBaseline = std::max(*belowBaseline, y + bounds.top + bounds.height);
     any = true;
-  }
+  });
   return any;
 }
 
@@ -1555,15 +1561,16 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 
     // Small-caps: fold lowercase to its uppercase glyph and draw it scaled.  Decided
     // per glyph so already-uppercase letters, digits and punctuation stay full-size.
-    const bool smallCapsStyle = (style & EpdFontFamily::SMALL_CAPS) != 0;
-    const bool folded = smallCapsStyle && smallCaps::fold(cp);
+    float capsScale = 1.0f;
+    cp = font.resolveCaps(cp, style, capsScale);
+    const bool folded = capsScale != 1.0f;
 
     // Differential rounding: snap (previous advance + current kern) as one unit so
     // identical character pairs always produce the same pixel step regardless of
     // where they fall on the line.
     if (prevCp != 0) {
       auto kernFP = static_cast<int32_t>(font.getKerning(prevCp, cp, style));  // 4.4 fixed-point kern
-      if (folded) kernFP = static_cast<int32_t>(kernFP * smallCaps::SCALE + 0.5f);
+      if (folded) kernFP = static_cast<int32_t>(std::lround(kernFP * smallCaps::SCALE));
       lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);  // snap 12.4 fixed-point to nearest pixel
     }
 
@@ -3034,7 +3041,7 @@ std::string GfxRenderer::truncatedText(const int fontId, const char* text, const
 
   // The fast helper measures raw font metrics. Dense masters, scaled aliases,
   // and small caps need the public measured path so the logical width is used.
-  if (fontBaseScale(fontId) == 1.0f && !(style & EpdFontFamily::SMALL_CAPS) &&
+  if (fontBaseScale(fontId) == 1.0f && !(style & (EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS)) &&
       textTruncation::canTruncate(fontIt->second, style)) {
     return textTruncation::truncateToWidth(fontIt->second, text, maxWidth, style);
   }
@@ -3264,8 +3271,13 @@ int GfxRenderer::getSpaceAdvance(const int fontId, const uint32_t leftCp, const 
   const int32_t spaceAdvanceFP = spaceGlyph ? static_cast<int32_t>(spaceGlyph.advanceX) : 0;
   // Combine space advance + flanking kern into one fixed-point sum before snapping.
   // Snapping the combined value avoids the +/-1 px error from snapping each component separately.
-  const int32_t kernFP = static_cast<int32_t>(font.getKerning(leftCp, ' ', style)) +
-                         static_cast<int32_t>(font.getKerning(' ', rightCp, style));
+  float leftScale = 1.0f, rightScale = 1.0f;
+  const auto left = font.resolveCaps(leftCp, style, leftScale);
+  const auto right = font.resolveCaps(rightCp, style, rightScale);
+  // The text cursor scales pair adjustment by its right-hand glyph. A space
+  // keeps full scale; the following synthetic small capital may not.
+  const int32_t kernFP = font.getKerning(left, ' ', style) +
+                         static_cast<int32_t>(std::lround(font.getKerning(' ', right, style) * rightScale));
   // Scaled in FIXED POINT, before the snap. This is the inter-word advance ParsedText uses for
   // line breaking and justification, so it has to grow with the glyphs or a synthesised size
   // measures words at its own scale and the gaps between them at its master's -- 83% of the right
@@ -3282,7 +3294,10 @@ int GfxRenderer::getKerning(const int fontId, const uint32_t leftCp, const uint3
                             const EpdFontFamily::Style style) const {
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) return 0;
-  const int kernFP = fontIt->second.getKerning(leftCp, rightCp, style);  // 4.4 fixed-point
+  float leftScale = 1.0f, rightScale = 1.0f;
+  const auto left = fontIt->second.resolveCaps(leftCp, style, leftScale);
+  const auto right = fontIt->second.resolveCaps(rightCp, style, rightScale);
+  const int kernFP = static_cast<int>(std::lround(fontIt->second.getKerning(left, right, style) * rightScale));
   // Scaled before the snap, for the same reason getSpaceAdvance() is: ParsedText adds this to
   // word widths when breaking lines, so a synthesised size kerning at its master's scale would
   // mis-measure every line.
@@ -3339,13 +3354,15 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
     cp = font.applyLigatures(cp, text, style);
 
     // Small-caps fold — mirror drawText so measurement and rendering agree exactly.
-    const bool folded = (style & EpdFontFamily::SMALL_CAPS) != 0 && smallCaps::fold(cp);
+    float capsScale = 1.0f;
+    cp = font.resolveCaps(cp, style, capsScale);
+    const bool folded = capsScale != 1.0f;
 
     // Differential rounding: snap (previous advance + current kern) together,
     // matching drawText so measurement and rendering agree exactly.
     if (prevCp != 0) {
       auto kernFP = static_cast<int32_t>(font.getKerning(prevCp, cp, style));  // 4.4 fixed-point kern
-      if (folded) kernFP = static_cast<int32_t>(kernFP * smallCaps::SCALE + 0.5f);
+      if (folded) kernFP = static_cast<int32_t>(std::lround(kernFP * smallCaps::SCALE));
       widthPx += fp4::toPixel(prevAdvanceFP + kernFP);  // snap 12.4 fixed-point to nearest pixel
     }
 
@@ -3868,7 +3885,12 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
   }
 }
 
-GfxRenderer::TextFont GfxRenderer::resolveTextFont(const int fontId, const uint8_t family) const {
+GfxRenderer::TextFont GfxRenderer::resolveTextFont(const int fontId, const uint8_t family, const float scale) const {
+  if (bookFontResolver_) return bookFontResolver_(bookFontContext_, fontId, family, scale);
+  return resolveGenericTextFont(fontId, family);
+}
+
+GfxRenderer::TextFont GfxRenderer::resolveGenericTextFont(const int fontId, const uint8_t family) const {
   if (family != wordTypography::Serif && family != wordTypography::SansSerif) return {fontId, 1.0f};
   for (uint8_t i = 0; i < readerFontPairCount_; ++i) {
     const auto& p = readerFontPairs_[i];

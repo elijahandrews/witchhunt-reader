@@ -487,7 +487,7 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
                                               static_cast<uint8_t>(CssTextDecoration::LineThrough)) != 0;
   effectiveSup = false;
   effectiveSub = false;
-  effectiveSmallCaps = currentCssStyle.hasSmallCaps() && currentCssStyle.smallCaps;
+  effectiveSmallCaps = inheritedSmallCaps_;
   effectiveInlineMarginLeft = 0;
   // Inline font-size composes multiplicatively through the stack (em is relative to
   // the parent element); the block's own font-size lives in BlockStyle, so 100 here
@@ -515,9 +515,6 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
     if (entry.hasSub) {
       effectiveSub = entry.sub;
       if (entry.sub) effectiveSup = false;
-    }
-    if (entry.hasSmallCaps) {
-      effectiveSmallCaps = entry.smallCaps;
     }
     if (entry.hasMarginLeft) {
       effectiveInlineMarginLeft = entry.marginLeftPx;
@@ -589,12 +586,12 @@ void ChapterHtmlSlimParser::initializeFontSizeBaseline() {
   if (!cssParser) return;
 
   if (!hasRootFontSizeBaseline_) {
-    const CssStyle bodyStyle = cssParser->resolveStyle("body", "");
+    const CssStyle bodyStyle = resolveDocumentStyle("body", "");
     if (bodyStyle.hasFontSizeMultiplier() && bodyStyle.fontSizeMultiplier != 1.0f) {
       rootFontSizeBaseline_ = saneFontSizeBaseline(bodyStyle.fontSizeMultiplier);
       hasRootFontSizeBaseline_ = rootFontSizeBaseline_ != 1.0f;
     } else {
-      const CssStyle htmlStyle = cssParser->resolveStyle("html", "");
+      const CssStyle htmlStyle = resolveDocumentStyle("html", "");
       if (htmlStyle.hasFontSizeMultiplier() && htmlStyle.fontSizeMultiplier != 1.0f) {
         rootFontSizeBaseline_ = saneFontSizeBaseline(htmlStyle.fontSizeMultiplier);
         hasRootFontSizeBaseline_ = rootFontSizeBaseline_ != 1.0f;
@@ -603,14 +600,14 @@ void ChapterHtmlSlimParser::initializeFontSizeBaseline() {
   }
 
   if (!hasMainTextFontSizeBaseline_) {
-    const CssStyle paragraphStyle = cssParser->resolveStyle("p", "");
+    const CssStyle paragraphStyle = resolveDocumentStyle("p", "");
     if (paragraphStyle.hasFontSizeMultiplier() && paragraphStyle.fontSizeMultiplier != 1.0f) {
       mainTextFontSizeBaseline_ = saneFontSizeBaseline(paragraphStyle.fontSizeMultiplier);
       hasMainTextFontSizeBaseline_ = mainTextFontSizeBaseline_ != 1.0f;
       return;
     }
 
-    const CssStyle listStyle = cssParser->resolveStyle("li", "");
+    const CssStyle listStyle = resolveDocumentStyle("li", "");
     if (listStyle.hasFontSizeMultiplier() && listStyle.fontSizeMultiplier != 1.0f) {
       mainTextFontSizeBaseline_ = saneFontSizeBaseline(listStyle.fontSizeMultiplier);
       hasMainTextFontSizeBaseline_ = mainTextFontSizeBaseline_ != 1.0f;
@@ -670,7 +667,7 @@ CssStyle ChapterHtmlSlimParser::normalizeFontSizeForElement(const char* tagName,
 CssStyle ChapterHtmlSlimParser::inlineStyleFor(const std::string& styleAttr) {
   const auto it = inlineStyleCache_.find(styleAttr);
   if (it != inlineStyleCache_.end()) return it->second;
-  CssStyle parsed = CssParser::parseInlineStyle(styleAttr);
+  CssStyle parsed = CssParser::parseInlineStyle(styleAttr, documentCss_ ? documentCss_.get() : cssParser);
   if (styleMemoHasRoom(inlineStyleCache_)) inlineStyleCache_.emplace(styleAttr, parsed);
   return parsed;
 }
@@ -680,7 +677,7 @@ CssStyle ChapterHtmlSlimParser::resolvedImgStyle(const std::string& classAttr) {
   key += classAttr;
   const auto it = cssStyleCache_.find(key);
   if (it != cssStyleCache_.end()) return it->second;
-  CssStyle resolved = cssParser->resolveStyle("img", classAttr);
+  CssStyle resolved = resolveDocumentStyle("img", classAttr);
   if (styleMemoHasRoom(cssStyleCache_)) cssStyleCache_.emplace(std::move(key), resolved);
   return resolved;
 }
@@ -886,7 +883,8 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
     fontStyle = static_cast<EpdFontFamily::Style>(fontStyle | EpdFontFamily::SUB);
   }
   if (effectiveSmallCaps) {
-    fontStyle = static_cast<EpdFontFamily::Style>(fontStyle | EpdFontFamily::SMALL_CAPS);
+    fontStyle = static_cast<EpdFontFamily::Style>(fontStyle | EpdFontFamily::SMALL_CAPS |
+                                                  (effectiveSmallCaps == 2 ? EpdFontFamily::ALL_SMALL_CAPS : 0));
   }
 
   // The item's first word: its marker goes in front of it.
@@ -1298,8 +1296,8 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
       if (auxFontId_ == 0) auxFontId_ = capFontId;
     }
   }
-  const auto familyFont =
-      renderer.resolveTextFont(capFontId != 0 ? capFontId : fontId, wordTypography::family(pendingDropCap_.typography));
+  const auto familyFont = renderer.resolveTextFont(capFontId != 0 ? capFontId : fontId,
+                                                   wordTypography::family(pendingDropCap_.typography), capScale);
   capFontId = familyFont.fontId;
   capScale *= familyFont.scale;
   const int capEffFontId = capFontId;
@@ -1703,8 +1701,9 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       // this book's stylesheets has a single # selector, nor the other edition's -- the id is
       // dropped from the key entirely and the element shares the tag|class entry, so a chapter of
       // uniquely-id'd notes gets cache HITS instead of a re-resolve (and its SD reads) per note.
-      if (!idAttr.empty() && self->cssParser->hasIdSelectors()) {
-        cssStyle = self->cssParser->resolveStyle(name, classAttr, idAttr);
+      if (!idAttr.empty() &&
+          (self->cssParser->hasIdSelectors() || (self->documentCss_ && self->documentCss_->hasIdSelectors()))) {
+        cssStyle = self->resolveDocumentStyle(name, classAttr, idAttr);
       } else {
         std::string cacheKey(name);
         cacheKey += '|';
@@ -1713,7 +1712,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
         if (it != self->cssStyleCache_.end()) {
           cssStyle = it->second;
         } else {
-          CssStyle resolved = self->cssParser->resolveStyle(name, classAttr, idAttr);
+          CssStyle resolved = self->resolveDocumentStyle(name, classAttr, idAttr);
           // An empty result stays out so future calls can re-resolve; anything else is memoised
           // while the memo has room (kStyleMemoMaxEntries). Either way the element uses `resolved`.
           if (resolved.defined.anySet() && self->styleMemoHasRoom(self->cssStyleCache_))
@@ -1744,14 +1743,35 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     return;
   }
 
-  if (cssStyle.hasTextTransform() || cssStyle.hasLineHeight()) {
+  const bool preElement = strcmp(name, "pre") == 0;
+  if (preElement && !cssStyle.hasWhiteSpace()) {
+    cssStyle.whiteSpace = CssWhiteSpace::Pre;
+    cssStyle.defined.whiteSpace = 1;
+  }
+  if (!cssStyle.hasFontFamily() &&
+      (preElement || strcmp(name, "code") == 0 || strcmp(name, "kbd") == 0 || strcmp(name, "samp") == 0)) {
+    cssStyle.fontFamily = wordTypography::Monospace;
+    cssStyle.defined.fontFamily = 1;
+  }
+  if (cssStyle.hasTextTransform() || cssStyle.hasLineHeight() || cssStyle.hasWhiteSpace() || cssStyle.hasSmallCaps()) {
     if (self->partWordBufferIndex > 0) {
       const bool endsAtDashBreak = bufferEndsWithBreakableDash(self->partWordBuffer, self->partWordBufferIndex);
       if (!self->flushPartWordBuffer()) return;
       if (!isHeaderOrBlock(name) && !endsAtDashBreak) self->nextWordContinues = true;
     }
-    self->textPropertyScopes_.push_back(
-        {self->depth, self->textTransform_, self->inheritedLineHeight_, self->inheritedLineHeightDefined_});
+    self->textPropertyScopes_.push_back({self->depth, self->textTransform_, self->inheritedLineHeight_,
+                                         self->inheritedLineHeightDefined_, self->whiteSpace_,
+                                         self->inheritedSmallCaps_});
+    if (cssStyle.hasWhiteSpace() && cssStyle.whiteSpace != CssWhiteSpace::Inherit)
+      self->whiteSpace_ = cssStyle.whiteSpace;
+    if (cssStyle.hasSmallCaps() && cssStyle.smallCaps != 3) self->inheritedSmallCaps_ = cssStyle.smallCaps;
+    self->updateEffectiveInlineStyle();
+    if (preElement) {
+      self->preColumnMod8_ = 0;
+      self->preservedWhitespace_ = false;
+      self->previousPreCr_ = false;
+      self->dropPreInitialNewline_ = true;
+    }
     if (cssStyle.hasTextTransform() && cssStyle.textTransform != CssTextTransform::Inherit)
       self->textTransform_ = cssStyle.textTransform;
     if (cssStyle.hasLineHeight() && cssStyle.lineHeightMultiplier > 0.0f) {
@@ -1759,6 +1779,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       self->inheritedLineHeightDefined_ = true;
     }
   }
+  cssStyle.whiteSpace = self->whiteSpace_;
+  cssStyle.defined.whiteSpace = 1;
   cssStyle.lineHeightMultiplier = self->inheritedLineHeight_;
   // This is now a computed value, including the default. Mark it explicit so an
   // empty, closed sibling cannot donate its spacing through the empty-block merge.
@@ -1962,7 +1984,11 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     return;
   }
 
-  if (matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS)) {
+  const char* mathLocalName = strrchr(name, ':');
+  mathLocalName = mathLocalName ? mathLocalName + 1 : name;
+  const bool mathAltImage = strcmp(mathLocalName, "math") == 0 && self->imageRendering == 0 &&
+                            getAttribute(atts, "altimg") && *getAttribute(atts, "altimg");
+  if (matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS) || mathAltImage) {
     std::string src;
     std::string alt;
     // Explicit width/height from the markup (e.g. an SVG cover: <image width="455" height="751" .../>,
@@ -1973,18 +1999,19 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     int attrWidth = 0, attrHeight = 0;
     if (atts != nullptr) {
       for (int i = 0; atts[i]; i += 2) {
-        if (strcmp(atts[i], "src") == 0 || strcmp(atts[i], "href") == 0 || strcmp(atts[i], "xlink:href") == 0) {
+        if (strcmp(atts[i], "src") == 0 || strcmp(atts[i], "href") == 0 || strcmp(atts[i], "xlink:href") == 0 ||
+            (mathAltImage && strcmp(atts[i], "altimg") == 0)) {
           if (src.empty()) {
             src = atts[i + 1];
             // Strip fragment anchors (e.g. "cover.jpg#xywh=0,0,100,100")
             auto hash = src.find('#');
             if (hash != std::string::npos) src.erase(hash);
           }
-        } else if (strcmp(atts[i], "alt") == 0) {
+        } else if ((strcmp(atts[i], "alt") == 0 || (mathAltImage && strcmp(atts[i], "alttext") == 0))) {
           alt = atts[i + 1];
-        } else if (strcmp(atts[i], "width") == 0) {
+        } else if ((strcmp(atts[i], "width") == 0 || (mathAltImage && strcmp(atts[i], "altimg-width") == 0))) {
           attrWidth = atoi(atts[i + 1]);  // ignores a trailing "%"/"px"; 0 for non-leading-digit values
-        } else if (strcmp(atts[i], "height") == 0) {
+        } else if ((strcmp(atts[i], "height") == 0 || (mathAltImage && strcmp(atts[i], "altimg-height") == 0))) {
           attrHeight = atoi(atts[i + 1]);
         }
       }
@@ -1993,6 +2020,25 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       // grid (first image per cell wins). The fragment layout sizes the cell to fit it; the
       // paragraph fallback re-emits it as a block image below the table.
       if (self->currentTableCell && self->currentTable && !src.empty() && self->imageRendering != 2) {
+        if (mathAltImage) {
+          // A table cell accepts only one image. Never suppress a second expression, or
+          // an unreadable fallback: its MathML text must remain available below.
+          const std::string path = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->contentBase + src));
+          ImageDimensions dimensions{};
+          bool accepted = false;
+          if (self->currentTableCell->imageSrc.empty() && ImageDecoderFactory::isFormatSupported(path)) {
+            if (self->imageManifest)
+              accepted = self->imageManifest->resolve(self->epub->getPath(), path, dimensions, self->buildArena_) ==
+                         EpubImageManifest::Resolve::Resolved;
+            else if (self->heapAllowsImageHeaderRead())
+              accepted = ImageDecoderFactory::getDimensionsFromZipEntry(self->epub->getPath(), path, dimensions);
+          }
+          if (!accepted) {
+            self->depth += 1;
+            return;
+          }
+          self->skipUntilDepth = self->depth;
+        }
         if (self->currentTableCell->imageSrc.empty()) {
           self->currentTableCell->imageSrc = src;
           self->currentTableCell->imageAlt = alt;
@@ -2043,6 +2089,12 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       }
 
       const auto handleImageFallback = [&]() {
+        // Only an accepted picture replaces MathML. Missing/unsupported/temporarily
+        // unavailable images leave descendants in the normal text stream.
+        if (mathAltImage) {
+          self->depth += 1;
+          return;
+        }
         // Fallback to alt text if image processing fails.
         if (!alt.empty()) {
           alt = "[Image: " + alt + "]";
@@ -2083,7 +2135,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
             bool dimsOk = false;
             bool manifestAnswered = false;
             bool imageDeferred = false;
-            if (attrWidth > 0 && attrHeight > 0) {
+            if (attrWidth > 0 && attrHeight > 0 && !mathAltImage) {
               dims.width = attrWidth;
               dims.height = attrHeight;
               dimsOk = true;
@@ -2324,6 +2376,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                   self->pendingInlineImage_.active = true;
                   LOG_TRC("EHP", "Inline image deferred: w=%d h=%d", displayWidth, displayHeight);
                   // Don't flush the current text block — let it continue into the next paragraph.
+                  if (mathAltImage) self->skipUntilDepth = self->depth;
                   self->depth += 1;
                   return;
                 }
@@ -2414,6 +2467,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                   LOG_TRC("EHP", "Image spacing consumed; pending empty block style reset for following text");
                 }
 
+                if (mathAltImage) self->skipUntilDepth = self->depth;
                 self->depth += 1;
                 return;
               }  // layout geometry block
@@ -2962,7 +3016,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
         }
       }
       applyVerticalAlignToEntry(entry, cssStyle);
-      if (cssStyle.hasSmallCaps()) {
+      if (cssStyle.hasSmallCaps() && cssStyle.smallCaps != 3) {
         entry.hasSmallCaps = true;
         entry.smallCaps = cssStyle.smallCaps;
       }
@@ -3123,6 +3177,55 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
   for (int i = 0; i < len; i++) {
     const unsigned char c = static_cast<unsigned char>(s[i]);
 
+    const bool preserveSpaces = self->whiteSpace_ == CssWhiteSpace::Pre || self->whiteSpace_ == CssWhiteSpace::PreWrap;
+    const bool preserveNewlines = preserveSpaces || self->whiteSpace_ == CssWhiteSpace::PreLine;
+    if (preserveNewlines) {
+      if (c == '\n' && self->previousPreCr_) {
+        self->previousPreCr_ = false;
+        continue;
+      }
+      self->previousPreCr_ = c == '\r';
+      if (self->dropPreInitialNewline_) {
+        self->dropPreInitialNewline_ = false;
+        if (c == '\n' || c == '\r') continue;  // HTML ignores the first newline immediately after <pre>.
+      }
+      if (c == '\n' || c == '\r') {
+        if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
+        if (self->currentTextBlock) {
+          if (self->currentTextBlock->isEmpty()) {
+            self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR, false, false, self->effectiveSizePct,
+                                            wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_));
+          }
+          self->startNewTextBlock(self->currentTextBlock->getBlockStyle());
+        }
+        self->nextWordContinues = false;
+        self->preservedWhitespace_ = false;
+        self->preColumnMod8_ = 0;
+        continue;
+      }
+    }
+    if (preserveSpaces && (c == ' ' || c == '\t' || c == '\f')) {
+      const unsigned spaces = c == '\t' ? 8 - self->preColumnMod8_ : 1;
+      for (unsigned n = 0; n < spaces; ++n) {
+        if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
+          if (!self->flushPartWordBuffer()) return;
+          self->nextWordContinues = true;
+        }
+        self->partWordBuffer[self->partWordBufferIndex++] = ' ';
+        self->preColumnMod8_ = (self->preColumnMod8_ + 1) & 7;
+      }
+      self->preservedWhitespace_ = true;
+      continue;
+    }
+    if (self->preservedWhitespace_) {
+      if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
+      // The trailing spaces are already in the preceding token. Permit wrapping here
+      // without introducing another collapsed space (ParsedText::wordGap).
+      self->nextWordContinues = false;
+      self->preservedWhitespace_ = false;
+    }
+    if (preserveSpaces && (c & 0xc0) != 0x80) self->preColumnMod8_ = (self->preColumnMod8_ + 1) & 7;
+
     // Fast path for plain ASCII word characters (> 0x20 and < 0x80).
     // This covers the vast majority of characters in Latin-script text.
     // All multi-byte UTF-8 sequences start with a byte >= 0x80, so this
@@ -3132,28 +3235,13 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         // Buffer is full — flush before appending. Pure ASCII means no
         // partial multi-byte sequence can be at the boundary.
         if (!self->flushPartWordBuffer()) return;
+        if (preserveSpaces) self->nextWordContinues = true;
       }
       self->partWordBuffer[self->partWordBufferIndex++] = s[i];
       continue;
     }
 
     if (isWhitespace(s[i])) {
-      // Inside <pre>: treat \n as a hard line break.
-      if (s[i] == '\n' && self->preUntilDepth < self->depth) {
-        if (self->partWordBufferIndex > 0) {
-          if (!self->flushPartWordBuffer()) return;
-        }
-        // Blank line: the current block is empty, but we still need to emit a visible
-        // empty line.  Add a single space so the block is non-empty and makePages()
-        // will produce a line of the correct height instead of reusing the empty block.
-        if (self->currentTextBlock->isEmpty()) {
-          self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR, false, false, self->effectiveSizePct,
-                                          wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_));
-        }
-        self->startNewTextBlock(self->currentTextBlock->getBlockStyle());
-        self->nextWordContinues = false;
-        continue;
-      }
       // Currently looking at whitespace, if there's anything in the partWordBuffer, flush it
       if (self->partWordBufferIndex > 0) {
         if (!self->flushPartWordBuffer()) return;
@@ -3301,6 +3389,9 @@ void ChapterHtmlSlimParser::endElement(void* userData, const char* name) {
     self->textTransform_ = scope.parentTransform;
     self->inheritedLineHeight_ = scope.parentLineHeight;
     self->inheritedLineHeightDefined_ = scope.parentLineHeightDefined;
+    self->whiteSpace_ = scope.parentWhiteSpace;
+    self->inheritedSmallCaps_ = scope.parentSmallCaps;
+    self->updateEffectiveInlineStyle();
     self->textPropertyScopes_.pop_back();
   }
   while (!self->typographyScopes_.empty() && self->typographyScopes_.back().depth >= self->depth) {
@@ -3540,6 +3631,10 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   // Leaving pre tag
   if (self->preUntilDepth == self->depth) {
     self->preUntilDepth = INT_MAX;
+    self->dropPreInitialNewline_ = false;
+    self->previousPreCr_ = false;
+    self->preservedWhitespace_ = false;
+    self->preColumnMod8_ = 0;
   }
 
   // Pop from inline style stack if we pushed an entry at this depth
@@ -3688,6 +3783,41 @@ void ChapterHtmlSlimParser::recordAnchor(std::string id, const uint16_t page) {
   // the spill first and these after, which is the order they were recorded in.
   anchorData.emplace_back(std::move(id), page);
   anchorCount++;
+}
+
+CssStyle ChapterHtmlSlimParser::resolveDocumentStyle(const std::string& tag, const std::string& classes,
+                                                     const std::string& id) const {
+  return cssParser ? cssParser->resolveStyle(tag, classes, id, documentCss_.get()) : CssStyle{};
+}
+
+bool ChapterHtmlSlimParser::loadDocumentStyles(const int spineIndex) {
+  documentCss_.reset();
+  documentCssFailed_ = false;
+  if (!embeddedStyle || !cssParser) return true;
+  fontCatalogStartEpoch_ = cssParser->fontCatalogFailureEpoch();
+  std::string path;
+  bool truncated = false;
+  if (!epub->documentStyleCache(spineIndex, path, truncated)) {
+    documentCssFailed_ = true;
+    return false;
+  }
+  if (truncated) noteCapOverflow(kCapDocumentCss, "document head stylesheet");
+  if (path.empty()) return true;
+  // Local caches retain at most128 selectors (a1KiB index). Do not consume the
+  // chapter's arena or retain a shared mutable overlay in the book-level parser.
+  if (ESP.getFreeHeap() < 12 * 1024) {
+    documentCssFailed_ = true;
+    return false;
+  }
+  auto local = std::make_unique<CssParser>(path, cssParser);
+  local->setLeanResolve(true);
+  if (!local->loadFromCache()) {
+    documentCssFailed_ = true;
+    return false;
+  }
+  if (local->rulesTruncated()) noteCapOverflow(kCapDocumentCss, "document stylesheet selectors");
+  documentCss_ = std::move(local);
+  return true;
 }
 
 bool ChapterHtmlSlimParser::setup(const size_t totalInflatedSize) {
@@ -3916,7 +4046,7 @@ void ChapterHtmlSlimParser::resolveBlockFont(BlockStyle& bs) {
 
 int ChapterHtmlSlimParser::effectiveLineHeight(const BlockStyle& bs, const uint8_t family,
                                                const uint8_t sizePct) const {
-  const auto f = renderer.resolveTextFont(effectiveFontId(bs), family);
+  const auto f = renderer.resolveTextFont(effectiveFontId(bs), family, bs.fontSizeMultiplier * (sizePct / 100.0f));
   const float height = renderer.getLineHeight(f.fontId) * bs.fontSizeMultiplier * (sizePct / 100.0f) * f.scale;
   return static_cast<int>(height * lineCompression * bs.lineHeightMultiplier + 0.5f);
 }
@@ -4158,7 +4288,8 @@ void ChapterHtmlSlimParser::makePages() {
   // Suppressed between lines within a <pre> block so code/preformatted text is not
   // double-spaced; the last line of the block is flushed after </pre> is closed and
   // preUntilDepth has already been reset, so it still receives normal paragraph spacing.
-  if (extraParagraphSpacing && preUntilDepth == INT_MAX) {
+  if (extraParagraphSpacing && preUntilDepth == INT_MAX && whiteSpace_ != CssWhiteSpace::Pre &&
+      whiteSpace_ != CssWhiteSpace::PreWrap && whiteSpace_ != CssWhiteSpace::PreLine) {
     currentPageNextY += lineHeight / 2;
   }
 }
@@ -4407,7 +4538,8 @@ void ChapterHtmlSlimParser::noteBackgroundImage(const char* name, const std::str
     }
   }
   if (!inlineDeclared) {
-    if (const std::string* sheetPath = cssParser->backgroundImageFor(name, classAttr, idAttr)) path = *sheetPath;
+    if (const std::string* sheetPath = cssParser->backgroundImageFor(name, classAttr, idAttr, documentCss_.get()))
+      path = *sheetPath;
   }
   if (path.empty()) return;
   std::string resolved = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(path));

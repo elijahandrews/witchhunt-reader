@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "CssFontCatalog.h"
 #include "CssStyle.h"
 
 class BuildArena;  // lib/Memory — optional backing store for the disk index (Phase 2)
@@ -31,7 +32,7 @@ class BuildArena;  // lib/Memory — optional backing store for the disk index (
  *   - Descendant/child selectors
  *   - Pseudo-classes and pseudo-elements
  *   - Media queries (content is skipped)
- *   - @import, @font-face, etc.
+ *   - @import and conditional @ rules; local @font-face resources are catalogued.
  */
 class CssParser {
  public:
@@ -92,7 +93,8 @@ class CssParser {
   //      next to the rule cache (see backgroundImageFor). A v19 compile never looked for it, so
   //      a book whose picture is a CSS background (Alice's rabbit hole) kept showing none.
   // v21: persist text-transform and line-height; older caches discarded both.
-  static constexpr uint8_t CSS_CACHE_VERSION = 22;
+  // v23: named font stacks, monospace, distinct all-small-caps/inherit and white-space modes.
+  static constexpr uint8_t CSS_CACHE_VERSION = 23;
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;
@@ -102,7 +104,9 @@ class CssParser {
   // from this; a static_assert in CssParser.cpp pins it to sizeof(SelectorEntry).
   static constexpr size_t CSS_INDEX_BYTES_PER_RULE = 8;
 
-  explicit CssParser(std::string cachePath) : cachePath(std::move(cachePath)) {}
+  // Document-local rule caches share the owning book's durable font IDs, never its selectors.
+  explicit CssParser(std::string cachePath, const CssParser* fontCatalogOwner = nullptr)
+      : fontCatalogOwner_(fontCatalogOwner), cachePath(std::move(cachePath)) {}
   ~CssParser() = default;
 
   // Non-copyable
@@ -115,7 +119,7 @@ class CssParser {
    * @param source Open file handle to read from
    * @return true if parsing completed (even if no rules found)
    */
-  bool loadFromStream(FsFile& source);
+  bool loadFromStream(FsFile& source, bool fontsOnly = false);
 
   /**
    * Look up the style for an HTML element, considering tag name, class, and id attributes.
@@ -138,14 +142,20 @@ class CssParser {
   [[nodiscard]] bool rulesTruncated() const { return rulesTruncated_; }
 
   [[nodiscard]] CssStyle resolveStyle(const std::string& tagName, const std::string& classAttr,
-                                      const std::string& idAttr = {}) const;
+                                      const std::string& idAttr = {}, const CssParser* overlay = nullptr) const;
 
   /**
    * Parse an inline style attribute string.
    * @param styleValue The value of a style="" attribute
    * @return Parsed style properties
    */
-  [[nodiscard]] static CssStyle parseInlineStyle(const std::string& styleValue);
+  [[nodiscard]] static CssStyle parseInlineStyle(const std::string& styleValue, const CssParser* context = nullptr);
+
+  // Stable per-book font stacks and local @font-face sources, including cached reopens.
+  [[nodiscard]] const CssFontCatalog& fontCatalog() const;
+  [[nodiscard]] uint32_t fontCatalogFailureEpoch() const {
+    return fontCatalogOwner_ ? fontCatalogOwner_->fontCatalogFailureEpoch() : fontCatalogFailureEpoch_;
+  }
 
   /**
    * Check if any rules have been loaded
@@ -203,7 +213,7 @@ class CssParser {
   // - appendCompiledFromStream(): parses one stylesheet stream into compile staging
   // - endCacheCompile(): finalizes cache file from staged records
   bool beginCacheCompile();
-  bool appendCompiledFromStream(FsFile& source);
+  bool appendCompiledFromStream(FsFile& source, bool fontsOnly = false);
   bool endCacheCompile();
   // Abort a streaming compile (e.g. a stylesheet was skipped for low heap): discards the staged
   // temp file and persists NOTHING, so hasCache() stays false and the next open re-parses.
@@ -272,9 +282,28 @@ class CssParser {
   // normalised or unescaped), or nullptr. Same cascade as resolveStyle: tag < .class < tag.class
   // < #id < tag#id, and among rules for the same selector the later one.
   [[nodiscard]] const std::string* backgroundImageFor(const std::string& tagName, const std::string& classAttr,
-                                                      const std::string& idAttr = {}) const;
+                                                      const std::string& idAttr = {},
+                                                      const CssParser* overlay = nullptr) const;
 
  private:
+  const CssParser* fontCatalogOwner_ = nullptr;
+  uint64_t fontScopeId_ = 0;
+  bool collectingDocumentFaces_ = false;
+  bool saveFontScope() const;
+  bool loadFontScope();
+  void finishDocumentFaceDiscovery();
+  std::string fontScope() const;
+  uint8_t scopedFontFamily(uint8_t id) const;
+  void addFontFace(CssFontCatalog::Face face);
+  CssFontCatalog& mutableFontCatalog() const;
+  mutable uint32_t fontCatalogFailureEpoch_ = 0;
+  mutable CssFontCatalog fontCatalog_;
+  mutable bool fontCatalogLoaded_ = false;
+  mutable bool fontCatalogValid_ = false;
+  bool parsingStylesheet_ = false;
+  bool ensureFontCatalogLoaded() const;
+  uint8_t resolveFontFamily(std::string_view value) const;
+
   // See backgroundImageFor. An empty path records an explicit `none`, which cancels an earlier
   // rule's picture for the same selector.
   struct BackgroundImageRule {
@@ -379,9 +408,9 @@ class CssParser {
 
   // Internal parsing helpers
   void processRuleBlockWithStyle(std::string_view selectorGroup, const CssStyle& style);
-  static CssStyle parseDeclarations(std::string_view declBlock);
+  static CssStyle parseDeclarations(std::string_view declBlock, const CssParser* context = nullptr);
   static void parseDeclarationIntoStyle(std::string_view decl, CssStyle& style, std::string& propNameBuf,
-                                        std::string& propValueBuf);
+                                        std::string& propValueBuf, const CssParser* context = nullptr);
 
   // Individual property value parsers
   // Take string_view and do NOT normalize — every caller already passes normalized text, and

@@ -89,7 +89,7 @@ void stripSoftHyphensInPlace(std::string& word) {
 uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const std::string& word,
                           const EpdFontFamily::Style style, const bool appendHyphen = false, const float scale = 1.0f,
                           const uint32_t typography = 0) {
-  const auto resolved = renderer.resolveTextFont(fontId, wordTypography::family(typography));
+  const auto resolved = renderer.resolveTextFont(fontId, wordTypography::family(typography), scale);
   const float effectiveScale = scale * resolved.scale;
   int raw = 0;
   if (word.size() == 1 && word[0] == ' ' && !appendHyphen) {
@@ -328,7 +328,8 @@ void ParsedText::layoutAndExtractLines(
   // for already-transformed words (bionicTransformedUpTo_ == words.size()) and
   // only processes raw words appended since the last flush, so it is always safe
   // to call regardless of isContinuation_.
-  if (bionicReadingEnabled) {
+  if (bionicReadingEnabled && blockStyle.whiteSpace != CssWhiteSpace::Pre &&
+      blockStyle.whiteSpace != CssWhiteSpace::PreWrap) {
     applyBionicReadingTransform();
   }
 
@@ -413,7 +414,45 @@ void ParsedText::layoutAndExtractLines(
   lineEndsWithHyphenatedWord.clear();
   splitPrefixWordIndexes.clear();
   splitInsertedHyphen.clear();
-  if (hyphenationEnabled || maxFloatLineHeight_ > 0) {
+  const bool noWrap = blockStyle.whiteSpace == CssWhiteSpace::Pre || blockStyle.whiteSpace == CssWhiteSpace::NoWrap;
+  const bool preformatted =
+      blockStyle.whiteSpace == CssWhiteSpace::Pre || blockStyle.whiteSpace == CssWhiteSpace::PreWrap;
+  if (noWrap) {
+    lineBreakIndices.assign(1, words.size());
+    lineEndsWithHyphenatedWord.assign(1, false);
+    splitPrefixWordIndexes.assign(1, -1);
+    splitInsertedHyphen.assign(1, false);
+  } else if (preformatted) {
+    // CSS pre-wrap breaks at preserved whitespace; never insert prose hyphens into code.
+    // Keep styled fragments and buffer-sized fragments of an unbreakable token together,
+    // even when that token must overflow the viewport.
+    lineBreakIndices.clear();
+    size_t start = 0, i = 0;
+    int width = 0;
+    while (i < words.size()) {
+      size_t end = i + 1;
+      int groupWidth = wordWidths[i];
+      while (end < words.size() && wordContinues[end]) {
+        groupWidth += wordGap(renderer, fontId, end - 1, end, true) + wordWidths[end];
+        ++end;
+      }
+      int gap = i == start ? 0 : wordGap(renderer, fontId, i - 1, i, false);
+      const int available = widthForLine(lineBreakIndices.size(), lineHeight, blockStartY, pageWidth) -
+                            (lineBreakIndices.empty() ? firstLineIndent : 0);
+      if (i > start && width + gap + groupWidth > available) {
+        lineBreakIndices.push_back(i);
+        start = i;
+        width = 0;
+        gap = 0;
+      }
+      width += gap + groupWidth;
+      i = end;
+    }
+    if (start < words.size()) lineBreakIndices.push_back(words.size());
+    lineEndsWithHyphenatedWord.assign(lineBreakIndices.size(), false);
+    splitPrefixWordIndexes.assign(lineBreakIndices.size(), -1);
+    splitInsertedHyphen.assign(lineBreakIndices.size(), false);
+  } else if (hyphenationEnabled || maxFloatLineHeight_ > 0) {
     // Active floats use greedy layout so the line index used for exclusion is
     // the actual index, not the ordinary DP breaker's estimated line number.
     // Without hyphenation, only a word too wide for an empty line may split.
@@ -1299,7 +1338,7 @@ ParsedText::LineProcessResult ParsedText::extractLine(
 
   // Calculate initial x position (first line starts at indent for left/justified text;
   // may be negative for hanging indents, e.g. margin-left:3em; text-indent:-1em).
-  auto xpos = static_cast<int16_t>(lineIndent);
+  int xpos = lineIndent;
   if (blockStyle.alignment == CssTextAlign::Right) {
     xpos = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
   } else if (blockStyle.alignment == CssTextAlign::Center) {
@@ -1313,7 +1352,7 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   lineXPos.reserve(lineWordCount);
 
   for (size_t wordIdx = 0; wordIdx < lineWordCount; wordIdx++) {
-    lineXPos.push_back(xpos);
+    lineXPos.push_back(static_cast<int16_t>(std::max(-32768, std::min(32767, xpos))));
 
     const bool nextIsContinuation = wordIdx + 1 < lineWordCount && continuesVec[lastBreakAt + wordIdx + 1];
     if (nextIsContinuation) {
@@ -1379,13 +1418,16 @@ ParsedText::LineProcessResult ParsedText::extractLine(
 }
 
 float ParsedText::wordHeight(const GfxRenderer& renderer, const int fontId, const size_t index) const {
-  const auto f = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[index]));
+  const auto f = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[index]), wordScale(index));
   return renderer.getLineHeight(f.fontId) * wordScale(index) * f.scale;
 }
 
 float ParsedText::wordGap(const GfxRenderer& renderer, int fontId, size_t left, size_t right, bool continued) const {
-  const auto a = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[left]));
-  const auto b = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[right]));
+  // Preserved spaces are already part of the preceding token's measured advance. This
+  // boundary can wrap, but must not add the normal synthetic collapsed space as well.
+  if (!continued && !words[left].empty() && words[left].back() == ' ') continued = true;
+  const auto a = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[left]), wordScale(left));
+  const auto b = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[right]), wordScale(right));
   const float scale = wordScale(left) * a.scale;
   float gap;
   if (continued) {

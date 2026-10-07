@@ -1,0 +1,137 @@
+BOOK title=EPUB Feature Specimens lang=en spine=6 toc=6 reliableToc=1
+SPINE 0 href=OPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=7 footnotes=0
+  LINE y=0 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=4 ls=0 t=  
+   W x=18 s=0 z=100 f=4 ls=0 t=LEAD  
+   W x=72 s=0 z=100 f=4 ls=0 t=GAP
+  LINE y=24 x=0 align=1 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 f=4 ls=0 t=A       
+   W x=72 s=0 z=100 f=4 ls=0 t=TAB
+  LINE y=48 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=4 ls=0 t=AB 
+   W x=27 s=1 z=100 f=4 ls=0 t= 
+   W x=36 s=1 z=100 f=4 ls=0 t=CD
+  LINE y=72 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=4 ls=0 t=XY
+   W x=18 s=2 z=100 f=4 ls=0 t=  
+   W x=36 s=0 z=100 f=4 ls=0 t=Z
+  LINE y=96 x=0 align=1 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=4 ls=0 t= 
+  LINE y=120 x=0 align=1 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=4 ls=0 t=LAST
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=AFTER
+   W x=49 s=0 z=100 t=COLLAPSE
+SPINE 1 href=OPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=9 footnotes=0
+  LINE y=0 x=0 align=1 mult=1.000 hfid=0 words=12
+   W x=0 s=0 z=100 f=4 ls=0 t=NOWRAP 
+   W x=63 s=0 z=100 f=4 ls=0 t=alpha 
+   W x=117 s=0 z=100 f=4 ls=0 t=beta 
+   W x=162 s=0 z=100 f=4 ls=0 t=gamma 
+   W x=216 s=0 z=100 f=4 ls=0 t=delta 
+   W x=270 s=0 z=100 f=4 ls=0 t=epsilon 
+   W x=342 s=0 z=100 f=4 ls=0 t=zeta 
+   W x=387 s=0 z=100 f=4 ls=0 t=eta 
+   W x=423 s=0 z=100 f=4 ls=0 t=theta 
+   W x=477 s=0 z=100 f=4 ls=0 t=iota 
+   W x=522 s=0 z=100 f=4 ls=0 t=kappa 
+   W x=576 s=0 z=100 f=4 ls=0 t=lambda
+  LINE y=24 x=0 align=1 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 f=4 ls=0 t=WRAP 
+   W x=45 s=0 z=100 f=4 ls=0 t=alpha 
+   W x=99 s=0 z=100 f=4 ls=0 t=beta 
+   W x=144 s=0 z=100 f=4 ls=0 t=gamma 
+   W x=198 s=0 z=100 f=4 ls=0 t=delta 
+   W x=252 s=0 z=100 f=4 ls=0 t=epsilon 
+   W x=324 s=0 z=100 f=4 ls=0 t=zeta 
+   W x=369 s=0 z=100 f=4 ls=0 t=eta 
+   W x=405 s=0 z=100 f=4 ls=0 t=theta 
+  LINE y=48 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=4 ls=0 t=iota 
+   W x=45 s=0 z=100 f=4 ls=0 t=kappa 
+   W x=99 s=0 z=100 f=4 ls=0 t=lambda
+  LINE y=72 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 f=4 ls=0 t=TOKEN 
+   W x=54 s=0 z=100 f=4 ls=0 t=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 
+   W x=387 s=0 z=100 f=4 ls=0 t=END
+  LINE y=96 x=0 align=1 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=  
+   W x=20 s=0 z=100 t=CSSLEAD  
+   W x=117 s=0 z=100 t=CSSGAP
+  LINE y=120 x=0 align=1 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=CSSNEXT
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=PRELINE
+   W x=78 s=0 z=100 t=COLLAPSED
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=NEXTLINE
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 f=4 ls=0 t=CODE
+   W x=45 s=0 z=100 f=4 ls=0 t=KEY
+   W x=81 s=0 z=100 f=4 ls=0 t=OUTPUT
+   W x=144 s=0 z=100 f=0 ls=0 t=PROSE
+SPINE 2 href=OPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=9 footnotes=1
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=64 z=100 t=CapsBlock
+   W x=88 s=64 z=100 t=CapsInherited
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=64 z=100 f=0 ls=0 t=CapsNested
+   W x=95 s=192 z=100 f=0 ls=0 t=AllInline
+   W x=182 s=64 z=100 f=0 ls=0 t=CapsAgain
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=NormalNested
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=64 z=100 t=CapsRestored
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=192 z=100 t=AllBlock
+   W x=77 s=196 z=100 t=AllLink
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=192 z=100 t=AllInherited
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=NormalOverride
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=192 z=100 t=AllRestored
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=OutsideCaps
+  FN n=AllLink href=#target
+SPINE 3 href=OPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=5 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=BeforeMath
+  IMG y=24 x=190 w=80 h=24 src=<cache>/epub_<hash>/img_901d8fb5dbf2e85b.png
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=AfterMath
+   W x=102 s=0 z=100 t=MissingMathVisible
+   W x=270 s=0 z=100 t=UnsupportedMathVisible
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=NoImageMathVisible
+  TABLE y=96 x=0 w=460 h=36 cols=2 border=1 rows=1
+   ROW h=34 hdr=0 cells=2
+    CELL 0 hdr=0 span=1 lines=0
+     CELLIMG w=80 h=24 src=<cache>/epub_<hash>/img_901d8fb5dbf2e85b.png
+    CELL 1 hdr=0 span=1 lines=1
+     LN words=1
+      W x=18 s=0 z=100 t=MissingCellMathVisible
+SPINE 4 href=OPS/Heads/ch4.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=4 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=6 ls=0 t=SHAREDONE
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=6 ls=0 t=Nn
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=6 ls=0 t=Hh
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=1 z=100 t=PriorityOne
+SPINE 5 href=OPS/Heads/ch5.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=4 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=7 ls=0 t=sharedtwo
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=7 ls=0 t=Tt
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 f=7 ls=0 t=Nn
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=1 z=100 t=PriorityTwo

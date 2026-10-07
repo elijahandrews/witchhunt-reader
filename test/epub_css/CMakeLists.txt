@@ -4,6 +4,7 @@ add_executable(CssParserTest
   CssParserTest.cpp
   ${REPO_ROOT}/test/zip_entry_reader/LoggingStub.cpp
   ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/css/CssFontCatalog.cpp
   ${REPO_ROOT}/lib/ZipFile/ZipFile.cpp
   ${REPO_ROOT}/lib/InflateReader/InflateReader.cpp
   ${REPO_ROOT}/lib/uzlib/src/tinflate.c
@@ -33,8 +34,10 @@ gtest_discover_tests(CssParserTest)
 # with the ZipEntryReaderTest harness — keep them in test/zip_entry_reader.
 add_executable(EpubCssCacheTest
   CssParserCacheTest.cpp
+  CssFontCatalogTest.cpp
   ${REPO_ROOT}/test/zip_entry_reader/LoggingStub.cpp
   ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/css/CssFontCatalog.cpp
   ${REPO_ROOT}/lib/ZipFile/ZipFile.cpp
   ${REPO_ROOT}/lib/InflateReader/InflateReader.cpp
   ${REPO_ROOT}/lib/uzlib/src/tinflate.c

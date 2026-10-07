@@ -31,8 +31,10 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text)))) {
     const bool combining = utf8IsCombiningMark(cp);
     if (!combining && tracking == 0) cp = font.applyLigatures(cp, text, style);
-    const bool folded = (style & EpdFontFamily::SMALL_CAPS) && smallCaps::fold(cp);
-    const float glyphScale = scale * (folded ? smallCaps::SCALE : 1.0f);
+    float capsScale = 1.0f;
+    if (!combining) cp = font.resolveCaps(cp, style, capsScale);
+    const bool folded = capsScale != 1.0f;
+    const float glyphScale = scale * capsScale;
     const auto glyph = font.getGlyph(cp, style);
     if (!glyph) {
       if (!combining) previous = 0;

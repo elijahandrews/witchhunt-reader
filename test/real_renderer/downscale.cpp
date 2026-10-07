@@ -1,3 +1,4 @@
+#include <EpdOutlineFontCallbacks.h>
 #include <GfxRenderer.h>
 #include <SmallCaps.h>
 
@@ -91,10 +92,28 @@ std::vector<uint8_t> reference(const uint8_t* bitmap, bool twoBit, int sw, int s
 int checks = 0, failures = 0;
 void checkGlyph(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& family, const char* text,
                 uint32_t codepoint, float scale, EpdFontFamily::Style style, bool spaced) {
-  const bool folded = (style & EpdFontFamily::SMALL_CAPS) && smallCaps::fold(codepoint);
+  // Read the authored mapping directly; do not use the production text walk
+  // to decide the independent pixel projection's source glyph or scale.
+  const auto data = family.getData(style);
+  uint32_t alternate = 0;
+  const auto mapped = [&](uint8_t mode) -> uint32_t {
+    if (data->outline) {
+      const auto gid = data->outline->glyphId(data->outlineCtx, codepoint, mode);
+      return gid ? EPD_ALTERNATE_GLYPH_BASE + gid : 0;
+    }
+    return data->capsGlyph ? data->capsGlyph(data->glyphMissCtx, codepoint, mode) : 0;
+  };
+  if (style & EpdFontFamily::ALL_SMALL_CAPS) alternate = mapped(2);
+  if (!alternate && (style & (EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS))) alternate = mapped(1);
+  bool folded = false;
+  if (alternate)
+    codepoint = alternate;
+  else if (style & (EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS)) {
+    const bool upper = (style & EpdFontFamily::ALL_SMALL_CAPS) && smallCaps::isUppercase(codepoint);
+    folded = smallCaps::fold(codepoint) || upper;
+  }
   const float glyphScale = scale * g.fontBaseScale(id) * (folded ? smallCaps::SCALE : 1.0f);
   const auto glyph = family.getGlyph(codepoint, style);
-  const auto data = family.getData(style);
   const auto raw = reference(g.getGlyphBitmap(data, glyph), data->is2Bit, glyph.width, glyph.height, glyph.left,
                              glyph.top, glyphScale);
   const int left = std::floor(glyph.left * glyphScale), top = std::floor(-glyph.top * glyphScale);
@@ -167,6 +186,12 @@ void checkFamily(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fam
         static_cast<EpdFontFamily::Style>(EpdFontFamily::BOLD_ITALIC | EpdFontFamily::SMALL_CAPS)})
     for (bool spaced : {false, true})
       for (float scale : {0.75f, 1.0f}) checkGlyph(g, d, id, family, "a", 'a', scale, style, spaced);
+  const auto all = static_cast<EpdFontFamily::Style>(EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS);
+  for (bool spaced : {false, true})
+    for (float scale : {.75f, 1.0f}) {
+      checkGlyph(g, d, id, family, "A", 'A', scale, all, spaced);
+      checkGlyph(g, d, id, family, "a", 'a', scale, all, spaced);
+    }
 }
 
 // Cropping is a storage choice, not a placement choice. Adding transparent

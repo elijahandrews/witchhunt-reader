@@ -112,3 +112,25 @@ Existing V4 fonts remain supported. See [the format specification](../../docs/cp
 for units, checksum and compatibility, and [the driver audit](DRIVER_AUDIT.md)
 for the actual UC8279 X4 bitplane and baseline-restoration checks. Only firmware
 with V5 support can read the new files; keep original font sources or V4 backups.
+
+
+## Runtime fonts and v6 small caps
+
+`run.py --cpfont /path/to/font.cpfont` now loads v4/v5/v6 data through the
+production `SdCardFont` mmap path, including authored alternate glyphs and
+kerning. It does not substitute a second file-format parser. Tests cover
+small-caps and all-small-caps, including independently calculated boundary
+spacing and ink bounds.
+
+Add `--outline /path/to/font.ttf` (or `.otf`) to compile the actual vendored
+FreeType and `OutlineFontFace` backend. The resulting `outline-font.png` shows
+normal text, small caps and all-small-caps at 11.2, 14 and 22.4 points. No font
+asset is copied into the repository. This catches integration failures that
+comparing advances alone misses, including CFF outlines being scaled twice
+when the PostScript hinter was absent from the module registry. The separate
+`PublisherFontsTest` uses original geometric CFF/TrueType fixtures to compare
+raster bounds and advances against known design units.
+
+Use `--sanitize` for AddressSanitizer and UndefinedBehaviorSanitizer throughout
+the renderer, SD loader, optional outline backend and display-driver audit.
+The same host-versus-panel limitations still apply.

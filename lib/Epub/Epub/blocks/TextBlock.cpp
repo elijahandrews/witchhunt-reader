@@ -19,6 +19,10 @@ uint8_t packStyle(const EpdFontFamily::Style style, const bool continues) {
   return static_cast<uint8_t>((static_cast<uint8_t>(style) & ~TextBlock::WORD_CONTINUES_BIT) |
                               (continues ? TextBlock::WORD_CONTINUES_BIT : 0));
 }
+uint32_t packedTypography(uint32_t typography, EpdFontFamily::Style style) {
+  return (typography & ~wordTypography::ALL_SMALL_CAPS) |
+         ((style & EpdFontFamily::ALL_SMALL_CAPS) ? wordTypography::ALL_SMALL_CAPS : 0);
+}
 }  // namespace
 
 TextBlock::ArenaOffsets TextBlock::arenaOffsets(const uint16_t wordCount, const bool hasSizes,
@@ -97,9 +101,14 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
       isValid = false;
       return;
     }
-    uniformTypography = word_typography.front();
-    typographyPresent =
-        std::any_of(word_typography.begin(), word_typography.end(), [&](uint32_t t) { return t != uniformTypography; });
+  }
+  const auto typographyFor = [&](size_t i) {
+    return packedTypography(word_typography.empty() ? 0 : word_typography[i], word_styles[i]);
+  };
+  if (!words.empty()) {
+    uniformTypography = typographyFor(0);
+    for (size_t i = 1; i < words.size(); ++i)
+      if (typographyFor(i) != uniformTypography) typographyPresent = true;
   }
   numWords = static_cast<uint16_t>(words.size());
   sizesPresent = hasSizes;
@@ -151,7 +160,10 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
     uint8_t* sizes = base + o.sizes;
     for (uint16_t i = 0; i < numWords; i++) sizes[i] = word_sizes[i];
   }
-  if (typographyPresent) memcpy(base + o.typography, word_typography.data(), numWords * sizeof(uint32_t));
+  if (typographyPresent) {
+    auto* typography = reinterpret_cast<uint32_t*>(base + o.typography);
+    for (uint16_t i = 0; i < numWords; ++i) typography[i] = typographyFor(i);
+  }
   bindArenaPointers();
 }
 
@@ -173,11 +185,6 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
       isValid = false;
       return;
     }
-    if (count) {
-      uniformTypography = (*range.typography)[first];
-      for (size_t i = first; i < first + count; ++i)
-        if ((*range.typography)[i] != uniformTypography) typographyPresent = true;
-    }
   }
 
   // Every source array must actually span [first, first + count); xpos is per line so it is
@@ -194,6 +201,15 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
             static_cast<uint32_t>(word_xpos.size()));
     isValid = false;
     return;
+  }
+
+  const auto typographyFor = [&](size_t i) {
+    return packedTypography(hasTypographySrc ? (*range.typography)[first + i] : 0, styleSrc[first + i]);
+  };
+  if (count) {
+    uniformTypography = typographyFor(0);
+    for (size_t i = 1; i < count; ++i)
+      if (typographyFor(i) != uniformTypography) typographyPresent = true;
   }
 
   // Normalize the all-100% case to no sizes, matching the vector constructor so both paths
@@ -272,7 +288,10 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
     const std::vector<uint8_t>& sizeSrc = *range.sizes;
     for (uint16_t i = 0; i < numWords; i++) sizes[i] = sizeSrc[first + i];
   }
-  if (typographyPresent) memcpy(base + o.typography, range.typography->data() + first, numWords * sizeof(uint32_t));
+  if (typographyPresent) {
+    auto* typography = reinterpret_cast<uint32_t*>(base + o.typography);
+    for (uint16_t i = 0; i < numWords; ++i) typography[i] = typographyFor(i);
+  }
   bindArenaPointers();
 }
 
@@ -292,7 +311,7 @@ float TextBlock::lineHeight(const GfxRenderer& renderer, const int fontId) const
   const int baseFont = renderStyle.headingFontId ? renderStyle.headingFontId : fontId;
   float height = numWords ? 0.0f : renderer.getLineHeight(baseFont) * renderStyle.fontSizeMultiplier;
   for (uint16_t i = 0; i < numWords; ++i) {
-    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)));
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
     height = std::max(height, renderer.getLineHeight(f.fontId) * wordScale(i) * f.scale);
   }
   return height;
@@ -306,10 +325,10 @@ TextBlock::WordBox TextBlock::wordBox(const GfxRenderer& renderer, const uint16_
   const int blockAscender = renderer.getFontAscenderSizeScaled(baseFont, renderStyle.fontSizeMultiplier);
   int lineAscender = numWords ? 0 : blockAscender;
   for (uint16_t j = 0; j < numWords; ++j) {
-    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(j)));
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(j)), wordScale(j));
     lineAscender = std::max(lineAscender, renderer.getFontAscenderSizeScaled(f.fontId, wordScale(j) * f.scale));
   }
-  const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)));
+  const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
   const float scale = wordScale(i) * f.scale;
   const auto style = wordStyle(i);
   const int ascender = renderer.getFontAscenderSizeScaled(f.fontId, scale);
@@ -335,7 +354,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     // Record text/family/style only. Measuring glyphs here would load SD metadata
     // before the prewarm pass and inflate its low-memory working set.
     for (uint16_t i = 0; i < numWords; ++i) {
-      const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)));
+      const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
       renderer.drawTextSpaced(f.fontId, x + xposArr[i], y, wordText(i), true, wordStyle(i), wordScale(i) * f.scale,
                               wordTypography::tracking(wordTypography(i)));
     }
@@ -344,13 +363,13 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
   const int blockAscender = renderer.getFontAscenderSizeScaled(baseFont, renderStyle.fontSizeMultiplier);
   int lineAscender = numWords ? 0 : blockAscender;
   for (uint16_t i = 0; i < numWords; ++i) {
-    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)));
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
     lineAscender = std::max(lineAscender, renderer.getFontAscenderSizeScaled(f.fontId, wordScale(i) * f.scale));
   }
   const int dotSize = std::max(2, blockAscender / 8);
   int prevWordEndX = 0;
   for (uint16_t i = 0; i < numWords; ++i) {
-    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)));
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
     const float scale = wordScale(i) * f.scale;
     const auto style = wordStyle(i);
     const int ascender = renderer.getFontAscenderSizeScaled(f.fontId, scale);

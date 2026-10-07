@@ -71,6 +71,7 @@ enum class CssFloat : uint8_t { None = 0, Left = 1, Right = 2 };
 
 // Inherit is kept explicitly so it can cancel an earlier declaration in the cascade.
 enum class CssTextTransform : uint8_t { None = 0, Uppercase = 1, Lowercase = 2, Inherit = 3 };
+enum class CssWhiteSpace : uint8_t { Normal = 0, Pre = 1, PreWrap = 2, PreLine = 3, NoWrap = 4, Inherit = 5 };
 
 // Bitmask for tracking which properties have been explicitly set
 struct CssPropertyFlags {
@@ -101,6 +102,7 @@ struct CssPropertyFlags {
   uint32_t textTransform : 1;
   uint32_t fontFamily : 1;
   uint32_t letterSpacing : 1;
+  uint32_t whiteSpace : 1;
   // Invisibility. Three bits, not one: they come from three properties that cascade
   // independently, and a shared bit would let a later `visibility: visible` cancel an
   // `opacity: 0` (or vice versa) purely by declaration order.
@@ -136,6 +138,7 @@ struct CssPropertyFlags {
         textTransform(0),
         fontFamily(0),
         letterSpacing(0),
+        whiteSpace(0),
         colorTransparent(0),
         opacityZero(0),
         visibilityHidden(0) {}
@@ -144,7 +147,7 @@ struct CssPropertyFlags {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
            imageWidth || display || verticalAlign || listStyleNone || pageBreakBefore || pageBreakAfter || lineHeight ||
-           fontSizeMultiplier || cssFloat || smallCaps || textTransform || fontFamily || letterSpacing ||
+           fontSizeMultiplier || cssFloat || smallCaps || textTransform || fontFamily || letterSpacing || whiteSpace ||
            colorTransparent || opacityZero || visibilityHidden;
   }
 
@@ -154,7 +157,8 @@ struct CssPropertyFlags {
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
     imageHeight = imageWidth = display = verticalAlign = 0;
     listStyleNone = pageBreakBefore = pageBreakAfter = lineHeight = fontSizeMultiplier = cssFloat = 0;
-    fontFamily = letterSpacing = smallCaps = textTransform = colorTransparent = opacityZero = visibilityHidden = 0;
+    whiteSpace = fontFamily = letterSpacing = smallCaps = textTransform = colorTransparent = opacityZero =
+        visibilityHidden = 0;
   }
 };
 
@@ -187,8 +191,9 @@ struct CssStyle {
   float lineHeightMultiplier = 1.0f;   // normalised line-height multiplier (relative to default y_advance)
   float fontSizeMultiplier = 1.0f;     // font-size multiplier relative to body em size
   CssFloat cssFloat = CssFloat::None;  // float: left/right — signals inline image context
-  bool smallCaps = false;              // font-variant: small-caps
+  uint8_t smallCaps = 0;               // 0 normal, 1 small-caps, 2 all-small-caps, 3 inherit/unset
   CssTextTransform textTransform = CssTextTransform::None;
+  CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
   uint8_t fontFamily = wordTypography::Reader;
   CssLength letterSpacing;  // Auto is the explicit inherit/unset marker. Percent is invalid for this property.
   // Text made invisible while still in the flow. A PDF-to-EPUB conversion emits every OCR word
@@ -317,6 +322,10 @@ struct CssStyle {
       textTransform = base.textTransform;
       defined.textTransform = 1;
     }
+    if (base.hasWhiteSpace()) {
+      whiteSpace = base.whiteSpace;
+      defined.whiteSpace = 1;
+    }
     if (base.hasSmallCaps()) {
       smallCaps = base.smallCaps;
       defined.smallCaps = 1;
@@ -357,6 +366,7 @@ struct CssStyle {
   [[nodiscard]] bool hasVerticalAlign() const { return defined.verticalAlign; }
   [[nodiscard]] bool hasListStyleNone() const { return defined.listStyleNone; }
   [[nodiscard]] bool hasCssFloat() const { return defined.cssFloat; }
+  [[nodiscard]] bool hasWhiteSpace() const { return defined.whiteSpace; }
   [[nodiscard]] bool hasSmallCaps() const { return defined.smallCaps; }
   [[nodiscard]] bool hasFontFamily() const { return defined.fontFamily; }
   [[nodiscard]] bool hasLetterSpacing() const { return defined.letterSpacing; }
@@ -392,8 +402,9 @@ struct CssStyle {
     lineHeightMultiplier = 1.0f;
     fontSizeMultiplier = 1.0f;
     cssFloat = CssFloat::None;
-    smallCaps = false;
+    smallCaps = 0;
     textTransform = CssTextTransform::None;
+    whiteSpace = CssWhiteSpace::Normal;
     fontFamily = wordTypography::Reader;
     letterSpacing = CssLength();
     colorTransparent = false;

@@ -1,6 +1,7 @@
 add_executable(CssGapsTest
   CssGapsTest.cpp
   ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/css/CssFontCatalog.cpp
 )
 
 target_include_directories(CssGapsTest PRIVATE

@@ -226,6 +226,7 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
 
   EpdFontFamily fontFamily(font->getEpdFont(0), font->getEpdFont(1), font->getEpdFont(2), font->getEpdFont(3));
   renderer.insertScaledFont(fontId, fontFamily, font->rasterScale());
+  renderer.registerFontPointSize(fontId, selected->pointSize);
 
   loadedFamilyName_ = family.name;
   loadedPointSize_ = selected->pointSize;
@@ -263,6 +264,7 @@ bool SdCardFontManager::ensureSizeAlias(GfxRenderer& renderer, const uint8_t tar
   renderer.registerSdCardFontAlias(aliasId, lf.font);
   renderer.insertScaledFont(aliasId, fontFamily,
                             static_cast<float>(targetPtSize) / loadedPointSize_ * lf.font->rasterScale());
+  renderer.registerFontPointSize(aliasId, targetPtSize);
   aliasFontId_ = aliasId;
   aliasPointSize_ = targetPtSize;
   LOG_INF("SDMGR", "%s: %u pt served by the %u pt face scaled %u/%u (id=%d)", loadedFamilyName_.c_str(), targetPtSize,

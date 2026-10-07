@@ -67,7 +67,7 @@ class ZipFile {
 
  public:
   // Look up a single entry's stat by scanning the central directory sequentially.
-  bool loadFileStatSlim(const char* filename, FileStatSlim* fileStat);
+  bool loadFileStatSlim(const char* filename, FileStatSlim* fileStat, uint32_t* crc32 = nullptr);
   explicit ZipFile(const std::string& filePath) : filePath(filePath) {}
   ~ZipFile() = default;
   // Zip file can be opened and closed by hand in order to allow for quick calculation of inflated file size

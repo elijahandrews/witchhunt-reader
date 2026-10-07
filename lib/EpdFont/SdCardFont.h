@@ -26,17 +26,16 @@ class SdCardFont {
   ~SdCardFont();
 
   // Load .cpfont file: reads header + intervals into RAM, records file layout offsets.
-  // Supports v4 and v5 (multi-style, optional 2x raster density).
+  // Supports v4, v5, and v6 (multi-style, optional 2x raster density).
   // Returns true on success.
   bool load(const char* path);
 
   // Load from a flash partition mmap pointer (e.g. from FlashFontPartition::mmap()).
-  // fullIntervals and kern/lig tables are read directly from the mmap region — no
-  // heap allocation for metadata.  The mmap pointer must remain valid for the
-  // lifetime of this SdCardFont.  unloadMetadata() and reloadMetadata() are no-ops
-  // for mmap-loaded fonts (metadata is always present in the flash mapping).
-  // sdPath must be the SD path of the same .cpfont — it is used by the bitmap
-  // overflow handler to load glyph bitmaps from SD at draw time.
+  // Intervals and ligatures receive aligned heap copies; packed kerning tables
+  // and glyph records can be read directly from the mapping. The mmap pointer
+  // must remain valid for the lifetime of this SdCardFont. Metadata unload/reload
+  // are no-ops for mapped fonts. Overflow glyph bitmaps also come from the mapping,
+  // so sdPath is optional provenance and is not needed for rendering.
   // Returns true on success.
   bool loadFromMmap(const uint8_t* base, size_t size, const char* sdPath);
 
@@ -137,6 +136,19 @@ class SdCardFont {
     uint32_t kernMatrixFileOffset = 0;
     uint32_t ligatureFileOffset = 0;
     uint32_t bitmapFileOffset = 0;
+
+    // V6 feature tables remain in SD/flash; only offsets and the last lookup
+    // are resident. Large sparse kerning tables never occupy internal RAM.
+    struct Caps {
+      uint32_t offset = 0;
+      uint32_t smcpOffset = 0, c2scOffset = 0, glyphOffset = 0, kernOffset = 0, bitmapOffset = 0;
+      uint32_t kernCount = 0, bitmapBytes = 0;
+      uint16_t smcpCount = 0, c2scCount = 0, glyphCount = 0;
+      uint32_t lastCp = 0, lastKey = 0, lastLeft = 0, lastRight = 0;
+      int16_t lastKern = 0;
+      uint8_t lastMode = 0;
+      bool kernCached = false;
+    } caps;
 
     // Full intervals loaded from file (kept in RAM for codepoint lookup)
     EpdUnicodeInterval* fullIntervals = nullptr;
@@ -251,6 +263,7 @@ class SdCardFont {
   Stats stats_;
   uint32_t contentHash_ = 0;
   uint8_t rasterDensity_ = 1;
+  size_t fileSize_ = 0;
   bool loaded_ = false;
 
   // True when persistent metadata (fullIntervals, kernLeft/RightClasses,
@@ -288,4 +301,9 @@ class SdCardFont {
 
   // Static callback for EpdFontData::glyphMissHandler (per-style via OverflowContext)
   static const EpdGlyph* onGlyphMiss(void* ctx, uint32_t codepoint);
+  bool readAt(HalFile& file, uint32_t offset, void* out, size_t count) const;
+  bool validateKernClassMaps(const PerStyle& s, HalFile& file) const;
+  bool validateV6Style(PerStyle& s, HalFile& file);
+  static uint32_t onCapsGlyph(void* ctx, uint32_t cp, uint8_t mode);
+  static int16_t onAlternateKerning(void* ctx, uint32_t left, uint32_t right);
 };

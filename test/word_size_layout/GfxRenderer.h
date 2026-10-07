@@ -27,7 +27,7 @@ class GfxRenderer {
     int fontId;
     float scale;
   };
-  TextFont resolveTextFont(int fontId, uint8_t family) const {
+  TextFont resolveTextFont(int fontId, uint8_t family, float = 1.0f) const {
     return {family == 2 ? -2000000 : (family == 1 ? -1000000 : fontId), 1.0f};
   }
   int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,

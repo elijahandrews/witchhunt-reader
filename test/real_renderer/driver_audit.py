@@ -9,7 +9,8 @@ import subprocess
 import sys
 
 
-def run(repo, output):
+def run(repo, output, sanitize=False):
+    sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []
     repo, output = Path(repo).resolve(), Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     source = Path(__file__).parent.resolve()
@@ -37,15 +38,15 @@ def run(repo, output):
     (output / "sdk/src/bus").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "driver_shims/bus/EpdBus.h", output / "sdk/src/bus/EpdBus.h")
 
-    includes = [output, source, repo / "test/shims"] + [
+    includes = [output, source, repo / "test/zip_entry_reader", repo / "test/shims"] + [
         repo / "lib" / name
         for name in (
-            "GfxRenderer", "EpdFont", "Memory", "Logging", "Utf8",
+            "GfxRenderer", "EpdFont", "OutlineFont", "Memory", "Logging", "Utf8",
             "InflateReader", "uzlib/src",
         )
     ]
     c_command = [
-        "clang", "-c", str(repo / "lib/uzlib/src/tinflate.c"),
+        "clang", *sanitizers, "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
     files = [source / "driver_fixtures.cpp", source / "support.cpp", output / "GfxRenderer.cpp"]
@@ -53,18 +54,19 @@ def run(repo, output):
         repo / "lib" / name
         for name in (
             "GfxRenderer/TextTruncation.cpp", "EpdFont/EpdFont.cpp",
-            "EpdFont/EpdFontFamily.cpp", "EpdFont/FontDecompressor.cpp",
+            "EpdFont/EpdFontFamily.cpp", "EpdFont/SdCardFont.cpp", "EpdFont/FontDecompressor.cpp",
             "EpdFont/GlyphFallback.cpp", "Utf8/Utf8.cpp",
             "InflateReader/InflateReader.cpp",
         )
     ]
+    files.append(repo / "test/zip_entry_reader/LoggingStub.cpp")
     files.append(output / "tinflate.o")
-    renderer = ["clang++", "-std=c++20", "-O1", "-ffunction-sections", "-fdata-sections"]
+    renderer = ["clang++", *sanitizers, "-std=c++20", "-O1", "-ffunction-sections", "-fdata-sections"]
     renderer.append("-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections")
     renderer += ["-I" + str(path) for path in includes]
     renderer += [str(path) for path in files] + ["-o", str(output / "driver_fixtures")]
     wire = [
-        "clang++", "-std=c++20", "-O1",
+        "clang++", *sanitizers, "-std=c++20", "-O1",
         "-I" + str(source / "driver_shims"), "-I" + str(output / "sdk/src"),
         str(source / "driver_wire.cpp"), str(output / "sdk/src/driver/Uc8279X4Driver.cpp"),
         "-o", str(output / "driver_wire"),
@@ -83,5 +85,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo_root", type=Path)
     parser.add_argument("--out", type=Path, default=Path("driver-audit-output"))
+    parser.add_argument("--sanitize", action="store_true")
     args = parser.parse_args()
-    run(args.repo_root, args.out)
+    run(args.repo_root, args.out, sanitize=args.sanitize)

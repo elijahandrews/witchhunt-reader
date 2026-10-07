@@ -16,6 +16,9 @@
 #include <fstream>
 #include <iostream>
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
+#ifdef WITCH_TEST_OUTLINE
+int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
+#endif
 int main(int argc, char** argv) {
   HalDisplay d;
   GfxRenderer g(d);
@@ -128,5 +131,10 @@ int main(int argc, char** argv) {
       uint8_t v = d.fb[(479 - x) * 100 + y / 8] & (0x80 >> (y % 8)) ? 255 : 0;
       out.write((char*)&v, 1);
     }
-  return runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 ? argv[1] : nullptr);
+  int result =
+      runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 && std::string(argv[1]) != "-" ? argv[1] : nullptr);
+#ifdef WITCH_TEST_OUTLINE
+  if (argc > 2) result |= runOutlineChecks(g, d, argv[2]);
+#endif
+  return result;
 }

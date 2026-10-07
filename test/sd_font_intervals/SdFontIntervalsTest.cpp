@@ -277,6 +277,122 @@ std::vector<uint8_t> buildMetricFont(bool v5, bool largeClasses = false) {
   return b;
 }
 
+// Rebuild only the ordinary class maps and matrix of the original metric fixture.
+// The glyph and bitmap records stay valid in every supported format version.
+constexpr size_t KERN_MAP_START = HEADER + TOC_ENTRY + 3 * 12 + 4 * 16;
+std::vector<uint8_t> buildKernMapFont(uint16_t version, uint16_t entries = 2, uint8_t leftClasses = 2,
+                                      uint8_t rightClasses = 2) {
+  auto bytes = buildMetricFont(version >= 5);
+  const size_t entryBytes = version >= 5 ? 2 : 1;
+  const size_t oldBitmap = KERN_MAP_START + 12 + 4 * entryBytes;
+  std::vector<uint8_t> tables(2u * entries * 3 + leftClasses * rightClasses * entryBytes, 0);
+  for (unsigned side = 0; side < 2; ++side) {
+    const uint8_t classes = side ? rightClasses : leftClasses;
+    for (uint32_t i = 0; i < entries; ++i) {
+      const size_t at = (side * entries + i) * 3;
+      putU16(tables, at, static_cast<uint16_t>('A' + i));
+      tables[at + 2] = classes ? std::min<unsigned>(classes, 1 + i % 2) : 0;
+    }
+  }
+  for (unsigned i = 0; i < leftClasses * rightClasses; ++i) {
+    const size_t at = 2u * entries * 3 + i * entryBytes;
+    if (entryBytes == 2)
+      putU16(tables, at, static_cast<uint16_t>(-23));
+    else
+      tables[at] = static_cast<uint8_t>(-23);
+  }
+  bytes.erase(bytes.begin() + KERN_MAP_START, bytes.begin() + oldBitmap);
+  bytes.insert(bytes.begin() + KERN_MAP_START, tables.begin(), tables.end());
+  putU16(bytes, 8, version);
+  putU16(bytes, HEADER + 17, entries);
+  putU16(bytes, HEADER + 19, entries);
+  bytes[HEADER + 21] = leftClasses;
+  bytes[HEADER + 22] = rightClasses;
+  if (version >= 5) updateChecksum(bytes);
+  return bytes;
+}
+
+class SdFontKernMaps : public testing::TestWithParam<std::tuple<uint16_t, bool>> {};
+
+TEST_P(SdFontKernMaps, RejectsOutOfRangeClassesAndUnorderedCodepoints) {
+  const auto [version, mmap] = GetParam();
+  for (unsigned side = 0; side < 2; ++side) {
+    for (unsigned mutation = 0; mutation < 8; ++mutation) {
+      SCOPED_TRACE(testing::Message() << "side " << side << ", mutation " << mutation);
+      const uint16_t entries = mutation >= 5 ? 130 : 2;
+      auto bytes = buildKernMapFont(version, entries, mutation == 1 ? 1 : 2, mutation == 1 ? 1 : 2);
+      if (mutation == 2) bytes = buildKernMapFont(version, entries, side ? 2 : 0, side ? 0 : 2);
+      const size_t map = KERN_MAP_START + side * entries * 3;
+      switch (mutation) {
+        case 0:
+          bytes[map + 2] = 3;  // One past the declared matrix dimension.
+          break;
+        case 1:
+          bytes[map + 2] = 255;  // Regression: class 255 with only one matrix row/column.
+          break;
+        case 2:
+          bytes[map + 2] = 1;  // Nonzero ID when that matrix dimension is zero.
+          break;
+        case 3:
+          putU16(bytes, map + 3, 'A' - 1);
+          break;
+        case 4:
+          putU16(bytes, map + 3, 'A');  // Duplicate source codepoint.
+          break;
+        case 5:
+          putU16(bytes, map + 64 * 3, 'A' + 62);  // Descending across a validation chunk.
+          break;
+        case 6:
+          putU16(bytes, map + 64 * 3, 'A' + 63);  // Duplicate across a validation chunk.
+          break;
+        case 7:
+          bytes[map + (entries - 1) * 3 + 2] = 3;  // Check the final partial chunk too.
+          break;
+      }
+      if (version >= 5) updateChecksum(bytes);  // Reach class-map validation, not just CRC rejection.
+      const auto path = writeTemp(bytes);
+      std::vector<uint8_t> odd(1, 0);
+      odd.insert(odd.end(), bytes.begin(), bytes.end());
+      SdCardFont font;
+      EXPECT_FALSE(mmap ? font.loadFromMmap(odd.data() + 1, bytes.size(), nullptr) : font.load(path.c_str()));
+      EXPECT_EQ(font.getEpdFont(), nullptr);
+      std::filesystem::remove(path);
+    }
+  }
+}
+
+TEST_P(SdFontKernMaps, AcceptsSortedMapsAndExplicitNoKerningClasses) {
+  const auto [version, mmap] = GetParam();
+  for (unsigned variant = 0; variant < 5; ++variant) {
+    SCOPED_TRACE(testing::Message() << "variant " << variant);
+    // Maps can cross several streaming chunks and may explicitly name class 0,
+    // including when either or both declared matrix dimensions are zero.
+    auto bytes =
+        buildKernMapFont(version, 130, variant == 2 || variant == 4 ? 0 : 2, variant == 3 || variant == 4 ? 0 : 2);
+    if (variant == 1) {
+      bytes[KERN_MAP_START + 2] = 0;
+      bytes[KERN_MAP_START + 130 * 3 + 2] = 0;
+    }
+    if (version >= 5) updateChecksum(bytes);
+    const auto path = writeTemp(bytes);
+    std::vector<uint8_t> odd(1, 0);
+    odd.insert(odd.end(), bytes.begin(), bytes.end());
+    SdCardFont font;
+    ASSERT_TRUE(mmap ? font.loadFromMmap(odd.data() + 1, bytes.size(), nullptr) : font.load(path.c_str()));
+    for (bool metadata : {true, false}) {
+      ASSERT_EQ(font.prewarm("AB", 1, metadata, true), 0);
+      EXPECT_EQ(font.getEpdFont()->getKerning('A', 'B'), variant == 0 ? -23 : 0);
+      EXPECT_EQ(font.getEpdFont()->getKerning('B', 'A'), variant == 0 ? -23 : 0);
+      EXPECT_EQ(font.getEpdFont()->getKerning('B', 'B'), variant < 2 ? -23 : 0);
+      font.clearCache();
+    }
+    std::filesystem::remove(path);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(AllSupportedVersions, SdFontKernMaps,
+                         testing::Combine(testing::Values<uint16_t>(4, 5, 6), testing::Bool()));
+
 class SdFontVersion : public testing::TestWithParam<std::tuple<bool, bool>> {};
 
 TEST_P(SdFontVersion, MetricsKernBitmapAndOverflowSurviveAllCacheModes) {
@@ -475,6 +591,283 @@ TEST(SdFontV5, PayloadChecksumChangesCacheIdentity) {
   ASSERT_TRUE(a.loadFromMmap(first.data(), first.size(), nullptr));
   ASSERT_TRUE(b.loadFromMmap(second.data(), second.size(), nullptr));
   EXPECT_NE(a.contentHash(), b.contentHash());
+}
+
+// A v6 extension built byte-by-byte, independent of the Python converter.
+// Normal glyphs use the v5 fixture; two authored capitals have distinct metrics.
+std::vector<uint8_t> buildCapsFont() {
+  auto b = buildMetricFont(true);
+  putU16(b, 8, 6);
+  const uint32_t feature = b.size();
+  putU32(b, HEADER + 28, feature);
+  constexpr uint32_t mapBytes = 3 * 6, glyphBytes = 2 * 16, pairBytes = 4 * 10;
+  b.resize(feature + 24 + mapBytes + glyphBytes + pairBytes + 3, 0);
+  std::copy_n("SCAP", 4, b.begin() + feature);
+  b[feature + 4] = 1;
+  putU16(b, feature + 6, 2);  // smcp A->0, B->1
+  putU16(b, feature + 8, 1);  // c2sc A->1
+  putU16(b, feature + 10, 2);
+  putU32(b, feature + 16, 4);
+  putU32(b, feature + 20, 3);
+  const uint32_t maps = feature + 24;
+  putU32(b, maps, 'A');
+  putU16(b, maps + 4, 0);
+  putU32(b, maps + 6, 'B');
+  putU16(b, maps + 10, 1);
+  putU32(b, maps + 12, 'A');
+  putU16(b, maps + 16, 1);
+  const uint32_t glyphs = maps + mapBytes;
+  b[glyphs] = 2;
+  b[glyphs + 1] = 2;
+  putU16(b, glyphs + 2, 120);
+  putU16(b, glyphs + 4, static_cast<uint16_t>(-2));
+  putU16(b, glyphs + 6, 7);
+  putU16(b, glyphs + 8, 1);
+  b[glyphs + 16] = 3;
+  b[glyphs + 17] = 2;
+  putU16(b, glyphs + 18, 180);
+  putU16(b, glyphs + 22, 9);
+  putU16(b, glyphs + 24, 2);
+  putU32(b, glyphs + 28, 1);
+  const uint32_t pairs = glyphs + glyphBytes;
+  constexpr uint32_t alt = 0x110000;
+  const uint32_t lefts[] = {'A', alt, alt, alt + 1};
+  const uint32_t rights[] = {alt, 'V', alt + 1, alt};
+  const int16_t kern[] = {-45, 100, -240, 300};
+  for (unsigned i = 0; i < 4; ++i) {
+    putU32(b, pairs + 10 * i, lefts[i]);
+    putU32(b, pairs + 10 * i + 4, rights[i]);
+    putU16(b, pairs + 10 * i + 8, static_cast<uint16_t>(kern[i]));
+  }
+  b[b.size() - 3] = 0x1b;
+  b[b.size() - 2] = 0xe4;
+  b[b.size() - 1] = 0xa0;
+  updateChecksum(b);
+  return b;
+}
+
+TEST(SdFontMmap, FullPrewarmNeedsNoSdSourceAcrossCacheTransitions) {
+  for (uint16_t version : {4, 5, 6}) {
+    SCOPED_TRACE(testing::Message() << "version " << version);
+    const auto bytes = version == 6 ? buildCapsFont() : buildMetricFont(version >= 5);
+    std::vector<uint8_t> odd(1, 0);
+    odd.insert(odd.end(), bytes.begin(), bytes.end());
+    SdCardFont font;
+    const size_t readBefore = HalFile::bytesRead;
+    ASSERT_TRUE(font.loadFromMmap(odd.data() + 1, bytes.size(), nullptr));
+    auto* face = font.getEpdFont();
+    ASSERT_NE(face, nullptr);
+    for (unsigned round = 0; round < 2; ++round) {
+      // Exercise metadata->full->metadata, repeated full-cache use, and reload.
+      for (bool metadata : {true, false, false, true, false}) {
+        ASSERT_EQ(font.prewarm("ABV", 1, metadata, true), 0);
+        EXPECT_EQ(face->getKerning('A', 'A'), version >= 5 ? -403 : -103);
+        EXPECT_EQ(face->getKerning('A', 'V'), 44);
+        auto a = face->getGlyph('A');
+        ASSERT_TRUE(a.valid);
+        EXPECT_EQ(a.width, version >= 5 ? 267 : 11);
+        EXPECT_EQ(a.height, version >= 5 ? 257 : 1);
+        EXPECT_EQ(a.advanceX, 4500);
+        EXPECT_EQ(a.left, -9);
+        EXPECT_EQ(a.top, 260);
+        if (!metadata) {
+          ASSERT_FALSE(font.isOverflowGlyph(a.sdRecord));
+          ASSERT_NE(face->data->bitmap, nullptr);
+          EXPECT_EQ(face->data->bitmap[a.sdRecord->dataOffset], 0x39);
+          EXPECT_EQ(face->data->bitmap[a.sdRecord->dataOffset + a.sdRecord->dataLength - 1], 0xA7);
+          auto b = face->getGlyph('B');
+          ASSERT_TRUE(b.valid);
+          EXPECT_EQ(face->data->bitmap[b.sdRecord->dataOffset], 0xB1);
+        }
+        if (version == 6) {
+          float scale = 0;
+          EXPECT_EQ(face->resolveCaps('A', 1, scale), 0x110000u);
+          const auto alternate = face->getGlyph(0x110000);
+          ASSERT_TRUE(alternate.valid);
+          ASSERT_NE(font.getOverflowBitmap(alternate.sdRecord), nullptr);
+          EXPECT_EQ(font.getOverflowBitmap(alternate.sdRecord)[0], 0x1b);
+          EXPECT_EQ(face->getKerning(0x110000, 0x110001), -240);
+        }
+      }
+      font.clearAccumulation();
+      font.clearCache();
+      font.unloadMetadata();
+      ASSERT_TRUE(font.reloadMetadata());
+    }
+    EXPECT_EQ(HalFile::bytesRead, readBefore);
+  }
+}
+
+TEST(SdFontV6, GenuineGlyphsKerningAndBitmapSurviveAllCacheModes) {
+  const auto bytes = buildCapsFont();
+  const auto path = writeTemp(bytes);
+  for (bool mmap : {false, true}) {
+    SdCardFont font;
+    ASSERT_TRUE(mmap ? font.loadFromMmap(bytes.data(), bytes.size(), path.c_str()) : font.load(path.c_str()));
+    auto* face = font.getEpdFont();
+    const auto verify = [&]() {
+      float scale = 0;
+      EXPECT_EQ(face->resolveCaps('A', 1, scale), 0x110000u);
+      EXPECT_EQ(scale, 1.0f);
+      EXPECT_EQ(face->resolveCaps('A', 2, scale), 0x110001u);
+      EXPECT_EQ(scale, 1.0f);
+      EXPECT_EQ(face->resolveCaps('V', 0, scale), static_cast<uint32_t>('V'));
+      const auto g0 = face->getGlyph(0x110000);
+      ASSERT_TRUE(g0.valid);
+      EXPECT_EQ(g0.width, 2);
+      EXPECT_EQ(g0.height, 2);
+      EXPECT_EQ(g0.advanceX, 120);
+      EXPECT_EQ(g0.left, -2);
+      EXPECT_EQ(g0.top, 7);
+      ASSERT_TRUE(font.isOverflowGlyph(g0.sdRecord));
+      ASSERT_NE(font.getOverflowBitmap(g0.sdRecord), nullptr);
+      EXPECT_EQ(font.getOverflowBitmap(g0.sdRecord)[0], 0x1b);
+      const auto g1 = face->getGlyph(0x110001);
+      ASSERT_TRUE(g1.valid);
+      EXPECT_EQ(g1.advanceX, 180);
+      EXPECT_EQ(font.getOverflowBitmap(g1.sdRecord)[1], 0xa0);
+      EXPECT_EQ(face->getKerning('A', 0x110000), -45);
+      EXPECT_EQ(face->getKerning(0x110000, 'V'), 100);
+      EXPECT_EQ(face->getKerning(0x110000, 0x110001), -240);
+      EXPECT_EQ(face->getKerning(0x110001, 0x110000), 300);
+      EXPECT_EQ(face->getKerning(0x110001, 0x110001), 0);
+      EXPECT_EQ(face->data->capsGlyph(face->data->glyphMissCtx, 'V', 1), 0u);
+      EXPECT_EQ(face->data->capsGlyph(face->data->glyphMissCtx, 'A', 3), 0u);
+    };
+    verify();  // Fresh stub callbacks, before any prewarm.
+    for (const bool metadata : {true, false, true}) {
+      ASSERT_EQ(font.prewarm("ABV", 1, metadata, true), 0);
+      verify();
+      EXPECT_EQ(face->getKerning('A', 'V'), 44);
+    }
+    font.clearAccumulation();
+    verify();
+    font.clearCache();
+    verify();
+    font.unloadMetadata();
+    font.clearCache();
+    verify();  // Alternate table lookup is independent of normal interval residency.
+    ASSERT_TRUE(font.reloadMetadata());
+    ASSERT_EQ(font.prewarm("ABV", 1, true, true), 0);
+    verify();
+  }
+  std::filesystem::remove(path);
+}
+
+TEST(SdFontV6, MissingFeatureBlockUsesFallbackAndMmapNeedsNoSdFile) {
+  auto bytes = buildMetricFont(true);
+  putU16(bytes, 8, 6);
+  updateChecksum(bytes);
+  SdCardFont font;
+  ASSERT_TRUE(font.loadFromMmap(bytes.data(), bytes.size(), nullptr));
+  float scale = 0;
+  const auto* face = font.getEpdFont();
+  EXPECT_EQ(face->data->capsGlyph, nullptr);
+  EXPECT_EQ(face->resolveCaps('a', 1, scale), static_cast<uint32_t>('A'));
+  EXPECT_FLOAT_EQ(scale, 0.75f);
+  const auto normal = face->getGlyph('V');
+  ASSERT_TRUE(normal.valid);
+  ASSERT_NE(font.getOverflowBitmap(normal.sdRecord), nullptr);
+}
+
+TEST(SdFontV6, RejectsMalformedFeaturesOnSdAndUnalignedMmap) {
+  const auto good = buildCapsFont();
+  const uint32_t feature =
+      good[60] | (uint32_t(good[61]) << 8) | (uint32_t(good[62]) << 16) | (uint32_t(good[63]) << 24);
+  const uint32_t maps = feature + 24, glyphs = maps + 18, pairs = glyphs + 32;
+  for (int mutation = 0; mutation < 24; ++mutation) {
+    auto bytes = good;
+    switch (mutation) {
+      case 0:
+        bytes[feature] = 'X';
+        break;
+      case 1:
+        bytes[feature + 4] = 2;
+        break;
+      case 2:
+        bytes[feature + 5] = 1;
+        break;
+      case 3:
+        bytes[feature + 12] = 1;
+        break;
+      case 4:
+        bytes[feature + 14] = 1;
+        break;
+      case 5:
+        putU16(bytes, feature + 10, 0);
+        break;
+      case 6:
+        putU32(bytes, feature + 16, UINT32_MAX);
+        break;
+      case 7:
+        putU32(bytes, feature + 20, UINT32_MAX);
+        break;
+      case 8:
+        putU32(bytes, maps + 6, 'A');
+        break;  // duplicate
+      case 9:
+        putU32(bytes, maps, 'Z');
+        break;  // absent source
+      case 10:
+        putU16(bytes, maps + 4, 2);
+        break;  // bad ID
+      case 11:
+        putU16(bytes, maps + 10, 0);
+        putU16(bytes, maps + 16, 0);
+        break;  // unreferenced ID
+      case 12:
+        bytes[glyphs] = 255;
+        break;  // mismatched bitmap length
+      case 13:
+        putU32(bytes, glyphs + 12, UINT32_MAX);
+        break;
+      case 14:
+        putU32(bytes, pairs, 0x110002);
+        break;
+      case 15:
+        putU32(bytes, pairs + 4, 'B');
+        break;  // normal-normal
+      case 16:
+        putU16(bytes, pairs + 8, 0);
+        break;
+      case 17:
+        std::copy_n(bytes.begin() + pairs, 10, bytes.begin() + pairs + 10);
+        break;
+      case 18:
+        putU32(bytes, HEADER + 28, HEADER);
+        break;
+      case 19:
+        putU32(bytes, HEADER + 28, UINT32_MAX);
+        break;
+      case 20:
+        bytes.pop_back();
+        break;
+      case 21:
+        bytes[HEADER + 1] = 1;
+        break;
+      case 22:
+        putU32(bytes, HEADER + 24, HEADER);
+        break;
+      case 23:
+        putU32(bytes, 64 + 8, 1);
+        break;  // bad normal interval index
+    }
+    updateChecksum(bytes);  // Ensure failures reach structural checks, not only CRC.
+    const auto path = writeTemp(bytes);
+    SdCardFont sd, mapped;
+    EXPECT_FALSE(sd.load(path.c_str())) << "mutation " << mutation;
+    std::vector<uint8_t> odd(1, 0);
+    odd.insert(odd.end(), bytes.begin(), bytes.end());
+    EXPECT_FALSE(mapped.loadFromMmap(odd.data() + 1, bytes.size(), nullptr)) << "mutation " << mutation;
+    std::filesystem::remove(path);
+  }
+  std::vector<uint8_t> odd(1, 0);
+  odd.insert(odd.end(), good.begin(), good.end());
+  SdCardFont valid;
+  ASSERT_TRUE(valid.loadFromMmap(odd.data() + 1, good.size(), nullptr));
+  float scale = 0;
+  EXPECT_EQ(valid.getEpdFont()->resolveCaps('A', 1, scale), 0x110000u);
+  EXPECT_EQ(valid.getEpdFont()->getKerning(0x110000, 0x110001), -240);
 }
 
 }  // namespace

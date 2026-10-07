@@ -191,6 +191,10 @@ class ChapterHtmlSlimParser final : public Print {
   // body wrappers back to native size); when false, only a tight ±3% dead zone is applied.
   bool fontSizeNormalization;
   const CssParser* cssParser;
+  std::unique_ptr<CssParser> documentCss_;
+  bool documentCssFailed_ = false;
+  uint32_t fontCatalogStartEpoch_ = 0;
+  CssStyle resolveDocumentStyle(const std::string& tag, const std::string& classes, const std::string& id = {}) const;
   EpubImageManifest* imageManifest;
   bool embeddedStyle;
   uint8_t imageRendering;
@@ -206,7 +210,8 @@ class ChapterHtmlSlimParser final : public Print {
     bool hasStrikethrough = false, strikethrough = false;
     bool hasSup = false, sup = false;
     bool hasSub = false, sub = false;
-    bool hasSmallCaps = false, smallCaps = false;
+    bool hasSmallCaps = false;
+    uint8_t smallCaps = 0;
     bool hasMarginLeft = false;
     int16_t marginLeftPx = 0;  // margin-left in pixels, for span-level poem indents
     // Inline font-size as a percent of the PARENT element's size (em semantics).
@@ -223,6 +228,8 @@ class ChapterHtmlSlimParser final : public Print {
     CssTextTransform parentTransform;
     float parentLineHeight;
     bool parentLineHeightDefined;
+    CssWhiteSpace parentWhiteSpace;
+    uint8_t parentSmallCaps;
   };
   std::vector<TextPropertyScope> textPropertyScopes_;
   struct TypographyScope {
@@ -236,6 +243,12 @@ class ChapterHtmlSlimParser final : public Print {
   int16_t inheritedTracking_ = 0;
   float typographyFontScale_ = 1.0f;
   CssTextTransform textTransform_ = CssTextTransform::None;
+  CssWhiteSpace whiteSpace_ = CssWhiteSpace::Normal;
+  uint8_t inheritedSmallCaps_ = 0;
+  uint8_t preColumnMod8_ = 0;
+  bool preservedWhitespace_ = false;
+  bool previousPreCr_ = false;
+  bool dropPreInitialNewline_ = false;
   float inheritedLineHeight_ = 1.0f;
   bool inheritedLineHeightDefined_ = false;
   bool effectiveBold = false;
@@ -244,7 +257,7 @@ class ChapterHtmlSlimParser final : public Print {
   bool effectiveStrikethrough = false;
   bool effectiveSup = false;
   bool effectiveSub = false;
-  bool effectiveSmallCaps = false;
+  uint8_t effectiveSmallCaps = 0;
   int16_t effectiveInlineMarginLeft = 0;  // accumulated margin-left from inline span stack
   // Composed inline font-size percent (relative to the block font size) for the
   // words currently being flushed. 100 outside sized spans; clamped to the
@@ -734,6 +747,13 @@ class ChapterHtmlSlimParser final : public Print {
   //   parser.finalize();
   // Returns false from setup() on parser allocation failure; check streamSucceeded()
   // after finalize() to detect a parse error mid-stream.
+  // Called before setup. Rules live only in this visitor, independent of another
+  // chapter's foreground/background build; the durable font catalog is book-wide.
+  bool loadDocumentStyles(int spineIndex);
+  [[nodiscard]] bool documentStylesDegraded() const {
+    return documentCssFailed_ || (cssParser && cssParser->fontCatalogFailureEpoch() != fontCatalogStartEpoch_) ||
+           (documentCss_ && documentCss_->getResolveStats().lowHeapSkips > 0);
+  }
   bool setup(size_t totalInflatedSize);
   bool finalize();
   [[nodiscard]] bool streamSucceeded() const { return !streamFailed; }
@@ -754,10 +774,13 @@ class ChapterHtmlSlimParser final : public Print {
     kCapPageLabels = 1u << 3,         // 65535 printed-page labels: later ones not recorded
     kCapFootnoteHref = 1u << 4,       // FOOTNOTE_HREF_LEN: a link too long to navigate, kept as text
     kCapSaxDepth = 1u << 5,           // SaxParser kMaxDepth: nesting flattened past 64
+    kCapDocumentCss = 1u << 7,        // Head scan / local selector count exceeded its bound
     kCapPagesPerSection = 1u << 6,    // Page::MAX_PAGES_PER_SECTION: parse stopped (truncated cache)
   };
   // Union of the CapOverflow bits this parse hit; 0 when every structure fit.
-  [[nodiscard]] uint8_t capOverflowFlags() const { return capOverflowFlags_; }
+  [[nodiscard]] uint8_t capOverflowFlags() const {
+    return capOverflowFlags_ | ((cssParser && cssParser->fontCatalog().truncated()) ? kCapDocumentCss : 0);
+  }
   void setInlineFootnotePreviews(FootnotePreviews::Lookup* lookup) { inlineFootnotePreviews = lookup; }
 
   // Print interface — fed by Epub::readItemContentsToStream.

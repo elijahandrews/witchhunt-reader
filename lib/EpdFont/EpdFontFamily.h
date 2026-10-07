@@ -12,12 +12,12 @@ class EpdFontFamily {
     BOLD = 1,
     ITALIC = 2,
     BOLD_ITALIC = 3,
-    UNDERLINE = 4,      // drawn as a line below baseline by TextBlock::render()
-    STRIKETHROUGH = 8,  // drawn as a line through midline by TextBlock::render()
-    SUP = 16,           // superscript: glyph scaled 50%, raised ~40% of ascender
-    SUB = 32,           // subscript:   glyph scaled 50%, lowered ~25% of ascender
-    SMALL_CAPS = 64,    // font-variant: small-caps — lowercase letters folded to uppercase glyphs
-                        // and rendered at reduced scale; non-lowercase chars render full-size
+    UNDERLINE = 4,         // drawn as a line below baseline by TextBlock::render()
+    STRIKETHROUGH = 8,     // drawn as a line through midline by TextBlock::render()
+    SUP = 16,              // superscript: glyph scaled 50%, raised ~40% of ascender
+    SUB = 32,              // subscript:   glyph scaled 50%, lowered ~25% of ascender
+    SMALL_CAPS = 64,       // use designed small-cap glyphs, with a synthetic fallback
+    ALL_SMALL_CAPS = 128,  // also convert capitals (combined with SMALL_CAPS)
   };
 
   explicit EpdFontFamily(const EpdFont* regular, const EpdFont* bold = nullptr, const EpdFont* italic = nullptr,
@@ -27,6 +27,7 @@ class EpdFontFamily {
   void getTextDimensions(const char* string, int* w, int* h, Style style = REGULAR) const;
   const EpdFontData* getData(Style style = REGULAR) const;
   EpdGlyphRef getGlyph(uint32_t cp, Style style = REGULAR) const;
+  uint32_t resolveCaps(uint32_t cp, Style style, float& scale) const;
   int16_t getKerning(uint32_t leftCp, uint32_t rightCp, Style style = REGULAR) const;
   uint32_t applyLigatures(uint32_t cp, const char*& text, Style style = REGULAR) const;
 

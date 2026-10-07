@@ -549,6 +549,207 @@ void Epub::discoverCssFilesFromZip() {
   }
 }
 
+namespace {
+constexpr size_t MAX_DOCUMENT_HEAD_BYTES = 64 * 1024;
+constexpr uint8_t DOCUMENT_CSS_INDEX_VERSION = 1;
+constexpr uint32_t DOCUMENT_CSS_INDEX_HEADER = 3;  // version, u16 spine count
+uint32_t documentCssHashStart(const uint16_t count) {
+  uint32_t hash = (2166136261u ^ DOCUMENT_CSS_INDEX_VERSION) * 16777619u;
+  hash = (hash ^ static_cast<uint8_t>(count)) * 16777619u;
+  return (hash ^ static_cast<uint8_t>(count >> 8)) * 16777619u;
+}
+
+class HeadStyleExtractor {
+ public:
+  explicit HeadStyleExtractor(const std::string& path) : path_(path) {}
+  bool init() { return parser_.init(this, start, end, text, nullptr, true); }
+  bool feed(const uint8_t* data, size_t size) { return parser_.feed(data, size) && !failed_; }
+  bool stopped() const { return parser_.isStopped(); }
+  bool hasStyles() const { return hasStyles_; }
+  bool finish() {
+    const bool okay = !failed_;
+    if (file_) file_.close();
+    return okay;
+  }
+
+ private:
+  static bool tag(const char* name, const char* target) {
+    if (const char* colon = strrchr(name, ':')) name = colon + 1;
+    while (*name && *target && std::tolower(static_cast<unsigned char>(*name)) == *target) {
+      ++name;
+      ++target;
+    }
+    return !*name && !*target;
+  }
+  static void start(void* data, const char* name, const char** atts) {
+    auto& self = *static_cast<HeadStyleExtractor*>(data);
+    if (tag(name, "head"))
+      self.inHead_ = true;
+    else if (tag(name, "body"))
+      self.parser_.stop();
+    else if (self.inHead_ && tag(name, "style")) {
+      self.inStyle_ = true;
+      for (int i = 0; atts && atts[i]; i += 2) {
+        // Conditional media queries retain the existing CSS resolver's limits.
+        if (tag(atts[i], "type") && strcmp(atts[i + 1], "text/css") != 0) self.inStyle_ = false;
+        if (tag(atts[i], "media") && strcmp(atts[i + 1], "print") == 0) self.inStyle_ = false;
+      }
+    }
+  }
+  static void end(void* data, const char* name) {
+    auto& self = *static_cast<HeadStyleExtractor*>(data);
+    if (tag(name, "style")) {
+      if (self.inStyle_ && self.file_ && self.file_.write(static_cast<uint8_t>('\n')) != 1) self.failed_ = true;
+      self.inStyle_ = false;
+    } else if (tag(name, "head")) {
+      self.inHead_ = false;
+      self.parser_.stop();
+    }
+  }
+  static void text(void* data, const char* text, int size) {
+    auto& self = *static_cast<HeadStyleExtractor*>(data);
+    if (!self.inStyle_ || size <= 0 || self.failed_) return;
+    if (!self.file_ && !Storage.openFileForWrite("EBP", self.path_, self.file_)) self.failed_ = true;
+    if (!self.failed_ && self.file_.write(reinterpret_cast<const uint8_t*>(text), size) != static_cast<size_t>(size))
+      self.failed_ = true;
+    self.hasStyles_ = true;
+  }
+  const std::string& path_;
+  SaxParser parser_;
+  FsFile file_;
+  bool inHead_ = false, inStyle_ = false, hasStyles_ = false, failed_ = false;
+};
+}  // namespace
+
+bool Epub::compileDocumentStyles() const {
+  const auto root = getCachePath() + "/doc_css";
+  const auto temp = getCachePath() + "/.tmp.head.css";
+  if (!Storage.mkdir(root.c_str())) return false;
+  FsFile index;
+  if (!Storage.openFileForWrite("EBP", root + "/index.bin", index)) return false;
+  const auto count = static_cast<uint16_t>(getSpineItemsCount());
+  uint32_t hash = documentCssHashStart(count);
+  if (index.write(DOCUMENT_CSS_INDEX_VERSION) != 1 ||
+      index.write(reinterpret_cast<const uint8_t*>(&count), sizeof(count)) != sizeof(count))
+    return false;
+  ZipFile zip(filepath);
+  primeZip(zip);
+  for (uint16_t i = 0; i < count; ++i) {
+    if (CooperativeAbort::shouldAbortLongTask()) {
+      CooperativeAbort::markAborted();
+      return false;
+    }
+    const std::string path = FsHelpers::normalisePath(getSpineItem(i).href);
+    ZipFile::FileStatSlim stat{};
+    // Reuse one ZIP scanner: its central-directory cursor advances in spine order.
+    if (!zip.loadFileStatSlim(path.c_str(), &stat)) return false;
+    const size_t ringBytes =
+        stat.method == 0 ? 0
+                         : InflateReader::ringSizeFor(std::min<size_t>(stat.uncompressedSize, MAX_DOCUMENT_HEAD_BYTES));
+    const size_t readerBytes = ringBytes + 1024 + 2 * alignof(std::max_align_t);
+    BuildArena* arena =
+        loadScratch_ && loadScratch_->valid() && loadScratch_->capacity() - loadScratch_->used() >= readerBytes
+            ? loadScratch_
+            : nullptr;
+    if (ESP.getFreeHeap() < SaxParser::stateBytes() + 8 * 1024 + (arena ? 0 : readerBytes)) {
+      LOG_ERR("EBP", "Insufficient heap for document head CSS; will retry on next open");
+      return false;
+    }
+    bool styles = false, truncated = false;
+    {
+      HeadStyleExtractor head(temp);
+      ZipFile::EntryReader reader(zip, 1024, arena);
+      if (!head.init() || !reader.open(stat, MAX_DOCUMENT_HEAD_BYTES)) return false;
+      uint8_t buffer[512];
+      bool done = false, valid = true;
+      while (!done && !head.stopped()) {
+        size_t produced = 0;
+        if (!reader.step(buffer, sizeof(buffer), &produced, &done)) return false;
+        if (!head.feed(buffer, produced)) {
+          valid = false;
+          break;
+        }
+      }
+      truncated = !head.stopped();
+      styles = head.hasStyles();
+      if (!head.finish()) return false;
+      if (!valid) LOG_ERR("EBP", "Malformed document head CSS; keeping complete rules only");
+      if (truncated) LOG_ERR("EBP", "Document head CSS incomplete or exceeds %zu-byte cap", MAX_DOCUMENT_HEAD_BYTES);
+    }  // Release SAX and inflate state before compiling the extracted CSS.
+    uint8_t flags = truncated ? 2 : 0;
+    if (styles) {
+      const auto dir = root + "/" + std::to_string(i);
+      if (!Storage.mkdir(dir.c_str())) return false;
+      CssParser local(dir, cssParser.get());
+      local.setStylesheetPath(path);
+      FsFile source;
+      if (!Storage.openFileForRead("EBP", temp, source)) return false;
+      if (ESP.getFreeHeap() < 24 * 1024 + std::min<size_t>(source.size(), 16 * 1024) || !local.beginCacheCompile())
+        return false;
+      local.setStylesheetPath(path);  // beginCacheCompile clears parse-time context
+      if (!local.appendCompiledFromStream(source, true) || !source.seek(0) || !local.appendCompiledFromStream(source) ||
+          !local.endCacheCompile())
+        return false;
+      if (local.rulesTruncated()) flags |= 2;
+      flags |= 1;
+    }
+    Storage.remove(temp.c_str());
+    if (index.write(flags) != 1) return false;
+    hash = (hash ^ flags) * 16777619u;
+  }
+  if (index.write(reinterpret_cast<const uint8_t*>(&hash), sizeof(hash)) != sizeof(hash)) return false;
+  index.close();
+  adoptZipDetails(zip);
+  return true;
+}
+
+bool Epub::documentStyleCache(const int spineIndex, std::string& path, bool& truncated) const {
+  path.clear();
+  truncated = false;
+  FsFile index;
+  if (spineIndex < 0 || !Storage.openFileForRead("EBP", getCachePath() + "/doc_css/index.bin", index)) return false;
+  uint8_t version = 0, flags = 0;
+  uint16_t count = 0;
+  if (index.read(&version, 1) != 1 || version != DOCUMENT_CSS_INDEX_VERSION ||
+      index.read(&count, sizeof(count)) != sizeof(count) || count != getSpineItemsCount() || spineIndex >= count ||
+      index.size() != DOCUMENT_CSS_INDEX_HEADER + count + sizeof(uint32_t))
+    return false;
+  uint32_t hash = documentCssHashStart(count), stored = 0;
+  for (uint16_t i = 0; i < count; ++i) {
+    uint8_t entry = 0;
+    if (index.read(&entry, 1) != 1 || (entry & ~3u)) return false;
+    hash = (hash ^ entry) * 16777619u;
+    if (i == spineIndex) flags = entry;
+  }
+  if (index.read(&stored, sizeof(stored)) != sizeof(stored) || stored != hash) return false;
+  if (flags & 1) path = getCachePath() + "/doc_css/" + std::to_string(spineIndex);
+  truncated = flags & 2;
+  return true;
+}
+
+bool Epub::documentStyleCachesValid() const {
+  FsFile index;
+  if (!Storage.openFileForRead("EBP", getCachePath() + "/doc_css/index.bin", index)) return false;
+  uint8_t version = 0;
+  uint16_t count = 0;
+  if (index.read(&version, 1) != 1 || version != DOCUMENT_CSS_INDEX_VERSION ||
+      index.read(&count, sizeof(count)) != sizeof(count) || count != getSpineItemsCount() ||
+      index.size() != DOCUMENT_CSS_INDEX_HEADER + count + sizeof(uint32_t))
+    return false;
+  uint32_t hash = documentCssHashStart(count), stored = 0;
+  for (uint16_t i = 0; i < count; ++i) {
+    uint8_t flags = 0;
+    if (index.read(&flags, 1) != 1 || (flags & ~3u)) return false;
+    hash = (hash ^ flags) * 16777619u;
+    if (flags & 1) {
+      CssParser local(getCachePath() + "/doc_css/" + std::to_string(i), cssParser.get());
+      // The small disk index validates version/bounds as well as file existence.
+      if (!local.loadFromCache()) return false;
+    }
+  }
+  return index.read(&stored, sizeof(stored)) == sizeof(stored) && stored == hash;
+}
+
 void Epub::parseCssFiles() const {
   // Maximum CSS file size we'll attempt to parse (uncompressed)
   // Larger files risk memory exhaustion on ESP32
@@ -566,7 +767,7 @@ void Epub::parseCssFiles() const {
   LOG_DBG("EBP", "CSS files to parse: %zu", cssFiles.size());
 
   // See if we have a cached version of the CSS rules
-  if (cssParser->hasCache()) {
+  if (cssParser->hasCache() && documentStyleCachesValid()) {
     LOG_DBG("EBP", "CSS cache exists, skipping parseCssFiles");
     return;
   }
@@ -577,6 +778,7 @@ void Epub::parseCssFiles() const {
     return;
   }
 
+  Storage.removeDir((getCachePath() + "/doc_css").c_str());
   bool skippedForLowHeap = false;
   for (const auto& cssPath : cssFiles) {
     LOG_DBG("EBP", "Parsing CSS file: %s", cssPath.c_str());
@@ -639,6 +841,9 @@ void Epub::parseCssFiles() const {
       break;
     }
   }
+
+  // Head styles stay in per-spine rule caches; only their font identities are shared.
+  if (!skippedForLowHeap && !compileDocumentStyles()) skippedForLowHeap = true;
 
   // A stylesheet skipped for low heap must NOT produce a persisted cache: an incomplete (or
   // empty) index loads as valid on every later open — hasCache() then short-circuits the
@@ -704,7 +909,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, BuildArena
   if (!retryLostToc && bookMetadataCache->load()) {
     if (!skipLoadingCss) {
       // Rebuild CSS cache when missing or when cache version changed (loadFromCache removes stale file)
-      if (!cssParser->hasCache() || !cssParser->loadFromCache()) {
+      if (!cssParser->hasCache() || !cssParser->loadFromCache() || !documentStyleCachesValid()) {
         LOG_DBG("EBP", "CSS rules cache missing or stale, attempting to parse CSS files");
         cssParser->deleteCache();
 
@@ -2043,6 +2248,17 @@ bool Epub::getItemSize(const std::string& itemHref, size_t* size) const {
   const bool ok = zip.getInflatedFileSize(path.c_str(), size);
   adoptZipDetails(zip);
   return ok;
+}
+
+bool Epub::getItemCrc32(const std::string& itemHref, uint32_t* crc32) const {
+  if (!crc32) return false;
+  const std::string path = FsHelpers::normalisePath(itemHref);
+  ZipFile zip(filepath);
+  primeZip(zip);
+  ZipFile::FileStatSlim stat{};
+  const bool okay = zip.loadFileStatSlim(path.c_str(), &stat, crc32);
+  adoptZipDetails(zip);
+  return okay;
 }
 
 bool Epub::getStoredItemRange(const std::string& itemHref, uint32_t* offset, uint32_t* size) const {

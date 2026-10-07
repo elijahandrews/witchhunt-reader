@@ -77,7 +77,7 @@ static std::string normalizeZipPathLower(const char* filename) {
   return normalized;
 }
 
-bool ZipFile::loadFileStatSlim(const char* filename, FileStatSlim* fileStat) {
+bool ZipFile::loadFileStatSlim(const char* filename, FileStatSlim* fileStat, uint32_t* crc32) {
   const std::string normalizedFilename = normalizeZipPath(filename);
   const std::string normalizedFilenameLower = normalizeZipPathLower(filename);
 
@@ -129,7 +129,12 @@ bool ZipFile::loadFileStatSlim(const char* filename, FileStatSlim* fileStat) {
 
     file.seekCur(6);
     file.read(&fileStat->method, 2);
-    file.seekCur(8);
+    uint32_t entryCrc = 0;
+    if (crc32) {
+      if (!file.seekCur(4) || file.read(&entryCrc, sizeof(entryCrc)) != sizeof(entryCrc)) return false;
+    } else {
+      file.seekCur(8);
+    }
     file.read(&fileStat->compressedSize, 4);
     file.read(&fileStat->uncompressedSize, 4);
     uint16_t nameLen, m, k;
@@ -149,6 +154,7 @@ bool ZipFile::loadFileStatSlim(const char* filename, FileStatSlim* fileStat) {
         file.seekCur(m + k);
         lastCentralDirPos = file.position();
         lastCentralDirPosValid = true;
+        if (crc32) *crc32 = entryCrc;
         found = true;
         break;
       }
@@ -160,6 +166,7 @@ bool ZipFile::loadFileStatSlim(const char* filename, FileStatSlim* fileStat) {
         file.seekCur(m + k);
         lastCentralDirPos = file.position();
         lastCentralDirPosValid = true;
+        if (crc32) *crc32 = entryCrc;
         found = true;
         break;
       }

@@ -7,6 +7,8 @@ layout on the supported devices (little-endian).
 
 The default density preserves v4 output. --raster-density 2 writes v5
 with a 2x LIGHT-hinted outline raster for baseline-aligned resampling.
+--small-caps adds v6 authored smcp/c2sc alternates. Variable-font optical/style
+instancing is explicit and uses logical point sizes before rasterization.
 See docs/cpfont-format.md for the byte layout and metric units.
 
 Usage:
@@ -34,9 +36,12 @@ import os
 import math
 import argparse
 import binascii
+import tempfile
+from contextlib import contextmanager
 from collections import namedtuple
 
 from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
 
 try:
     from PIL import Image
@@ -153,7 +158,18 @@ StyleRasterData = namedtuple("StyleRasterData", [
     "kern_left_classes", "kern_right_classes", "kern_matrix",
     "kern_left_class_count", "kern_right_class_count",
     "ligature_pairs",
+    "caps_data",              # optional v6 SmallCapsData
+], defaults=[None])
+
+SmallCapsData = namedtuple("SmallCapsData", [
+    "smcp", "c2sc", "all_glyphs", "kern_pairs", "total_bitmap_size"
 ])
+ALTERNATE_KEY_BASE = 0x110000
+
+# Defaults deliberately preserve existing v4/v5 output. Pinning is opt-in.
+FontInstanceOptions = namedtuple("FontInstanceOptions", [
+    "optical_size", "instance_styles", "axes", "style_axes"
+], defaults=["default", False, None, None])
 
 
 def norm_floor(val):
@@ -318,12 +334,14 @@ def style_uses_synthetic_bold(base_sd, target_sd):
 
 def apply_synthetic_bold(sd, style_label):
     print(f"  Debug: synthetic bold applied for style {style_label}", file=sys.stderr)
-    for idx, (glyph, packed) in enumerate(sd.all_glyphs):
-        if glyph.width == 0 or glyph.height == 0:
-            continue
-        pixels = expand_processed_bitmap(glyph.width, glyph.height, packed, 2)
-        bold_pixels = dilate_2bit_bitmap(glyph.width, glyph.height, pixels)
-        sd.all_glyphs[idx] = (glyph, pack_2bit_bitmap(glyph.width, glyph.height, bold_pixels))
+    groups = [sd.all_glyphs] + ([sd.caps_data.all_glyphs] if sd.caps_data else [])
+    for entries in groups:
+        for idx, (glyph, packed) in enumerate(entries):
+            if glyph.width == 0 or glyph.height == 0:
+                continue
+            pixels = expand_processed_bitmap(glyph.width, glyph.height, packed, 2)
+            bold_pixels = dilate_2bit_bitmap(glyph.width, glyph.height, pixels)
+            entries[idx] = (glyph, pack_2bit_bitmap(glyph.width, glyph.height, bold_pixels))
 
 
 def save_debug_glyph_image(output_path, raster_data):
@@ -421,7 +439,8 @@ def _extract_pairpos_subtable(subtable, glyph_to_cp, raw_kern):
                         raw_kern[key] = raw_kern.get(key, 0) + xa
 
 
-def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False):
+def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False,
+                              glyph_aliases=None, alternate_only=False):
     """Extract kerning pairs from a font file using fonttools.
 
     Returns dict of {(leftCp, rightCp): pixel_adjust} for the given
@@ -439,6 +458,8 @@ def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False):
         gname = cmap.get(cp)
         if gname:
             glyph_to_cps.setdefault(gname, []).append(cp)
+    if glyph_aliases is not None:
+        glyph_to_cps = glyph_aliases
     # Flat dict for membership checks and subtable extraction (uses keys only)
     glyph_to_cp = glyph_to_cps
 
@@ -495,7 +516,8 @@ def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False):
         if adjust != 0:
             for lcp in glyph_to_cps[lg]:
                 for rcp in glyph_to_cps[rg]:
-                    result[(lcp, rcp)] = adjust
+                    if not alternate_only or lcp >= ALTERNATE_KEY_BASE or rcp >= ALTERNATE_KEY_BASE:
+                        result[(lcp, rcp)] = adjust
     if clamped_pairs:
         print(f"  WARNING: v4 clamped {clamped_pairs} glyph kerning pairs to int8; "
               "--raster-density 2 uses the wider v5 matrix", file=sys.stderr)
@@ -685,7 +707,172 @@ def extract_ligatures_fonttools(font_path, codepoints):
     return pairs
 
 
-def rasterize_font_style(fontfile, size, intervals, style_id=0, raster_density=1):
+def parse_axis_settings(text):
+    """Parse explicit OpenType axis coordinates; reject typos and duplicate tags."""
+    result = {}
+    if not text:
+        return result
+    for assignment in text.split(","):
+        fields = assignment.strip().split("=")
+        if len(fields) != 2 or len(fields[0]) != 4 or not fields[0].isascii():
+            raise ValueError(f"invalid axis assignment {assignment!r}; expected TAG=VALUE")
+        tag, raw = fields
+        if tag in result:
+            raise ValueError(f"duplicate axis {tag}")
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(f"axis {tag} must be finite")
+        result[tag] = value
+    return result
+
+
+def instance_coordinates(font, logical_size, style_id, options):
+    """Return fully pinned design coordinates, never the enlarged raster size.
+
+    Optical size describes intended reading size, not raster density:
+    https://learn.microsoft.com/en-us/typography/opentype/spec/dvaraxistag_opsz
+    https://fonttools.readthedocs.io/en/latest/varLib/instancer.html
+    """
+    axes = {axis.axisTag: axis for axis in font['fvar'].axes} if 'fvar' in font else {}
+    explicit = dict(options.axes or {})
+    explicit.update((options.style_axes or {}).get(style_id, {}))
+    optical = options.optical_size
+    if optical not in ('default', 'auto'):
+        optical = float(optical)
+        if not math.isfinite(optical):
+            raise ValueError("optical size must be finite")
+        explicit.setdefault('opsz', optical)
+    for tag, value in explicit.items():
+        if tag not in axes:
+            raise ValueError(f"font has no {tag} variation axis")
+        axis = axes[tag]
+        if not math.isfinite(value) or not axis.minValue <= value <= axis.maxValue:
+            raise ValueError(f"axis {tag}={value} outside [{axis.minValue}, {axis.maxValue}]")
+    coords = {tag: axis.defaultValue for tag, axis in axes.items()}
+    if optical == 'auto' and 'opsz' in axes:
+        coords['opsz'] = max(axes['opsz'].minValue, min(axes['opsz'].maxValue, logical_size))
+    if options.instance_styles:
+        for tag, value in [('wght', 700 if style_id & 1 else 400), ('ital', 1 if style_id & 2 else 0)]:
+            if tag in axes:
+                coords[tag] = max(axes[tag].minValue, min(axes[tag].maxValue, value))
+    coords.update(explicit)
+    return coords
+
+
+@contextmanager
+def instanced_font_path(fontfile, logical_size, style_id=0, options=None):
+    """Use one static instance for outlines, advances, GPOS, and GSUB.
+
+    Source files are never rewritten. With no options the original path is used
+    without opening or resaving it, preserving default v4/v5 bytes.
+    """
+    options = options or FontInstanceOptions()
+    if options == FontInstanceOptions():
+        yield fontfile
+        return
+    with TTFont(fontfile) as font:
+        coords = instance_coordinates(font, logical_size, style_id, options)
+        if not coords:
+            yield fontfile  # Static fonts have no automatic axes to select.
+            return
+        with tempfile.TemporaryDirectory(prefix='cpfont-instance-') as directory:
+            instance = instantiateVariableFont(font, coords, inplace=False)
+            try:
+                path = os.path.join(directory, 'instance.otf')
+                instance.save(path)
+                print(f"  [{STYLE_LABELS[style_id]}] Instance axes: {coords}", file=sys.stderr)
+                yield path
+            finally:
+                instance.close()
+
+
+def _single_substitution(font, feature, glyph_names):
+    """Resolve single-glyph GSUB features in lookup order, with first-match rules.
+
+    Language-specific results cannot be represented by a cpfont's language-free
+    sparse map. Conflicting results and contextual substitutions are rejected
+    instead of silently exporting a different design.
+    """
+    if 'GSUB' not in font or not font['GSUB'].table.FeatureList:
+        return {}
+    table = font['GSUB'].table
+    result = {}
+    for record in table.FeatureList.FeatureRecord:
+        if record.FeatureTag != feature:
+            continue
+        current = {name: name for name in glyph_names}
+        for index in record.Feature.LookupListIndex:
+            lookup = table.LookupList.Lookup[index]
+            if lookup.LookupFlag:
+                raise ValueError(f"{feature} lookup flags {lookup.LookupFlag} are unsupported")
+            mappings = []
+            for subtable in lookup.SubTable:
+                actual = subtable
+                kind = lookup.LookupType
+                if kind == 7:
+                    kind, actual = subtable.ExtensionLookupType, subtable.ExtSubTable
+                if kind != 1 or not hasattr(actual, 'mapping'):
+                    raise ValueError(f"{feature} requires unsupported GSUB lookup type {kind}")
+                mappings.append(actual.mapping)
+            for original, name in current.items():
+                for mapping in mappings:
+                    if name in mapping:
+                        current[original] = mapping[name]
+                        break
+        for original, alternate in current.items():
+            if original == alternate:
+                continue
+            if original in result and result[original] != alternate:
+                raise ValueError(f"conflicting language-specific {feature} alternates for {original}")
+            result[original] = alternate
+    return result
+
+
+def rasterize_small_caps(fontfile, face, all_cps, ppem, load_flags):
+    """Export authored smcp/c2sc glyphs, including alternates without cmap entries."""
+    with TTFont(fontfile) as font:
+        cmap = font.getBestCmap() or {}
+        source = {cp: cmap[cp] for cp in all_cps if cp in cmap and not is_default_ignorable(cp)}
+        maps = []
+        for tag in ('smcp', 'c2sc'):
+            substitutions = _single_substitution(font, tag, set(source.values()))
+            maps.append({cp: substitutions[name] for cp, name in source.items() if name in substitutions})
+        names = sorted(set(maps[0].values()) | set(maps[1].values()))
+        if not names:
+            return None
+        validate_integer("alternate glyph count", len(names), 1, 65535)
+        ids = {name: i for i, name in enumerate(names)}
+        glyphs, bitmap_size = [], 0
+        aliases = {}
+        for cp, name in source.items():
+            aliases.setdefault(name, []).append(cp)
+        for name, index in ids.items():
+            face.load_glyph(font.getGlyphID(name), load_flags)
+            bitmap = face.glyph.bitmap
+            packed = pack_freetype_bitmap(bitmap, 2)
+            key = ALTERNATE_KEY_BASE + index
+            glyph = GlyphProps(bitmap.width, bitmap.rows, fp4_from_ft16_16(face.glyph.linearHoriAdvance),
+                               face.glyph.bitmap_left, face.glyph.bitmap_top, len(packed), bitmap_size, key)
+            glyphs.append((glyph, packed))
+            bitmap_size += len(packed)
+            aliases.setdefault(name, []).append(key)
+        pairs = extract_kerning_fonttools(fontfile, all_cps, ppem, wide=True,
+                                         glyph_aliases=aliases, alternate_only=True)
+        return SmallCapsData(*[sorted((cp, ids[name]) for cp, name in mapping.items()) for mapping in maps],
+                             glyphs, sorted((left, right, value) for (left, right), value in pairs.items()), bitmap_size)
+
+
+def rasterize_font_style(fontfile, size, intervals, style_id=0, raster_density=1,
+                         small_caps=False, instance_options=None):
+    validate_raster_density(raster_density)
+    validate_integer("logical point size", size, 1, 65535)
+    if small_caps and raster_density != 2:
+        raise ValueError("--small-caps requires --raster-density 2")
+    with instanced_font_path(fontfile, size, style_id, instance_options) as path:
+        return _rasterize_font_style(path, size, intervals, style_id, raster_density, small_caps)
+
+
+def _rasterize_font_style(fontfile, size, intervals, style_id=0, raster_density=1, small_caps=False):
     """Rasterize all glyphs for one font style. Returns StyleRasterData."""
     validate_raster_density(raster_density)
     validate_integer("logical point size", size, 1, 65535)
@@ -829,6 +1016,7 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, raster_density=1
         kern_left_class_count=kern_left_class_count,
         kern_right_class_count=kern_right_class_count,
         ligature_pairs=ligature_pairs,
+        caps_data=rasterize_small_caps(fontfile, face, all_cps, ppem, load_flags) if small_caps else None,
     )
 
 
@@ -936,6 +1124,60 @@ def pack_style_sections(sd, raster_density=1):
             kern_matrix_data, ligature_data, bitmap_data)
 
 
+def pack_small_caps(caps, valid_codepoints):
+    """Pack SCAP v1 with strict bounds and unique sorted lookup keys."""
+    if caps is None:
+        return b''
+    count = len(caps.all_glyphs)
+    validate_integer("alternate glyph count", count, 1, 65535)
+    validate_integer("alternate bitmap size", caps.total_bitmap_size, 0, 0xFFFFFFFF)
+    maps = bytearray()
+    used_ids = set()
+    for tag, entries in [('smcp', caps.smcp), ('c2sc', caps.c2sc)]:
+        validate_integer(f"{tag} map count", len(entries), 0, 65535)
+        previous = -1
+        for cp, index in entries:
+            validate_integer(f"{tag} codepoint", cp, previous + 1, 0x10FFFF)
+            if cp not in valid_codepoints or is_default_ignorable(cp):
+                raise ValueError(f"{tag} codepoint is absent or default-ignorable")
+            validate_integer(f"{tag} alternate ID", index, 0, count - 1)
+            previous = cp
+            used_ids.add(index)
+            maps += struct.pack('<IH', cp, index)
+    if used_ids != set(range(count)):
+        raise ValueError("alternate glyphs must all be referenced by a feature map")
+    # Reuse the exact v5 glyph/bitmap validator without serializing fake Unicode
+    # intervals. The alternate IDs use opaque keys, never EPUB codepoints.
+    fake = StyleRasterData(0, [(0, count - 1)], caps.all_glyphs, caps.total_bitmap_size,
+                           0, 0, 0, [], [], [], 0, 0, [])
+    sections = pack_style_sections(fake, 2)
+    for index, (glyph, _) in enumerate(caps.all_glyphs):
+        if glyph.code_point != ALTERNATE_KEY_BASE + index:
+            raise ValueError("alternate glyph keys must match their array indices")
+    validate_integer("alternate kerning pair count", len(caps.kern_pairs), 0, 0xFFFFFFFF)
+    pairs = bytearray()
+    previous = (-1, -1)
+    for left, right, value in caps.kern_pairs:
+        for key in (left, right):
+            validate_integer("alternate kerning key", key, 0, 0xFFFFFFFF)
+            if key not in valid_codepoints and not ALTERNATE_KEY_BASE <= key < ALTERNATE_KEY_BASE + count:
+                raise ValueError("alternate kerning key is absent")
+        if left < ALTERNATE_KEY_BASE and right < ALTERNATE_KEY_BASE:
+            raise ValueError("alternate kerning pair must involve an alternate")
+        if (left, right) <= previous:
+            raise ValueError("alternate kerning pairs must be unique and sorted")
+        validate_integer("alternate kerning adjustment", value, -32768, 32767)
+        if value == 0:
+            raise ValueError("alternate kerning pairs must be nonzero")
+        previous = (left, right)
+        pairs += struct.pack('<IIh', left, right, value)
+    total = 24 + len(maps) + len(sections[1]) + len(pairs) + len(sections[-1])
+    validate_integer("feature block size", total, 0, 0xFFFFFFFF)
+    header = struct.pack('<4sBBHHHHHII', b'SCAP', 1, 0, len(caps.smcp), len(caps.c2sc),
+                         count, 0, 0, len(caps.kern_pairs), caps.total_bitmap_size)
+    return header + maps + sections[1] + pairs + sections[-1]
+
+
 def style_sections_total_size(sections):
     """Total byte size of all sections returned by pack_style_sections()."""
     return sum(len(s) for s in sections)
@@ -944,14 +1186,17 @@ def style_sections_total_size(sections):
 # --- File writers ---
 
 def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
-                               synthetic_bold=False, debug_images=False, raster_density=1):
-    """Generate a multi-style v4 (density 1) or v5 (density 2) .cpfont file.
+                               synthetic_bold=False, debug_images=False, raster_density=1,
+                               small_caps=False, instance_options=None):
+    """Generate a multi-style v4/v5 file, or v6 when small_caps is enabled.
 
     style_fonts: dict of {style_id: fontfile_path} e.g. {0: "Regular.ttf", 2: "Italic.ttf"}
     """
     MAGIC = b"CPFONT\x00\x00"
     validate_raster_density(raster_density)
-    VERSION = 4 if raster_density == 1 else 5
+    if small_caps and raster_density != 2:
+        raise ValueError("--small-caps requires --raster-density 2")
+    VERSION = 6 if small_caps else (4 if raster_density == 1 else 5)
     HEADER_SIZE = 32
     STYLE_TOC_ENTRY_SIZE = 32
     flags = 1  # always 2-bit greyscale
@@ -966,7 +1211,8 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
         fontfile = style_fonts[style_id]
         print(f"  Rasterizing style {style_id}...", file=sys.stderr)
         raster_data[style_id] = rasterize_font_style(
-            fontfile, size, intervals, style_id=style_id, raster_density=raster_density)
+            fontfile, size, intervals, style_id=style_id, raster_density=raster_density,
+            small_caps=small_caps, instance_options=instance_options)
 
     if synthetic_bold:
         # If a bold-style output is identical to its base style, apply a synthetic
@@ -988,8 +1234,12 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
 
     # Pack binary sections for each style
     packed_sections = {}  # style_id -> tuple of section bytearrays
+    feature_sizes = {}
     for style_id, sd in raster_data.items():
-        packed_sections[style_id] = pack_style_sections(sd, raster_density=raster_density)
+        sections = pack_style_sections(sd, raster_density=raster_density)
+        features = pack_small_caps(sd.caps_data, {g.code_point for g, _ in sd.all_glyphs}) if small_caps else b''
+        feature_sizes[style_id] = len(features)
+        packed_sections[style_id] = sections + (features,)
 
     # Calculate data offsets (after header + TOC)
     data_start = HEADER_SIZE + style_count * STYLE_TOC_ENTRY_SIZE
@@ -1005,7 +1255,7 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
     # Each entry: styleId(1) + pad(3) + intervalCount(4) + glyphCount(4) +
     #   advanceY(1) + ascender(2) + descender(2) + kernL(2) + kernR(2) +
     #   kernLCls(1) + kernRCls(1) + ligCount(1) + dataOffset(4) + reserved(4) = 32
-    STYLE_TOC_FORMAT = "<B3xIIBhhHHBBBI4x"
+    STYLE_TOC_FORMAT = "<B3xIIBhhHHBBBII"
     assert struct.calcsize(STYLE_TOC_FORMAT) == STYLE_TOC_ENTRY_SIZE
 
     toc_data = bytearray()
@@ -1018,7 +1268,9 @@ def generate_cpfont_multistyle(style_fonts, size, intervals, output_path,
                                 len(sd.kern_left_classes), len(sd.kern_right_classes),
                                 sd.kern_left_class_count, sd.kern_right_class_count,
                                 len(sd.ligature_pairs),
-                                style_offsets[style_id])
+                                style_offsets[style_id],
+                                (style_offsets[style_id] + style_sections_total_size(packed_sections[style_id])
+                                 - feature_sizes[style_id]) if feature_sizes[style_id] else 0)
 
     # The v5 payload CRC covers the exact TOC and section bytes in file order.
     # It also changes the cache identity when outlines or conversion settings change.
@@ -1079,6 +1331,17 @@ def main():
     parser.add_argument("--raster-density", type=int, choices=(1, 2), default=1,
                         help="Raster pixels per logical pixel: 1 preserves v4; 2 writes v5 "
                              "with LIGHT-hinted outlines for higher quality resampling.")
+    parser.add_argument("--small-caps", action="store_true",
+                        help="Write v6 with genuine OpenType smcp/c2sc alternates (requires density 2).")
+    parser.add_argument("--optical-size", default="default", metavar="default|auto|NUMBER",
+                        help="Variable opsz: default unchanged, auto uses logical size, or explicit coordinate.")
+    parser.add_argument("--instance-styles", action="store_true",
+                        help="Pin variable wght to 400/700 and ital to 0/1 for each requested style.")
+    parser.add_argument("--axes", type=parse_axis_settings, default={}, metavar="TAG=VALUE,...",
+                        help="Explicit variation axes; overrides automatic optical/style selection.")
+    for label in STYLE_LABELS.values():
+        parser.add_argument(f"--{label}-axes", type=parse_axis_settings, default={}, metavar="TAG=VALUE,...",
+                            help=f"Variation overrides for the {label} style; overrides --axes.")
     parser.add_argument("--style", dest="style", default="regular",
                         choices=["regular", "bold", "italic", "bolditalic"],
                         help="Font style for single-style mode (default: regular).")
@@ -1106,6 +1369,10 @@ def main():
                         help="Font file for bold-italic style.")
 
     args = parser.parse_args()
+    instance_options = FontInstanceOptions(args.optical_size, args.instance_styles, args.axes,
+                                           {sid: getattr(args, label + "_axes") for sid, label in STYLE_LABELS.items()})
+    if not args.axes and not any(instance_options.style_axes.values()) and not args.instance_styles and args.optical_size == "default":
+        instance_options = None
 
     if args.list_presets:
         print("Available interval presets:")
@@ -1194,7 +1461,8 @@ def main():
         total_size += generate_cpfont_multistyle(
             style_fonts, sz, intervals, output_path,
             synthetic_bold=args.synthetic_bold,
-            debug_images=args.debug_images, raster_density=args.raster_density)
+            debug_images=args.debug_images, raster_density=args.raster_density,
+            small_caps=args.small_caps, instance_options=instance_options)
     print(f"\nTotal: {len(sizes)} files, {total_size / 1024 / 1024:.2f} MB", file=sys.stderr)
 
 

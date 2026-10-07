@@ -12,6 +12,7 @@
 #include <Epub.h>
 #include <Epub/FootnoteEntry.h>
 #include <Epub/Section.h>
+#include <EpubFontManager.h>
 
 #include <array>
 #include <atomic>
@@ -203,6 +204,7 @@ class EpubReaderActivity final : public Activity {
   };
 
   std::shared_ptr<Epub> epub;
+  std::unique_ptr<EpubFontManager> embeddedFonts_;
   // Build scratch backed by the borrowed secondary framebuffer (see the Background-C
   // release site). Handed to section->setExternalBuildScratch() so build allocations
   // land inside the lent block instead of the heap — nothing can allocate in the region,

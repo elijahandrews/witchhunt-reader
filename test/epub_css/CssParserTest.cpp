@@ -164,7 +164,7 @@ TEST(CssParserDeclarations, GenericFamilyFallbackAndResets) {
   const auto s = CssParser::parseInlineStyle("font-family: 'Unknown font', Helvetica, sans-serif");
   EXPECT_TRUE(s.hasFontFamily());
   EXPECT_EQ(s.fontFamily, wordTypography::SansSerif);
-  EXPECT_FALSE(CssParser::parseInlineStyle("font-family: monospace").hasFontFamily());
+  EXPECT_EQ(CssParser::parseInlineStyle("font-family: monospace").fontFamily, wordTypography::Monospace);
   EXPECT_FALSE(CssParser::parseInlineStyle("font-family: \"named, sans-serif, font\"").hasFontFamily());
   EXPECT_FALSE(CssParser::parseInlineStyle("font-family: 'serif'").hasFontFamily());
   EXPECT_EQ(CssParser::parseInlineStyle("font-family: serif; font-family: inherit").fontFamily,

@@ -76,9 +76,9 @@ def decode_file(path):
     data = path.read_bytes()
     assert data[:8] == b'CPFONT\0\0'
     version, flags = struct.unpack_from('<HH', data, 8)
-    assert version in (4, 5) and flags == 1
-    density = data[13] if version == 5 else 1
-    if version == 5:
+    assert version in (4, 5, 6) and flags == 1
+    density = data[13] if version >= 5 else 1
+    if version >= 5:
         assert density == 2 and data[18:32] == bytes(14)
         assert struct.unpack_from('<I', data, 14)[0] == zlib.crc32(data[32:])
     else:
@@ -102,13 +102,13 @@ def decode_file(path):
         right_start = left_start + left_count * 3
         matrix_start = right_start + right_count * 3
         matrix_count = left_classes * right_classes
-        matrix_size = matrix_count * (2 if version == 5 else 1)
+        matrix_size = matrix_count * (2 if version >= 5 else 1)
         bitmap_start = matrix_start + matrix_size + lig_count * 8
         glyphs = {}
         for j, cp in enumerate(cps):
             g = glyph_start + j * 16
             width, height = data[g], data[g + 1]
-            if version == 5:
+            if version >= 5:
                 width += data[g + 10] * 256
                 height += data[g + 11] * 256
             advance, left, top, length = struct.unpack_from('<HhhH', data, g + 2)
@@ -119,7 +119,7 @@ def decode_file(path):
                               left=left, top=top, pixels=pixels)
         left_map = dict(struct.unpack_from('<HB', data, left_start + j * 3) for j in range(left_count))
         right_map = dict(struct.unpack_from('<HB', data, right_start + j * 3) for j in range(right_count))
-        matrix = struct.unpack_from('<' + ('h' if version == 5 else 'b') * matrix_count, data, matrix_start)
+        matrix = struct.unpack_from('<' + ('h' if version >= 5 else 'b') * matrix_count, data, matrix_start)
         pairs = {(lc, rc): matrix[(li - 1) * right_classes + ri - 1]
                  for lc, li in left_map.items() for rc, ri in right_map.items()}
         styles[sid] = dict(glyphs=glyphs, pairs=pairs)

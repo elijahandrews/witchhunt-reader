@@ -32,8 +32,8 @@ class Section {
   uint32_t lutFileOffset_ = 0;
   bool truncatedCache = false;
   bool embeddedStyleFallback = false;
-  // Set by the last build when CssParser hit its own low-heap mode mid-parse
-  // (lowHeapSkips > 0): some elements were cached without their styles. The cache is
+  // Set by the last build when CSS lookup or publisher-font loading ran out of memory:
+  // some elements were cached with fallback styles or font metrics. The cache is
   // usable but visually degraded; background callers discard it so the foreground
   // blocking path (more headroom) rebuilds it clean. Persisted in the status byte
   // (kStatusCssDegraded) and reloaded by loadSectionFile(), so a blocking build that came
@@ -187,6 +187,7 @@ class Section {
     bool hyphenationEnabled = false;
     bool fontSizeNormalization = true;
     bool embeddedStyle = false;
+    uint32_t publisherFontHash = 0;
     bool bionicReadingEnabled = false;
     bool inlineFootnotePreviews = false;
     uint8_t imageRendering = 0;

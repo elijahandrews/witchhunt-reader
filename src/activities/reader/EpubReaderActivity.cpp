@@ -778,6 +778,7 @@ void EpubReaderActivity::onEnter() {
   // font this book reads in, now that its overrides are known: ~4.9 KB at a real size, ~9.5 KB
   // when the size is synthesised. A size changed mid-book keeps the cache it has until the next
   // book opens -- more resampling there, never a wrong glyph.
+  embeddedFonts_ = std::make_unique<EpubFontManager>(*epub, renderer);
   renderer.ensureScaledGlyphCache(getEffectiveReaderFontId());
   logReaderMemSnapshot("onEnter_after_glyph_cache");
 
@@ -909,6 +910,7 @@ void EpubReaderActivity::onExit() {
   // controller's retained RED RAM instead of its host baseline (ghosting). No-op on X3.
   renderer.setSingleBufferFastDiff(false);
   UITheme::getInstance().getMutableTheme().onBookWillClose(epub ? epub->getPath() : "", epub.get(), nullptr, nullptr);
+  embeddedFonts_.reset();
   epub.reset();
   currentPageFootnotes.clear();
   currentPageFootnotes.shrink_to_fit();
@@ -1296,6 +1298,7 @@ Section::BuildParams EpubReaderActivity::makeSectionBuildParams() const {
   p.hyphenationEnabled = getEffectiveHyphenation();
   p.fontSizeNormalization = getEffectiveFontSizeNormalization();
   p.embeddedStyle = lastRenderStats.embeddedStyle;
+  p.publisherFontHash = p.embeddedStyle && embeddedFonts_ ? embeddedFonts_->fingerprint() : 0;
   p.bionicReadingEnabled = getEffectiveBionicReading();
   // The SETTING, nothing else. Availability is guaranteed by construction: a preview-enabled
   // build resolves the note text its own spine needs before it lays out a single line (see
@@ -6417,6 +6420,7 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   }
 
   epub->setupCacheDir();
+  EpubFontManager embeddedFonts(*epub, renderer);
 
   // Load saved spine index and page number
   int spineIndex = 0, pageNumber = 0;
@@ -6506,6 +6510,7 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   p.hyphenationEnabled = effectiveHyphenation;
   p.fontSizeNormalization = effectiveFontSizeNormalization;
   p.embeddedStyle = effectiveEmbeddedStyle;
+  p.publisherFontHash = effectiveEmbeddedStyle ? embeddedFonts.fingerprint() : 0;
   p.bionicReadingEnabled = effectiveBionicReading;
   p.inlineFootnotePreviews = effectiveInlineFootnotePreviews;
   p.imageRendering = effectiveImageRendering;

@@ -324,6 +324,12 @@ TEST_F(ImageHeapGateFixture, HeapRefusalIsLatchedSoTheCacheCanBeDiscarded) {
 TEST_F(ImageHeapGateFixture, HeapRefusalIsReadBackFromTheCachedSection) {
   const std::string book = makeBookWithUnresolvableImage();
   const std::string cache = (work / "persisted").string();
+  // Isolate layout's image-header gate from the independent first-open head/CSS
+  // indexing gate: a later CSS rebuild intentionally invalidates section caches.
+  {
+    Epub indexed(book, cache);
+    ASSERT_TRUE(indexed.load(true));
+  }
   ESP.setFreeHeap(12 * 1024);
   ASSERT_TRUE(buildAndReportDegraded(book, cache));
   ESP.setFreeHeap(200 * 1024);

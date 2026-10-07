@@ -57,6 +57,9 @@ Legend: ✅ supported · ⚠️ partial / basic · ❌ not supported.
 
 ## Rendering & Typography
 
+This fork’s publisher-font support and remaining EPUB limitations are described in
+[EPUB typography support](docs/epub-typography-support.md).
+
 | Feature | Witch Reader | CrossPoint |
 | --- | :---: | :---: |
 | Floating images / text wrap around figures | ✅ left/right float, text wraps beside figure | ❌ falls back to block placement |

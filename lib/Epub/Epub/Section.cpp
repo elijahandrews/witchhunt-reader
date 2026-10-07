@@ -1,6 +1,7 @@
 #include "Section.h"
 
 #include <FsHelpers.h>
+#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <HeapFit.h>
 #include <Logging.h>
@@ -33,7 +34,7 @@
 namespace {
 // v79: CSS case transforms and inherited line spacing invalidate cached text and positions.
 // v81: scaled glyph ink bounds preserve fractional baseline/side bearings.
-constexpr uint8_t SECTION_FILE_VERSION = 81;  // v78: a span indent (poem line shape) gives way
+constexpr uint8_t SECTION_FILE_VERSION = 82;  // v78: a span indent (poem line shape) gives way
                                               // before its line wraps; v77 pages of such poems
                                               // carry the wrapped lines
                                               // v77: the status byte records a heap-degraded
@@ -318,6 +319,7 @@ uint32_t Section::calculatePropertyHash(const BuildParams& p) {
   append(&p.hyphenationEnabled, sizeof(p.hyphenationEnabled));
   append(&p.fontSizeNormalization, sizeof(p.fontSizeNormalization));
   append(&p.embeddedStyle, sizeof(p.embeddedStyle));
+  append(&p.publisherFontHash, sizeof(p.publisherFontHash));
   append(&p.bionicReadingEnabled, sizeof(p.bionicReadingEnabled));
   append(&p.inlineFootnotePreviews, sizeof(p.inlineFootnotePreviews));
   if (p.inlineFootnotePreviews) {
@@ -756,6 +758,7 @@ struct Section::BuildState {
   BuildParams params;
   std::function<void(int)> progressFn;
   uint32_t propertyHash = 0;
+  uint32_t fontFailureEpoch = 0;
   std::string localPath;
   std::string contentBase;
   std::string imageBasePath;
@@ -1016,6 +1019,7 @@ bool Section::htmlCacheReusable(const BuildState& st) const {
 
 Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
   const BuildParams& p = st.params;
+  st.fontFailureEpoch = renderer.bookFontFailureEpoch();
   st.propertyHash = calculatePropertyHash(p);
   filePath = getSectionFilePath(st.propertyHash);
 
@@ -1127,6 +1131,7 @@ Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
       [this, &st](std::unique_ptr<Page> page) { st.lut.emplace_back(this->onPageComplete(std::move(page))); },
       p.embeddedStyle, st.contentBase, st.imageBasePath, p.imageRendering, std::move(tocAnchors), st.progressFn,
       st.cssParser, epub->getImageManifest());
+  st.visitor->loadDocumentStyles(spineIndex);
   // Load printed-page list entries (NCX <pageList> or EPUB 3 nav page-list) for this
   // chapter's href, if any, straight into the parser's packed store (no intermediate vector of
   // string pairs: memory audit 2026-09, build inventory). Format: u16 count, then per entry:
@@ -1547,6 +1552,10 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
   if (st.visitor->capOverflowFlags() != 0) {
     simplified_ = true;
   }
+  // A transient publisher-font allocation failure changes line metrics just as a
+  // skipped CSS rule does. Keep such pagination out of the durable page-count index
+  // and use the existing bounded foreground rebuild policy.
+  cssLowHeapDegraded_ = renderer.bookFontFailureEpoch() != st.fontFailureEpoch || st.visitor->documentStylesDegraded();
   if (st.cssParser) {
     st.cssParser->logResolveStats(st.localPath.c_str());
     // Latch before Finalize clears the parser (which resets its stats): lowHeapSkips
@@ -1559,7 +1568,7 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
     // 14-page background build discarded after a single 960-byte dip below the lean floor,
     // forcing the released-path foreground rebuild whose 52 KB framebuffer realloc is the
     // failure that ends the session.
-    cssLowHeapDegraded_ = !st.cssParser->isArenaResident() && st.cssParser->getResolveStats().lowHeapSkips > 0;
+    cssLowHeapDegraded_ |= !st.cssParser->isArenaResident() && st.cssParser->getResolveStats().lowHeapSkips > 0;
   }
   st.parseMs += millis() - sliceStart;
   if (st.arena) st.laneParse = static_cast<uint32_t>(st.arena->laneHighWater());
@@ -2131,7 +2140,10 @@ bool Section::activeBuildCssDegraded() const {
   // cssLowHeapDegraded_ latch in runBuildParse), so its skips must not abort the build. This
   // is the mid-parse half of the same rule: Background-B polls this every slice and discards
   // the whole build the first time it returns true.
-  if (!buildState_ || !buildState_->cssParser) return false;
+  if (!buildState_) return false;
+  if (renderer.bookFontFailureEpoch() != buildState_->fontFailureEpoch) return true;
+  if (buildState_->visitor && buildState_->visitor->documentStylesDegraded()) return true;
+  if (!buildState_->cssParser) return false;
   if (buildState_->cssParser->isArenaResident()) return false;
   return buildState_->cssParser->getResolveStats().lowHeapSkips > 0;
 }

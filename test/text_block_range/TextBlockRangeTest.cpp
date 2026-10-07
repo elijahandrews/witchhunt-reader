@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "Epub/blocks/TextBlock.h"
+#include "WordTypography.h"
 
 namespace {
 
@@ -270,3 +271,92 @@ TEST(TextBlockContinues, AbsentFlagsMeanNoContinuation) {
 }
 
 }  // namespace
+
+namespace {
+void checkCapsBlock(const TextBlock& block, const std::vector<EpdFontFamily::Style>& styles,
+                    const std::vector<bool>& continues, const std::vector<uint32_t>& typography) {
+  ASSERT_TRUE(block.valid());
+  ASSERT_EQ(block.wordCount(), styles.size());
+  for (uint16_t i = 0; i < block.wordCount(); ++i) {
+    EXPECT_EQ(block.wordStyle(i), styles[i]) << "word " << i;
+    EXPECT_EQ(block.wordContinues(i), continues[i]) << "word " << i;
+    const uint32_t expected = typography.empty() ? 0 : typography[i];
+    EXPECT_EQ(wordTypography::family(block.wordTypography(i)), wordTypography::family(expected)) << "word " << i;
+    EXPECT_EQ(wordTypography::tracking(block.wordTypography(i)), wordTypography::tracking(expected)) << "word " << i;
+  }
+}
+void checkCapsRoundTrip(const TextBlock& block, const std::vector<EpdFontFamily::Style>& styles,
+                        const std::vector<bool>& continues, const std::vector<uint32_t>& typography) {
+  checkCapsBlock(block, styles, continues, typography);
+  FsFile file = FsFile::forReadWrite();
+  ASSERT_TRUE(block.serialize(file));
+  ASSERT_TRUE(file.seek(0));
+  auto reopened = TextBlock::deserialize(file);
+  ASSERT_NE(reopened, nullptr);
+  checkCapsBlock(*reopened, styles, continues, typography);
+  for (uint16_t i = 0; i < block.wordCount(); ++i) {
+    EXPECT_STREQ(reopened->wordText(i), block.wordText(i));
+    EXPECT_EQ(reopened->wordXpos(i), block.wordXpos(i));
+    EXPECT_EQ(reopened->wordSizePct(i), block.wordSizePct(i));
+  }
+}
+}  // namespace
+
+TEST(TextBlockCaps, MixedAllSmallCapsKeepContinuationFamiliesTrackingAndCacheBothConstructors) {
+  const auto allCapsBold = static_cast<EpdFontFamily::Style>(EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS |
+                                                             EpdFontFamily::BOLD | EpdFontFamily::UNDERLINE);
+  const std::vector<std::string> words = {"before", "Aa", "Bb", "Cc", "Dd", "after"};
+  const std::vector<EpdFontFamily::Style> styles = {EpdFontFamily::REGULAR,    allCapsBold,
+                                                    EpdFontFamily::SMALL_CAPS, allCapsBold,
+                                                    EpdFontFamily::ITALIC,     EpdFontFamily::REGULAR};
+  const std::vector<bool> continues = {true, false, true, true, false, true};
+  const std::vector<uint8_t> sizes = {100, 120, 100, 80, 175, 100};
+  const std::vector<uint32_t> typography = {0,
+                                            wordTypography::pack(9, -32),
+                                            wordTypography::pack(254, 17),
+                                            wordTypography::pack(wordTypography::Monospace, -123),
+                                            wordTypography::pack(wordTypography::Serif, 0),
+                                            0};
+  const std::vector<EpdFontFamily::Style> selectedStyles(styles.begin() + 1, styles.begin() + 5);
+  const std::vector<bool> selectedContinues(continues.begin() + 1, continues.begin() + 5);
+  const std::vector<uint32_t> selectedTypography(typography.begin() + 1, typography.begin() + 5);
+  TextBlock::WordRange range = makeRange(words, styles, sizes, 1, 4);
+  range.continues = &continues;
+  range.typography = &typography;
+  TextBlock ranged(range, {0, 20, 40, 60}, BlockStyle());
+  checkCapsRoundTrip(ranged, selectedStyles, selectedContinues, selectedTypography);
+  TextBlock copied(std::vector<std::string>(words.begin() + 1, words.begin() + 5), {0, 20, 40, 60}, selectedStyles,
+                   BlockStyle(), std::vector<uint8_t>(sizes.begin() + 1, sizes.begin() + 5), selectedContinues,
+                   selectedTypography);
+  checkCapsRoundTrip(copied, selectedStyles, selectedContinues, selectedTypography);
+}
+
+TEST(TextBlockCaps, UniformAllSmallCapsSurviveWithoutCallerTypographyAndNeverImplyContinuation) {
+  const auto allCaps = static_cast<EpdFontFamily::Style>(EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS);
+  const std::vector<std::string> words = {"Aa", "Bb", "Cc"};
+  const std::vector<EpdFontFamily::Style> styles(words.size(), allCaps);
+  const std::vector<bool> continues = {false, true, false};
+  const std::vector<uint8_t> sizes(words.size(), 100);
+  TextBlock copied(words, {0, 20, 40}, styles, BlockStyle(), {}, continues);
+  checkCapsRoundTrip(copied, styles, continues, {});
+  TextBlock::WordRange range = makeRange(words, styles, sizes, 0, words.size());
+  range.continues = &continues;
+  TextBlock ranged(range, {0, 20, 40}, BlockStyle());
+  checkCapsRoundTrip(ranged, styles, continues, {});
+}
+
+TEST(TextBlockCaps, MixedAllSmallCapsMaterializeMetadataWithoutChangingExistingUniformFamilyTracking) {
+  const auto allCaps = static_cast<EpdFontFamily::Style>(EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS);
+  const std::vector<std::string> words = {"Aa", "Bb", "Cc"};
+  const std::vector<EpdFontFamily::Style> styles = {allCaps, EpdFontFamily::SMALL_CAPS, allCaps};
+  const std::vector<bool> continues = {true, false, true};
+  const std::vector<uint8_t> sizes(words.size(), 100);
+  const std::vector<uint32_t> typography(words.size(), wordTypography::pack(77, -313));
+  TextBlock copied(words, {0, 20, 40}, styles, BlockStyle(), {}, continues, typography);
+  checkCapsRoundTrip(copied, styles, continues, typography);
+  TextBlock::WordRange range = makeRange(words, styles, sizes, 0, words.size());
+  range.continues = &continues;
+  range.typography = &typography;
+  TextBlock ranged(range, {0, 20, 40}, BlockStyle());
+  checkCapsRoundTrip(ranged, styles, continues, typography);
+}

@@ -25,6 +25,7 @@ class GfxRenderer {
   };
   ReaderFontPair readerFontPairs_[9]{};
   uint8_t readerFontPairCount_ = 0;
+  std::map<int, float> fontPointSizes_;
 
  public:
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
@@ -248,6 +249,7 @@ class GfxRenderer {
   void removeFont(int fontId) {
     fontMap.erase(fontId);
     fontBaseScales.erase(fontId);
+    fontPointSizes_.erase(fontId);
     invalidateScaledGlyphCache();
   }
 
@@ -620,10 +622,41 @@ class GfxRenderer {
     float scale;
   };
   // At most the nine shipped reader sizes. No font data or second SD font is loaded.
-  void registerReaderFontPair(int serif, int sans) {
+  void registerReaderFontPair(int serif, int sans, float points = 0) {
     if (readerFontPairCount_ < 9) readerFontPairs_[readerFontPairCount_++] = {serif, sans};
+    if (points > 0) {
+      registerFontPointSize(serif, points);
+      registerFontPointSize(sans, points);
+    }
   }
-  TextFont resolveTextFont(int fontId, uint8_t genericFamily) const;
+  void registerFontPointSize(int fontId, float points) { fontPointSizes_[fontId] = points; }
+  float fontPointSize(int fontId) const {
+    const auto it = fontPointSizes_.find(fontId);
+    return it == fontPointSizes_.end() ? 14.0f : it->second;
+  }
+  using BookFontResolver = TextFont (*)(void*, int, uint8_t, float);
+  void setBookFontResolver(void* ctx, BookFontResolver resolver, uint32_t (*failureEpoch)(void*) = nullptr) {
+    bookFontContext_ = ctx;
+    bookFontResolver_ = resolver;
+    bookFontFailureEpoch_ = failureEpoch;
+  }
+  uint32_t bookFontFailureEpoch() const { return bookFontFailureEpoch_ ? bookFontFailureEpoch_(bookFontContext_) : 0; }
+  void clearBookFontResolver(void* ctx) {
+    if (bookFontContext_ == ctx) {
+      bookFontContext_ = nullptr;
+      bookFontResolver_ = nullptr;
+      bookFontFailureEpoch_ = nullptr;
+    }
+  }
+  TextFont resolveGenericTextFont(int fontId, uint8_t genericFamily) const;
+  TextFont resolveTextFont(int fontId, uint8_t family, float textScale = 1.0f) const;
+
+ private:
+  void* bookFontContext_ = nullptr;
+  BookFontResolver bookFontResolver_ = nullptr;
+  uint32_t (*bookFontFailureEpoch_)(void*) = nullptr;
+
+ public:
   int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
                             int16_t tracking) const;
   int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking) const;

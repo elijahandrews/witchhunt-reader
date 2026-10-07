@@ -189,3 +189,5 @@ add_subdirectory(reading_stats)
 add_subdirectory(font_manifest_parser)
 add_subdirectory(folder_count_memo)
 add_subdirectory(bitmap_rows)
+
+add_subdirectory(publisher_fonts)

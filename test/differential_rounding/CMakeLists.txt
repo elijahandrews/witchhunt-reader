@@ -1,5 +1,7 @@
 add_executable(DifferentialRoundingTest
   DifferentialRoundingTest.cpp
+  FontFeaturesTest.cpp
+  ${REPO_ROOT}/lib/EpdFont/EpdFontFamily.cpp
   ${REPO_ROOT}/lib/EpdFont/EpdFont.cpp
   ${REPO_ROOT}/lib/EpdFont/GlyphFallback.cpp
   ${REPO_ROOT}/lib/Utf8/Utf8.cpp

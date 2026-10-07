@@ -5,7 +5,7 @@
 
 class EpdFont {
   void getTextBounds(const char* string, int startX, int startY, int* minX, int* minY, int* maxX, int* maxY,
-                     bool smallCaps = false) const;
+                     uint8_t capsMode = 0) const;
   /// Interval table plus the SD font's on-demand loader, with no fallbacks --
   /// so getGlyph()'s fallbacks can never recurse into one another.
   EpdGlyphRef findGlyph(uint32_t cp) const;
@@ -18,7 +18,7 @@ class EpdFont {
   const EpdFontData* data;
   explicit EpdFont(const EpdFontData* data) : data(data) {}
   ~EpdFont() = default;
-  void getTextDimensions(const char* string, int* w, int* h, bool smallCaps = false) const;
+  void getTextDimensions(const char* string, int* w, int* h, uint8_t capsMode = 0) const;
 
   /// The glyph for `cp`. When the font has no glyph for it, falls back first to
   /// a close visual relative (see GlyphFallback.h) and then to U+FFFD, so an
@@ -45,6 +45,10 @@ class EpdFont {
     }
     return getGlyphSlow(cp);
   }
+
+  // Applies real small-cap substitutions first. Synthetic fallback returns the
+  // uppercase Unicode character and a reduced scale; text itself is unchanged.
+  uint32_t resolveCaps(uint32_t cp, uint8_t mode, float& scale) const;
 
   /// Returns the kerning adjustment (4.4 fixed-point in pixels) between two codepoints.
   /// Returns 0 if no kerning data exists for the pair.

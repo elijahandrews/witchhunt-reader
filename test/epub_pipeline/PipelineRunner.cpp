@@ -34,7 +34,7 @@ void dumpWords(std::ostream& out, const TextBlock& block, const char* indent) {
   for (uint16_t w = 0; w < block.wordCount(); ++w) {
     out << indent << "W x=" << block.wordXpos(w) << " s=" << static_cast<int>(block.wordStyle(w))
         << " z=" << static_cast<int>(block.wordSizePct(w));
-    if (block.hasMixedTypography() || wordTypography::family(block.wordTypography(w)) == wordTypography::SansSerif ||
+    if (block.hasMixedTypography() || wordTypography::family(block.wordTypography(w)) >= wordTypography::SansSerif ||
         wordTypography::tracking(block.wordTypography(w)) != 0)
       out << " f=" << static_cast<int>(wordTypography::family(block.wordTypography(w)))
           << " ls=" << wordTypography::tracking(block.wordTypography(w));
@@ -130,6 +130,10 @@ bool runAndDump(const std::string& epubPath, const std::string& cacheDir, const 
     out << "ERROR load failed\n";
     return false;
   }
+  renderer.familyFallback = [&epub](uint8_t id) {
+    const auto* parser = epub->getCssParser();
+    return parser ? parser->fontCatalog().fallbackFamily(id) : static_cast<uint8_t>(wordTypography::Reader);
+  };
   epub->loadImageManifest();
   // No up-front gather any more: each section build resolves the notes its own spine references,
   // between the extract and the layout parse. The dump therefore exercises the real ordering.

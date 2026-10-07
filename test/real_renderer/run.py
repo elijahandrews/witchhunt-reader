@@ -23,8 +23,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo_root", type=Path)
     parser.add_argument("--out", type=Path, default=Path("render-smoke-output"))
-    parser.add_argument("--cpfont", type=Path, help="Local four-style v4/v5 font; never copied into the repository")
+    parser.add_argument("--cpfont", type=Path, help="Local four-style v4/v5/v6 font; never copied into the repository")
+    parser.add_argument("--outline", type=Path, help="Local TTF/OTF rendered by the actual embedded FreeType backend")
+    parser.add_argument("--sanitize", action="store_true", help="Run with AddressSanitizer and UndefinedBehaviorSanitizer")
     args = parser.parse_args()
+    sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if args.sanitize else []
     repo = args.repo_root.resolve()
     source = Path(__file__).parent.resolve()
     output = args.out.resolve()
@@ -41,15 +44,15 @@ def main():
             data = data.replace(assertion, b"sizeof(void*) > 4 || " + assertion)
         (output / name).write_bytes(data)
 
-    include_dirs = [output, source, repo / "test/shims"] + [
+    include_dirs = [output, source, repo / "test/zip_entry_reader", repo / "test/shims"] + [
         repo / "lib" / name
         for name in (
-            "GfxRenderer", "EpdFont", "Memory", "Logging", "Utf8",
+            "GfxRenderer", "EpdFont", "OutlineFont", "Memory", "Logging", "Utf8",
             "InflateReader", "uzlib/src",
         )
     ]
     c_command = [
-        "clang", "-c", str(repo / "lib/uzlib/src/tinflate.c"),
+        "clang", *sanitizers, "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
     files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", output / "GfxRenderer.cpp"]
@@ -57,21 +60,39 @@ def main():
         repo / "lib" / name
         for name in (
             "GfxRenderer/TextTruncation.cpp", "EpdFont/EpdFont.cpp",
-            "EpdFont/EpdFontFamily.cpp", "EpdFont/FontDecompressor.cpp",
+            "EpdFont/EpdFontFamily.cpp", "EpdFont/SdCardFont.cpp", "EpdFont/FontDecompressor.cpp",
             "EpdFont/GlyphFallback.cpp", "Utf8/Utf8.cpp",
             "InflateReader/InflateReader.cpp",
         )
     ]
+    files.append(repo / "test/zip_entry_reader/LoggingStub.cpp")
     files.append(output / "tinflate.o")
-    command = ["clang++", "-std=c++20", "-O1", "-ffunction-sections", "-fdata-sections"]
+    command = ["clang++", *sanitizers, "-std=c++20", "-O1", "-ffunction-sections", "-fdata-sections"]
     command.append("-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections")
+    if args.outline:
+        ft = repo / "lib/FreeType"
+        ftflags = [*sanitizers, "-O1", "-DWITCH_FONT_AUTOHINT=1", "-I" + str(ft / "config"),
+                   "-I" + str(ft / "third_party/freetype/include")]
+        backendflags = ftflags + ["-I" + str(repo / "lib/EpdFont"), "-I" + str(repo / "lib/OutlineFont")]
+        for src in sorted((ft / "src").glob("*.c")):
+            obj = output / (src.stem + ".o")
+            subprocess.run(["clang", *ftflags, "-c", str(src), "-o", str(obj)], check=True)
+            files.append(obj)
+        for src in sorted((repo / "lib/OutlineFont").glob("*.cpp")):
+            obj = output / ("outline_" + src.stem + ".o")
+            subprocess.run(["clang++", "-std=c++20", *backendflags, "-c", str(src), "-o", str(obj)], check=True)
+            files.append(obj)
+        files.append(source / "outline.cpp")
+        command.append("-DWITCH_TEST_OUTLINE=1")
     command += ["-I" + str(path) for path in include_dirs]
     command += [str(path) for path in files] + ["-o", str(output / "real_render")]
     (output / "build-command.json").write_text(json.dumps([c_command, command], indent=2) + "\n")
     subprocess.run(c_command, check=True)
     subprocess.run(command, check=True)
+    run_args = [str(args.cpfont.resolve()) if args.cpfont else "-"] if (args.cpfont or args.outline) else []
+    if args.outline: run_args.append(str(args.outline.resolve()))
     render = subprocess.run(
-        [str(output / "real_render")] + ([str(args.cpfont.resolve())] if args.cpfont else []),
+        [str(output / "real_render")] + run_args,
         cwd=output, check=False,
     )
 
@@ -91,7 +112,7 @@ def main():
         print("Screenshot:", png_path)
     render.check_returncode()
     import driver_audit
-    driver_audit.run(repo, output / "driver-audit")
+    driver_audit.run(repo, output / "driver-audit", sanitize=args.sanitize)
 
 
 if __name__ == "__main__":

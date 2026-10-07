@@ -33,6 +33,10 @@ struct BlockStyle {
   static constexpr float MAX_HORIZONTAL_INSET_EM = 4.0f;
 
   CssTextAlign alignment = CssTextAlign::Justify;
+  // Layout only: final line positions encode this in the section cache.
+  CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
+  bool whitespaceIndentDefault = false;
+  bool whitespaceAlignmentDefault = false;
 
   // Spacing (in pixels)
   int16_t marginTop = 0;
@@ -92,6 +96,7 @@ struct BlockStyle {
   // applied on top of the parent's style to get the combined style.
   BlockStyle getCombinedBlockStyle(const BlockStyle& child) const {
     BlockStyle combinedBlockStyle;
+    combinedBlockStyle.whiteSpace = child.whiteSpace;
 
     // Vertical margins between a parent and its child collapse (CSS collapsing margins):
     // the combined margin is the larger of the two, not their sum. Without this, a
@@ -114,20 +119,33 @@ struct BlockStyle {
     combinedBlockStyle.paddingLeft = child.paddingLeft;
     combinedBlockStyle.paddingRight = child.paddingRight;
     // Text indent: use child's if defined
-    if (child.textIndentDefined) {
+    if (whitespaceIndentDefault && child.whiteSpace != CssWhiteSpace::Pre &&
+        child.whiteSpace != CssWhiteSpace::PreWrap && !child.textIndentDefined) {
+      // An empty/hidden preformatted sibling must not donate its synthetic zero indent.
+      combinedBlockStyle.textIndent = child.textIndent;
+      combinedBlockStyle.textIndentDefined = false;
+    } else if (child.textIndentDefined) {
+      combinedBlockStyle.whitespaceIndentDefault = child.whitespaceIndentDefault;
       combinedBlockStyle.textIndent = child.textIndent;
       combinedBlockStyle.textIndentDefined = true;
       combinedBlockStyle.textIndentYields = child.textIndentYields;
     } else {
+      combinedBlockStyle.whitespaceIndentDefault = whitespaceIndentDefault;
       combinedBlockStyle.textIndent = textIndent;
       combinedBlockStyle.textIndentDefined = textIndentDefined;
       combinedBlockStyle.textIndentYields = textIndentYields;
     }
     // Text align: use child's if defined
-    if (child.textAlignDefined) {
+    if (whitespaceAlignmentDefault && child.whiteSpace != CssWhiteSpace::Pre &&
+        child.whiteSpace != CssWhiteSpace::PreWrap && !child.textAlignDefined) {
+      combinedBlockStyle.alignment = child.alignment;
+      combinedBlockStyle.textAlignDefined = false;
+    } else if (child.textAlignDefined) {
+      combinedBlockStyle.whitespaceAlignmentDefault = child.whitespaceAlignmentDefault;
       combinedBlockStyle.alignment = child.alignment;
       combinedBlockStyle.textAlignDefined = true;
     } else {
+      combinedBlockStyle.whitespaceAlignmentDefault = whitespaceAlignmentDefault;
       combinedBlockStyle.alignment = alignment;
       combinedBlockStyle.textAlignDefined = textAlignDefined;
     }
@@ -152,6 +170,7 @@ struct BlockStyle {
   static BlockStyle fromCssStyle(const CssStyle& cssStyle, const float emSize, const CssTextAlign paragraphAlignment,
                                  const uint16_t viewportWidth = 0) {
     BlockStyle blockStyle;
+    blockStyle.whiteSpace = cssStyle.whiteSpace;
     const float vw = viewportWidth;
     const auto maxHorizontalInsetPx = static_cast<int16_t>(emSize * MAX_HORIZONTAL_INSET_EM);
     // Resolve all CssLength values to pixels using the current font's em size and viewport width
@@ -177,6 +196,19 @@ struct BlockStyle {
       blockStyle.alignment = blockStyle.textAlignDefined ? cssStyle.textAlign : CssTextAlign::Justify;
     } else {
       blockStyle.alignment = paragraphAlignment;
+    }
+    if (blockStyle.whiteSpace == CssWhiteSpace::Pre || blockStyle.whiteSpace == CssWhiteSpace::PreWrap) {
+      // Preserved code columns cannot be expanded by prose justification or paragraph indents.
+      if (!cssStyle.hasTextAlign()) {
+        blockStyle.alignment = CssTextAlign::Left;
+        blockStyle.textAlignDefined = true;
+        blockStyle.whitespaceAlignmentDefault = true;
+      }
+      if (!cssStyle.hasTextIndent()) {
+        blockStyle.textIndent = 0;
+        blockStyle.textIndentDefined = true;
+        blockStyle.whitespaceIndentDefault = true;
+      }
     }
     if (cssStyle.hasFontSizeMultiplier()) {
       blockStyle.fontSizeMultiplier = cssStyle.fontSizeMultiplier;
