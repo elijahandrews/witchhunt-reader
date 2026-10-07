@@ -87,13 +87,15 @@ class EpubReaderActivity final : public Activity {
       Percent,    // normalised 0.0–1.0 within spine
       Paragraph,  // KOReader paragraph LUT index
       ListItem,   // KOReader li-anchored LUT index
+      Source,     // exact chapter source word/character anchor across reflow
     };
     Kind kind = Kind::Page;
     union {
-      int page;             // Kind::Page
-      int tocIndex;         // Kind::TocIndex
-      float spineProgress;  // Kind::Percent
-      uint16_t lutIndex;    // Kind::Paragraph / Kind::ListItem
+      int page;               // Kind::Page
+      int tocIndex;           // Kind::TocIndex
+      float spineProgress;    // Kind::Percent
+      uint16_t lutIndex;      // Kind::Paragraph / Kind::ListItem
+      uint32_t sourceOffset;  // Kind::Source
     };
     std::string anchorStr;  // Kind::Anchor; empty for all others
     // Cross-font rescaling: page count of this spine at save time.
@@ -106,6 +108,7 @@ class EpubReaderActivity final : public Activity {
     // when the lookup misses. Only meaningful for Kind::Paragraph / Kind::ListItem /
     // Kind::Anchor — for Kind::Page the `page` field is the baseline.
     int fallbackPage = 0;
+    uint16_t sourceCharacterOffset = 0;
     // Kind::Page restored from progress.bin: the paragraph LUT index of the saved page (0 = none).
     // Used only once the chapter turns out to have been laid out anew (its page count differs from
     // cachedPageCount), in place of rescaling the page number. Otherwise the saved page stands: it
@@ -119,6 +122,14 @@ class EpubReaderActivity final : public Activity {
       NavigationTarget t;
       t.kind = Kind::Page;
       t.page = n;
+      return t;
+    }
+    static NavigationTarget makeSourceOffset(uint32_t offset, int fallback = 0, uint16_t characterOffset = 0) {
+      NavigationTarget t;
+      t.kind = Kind::Source;
+      t.sourceOffset = offset;
+      t.sourceCharacterOffset = characterOffset;
+      t.fallbackPage = fallback;
       return t;
     }
     static NavigationTarget makeLastPage() {
@@ -164,6 +175,7 @@ class EpubReaderActivity final : public Activity {
 
     // Resolves the target into section.currentPage. Must be called on the render task
     // after the section has been loaded (pageCount is known).
+    std::optional<uint16_t> sourceTargetPage(const Section& sec) const;
     void resolveInto(Section& section, int spineIndex) const;
     // The page restoreParagraph lands on when `section` has been laid out anew since the position
     // was saved; nullopt when there is no paragraph, the layout is unchanged or the LUT misses.
@@ -228,6 +240,11 @@ class EpubReaderActivity final : public Activity {
   // names the page currently on screen, not the page the section was entered at — see
   // anchorNavTargetToCurrentPage().
   NavigationTarget navTarget;
+  // Keep the selected passage through consecutive reflows. Taking a fresh page-start
+  // anchor after every resize would walk backwards through the text on each cycle.
+  SourceAnchor reflowSource_;
+  int reflowSourceSpine_ = -1;
+  int reflowSourcePage_ = -1;
   int pagesUntilFullRefresh =
       1;  // initialized to freq in onEnter(); 1 triggers HALF on first render if somehow not reset
   unsigned long lastPageTurnTime = 0UL;
@@ -1038,7 +1055,8 @@ class EpubReaderActivity final : public Activity {
   float getEffectiveReaderLineCompression() const;
   // Re-point navTarget at the page currently displayed. Must be called after every move of
   // section->currentPage that stays inside the loaded section — see the definition for why.
-  void anchorNavTargetToCurrentPage();
+  void captureSourceBeforeReflow();
+  void anchorNavTargetToCurrentPage(bool preserveSourceAnchor = false);
   bool stepPageState(bool isForwardTurn);
   bool stepPageStateLocked(bool isForwardTurn);
   void pageTurn(bool isForwardTurn);

@@ -16,7 +16,6 @@
 #endif
 
 #include "EpubReaderActivity.h"
-#include "EpubReaderSearchActivity.h"
 
 #include <CooperativeAbort.h>
 #include <Epub/FootnotePreviews.h>
@@ -49,6 +48,7 @@
 #include "EpubReaderFootnotesActivity.h"
 #include "EpubReaderPercentSelectionActivity.h"
 #include "EpubReaderPrintedPageInputActivity.h"
+#include "EpubReaderSearchActivity.h"
 #include "FinishedBookActivity.h"
 #include "GlobalBookmarkIndex.h"
 #include "KOReaderCredentialStore.h"
@@ -2058,6 +2058,11 @@ void EpubReaderActivity::stepCurrentSectionBuild() {
               static_cast<unsigned long>(esp_get_free_heap_size()),
               static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT)));
     }
+    if (navTarget.kind == NavigationTarget::Kind::Page && reflowSource_.valid() &&
+        reflowSourceSpine_ == currentSpineIndex && reflowSourcePage_ == section->currentPage) {
+      navTarget = NavigationTarget::makeSourceOffset(reflowSource_.sourceOffset, section->currentPage,
+                                                     reflowSource_.characterOffset);
+    }
     section->clearCache();
     section.reset();  // aborts the in-flight build, releasing into the scratch arena
     // If this build ran inside the BORROWED secondary buffer, hand it back before the released
@@ -2137,6 +2142,12 @@ void EpubReaderActivity::stepCurrentSectionBuild() {
                 static_cast<unsigned>(*landed));
         section->currentPage = *landed;
         navTarget = NavigationTarget::makePage(*landed);
+      }
+    }
+    if (navTarget.kind == NavigationTarget::Kind::Source) {
+      if (const auto landed = section->sourceLookupPage()) {
+        section->currentPage = *landed;
+        anchorNavTargetToCurrentPage(true);
       }
     }
     // If the page the user is waiting on just became readable, ask the render task to draw it.
@@ -2223,7 +2234,7 @@ void EpubReaderActivity::stepCurrentSectionBuild() {
   } else {
     navTarget.resolveInto(*section, currentSpineIndex);
   }
-  anchorNavTargetToCurrentPage();
+  anchorNavTargetToCurrentPage(true);
   forceLoadLargeImages = false;
   pageHasPlaceholders = false;
   buildingPopupShown_ = false;
@@ -2380,22 +2391,21 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::FIND_IN_BOOK: {
       if (!epub) break;
       suspendBackgroundWork();
-      startActivityForResult(
-          std::make_unique<EpubReaderSearchActivity>(renderer, mappedInput, epub),
-          [this](const ActivityResult& result) {
-            ReaderUtils::enforceExitFullRefresh(renderer);
-            if (!result.isCancelled) {
-              RenderLock lock(*this);
-              const auto& match = std::get<BookSearchResult>(result.data);
-              currentSpineIndex = match.spineIndex;
-              navTarget = NavigationTarget::makeSourceOffset(match.sourceOffset);
-              section.reset();
-              forceLoadLargeImages = false;
-              pageHasPlaceholders = false;
-            }
-            resumeBackgroundWork();
-            requestUpdate();
-          });
+      startActivityForResult(std::make_unique<EpubReaderSearchActivity>(renderer, mappedInput, epub),
+                             [this](const ActivityResult& result) {
+                               ReaderUtils::enforceExitFullRefresh(renderer);
+                               if (!result.isCancelled) {
+                                 RenderLock lock(*this);
+                                 const auto& match = std::get<BookSearchResult>(result.data);
+                                 currentSpineIndex = match.spineIndex;
+                                 navTarget = NavigationTarget::makeSourceOffset(match.sourceOffset);
+                                 section.reset();
+                                 forceLoadLargeImages = false;
+                                 pageHasPlaceholders = false;
+                               }
+                               resumeBackgroundWork();
+                               requestUpdate();
+                             });
       break;
     }
     case EpubReaderMenuActivity::MenuAction::DICTIONARY:
@@ -2684,6 +2694,24 @@ void EpubReaderActivity::applyPendingBookmarkJump() {
   APP_STATE.saveToFile();
 }
 
+void EpubReaderActivity::captureSourceBeforeReflow() {
+  // The popup's cursor is page 0 until a pending source target resolves. A second
+  // settings change during indexing must keep that target, not capture the popup cursor.
+  if (navTarget.kind == NavigationTarget::Kind::Source) return;
+  if (section) {
+    const int currentPage = section->currentPage;
+    const auto source =
+        reflowSource_.valid() && reflowSourceSpine_ == currentSpineIndex && reflowSourcePage_ == currentPage
+            ? std::optional<SourceAnchor>(reflowSource_)
+            : section->getSourceAnchorForPage(currentPage);
+    navTarget = source ? NavigationTarget::makeSourceOffset(source->sourceOffset, currentPage, source->characterOffset)
+                       : NavigationTarget::makePage(currentPage);
+    // A partial build's count is not a completed layout and must never rescale a fallback.
+    if (!section->hasActiveBuild()) navTarget.cachedPageCount = section->pageCount;
+    navTarget.cachedSpineIdx = currentSpineIndex;
+  }
+}
+
 void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
   // No-op if the selected orientation matches current settings.
   if (SETTINGS.orientation == orientation) {
@@ -2693,11 +2721,7 @@ void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
   // Preserve current reading position so we can restore after reflow.
   {
     RenderLock lock(*this);
-    if (section) {
-      navTarget = NavigationTarget::makePage(section->currentPage);
-      navTarget.cachedPageCount = section->pageCount;
-      navTarget.cachedSpineIdx = currentSpineIndex;
-    }
+    captureSourceBeforeReflow();
 
     // Persist the selection so the reader keeps the new orientation on next launch.
     SETTINGS.orientation = orientation;
@@ -2735,11 +2759,7 @@ void EpubReaderActivity::stopAutomaticPageTurn() {
 
   // Preserve current reading position so we can restore after reflow.
   RenderLock lock(*this);
-  if (section) {
-    navTarget = NavigationTarget::makePage(section->currentPage);
-    navTarget.cachedPageCount = section->pageCount;
-    navTarget.cachedSpineIdx = currentSpineIndex;
-  }
+  captureSourceBeforeReflow();
   pendingPreRender = false;
   usePreRenderedBuffer = false;
   preRenderedPage.ready = false;
@@ -2763,11 +2783,7 @@ void EpubReaderActivity::toggleAutoPageTurn(const uint8_t selectedPageTurnOption
   if (UITheme::getStatusBarHeight(true) != UITheme::getStatusBarHeight()) {
     // Preserve current reading position so we can restore after reflow.
     RenderLock lock(*this);
-    if (section) {
-      navTarget = NavigationTarget::makePage(section->currentPage);
-      navTarget.cachedPageCount = section->pageCount;
-      navTarget.cachedSpineIdx = currentSpineIndex;
-    }
+    captureSourceBeforeReflow();
     section.reset();
   }
 }
@@ -2869,23 +2885,7 @@ void EpubReaderActivity::applyBookReaderOverrides(
   // popup expects its caller to own.
   if (epub) ensureSdFontLoadedForPath(epub->getPath().c_str());
 
-  if (section) {
-    const int currentPage = section->currentPage;
-    if (!section->hasActiveBuild()) {
-      if (const auto paragraphIndex = section->getParagraphIndexForPage(currentPage)) {
-        navTarget = NavigationTarget::makeParagraph(*paragraphIndex, currentPage);
-      } else {
-        navTarget = NavigationTarget::makePage(currentPage);
-      }
-      navTarget.cachedPageCount = section->pageCount;
-    } else {
-      // pageCount is only the number of pages produced so far. Treating it as a
-      // completed layout count would proportionally jump forward after relayout.
-      navTarget = NavigationTarget::makePage(currentPage);
-      LOG_DBG("ERS", "Preserving page %d without rescale during active section build", currentPage);
-    }
-    navTarget.cachedSpineIdx = currentSpineIndex;
-  }
+  captureSourceBeforeReflow();
   section.reset();
 }
 
@@ -3057,6 +3057,13 @@ std::optional<int> EpubReaderActivity::NavigationTarget::relaidOutRestorePage(co
   return *p;
 }
 
+std::optional<uint16_t> EpubReaderActivity::NavigationTarget::sourceTargetPage(const Section& sec) const {
+  if (kind != Kind::Source) return std::nullopt;
+  if (const auto page = sec.sourceLookupPage()) return page;
+  // A partial range cannot prove uniqueness: the same word may continue onto a later page.
+  return sec.hasActiveBuild() ? std::nullopt : sec.getPageForSourceOffset({sourceOffset, sourceCharacterOffset});
+}
+
 void EpubReaderActivity::NavigationTarget::resolveInto(Section& sec, int spineIndex) const {
   // Resolve to a baseline page first. Each branch records whether it produced a
   // precise page (LUT/anchor hit, percent jump, explicit page) or only an estimate.
@@ -3131,6 +3138,17 @@ void EpubReaderActivity::NavigationTarget::resolveInto(Section& sec, int spineIn
       break;
     }
 
+    case Kind::Source: {
+      if (const auto p = sourceTargetPage(sec)) {
+        sec.currentPage = *p;
+      } else {
+        LOG_INF("ERS", "Source position unavailable; using bounded page fallback %d", fallbackPage);
+        sec.currentPage = fallbackPage;
+        isEstimate = true;
+      }
+      break;
+    }
+
     case Kind::Percent: {
       if (sec.pageCount > 0) {
         int newPage = static_cast<int>(spineProgress * static_cast<float>(sec.pageCount));
@@ -3187,9 +3205,23 @@ void EpubReaderActivity::NavigationTarget::resolveInto(Section& sec, int spineIn
 //
 // None of them can be expected to remember the position individually, so keep the anchor live
 // instead: after this call navTarget names what is on screen, and any teardown lands back there.
-void EpubReaderActivity::anchorNavTargetToCurrentPage() {
+void EpubReaderActivity::anchorNavTargetToCurrentPage(const bool preserveSourceAnchor) {
   if (!section) {
+    reflowSource_ = {};
     return;
+  }
+  if (preserveSourceAnchor && navTarget.kind == NavigationTarget::Kind::Source) {
+    const auto resolved = navTarget.sourceTargetPage(*section);
+    if (resolved && *resolved == section->currentPage) {
+      reflowSource_ = {navTarget.sourceOffset, navTarget.sourceCharacterOffset};
+      reflowSourceSpine_ = currentSpineIndex;
+      reflowSourcePage_ = section->currentPage;
+    } else {
+      reflowSource_ = {};
+    }
+  } else if (!preserveSourceAnchor || reflowSourceSpine_ != currentSpineIndex ||
+             reflowSourcePage_ != section->currentPage) {
+    reflowSource_ = {};
   }
   navTarget = NavigationTarget::makePage(section->currentPage);
   // Carrying the page count lets resolveInto() rescale proportionally when the rebuild
@@ -4273,7 +4305,8 @@ bool EpubReaderActivity::buildSection(const RenderLayout& layout) {
   // navigation the B state is stale — drop it (aborting a partial build). While a build
   // is live, loadSectionFile must be skipped: it would clobber the live write handle.
   bool resumeBackgroundBuild = false;
-  if (backgroundSection_ && backgroundBuildSpineIndex_ == currentSpineIndex) {
+  if (backgroundSection_ && backgroundBuildSpineIndex_ == currentSpineIndex &&
+      !(navTarget.kind == NavigationTarget::Kind::Source && backgroundSection_->hasActiveBuild())) {
     resumeBackgroundBuild = backgroundSection_->hasActiveBuild();
     // Distinguish the three adopt cases for an accurate log: a live partial build (resume), a
     // B-completed section with pages (cache hit follows), or a section B only probed and parked
@@ -4310,6 +4343,8 @@ bool EpubReaderActivity::buildSection(const RenderLayout& layout) {
   }
   chapterSpanSpine_ = -1;  // new spine or new settings: the siblings' caches must be looked up again
   resetBackgroundBuild();
+  if (navTarget.kind == NavigationTarget::Kind::Source)
+    section->setSourceLookupTarget({navTarget.sourceOffset, navTarget.sourceCharacterOffset});
   const unsigned long sectionStart = millis();
 
   // The gather is NOT run here any more. It is a whole-book two-pass scan (measured 2822 ms on
@@ -4326,6 +4361,15 @@ bool EpubReaderActivity::buildSection(const RenderLayout& layout) {
   probeParams.embeddedStyle = embeddedStyle;
   probeParams.imageRendering = imageRendering;
   bool cacheHit = !resumeBackgroundBuild && section->loadSectionFile(probeParams);
+
+  // Conservative page ranges can overlap for split words, floats, or tables. One ordinary
+  // build with the exact source probe resolves that ambiguity; a missing probe then takes
+  // the bounded fallback rather than repeatedly rebuilding an unrendered search result.
+  if (cacheHit && navTarget.kind == NavigationTarget::Kind::Source &&
+      !section->getPageForSourceOffset({navTarget.sourceOffset, navTarget.sourceCharacterOffset})) {
+    section->clearCache();
+    cacheHit = false;
+  }
 
   // A cache written by an interrupted build is marked truncated (parseComplete was
   // false when it was persisted). With at least one page that is still readable and
@@ -4645,7 +4689,7 @@ bool EpubReaderActivity::buildSection(const RenderLayout& layout) {
   LOG_DBG("ERS", "resolveInto: navTarget.kind=%d pageCount=%d", (int)navTarget.kind, (int)section->pageCount);
   navTarget.resolveInto(*section, currentSpineIndex);
   LOG_DBG("ERS", "resolveInto result: currentPage=%d", (int)section->currentPage);
-  anchorNavTargetToCurrentPage();
+  anchorNavTargetToCurrentPage(true);
   forceLoadLargeImages = false;
   pageHasPlaceholders = false;
   return true;
