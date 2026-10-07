@@ -1,0 +1,25 @@
+#pragma once
+
+#include <cstdint>
+
+/**
+ * A reading position in CrossPoint's terms: a spine item and a page within it, plus whatever
+ * anchors the section cache's LUTs can snap to a page. Produced by ProgressMapper from a KOReader
+ * record; consumed by the reader (to land) and by ProgressComparison (to decide which side is
+ * further).
+ */
+struct CrossPointPosition {
+  int spineIndex;                  // Current spine item (chapter) index
+  int pageNumber;                  // Current page within the spine item (estimated if no paragraph LUT)
+  int totalPages;                  // Total pages in the current spine item
+  uint16_t paragraphIndex = 0;     // 1-based <p> index (0 if unavailable)
+  bool hasParagraphIndex = false;  // True when paragraphIndex is valid
+  // Only an XPath ending at the paragraph element proves its start. Descendant text/element
+  // anchors may lie many pages into that paragraph, even when their own character offset is 0.
+  bool isExactParagraphStart = false;
+  uint16_t listItemIndex = 0;     // 1-based running <li> count when target XPath ends in /li[N]
+  bool hasListItemIndex = false;  // True when listItemIndex is valid
+  // True when spineIndex came from the record's own DocFragment (or from local state), not from
+  // the percentage. A percentage-derived spine is an estimate that must not outrank one.
+  bool hasResolvedSpineIndex = false;
+};

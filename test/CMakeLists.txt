@@ -191,3 +191,4 @@ add_subdirectory(folder_count_memo)
 add_subdirectory(bitmap_rows)
 
 add_subdirectory(publisher_fonts)
+add_subdirectory(progress_comparison)

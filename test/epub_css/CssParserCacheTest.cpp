@@ -754,7 +754,8 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
       "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; text-transform: uppercase; "
       "list-style: none; page-break-before: always; page-break-after: always; }\n"
       ".b { margin-top: 3px; text-align: right; }\n"
-      ".c { display: none; }\n";
+      ".c { display: none; }\n"
+      ".d { display: inline; }\n";
   const std::string cacheDir = makeTempDir();
   ASSERT_FALSE(cacheDir.empty());
   std::string cssPath;
@@ -763,8 +764,8 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   CssParser parser(cacheDir);
   ASSERT_TRUE(compileCache(parser, cssPath));
 
-  const std::vector<std::pair<std::string, std::string>> probes = {
-      {"p", "a"}, {"p", "b"}, {"div", "c"}, {"span", "a"}, {"p", "none"}};
+  const std::vector<std::pair<std::string, std::string>> probes = {{"p", "a"},    {"p", "b"},    {"div", "c"},
+                                                                   {"span", "a"}, {"p", "none"}, {"span", "d"}};
   auto resolveAll = [&](CssParser& p) {
     std::vector<CssStyle> out;
     for (const auto& pr : probes) out.push_back(p.resolveStyle(pr.first, pr.second));
@@ -778,6 +779,9 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   EXPECT_EQ(heapStyles[0].textTransform, CssTextTransform::Uppercase);
   ASSERT_TRUE(heapStyles[0].hasLineHeight());
   EXPECT_NEAR(heapStyles[0].lineHeightMultiplier, 1.6f / 1.5f, 0.00001f);
+  // Both paths agreeing proves nothing if the disk cache already lost the value.
+  EXPECT_EQ(static_cast<int>(heapStyles[5].display), static_cast<int>(CssDisplay::Inline))
+      << "display:inline did not survive the disk cache";
 
   BuildArena arena(64 * 1024);
   ASSERT_TRUE(arena.valid());
@@ -1050,6 +1054,70 @@ TEST(CssParserTypography, FamilyAndTrackingSurviveColdDiskAndResidentArena) {
     const auto reset = parser.resolveStyle("span", "reset");
     EXPECT_EQ(reset.fontFamily, wordTypography::Inherit);
     EXPECT_EQ(reset.letterSpacing.unit, CssUnit::Auto);
+  }
+  removePath(cacheDir);
+  std::filesystem::remove(cssPath);
+}
+
+// The resident mask stores text-transform and the high display bit independently.
+// Pin authored values, rather than only comparing two potentially wrong paths.
+TEST(CssParserTypography, DisplayAndTransformKeepTypographyTailIndependent) {
+  const std::string css =
+      ".inline { display: inline; font-family: sans-serif; letter-spacing: .125em; white-space: pre-wrap }"
+      ".inlinecaps { display: inline; text-transform: uppercase; font-family: monospace; "
+      "letter-spacing: -2px; white-space: pre }"
+      ".blockcaps { display: block; text-transform: lowercase; font-family: serif; "
+      "letter-spacing: 3px; white-space: pre-line }"
+      ".block { display: block; font-family: monospace; letter-spacing: .25em; white-space: normal }";
+  std::string cssPath;
+  ASSERT_TRUE(writeTempCssFile(std::vector<uint8_t>(css.begin(), css.end()), cssPath));
+  const std::string cacheDir = makeTempDir();
+  {
+    CssParser parser(cacheDir);
+    ASSERT_TRUE(compileCache(parser, cssPath));
+  }
+  struct Expected {
+    const char* name;
+    CssDisplay display;
+    bool transformDefined;
+    CssTextTransform transform;
+    uint16_t family;
+    float spacing;
+    CssUnit unit;
+    CssWhiteSpace whiteSpace;
+  };
+  const Expected cases[] = {{"inline", CssDisplay::Inline, false, CssTextTransform::None, wordTypography::SansSerif,
+                             .125f, CssUnit::Em, CssWhiteSpace::PreWrap},
+                            {"inlinecaps", CssDisplay::Inline, true, CssTextTransform::Uppercase,
+                             wordTypography::Monospace, -2, CssUnit::Pixels, CssWhiteSpace::Pre},
+                            {"blockcaps", CssDisplay::Block, true, CssTextTransform::Lowercase, wordTypography::Serif,
+                             3, CssUnit::Pixels, CssWhiteSpace::PreLine},
+                            {"block", CssDisplay::Block, false, CssTextTransform::None, wordTypography::Monospace, .25f,
+                             CssUnit::Em, CssWhiteSpace::Normal}};
+  for (int resident = 0; resident < 2; ++resident) {
+    BuildArena arena(8192);
+    CssParser parser(cacheDir);
+    if (resident) {
+      parser.setIndexArena(&arena);
+      parser.setLeanResolve(true);
+    }
+    ASSERT_TRUE(parser.loadFromCache());
+    if (resident) ASSERT_TRUE(parser.isArenaResident());
+    for (const auto& expected : cases) {
+      SCOPED_TRACE(std::string(expected.name) + (resident ? " resident" : " disk"));
+      const auto actual = parser.resolveStyle("span", expected.name);
+      EXPECT_TRUE(actual.hasDisplay());
+      EXPECT_EQ(actual.display, expected.display);
+      EXPECT_EQ(actual.hasTextTransform(), expected.transformDefined);
+      if (expected.transformDefined) EXPECT_EQ(actual.textTransform, expected.transform);
+      EXPECT_TRUE(actual.hasFontFamily());
+      EXPECT_EQ(parser.fontCatalog().fallbackFamily(actual.fontFamily), expected.family);
+      EXPECT_TRUE(actual.hasLetterSpacing());
+      EXPECT_FLOAT_EQ(actual.letterSpacing.value, expected.spacing);
+      EXPECT_EQ(actual.letterSpacing.unit, expected.unit);
+      EXPECT_TRUE(actual.hasWhiteSpace());
+      EXPECT_EQ(actual.whiteSpace, expected.whiteSpace);
+    }
   }
   removePath(cacheDir);
   std::filesystem::remove(cssPath);

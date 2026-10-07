@@ -54,10 +54,16 @@ Implemented in `ProgressMapper::toCrossPoint`.
 
 1. Attempt to parse `DocFragment[N]` from incoming XPath; convert N to 0-based `spineIndex = N - 1`.
 2. If valid, attempt XPath-to-offset mapping via `ChapterXPathIndexer::findProgressForXPath`.
-3. Extract paragraph index from XPath via `ChapterXPathIndexer::tryExtractParagraphIndexFromXPath`
+3. If the match is **not exact** and disagrees with KOReader's `percentage` by more than 1% of
+   the book inside the same spine, use the percentage-derived intra-spine progress instead.
+   An **exact** match is never overridden. KOReader's percentage is its rendered page over its
+   page count, while ours is XHTML bytes, so a gap of over 1% between them is normal.
+   Overriding an exact chapter-start match moved the reader a dozen pages into the chapter (#268).
+4. Extract paragraph index from XPath via `ChapterXPathIndexer::tryExtractParagraphIndexFromXPath`
    (e.g. `/body/DocFragment[7]/body/p[685]/text().96` → `paragraphIndex = 685`).
-4. Convert resolved intra-spine progress to page estimate.
-5. If XPath path is invalid/unresolvable, fallback to percentage-based chapter/page estimation.
+5. Convert resolved intra-spine progress to page estimate.
+6. If XPath path is invalid/unresolvable, fallback to percentage-based chapter/page estimation.
+   A chapter-start XPath (no `p`/`li` predicate, ending in `.0`) pins the first page instead.
 
 When a paragraph index is available, `EpubReaderActivity` refines the page estimate using
 the section cache's per-page paragraph LUT (`Section::getPageForParagraphIndex`). This finds
@@ -86,6 +92,10 @@ Matching for reverse lookup:
 3. ancestor fallback — reported as `exact=no`
 
 If no match is found, caller must fallback to percentage.
+
+An element with no text of its own (a wrapper such as `section` or `div`) is matched at its
+**end** tag, so an ancestor-only match on a wrapper lands at the wrapper's end, often the
+chapter's last page. This is why inexact matches still defer to the percentage.
 
 ## Memory / Safety Constraints (ESP32-C3)
 
@@ -123,10 +133,22 @@ standard XPath same-name sibling counting.
 
 ## Operational Logging
 
-`ProgressMapper` logs mapping source in reverse direction:
+`ProgressMapper` logs the reverse mapping at **INF**, so it appears in release-build logs:
 
-- `xpath` when XPath mapping path was used
-- `percentage` when fallback path was used
+```
+[ProgressMapper] KOReader -> CrossPoint: 26.72% at /body/DocFragment[13]/... -> spine=12, page=0/40 (xpath, exact=yes)
+```
+
+The source in parentheses is one of:
+
+- `xpath`: the XPath resolved and was used as is
+- `xpath+percentage`: an inexact XPath match was replaced by the percentage
+- `xpath-spine+chapter-start`: the XPath did not resolve; spine from the XPath, first page
+- `xpath-spine+percentage`: the XPath did not resolve; spine from the XPath, page from the percentage
+- `percentage`: no usable XPath at all
 
 It also logs exactness (`exact=yes/no`) for XPath matches. Note that `exact=yes` is only set for
 a full path match with correct indices; index-insensitive and ancestor matches always log `exact=no`.
+
+Host coverage: `test/epub_pipeline/ProgressMapperTest.cpp` builds a two-chapter book and maps
+XPath/percentage pairs through `ProgressMapper::toCrossPoint`.

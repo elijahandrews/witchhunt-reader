@@ -365,31 +365,6 @@ bool runParse(SaxParser& saxParser, const std::string& path) {
   return ok;
 }
 
-// Starts the parser mid-document. Since the parser has no ancestor context (html/body stack is
-// missing), unmatched closing tags may appear, and callbacks emitted before the first start
-// tag can look structurally odd — an empty result is normal here. Callers
-// (ChapterXPathForwardMapper.cpp) recognise the empty result and fall back to runParse from
-// byte 0 with full document context.
-bool runParseFromOffset(SaxParser& saxParser, const std::string& path, const uint32_t seekBytes) {
-  if (seekBytes == 0) {
-    return runParse(saxParser, path);
-  }
-
-  FsFile file;
-  if (!Storage.openFileForRead("KOX", path, file)) {
-    return false;
-  }
-
-  if (!file.seek(seekBytes)) {
-    file.close();
-    return runParse(saxParser, path);  // fall back to full scan if seek fails
-  }
-
-  const bool ok = pumpSaxParserFromFile(saxParser, file);
-  file.close();
-  return ok;
-}
-
 bool isEntityRef(const char* text, const int len) {
   if (len < 3 || text[0] != '&' || text[len - 1] != ';') {
     return false;

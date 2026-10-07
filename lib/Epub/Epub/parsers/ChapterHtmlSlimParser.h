@@ -623,6 +623,35 @@ class ChapterHtmlSlimParser final : public Print {
   // that element has closed. A <br> inside it splits the element into more blocks, which keep its
   // font size; after it has closed, what it leaves behind must not lend that size to a sibling.
   int currentBlockOwnerDepth_ = -1;
+  // The open heading and the alignment and size its block was given. A block opening inside it is
+  // heading text and takes both (applyHeadingScope): otherwise only the first such block got them,
+  // by merging into the heading's still-empty block. INT_MAX when no heading is open.
+  int headingDepth_ = INT_MAX;
+  CssTextAlign headingAlignment_ = CssTextAlign::Center;
+  float headingFontSizeMultiplier_ = 1.0f;
+  void applyHeadingScope(BlockStyle& blockStyle, const CssStyle& cssStyle) const;
+  // The <span> laid out as a block because the book styles it display:block (#388), and the
+  // alignment and size of the block it interrupted: text after the span, still inside the same
+  // element, resumes on a line of its own in that style. One at a time -- a display:block span
+  // inside another stays inline. depth is INT_MAX when none is open.
+  struct BlockSpan {
+    int depth = INT_MAX;
+    int interruptedOwnerDepth = -1;
+    CssTextAlign alignment = CssTextAlign::Justify;
+    bool textAlignDefined = false;
+    bool fontResolved = false;
+    float fontSizeMultiplier = 1.0f;
+    int32_t headingFontId = 0;
+    CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
+    bool whitespaceIndentDefault = false;
+    bool whitespaceAlignmentDefault = false;
+    bool textIndentDefined = false;
+    float lineHeightMultiplier = 1.0f;
+    bool lineHeightDefined = false;
+  };
+  BlockSpan blockSpan_;
+  void startBlockSpan(const CssStyle& cssStyle, BlockStyle blockStyle);
+  void endBlockSpan();
   bool heapAllowsTableRowLayout() const;
   bool flushPartWordBuffer();
   void makePages();

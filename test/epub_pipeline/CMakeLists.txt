@@ -109,6 +109,7 @@ add_executable(EpubPipelineTest
   ImageExtractionTest.cpp
   ImageManifestTest.cpp
   ImageWrapperWidthTest.cpp
+  HeadingBlockLayoutTest.cpp
   SpineCacheLayoutTest.cpp
   SaxStateInArenaTest.cpp
   JpegDownscaleTest.cpp
@@ -118,6 +119,15 @@ add_executable(EpubPipelineTest
   PixelCacheWriteTest.cpp
   BufferedPrintTest.cpp
   CoverPipelineTest.cpp
+  ProgressMapperTest.cpp
+  ProgressMapperRoundTripTest.cpp
+  XPathExtractionTest.cpp
+  # lib/KOReaderSync position mapping: needs only the Epub and the SAX parser, not the network.
+  ${REPO_ROOT}/lib/KOReaderSync/ProgressMapper.cpp
+  ${REPO_ROOT}/lib/KOReaderSync/ChapterXPathIndexer.cpp
+  ${REPO_ROOT}/lib/KOReaderSync/ChapterXPathIndexerInternal.cpp
+  ${REPO_ROOT}/lib/KOReaderSync/ChapterXPathForwardMapper.cpp
+  ${REPO_ROOT}/lib/KOReaderSync/ChapterXPathReverseMapper.cpp
   # No-op HeapTrack: PipelineRunner brackets the dump read-back with pause/resume, and the gtest
   # binary must NOT get the real one (it overrides malloc/free process-wide). The two dump
   # targets pick their own implementation, so this cannot be moved into PIPELINE_SOURCES.

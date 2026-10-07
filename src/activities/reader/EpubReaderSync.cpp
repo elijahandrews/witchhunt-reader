@@ -71,26 +71,19 @@ void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode, const Syn
   sync.spineIndex = positionOverride ? positionOverride->spineIndex : currentSpineIndex;
   sync.page = currentPage;
   sync.totalPagesInSpine = totalPages;
-  // Populate paragraph index and XHTML seek hint from section LUT if available. Not applicable
+  // Populate the paragraph indices from the section LUT if available. Not applicable
   // (and not attempted) for an overridden position — see the SyncPositionOverride comment.
+  sync.paragraphIndex = 0;
+  sync.hasParagraphIndex = false;
+  sync.paragraphIndexBefore = 0;
   if (section && !positionOverride) {
     if (const auto pIdx = section->getParagraphIndexForPage(static_cast<uint16_t>(currentPage))) {
       sync.paragraphIndex = *pIdx;
       sync.hasParagraphIndex = true;
-      if (const auto hint = section->getXhtmlByteOffsetForPage(static_cast<uint16_t>(currentPage))) {
-        sync.xhtmlSeekHint = *hint;
-      } else {
-        sync.xhtmlSeekHint = 0;
-      }
-    } else {
-      sync.paragraphIndex = 0;
-      sync.hasParagraphIndex = false;
-      sync.xhtmlSeekHint = 0;
     }
-  } else {
-    sync.paragraphIndex = 0;
-    sync.hasParagraphIndex = false;
-    sync.xhtmlSeekHint = 0;
+    if (currentPage > 0) {
+      sync.paragraphIndexBefore = section->getParagraphIndexForPage(static_cast<uint16_t>(currentPage - 1)).value_or(0);
+    }
   }
   sync.intent = syncIntent;
   sync.outcome = KOReaderSyncOutcomeState::PENDING;

@@ -7,6 +7,7 @@
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"  // DocumentMatchMethod
 #include "KOReaderSyncClient.h"
+#include "ProgressComparison.h"
 #include "ProgressMapper.h"
 #include "activities/Activity.h"
 
@@ -36,7 +37,8 @@ class KOReaderSyncActivity final : public Activity {
  public:
   explicit KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& epubPath,
                                 int currentSpineIndex, int currentPage, int totalPagesInSpine,
-                                uint16_t paragraphIndex = 0, bool hasParagraphIndex = false, uint32_t xhtmlSeekHint = 0,
+                                uint16_t paragraphIndex = 0, bool hasParagraphIndex = false,
+                                uint16_t paragraphIndexBefore = 0,
                                 KOReaderSyncIntentState syncIntent = KOReaderSyncIntentState::COMPARE)
       : Activity("KOReaderSync", renderer, mappedInput),
         epubPath(epubPath),
@@ -45,7 +47,7 @@ class KOReaderSyncActivity final : public Activity {
         totalPagesInSpine(totalPagesInSpine),
         localParagraphIndex(paragraphIndex),
         hasLocalParagraphIndex(hasParagraphIndex),
-        localXhtmlSeekHint(xhtmlSeekHint),
+        localParagraphIndexBefore(paragraphIndexBefore),
         syncIntent(syncIntent),
         remoteProgress{},
         remotePosition{},
@@ -86,8 +88,11 @@ class KOReaderSyncActivity final : public Activity {
   int totalPagesInSpine;
   uint16_t localParagraphIndex;
   bool hasLocalParagraphIndex;
-  uint32_t localXhtmlSeekHint;
+  uint16_t localParagraphIndexBefore;
   KOReaderSyncIntentState syncIntent = KOReaderSyncIntentState::COMPARE;
+  // Known once the Epub was loaded for local mapping; 0 until then. Lets a fetched record's
+  // DocFragment be range-checked after the Epub has been released for TLS.
+  int spineCount = 0;
 
   State state = WIFI_SELECTION;
   std::string statusMessage;
@@ -146,8 +151,10 @@ class KOReaderSyncActivity final : public Activity {
   // further along. When false, any hit wins because we had nothing.
   bool probeAlternateDocumentId(bool havePrimaryRecord);
   bool smartSyncEnabled() const;
-  // -1 remote is further, 0 the two agree, +1 local is further.
-  int compareLocalToRemote() const;
+  // Which side is further, by spine, then the paragraph LUT, then percentage (ProgressComparison).
+  ProgressComparison compareLocalToRemote() const;
+  // The reader's position as ProgressComparison wants it.
+  LocalReadingPosition localReadingPosition() const;
   // Persist the mapped remote position and show the apply confirmation (or return straight
   // to the reader for auto-pull). Shared by the pull intent and smart resolution.
   void applyRemoteAndFinish();

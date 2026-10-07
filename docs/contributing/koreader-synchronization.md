@@ -71,6 +71,12 @@ The synchronization strategy therefore combines:
 - [lib/KOReaderSync/ProgressMapper.cpp](../../lib/KOReaderSync/ProgressMapper.cpp)
   - High-level mapping from app state to KOReader payload and back.
   - Chooses XPath path or percentage fallback.
+  - `peekRemote()`: what a record says from its XPath string alone (spine, body-child
+    paragraph), for comparisons that must not inflate a chapter.
+
+- [lib/KOReaderSync/ProgressComparison.cpp](../../lib/KOReaderSync/ProgressComparison.cpp)
+  - Which side of a sync is further along (see "Which side is further" below).
+  - Pure functions over positions; host-tested in `test/progress_comparison/`.
 
 ### XPath indexing facade
 
@@ -139,6 +145,39 @@ When XPath mapping fails or is ambiguous:
 - Use paragraph LUT refinement where available.
 
 This guarantees user progress continuity even for malformed or sparse content.
+
+## Which side is further
+
+Smart sync, the auto-push on book close, the wake pull and the choice between the two document
+ids (filename and binary hash) all have to decide whether the local or the remote position is
+further along. The two percentages cannot decide that on their own: KOReader's is its rendered
+page over its page count, ours is XHTML bytes, and they routinely differ by a percent or two of
+the book, which is more than a chapter boundary. Comparing them put a chapter start behind the
+end of the previous chapter (#268's family).
+
+`compareProgress()` in `ProgressComparison.cpp` ranks the evidence instead:
+
+1. **Spine**, when the record names one (`DocFragment`). Exact.
+2. **Paragraph LUT**, within the same spine. Let `K(i)` be the section cache's paragraph index at
+   the end of page `i`. A remote `p[K]` opens on the local page `p` exactly when
+   `K(p-1) < K <= K(p)`: Synchronized. `K <= K(p-1)`: the remote is behind. Otherwise it is ahead.
+   This exact rule requires a body-child paragraph element anchor (`p[K]` or `p[K].0`).
+   A descendant text or element anchor may lie many pages into that paragraph, even at its own
+   offset zero. For those anchors only `K < K(p-1)` proves the remote is behind and
+   `K > K(p)` proves it is ahead; overlapping paragraph intervals are Unknown. The handoff
+   carries `K(p)` and `K(p-1)` (`paragraphIndex`, `paragraphIndexBefore`) so no section cache is
+   needed there.
+3. **Percentages**, with a 0.001 tolerance for rounding. An estimate, now bounded to one chapter
+   by step 1.
+4. **Unknown**: neither percentage is usable, or an interior paragraph anchor overlaps the
+   local page. The sync screen asks and wake sync hands off to that screen. Automatic push
+   preserves an existing server record unless local progress is demonstrably ahead; it can
+   still create a missing record.
+
+The remote side of a comparison is `ProgressMapper::peekRemote()` (string-only) wherever the
+chapter has not been inflated yet: the wake pull and the auto-push preflight decide without an
+inflate, and only an upload or an apply pays for one. `selectRemoteRecord()` applies the same
+order to the two document ids' records; the alternate wins only when strictly ahead.
 
 ## Constraints and Non-Goals
 

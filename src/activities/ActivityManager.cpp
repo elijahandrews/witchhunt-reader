@@ -540,9 +540,9 @@ void ActivityManager::goToKOReaderSync() {
     return;
   }
 
-  replaceActivity(std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, sync.epubPath, sync.spineIndex,
-                                                         sync.page, sync.totalPagesInSpine, sync.paragraphIndex,
-                                                         sync.hasParagraphIndex, sync.xhtmlSeekHint, sync.intent));
+  replaceActivity(std::make_unique<KOReaderSyncActivity>(
+      renderer, mappedInput, sync.epubPath, sync.spineIndex, sync.page, sync.totalPagesInSpine, sync.paragraphIndex,
+      sync.hasParagraphIndex, sync.paragraphIndexBefore, sync.intent));
 }
 
 void ActivityManager::replaceWithReader(std::string path, ReturnHint hint) {
