@@ -133,6 +133,21 @@ TEST(BookTextSearch, NumericAndNamedEntitiesKeepRawOrigins) {
   EXPECT_EQ(accented[0].offset, html.find("&eacute;"));
   EXPECT_EQ(accented[1].offset, html.find("&#233;"));
 }
+TEST(BookTextSearch, UnsupportedMultiCharacterEntityRemainsLiteralWithDistinctOrigins) {
+  // fjlig is outside the renderer's supported named-entity table. Both parser
+  // and search preserve its spelling; they must not collapse its letters to '&'.
+  const auto html = document("<p>&fjlig;</p>");
+  for (const size_t chunk : {1, 2, 256}) {
+    const auto first = findMatches("f", html, chunk);
+    const auto second = findMatches("j", html, chunk);
+    ASSERT_EQ(first.size(), 1u);
+    ASSERT_EQ(second.size(), 1u);
+    EXPECT_EQ(first[0].offset, html.find("&fjlig;") + 1);
+    EXPECT_EQ(second[0].offset, html.find("&fjlig;") + 2);
+    EXPECT_NE(first[0].offset, second[0].offset);
+    EXPECT_NE(second[0].snippet.find("&fjlig;"), std::string::npos);
+  }
+}
 TEST(BookTextSearch, VoidTagRepairDoesNotShiftLaterOrigins) {
   const auto html = document("<p>before<br>after &nbsp; <img src=\"x\">target</p>");
   const auto matches = findMatches("target", html, 1);
