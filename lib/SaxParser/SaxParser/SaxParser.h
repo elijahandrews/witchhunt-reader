@@ -33,10 +33,10 @@ class SaxParser {
   // close (a hard parse error, book fails to open). Strict-XML parsers
   // (OPF/NCX/container/page-map/OPDS) must leave this off.
   bool init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxCharCb charCb = nullptr,
-            SaxDefaultCb defaultCb = nullptr, bool htmlVoidTagRepair = false);
+            SaxDefaultCb defaultCb = nullptr, bool htmlVoidTagRepair = false, bool trackSourceOffsets = false);
 
   // Bytes of parser state init() allocates (~10 KB: attribute table, name stack, buffers).
-  static size_t stateBytes();
+  static size_t stateBytes(bool trackSourceOffsets = false);
   // Storage for the NEXT init() to place its state in instead of the heap -- a bump allocation
   // from a build arena, for a section build that must keep the heap free. Ignored when smaller
   // than stateBytes(). Not owned: reset() forgets it and frees nothing; the memory must simply
@@ -57,6 +57,15 @@ class SaxParser {
   // Running byte offset of the parse cursor — replacement for XML_GetCurrentByteIndex.
   // Valid inside any callback fired from feed().
   uint32_t byteOffset() const;
+
+  // Optional decoded-text provenance: zero-based byte origin in the unmodified input stream.
+  // Each byte of an expanded entity points at its '&'. Valid only inside char/default callbacks;
+  // returns UINT32_MAX when disabled or out of range. Named-entity callback expansions may query
+  // any non-negative byte index: their entire expansion has the same source origin.
+  uint32_t characterSourceOffset(size_t index) const;
+  // Raw input position of the current token, unaffected by HTML repairs/entity routing.
+  // Unlike byteOffset(), this counts only bytes actually supplied to feed().
+  uint32_t sourceByteOffset() const;
 
   // Diagnostic: bitmask of fixed-capacity limits that were hit (and therefore
   // silently truncated) during parsing, plus other silent repairs the parser
@@ -91,6 +100,9 @@ class SaxParser {
 
   void* impl_ = nullptr;
   bool implExternal_ = false;  // impl_ lives in caller storage: never delete it
+  // A bounded 1 KiB map, only allocated when opted in and no external tail was provided.
+  // Ownership lives outside arena state because reset() may run after that arena was rewound.
+  uint32_t* sourceOffsetsOwned_ = nullptr;
   void* externalState_ = nullptr;
   size_t externalBytes_ = 0;
   bool stopped_ = false;

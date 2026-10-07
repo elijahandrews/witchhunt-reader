@@ -72,6 +72,13 @@ struct SaxParserImpl {
   // the end of each text node (ELEMEND).
   char charBuf[kCharBufLen];
   size_t charLen = 0;
+  uint32_t* charSources = nullptr;
+  bool insideChars = false;
+  bool insideDefault = false;
+  uint32_t rawBytesSeen = 0;
+  uint32_t sourceOffset = 0;
+  uint32_t entitySourceOffset = 0;
+  uint32_t voidCloseSourceOffset = 0;
 
   // Opening-tag accumulation: collected between ELEMSTART and the first
   // non-ATTR token, then fired as a single startCb call.
@@ -172,7 +179,9 @@ static bool isHtmlVoidElement(const char* name) {
 
 static void flushChar(SaxParserImpl* impl) {
   if (impl->charCb && impl->charLen > 0) {
+    impl->insideChars = true;
     impl->charCb(impl->userData, impl->charBuf, static_cast<int>(impl->charLen));
+    impl->insideChars = false;
   }
   impl->charLen = 0;
 }
@@ -181,6 +190,7 @@ static void flushChar(SaxParserImpl* impl) {
 static void appendChar(SaxParserImpl* impl, const char* s) {
   for (; *s; ++s) {
     if (impl->charLen == kCharBufLen) flushChar(impl);
+    if (impl->charSources) impl->charSources[impl->charLen] = impl->sourceOffset;
     impl->charBuf[impl->charLen++] = *s;
   }
 }
@@ -221,7 +231,9 @@ static void fireStart(SaxParserImpl* impl) {
 // SaxParser implementation
 // ---------------------------------------------------------------------------
 
-size_t SaxParser::stateBytes() { return sizeof(SaxParserImpl); }
+size_t SaxParser::stateBytes(const bool trackSourceOffsets) {
+  return sizeof(SaxParserImpl) + (trackSourceOffsets ? kCharBufLen * sizeof(uint32_t) : 0);
+}
 
 void SaxParser::setExternalState(void* storage, const size_t bytes) {
   externalState_ = storage;
@@ -229,6 +241,8 @@ void SaxParser::setExternalState(void* storage, const size_t bytes) {
 }
 
 void SaxParser::reset() {
+  delete[] sourceOffsetsOwned_;
+  sourceOffsetsOwned_ = nullptr;
   if (!impl_) return;
   // SaxParserImpl is plain data (arrays, pointers, counters): external state needs no destructor
   // call, and must get none -- the arena it sits in may already have been rewound.
@@ -240,7 +254,7 @@ void SaxParser::reset() {
 SaxParser::~SaxParser() { reset(); }
 
 bool SaxParser::init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxCharCb charCb, SaxDefaultCb defaultCb,
-                     bool htmlVoidTagRepair) {
+                     bool htmlVoidTagRepair, bool trackSourceOffsets) {
   reset();
   stopped_ = false;
   errorLine_ = 0;
@@ -258,11 +272,25 @@ bool SaxParser::init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxChar
   } else {
     impl = new (std::nothrow) SaxParserImpl;
   }
+  if (impl && trackSourceOffsets && implExternal_ && externalBytes_ >= stateBytes(true)) {
+    impl->charSources = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(externalState_) + sizeof(SaxParserImpl));
+  }
   externalState_ = nullptr;  // one init per offer
   externalBytes_ = 0;
   if (!impl) {
     errorString_ = "SaxParser: out of memory allocating parser state";
     return false;
+  }
+  if (trackSourceOffsets && !impl->charSources) {
+    // Reused for the entire parse; 256 raw origins cannot fit the small device task stack.
+    sourceOffsetsOwned_ = new (std::nothrow) uint32_t[kCharBufLen];
+    if (!sourceOffsetsOwned_) {
+      if (!implExternal_) delete impl;
+      implExternal_ = false;
+      errorString_ = "SaxParser: out of memory allocating source offsets";
+      return false;
+    }
+    impl->charSources = sourceOffsetsOwned_;
   }
   impl->startCb = startCb;
   impl->endCb = endCb;
@@ -292,6 +320,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
       }
       if (impl->charCb) {
         if (impl->charLen < kCharBufLen) {
+          if (impl->charSources) impl->charSources[impl->charLen] = impl->sourceOffset;
           impl->charBuf[impl->charLen++] = impl->x.data[0];
           if (impl->x.data[1] != '\0') appendChar(impl, impl->x.data + 1);
         } else {
@@ -486,6 +515,13 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
   for (size_t i = 0; i < len; ++i) {
     if (stopped_) break;
 
+    if (impl->rawBytesSeen == UINT32_MAX) {
+      errorLine_ = static_cast<int>(impl->x.line);
+      errorString_ = "SaxParser: input exceeds source offset range";
+      return false;
+    }
+    impl->sourceOffset = impl->rawBytesSeen++;
+    const uint32_t currentSourceOffset = impl->sourceOffset;
     const uint8_t c = buf[i];
 
     // ---------------------------------------------------------------------------
@@ -508,6 +544,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         // insignificant and passes through; anything else that is not the start of
         // a tag means the end tag is not coming.
         if (c == '<') {
+          impl->voidCloseSourceOffset = currentSourceOffset;
           impl->voidCloseBuf[impl->voidCloseLen++] = '<';
           continue;
         }
@@ -543,12 +580,14 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         // scanner must see these bytes too — the candidate may itself have been the
         // start of a tag), then fall through and process c as usual.
         for (size_t j = 0; j < impl->voidCloseLen && !stopped_; ++j) {
+          impl->sourceOffset = impl->voidCloseSourceOffset + static_cast<uint32_t>(j);
           const uint8_t b = static_cast<uint8_t>(impl->voidCloseBuf[j]);
           if (!tagScanByte(b)) return false;
           if (!feedByte(b)) return false;
         }
         impl->voidCloseLen = 0;
         impl->voidCloseName[0] = '\0';
+        impl->sourceOffset = currentSourceOffset;
         if (stopped_) break;
       }
     }
@@ -586,6 +625,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
                                   strcmp(impl->entityBuf, "&gt;") == 0 || strcmp(impl->entityBuf, "&quot;") == 0 ||
                                   strcmp(impl->entityBuf, "&apos;") == 0;
         if (isXmlBuiltin) {
+          impl->sourceOffset = impl->entitySourceOffset;
           for (int j = 0; j < impl->entityLen && !stopped_; ++j) {
             if (!feedByte((unsigned char)impl->entityBuf[j])) return false;
           }
@@ -598,9 +638,13 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
             fireStart(impl);
           }
           flushChar(impl);
+          impl->sourceOffset = impl->entitySourceOffset;
+          impl->insideDefault = true;
           impl->defaultCb(impl->userData, impl->entityBuf, impl->entityLen);
+          impl->insideDefault = false;
         } else {
           // No resolver: pass to yxml, which will return YXML_EREF → error.
+          impl->sourceOffset = impl->entitySourceOffset;
           for (int j = 0; j < impl->entityLen && !stopped_; ++j) {
             if (!feedByte((unsigned char)impl->entityBuf[j])) return false;
           }
@@ -614,12 +658,15 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         // Not a valid entity sequence (invalid char or name too long): flush
         // the buffered bytes to yxml and fall through to process c normally.
         for (int j = 0; j < impl->entityLen && !stopped_; ++j) {
+          impl->sourceOffset = impl->entitySourceOffset + static_cast<uint32_t>(j);
           if (!feedByte((unsigned char)impl->entityBuf[j])) return false;
         }
         impl->entityLen = 0;
+        impl->sourceOffset = currentSourceOffset;
         // fall through
       }
     } else if (c == '&') {
+      impl->entitySourceOffset = currentSourceOffset;
       impl->entityBuf[0] = '&';
       impl->entityLen = 1;
       continue;
@@ -638,6 +685,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
       if (impl->charCb) {
         // Inline single-byte append — x.data is a single char in >99% of cases.
         if (impl->charLen < kCharBufLen) {
+          if (impl->charSources) impl->charSources[impl->charLen] = impl->sourceOffset;
           impl->charBuf[impl->charLen++] = impl->x.data[0];
           if (impl->x.data[1] == '\0') continue;
           appendChar(impl, impl->x.data + 1);
@@ -684,4 +732,16 @@ uint32_t SaxParser::byteOffset() const {
 uint32_t SaxParser::truncationFlags() const {
   if (!impl_) return 0;
   return static_cast<SaxParserImpl*>(impl_)->truncFlags;
+}
+
+uint32_t SaxParser::characterSourceOffset(const size_t index) const {
+  if (!impl_) return UINT32_MAX;
+  const auto* impl = static_cast<const SaxParserImpl*>(impl_);
+  if (!impl->charSources) return UINT32_MAX;
+  if (impl->insideDefault) return impl->entitySourceOffset;
+  return impl->insideChars && index < impl->charLen ? impl->charSources[index] : UINT32_MAX;
+}
+
+uint32_t SaxParser::sourceByteOffset() const {
+  return impl_ ? static_cast<const SaxParserImpl*>(impl_)->sourceOffset : UINT32_MAX;
 }

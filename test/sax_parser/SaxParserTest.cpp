@@ -824,3 +824,85 @@ TEST(SaxParser, DeepNestingDoesNotLatchRootClosedEarly) {
 
   EXPECT_FALSE(p.feed(reinterpret_cast<const uint8_t*>(xml.data()), xml.size()));
 }
+
+namespace {
+struct SourceCollector {
+  SaxParser* parser = nullptr;
+  std::string text;
+  std::vector<uint32_t> origins;
+  static void chars(void* context, const char* text, const int length) {
+    auto& c = *static_cast<SourceCollector*>(context);
+    c.text.append(text, length);
+    for (int i = 0; i < length; ++i) c.origins.push_back(c.parser->characterSourceOffset(i));
+    EXPECT_EQ(c.parser->characterSourceOffset(length), UINT32_MAX);
+  }
+  static void entity(void* context, const char*, const int) {
+    auto& c = *static_cast<SourceCollector*>(context);
+    c.text += "\xc2\xa0";
+    c.origins.push_back(c.parser->characterSourceOffset(0));
+    c.origins.push_back(c.parser->characterSourceOffset(1));
+  }
+};
+}  // namespace
+
+TEST(SaxParser, SourceOriginsSurviveEntitiesVoidRepairAndEveryFeedChunkSize) {
+  const std::string xml = "<r>A&#x1F642;B&nbsp;C<br>D<img></img>E<em>F</em>G<![CDATA[H]]>I</r>";
+  const std::string expected =
+      "A\xf0\x9f\x99\x82"
+      "B\xc2\xa0"
+      "CDEFGHI";
+  std::vector<uint32_t> origins;
+  origins.push_back(xml.find('A'));
+  origins.insert(origins.end(), 4, xml.find("&#"));
+  origins.push_back(xml.find('B'));
+  origins.insert(origins.end(), 2, xml.find("&nbsp;"));
+  for (const char c : std::string("CDEFGHI")) {
+    // The CDATA marker contains C/D/A: its actual H is the character under test.
+    origins.push_back(c == 'F' ? xml.find(">F") + 1 : xml.find(c));
+  }
+  for (size_t chunk = 1; chunk <= xml.size(); ++chunk) {
+    SCOPED_TRACE(chunk);
+    SaxParser parser;
+    SourceCollector collected{&parser};
+    ASSERT_TRUE(parser.init(&collected, nullptr, nullptr, SourceCollector::chars, SourceCollector::entity, true, true));
+    for (size_t i = 0; i < xml.size(); i += chunk)
+      ASSERT_TRUE(parser.feed(reinterpret_cast<const uint8_t*>(xml.data() + i), std::min(chunk, xml.size() - i)));
+    ASSERT_TRUE(parser.finalize());
+    EXPECT_EQ(collected.text, expected);
+    EXPECT_EQ(collected.origins, origins);
+    EXPECT_EQ(parser.characterSourceOffset(0), UINT32_MAX);
+  }
+}
+
+TEST(SaxParser, SourceOriginsSurviveThe256ByteBufferAndUtf8Boundary) {
+  const std::string xml = "<r>" + std::string(255, 'x') + "&#x1F642;" + std::string(260, 'y') + "</r>";
+  SaxParser parser;
+  SourceCollector collected{&parser};
+  ASSERT_TRUE(parser.init(&collected, nullptr, nullptr, SourceCollector::chars, nullptr, false, true));
+  ASSERT_TRUE(parser.feed(reinterpret_cast<const uint8_t*>(xml.data()), xml.size()));
+  ASSERT_TRUE(parser.finalize());
+  ASSERT_EQ(collected.origins.size(), 519u);
+  for (size_t i = 0; i < 255; ++i) EXPECT_EQ(collected.origins[i], 3u + i);
+  for (size_t i = 255; i < 259; ++i) EXPECT_EQ(collected.origins[i], 258u);
+  for (size_t i = 259; i < 519; ++i) EXPECT_EQ(collected.origins[i], 8u + i);
+}
+
+TEST(SaxParser, SourceMapIsOptionalAndCanLiveEntirelyInExternalState) {
+  EXPECT_EQ(SaxParser::stateBytes(true) - SaxParser::stateBytes(), 256u * sizeof(uint32_t));
+  const std::string xml = "<r>z</r>";
+  for (const bool tracked : {false, true}) {
+    SaxParser parser;
+    std::vector<std::max_align_t> storage((SaxParser::stateBytes(tracked) + sizeof(std::max_align_t) - 1) /
+                                          sizeof(std::max_align_t));
+    parser.setExternalState(storage.data(), storage.size() * sizeof(std::max_align_t));
+    SourceCollector collected{&parser};
+    ASSERT_TRUE(parser.init(&collected, nullptr, nullptr, SourceCollector::chars, nullptr, false, tracked));
+    ASSERT_TRUE(parser.feed(reinterpret_cast<const uint8_t*>(xml.data()), xml.size()));
+    ASSERT_TRUE(parser.finalize());
+    ASSERT_EQ(collected.origins.size(), 1u);
+    EXPECT_EQ(collected.origins[0], tracked ? 3u : UINT32_MAX);
+    // Reinitializing after the borrowed memory has been overwritten must not inspect it.
+    std::memset(storage.data(), 0xa5, storage.size() * sizeof(std::max_align_t));
+    ASSERT_TRUE(parser.init(nullptr, nullptr, nullptr));
+  }
+}
