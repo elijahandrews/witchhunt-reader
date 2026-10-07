@@ -179,6 +179,16 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
   const std::vector<EpdFontFamily::Style>& styleSrc = *range.styles;
   const size_t first = range.first;
   const size_t count = range.count;
+  if (range.sources && first <= range.sources->size() && count <= range.sources->size() - first) {
+    for (size_t i = first; i < first + count; ++i) {
+      const auto& source = (*range.sources)[i];
+      if (!source.valid()) continue;
+      if (!sourceAnchor_.valid()) sourceAnchor_ = {source.start, source.characterOffset};
+      sourceMin_ = std::min(sourceMin_, source.start);
+      sourceEnd_ = std::max(sourceEnd_, source.end);
+      sourceProbeMatched_ |= source.probeByte != UINT16_MAX;
+    }
+  }
   const bool hasTypographySrc = range.typography && !range.typography->empty();
   if (hasTypographySrc) {
     if (first > range.typography->size() || count > range.typography->size() - first) {

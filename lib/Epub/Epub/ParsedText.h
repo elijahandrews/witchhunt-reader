@@ -1,5 +1,4 @@
 #pragma once
-
 #include <EpdFontFamily.h>
 
 #include <functional>
@@ -7,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "SourceAnchor.h"
 #include "blocks/BlockStyle.h"
 #include "blocks/TextBlock.h"
 
@@ -75,6 +75,7 @@ class ParsedText {
   // TextBlock line so inline font-size spans survive into the page cache.
   std::vector<uint8_t> wordSizes;
   std::vector<uint32_t> wordTypography_;
+  std::vector<SourceWordSpan> wordSources_;
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
   bool hyphenationEnabled;
@@ -162,7 +163,7 @@ class ParsedText {
   void releaseLayoutScratch();
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
-               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0);
+               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0, SourceWordSpan source = {});
   // True once addWord had to drop a word because the word vectors could not grow (see
   // wordGrowthRefused_). ChapterHtmlSlimParser::ensureHeapForTextLayout turns it into a
   // partial-cache abort.

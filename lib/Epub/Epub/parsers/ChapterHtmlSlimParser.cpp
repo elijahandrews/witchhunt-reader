@@ -899,11 +899,40 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
                               textTransform_ == CssTextTransform::Uppercase);
     word = transformed.c_str();
   }
+  SourceWordSpan source;
+  for (int i = 0; i < partWordBufferIndex; ++i) {
+    const uint32_t origin = partWordSources_[i];
+    if (origin == UINT32_MAX) continue;
+    if (source.start == UINT32_MAX) source.start = origin;
+    source.end = source.end == UINT32_MAX ? origin + 1 : std::max(source.end, origin + 1);
+    if (origin == sourceLookupTarget_.sourceOffset && source.probeByte == UINT16_MAX)
+      source.probeByte = static_cast<uint16_t>(i);
+  }
+  if (source.probeByte != UINT16_MAX && !transformed.empty()) {
+    source.probeByte = static_cast<uint16_t>(
+        utf8CaseMap(std::string_view(partWordBuffer, source.probeByte), textTransform_ == CssTextTransform::Uppercase)
+            .size());
+  }
+  if (source.start == sourceLookupTarget_.sourceOffset && sourceLookupTarget_.characterOffset > 0) {
+    // This is a fragment of the same cooked source word, not a guessed raw byte delta.
+    // Size/family changes leave its characters intact; a changed case transform clamps safely.
+    transformed = utf8NfcNorm(word);
+    word = transformed.c_str();
+    const size_t length = transformed.size();
+    size_t byte = 0, last = 0;
+    uint16_t character = 0;
+    while (byte < length && character < sourceLookupTarget_.characterOffset) {
+      last = byte++;
+      while (byte < length && (static_cast<unsigned char>(word[byte]) & 0xc0) == 0x80) ++byte;
+      ++character;
+    }
+    source.probeByte = static_cast<uint16_t>(byte < length ? byte : last);
+  }
   if (currentTableCell && currentTableCell->text) {
     // text is null only for a cell already consumed by the streaming path; currentTableCell is
     // cleared alongside that, so this is belt-and-braces against a future reordering.
     currentTableCell->text->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct,
-                                    wordTypography::pack(inheritedFamily_, inheritedTracking_));
+                                    wordTypography::pack(inheritedFamily_, inheritedTracking_), source);
     // Charge the word against the row budget. Only a row still headed for the grid accumulates —
     // a degraded cell is drained and freed at </td>.
     if (currentTable && !currentTable->degraded && !currentTable->rowDegraded) {
@@ -931,7 +960,7 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
       attachPendingFloatImage(currentTextBlock->getBlockStyle());
     }
     currentTextBlock->addWord(word, fontStyle, false, nextWordContinues, effectiveSizePct,
-                              wordTypography::pack(inheritedFamily_, inheritedTracking_));
+                              wordTypography::pack(inheritedFamily_, inheritedTracking_), source);
 
     if (currentTextBlock->size() > 96) {
       if (!ensureHeapForTextLayout("long-block split", currentTextBlock.get())) {
@@ -990,11 +1019,73 @@ bool ChapterHtmlSlimParser::flushPartWordBuffer() {
   return true;
 }
 
+uint32_t ChapterHtmlSlimParser::characterOrigin(int index) const {
+  if (sourceSynthetic_) return UINT32_MAX;
+  if (sourceOverride_) return sourceOverride_[index];
+  const uint32_t origin = saxParser_.characterSourceOffset(index + sourceOriginIndex_);
+  return sourceLiteralEntity_ && origin != UINT32_MAX ? origin + index : origin;
+}
+
+void ChapterHtmlSlimParser::noteSourceLine(const TextBlock& line) {
+  if (!line.sourceAnchor().valid()) return;
+  if (!pageSourceHasText_) pageSourceAnchor_ = line.sourceAnchor();
+  pageSourceHasText_ = true;
+  pageSourceMin_ = std::min(pageSourceMin_, line.sourceMin());
+  pageSourceEnd_ = std::max(pageSourceEnd_, line.sourceEnd());
+  pageSourceProbe_ |= line.sourceProbeMatched();
+}
+
+void ChapterHtmlSlimParser::noteSourceSpan(SourceWordSpan source) {
+  if (!source.valid()) return;
+  if (!pageSourceHasText_) pageSourceAnchor_ = {source.start, source.characterOffset};
+  pageSourceHasText_ = true;
+  pageSourceMin_ = std::min(pageSourceMin_, source.start);
+  pageSourceEnd_ = std::max(pageSourceEnd_, source.end);
+  pageSourceProbe_ |= source.probeByte != UINT16_MAX;
+}
+
+void ChapterHtmlSlimParser::noteSourcePoint(uint32_t offset) {
+  if (offset == UINT32_MAX) return;
+  if (!pageSourceAnchor_.valid()) pageSourceAnchor_ = {offset, 0};
+  pageSourceMin_ = std::min(pageSourceMin_, offset);
+  pageSourceEnd_ = std::max(pageSourceEnd_, offset + 1);
+  pageSourceProbe_ |= sourceLookupTarget_.sourceOffset == offset;
+}
+
+SourceWordSpan ChapterHtmlSlimParser::dropCapSource() const {
+  SourceWordSpan result;
+  for (int i = 0; i < pendingDropCap_.textLen; ++i) {
+    const uint32_t origin = pendingDropCap_.sources[i];
+    if (origin == UINT32_MAX) continue;
+    if (result.start == UINT32_MAX) result.start = origin;
+    result.end = result.end == UINT32_MAX ? origin + 1 : std::max(result.end, origin + 1);
+    if (origin == sourceLookupTarget_.sourceOffset) result.probeByte = 0;
+  }
+  return result;
+}
+
 // Emit the current page, keeping paragraphLutPerPage and completedPageCount in lockstep.
 // Callers must ensure currentPage is non-null and carries content; the helper resets
 // currentPage to a fresh Page and zeroes currentPageNextY so the caller can keep building.
 void ChapterHtmlSlimParser::emitPage(uint32_t xhtmlByteOffset) {
-  paragraphLutPerPage.push_back({xhtmlByteOffset, xpathParagraphIndex, xpathListItemIndex});
+  if (paragraphLutPerPage.size() == paragraphLutPerPage.capacity()) {
+    const size_t next = std::max<size_t>(16, paragraphLutPerPage.capacity() * 2);
+    if (ESP.getMaxAllocHeap() + LARGEST_FREE_BLOCK_SLACK < next * sizeof(ParagraphLutEntry) + 16) {
+      // Keep the already completed pages and their matching LUT. Refuse unchecked
+      // vector growth rather than aborting on an exhausted device heap.
+      streamFailed = layoutFailed = true;
+      saxParser_.stop();
+      return;
+    }
+    paragraphLutPerPage.reserve(next);
+  }
+  paragraphLutPerPage.push_back({xhtmlByteOffset, xpathParagraphIndex, xpathListItemIndex,
+                                 pageSourceAnchor_.sourceOffset, pageSourceMin_, pageSourceEnd_,
+                                 pageSourceAnchor_.characterOffset, pageSourceProbe_});
+  pageSourceAnchor_ = {};
+  pageSourceMin_ = UINT32_MAX;
+  pageSourceEnd_ = 0;
+  pageSourceHasText_ = pageSourceProbe_ = false;
   // Both of these borrow elements of the page being handed off, so they must be dropped
   // before it goes -- and the deferred yPos update is moot on a fresh page anyway (a drop
   // cap stays on the emitted page).
@@ -1159,6 +1250,7 @@ void ChapterHtmlSlimParser::attachPendingFloatImage(BlockStyle& bs) {
   // The page owns it from here; this is a borrowed pointer purely so the first line of
   // the block can re-base its yPos below. emitPage() clears it before handing the page
   // on, so it never outlives the element it points at.
+  noteSourcePoint(pendingInlineImage_.sourceOffset);
   deferredPageImage_ = pageImage.get();
   currentPage->elements.push_back(std::move(pageImage));
 
@@ -1256,11 +1348,12 @@ std::string ChapterHtmlSlimParser::caseMappedDropCapText(std::string_view tail) 
 
 void ChapterHtmlSlimParser::emitCapturedDropCapRun() {
   if (pendingDropCap_.textLen <= 0 || !currentTextBlock) return;
+  const SourceWordSpan capSource = dropCapSource();
   const std::string capText = caseMappedDropCapText();
   const float blockScale = std::max(0.01f, currentTextBlock->getBlockStyle().fontSizeMultiplier);
   const auto size = static_cast<uint8_t>(std::min(250.0f, pendingDropCap_.multiplier * 100 / blockScale));
   currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, nextWordContinues, size,
-                            pendingDropCap_.typography);
+                            pendingDropCap_.typography, capSource);
   pendingDropCap_.textLen = 0;
   nextWordContinues = true;
 }
@@ -1271,6 +1364,7 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
     emitCapturedDropCapRun();
     return;
   }
+  const SourceWordSpan capSource = dropCapSource();
   const std::string capText = caseMappedDropCapText();
   pendingDropCap_.textLen = 0;
   if (capText.empty() || !currentTextBlock) return;
@@ -1317,7 +1411,8 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   if (!haveInk || capInkTop <= 0 || capWidth <= 0 || capWidth + kDropCapGapPx > viewportWidth / 2) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (haveInk=%d inkTop=%d width=%d limit=%d)", capText.c_str(), haveInk,
             capInkTop, capWidth + kDropCapGapPx, viewportWidth / 2);
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography,
+                              capSource);
     nextWordContinues = true;  // "A" + "ll" form one visual word
     return;
   }
@@ -1357,7 +1452,8 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
                                                std::vector<uint32_t>{pendingDropCap_.typography});
   if (!capBlock || !capBlock->valid()) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (block alloc failed)", capText.c_str());
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography,
+                              capSource);
     nextWordContinues = true;
     return;
   }
@@ -1371,11 +1467,13 @@ void ChapterHtmlSlimParser::finalizePendingDropCap() {
   auto capLine = makeUniqueNoThrow<PageLine>(std::move(capBlock), capX, static_cast<int16_t>(top + dropCapYAdjust_));
   if (!capLine) {
     LOG_DBG("EHP", "dropcap '%s': inline fallback (PageLine alloc failed)", capText.c_str());
-    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography);
+    currentTextBlock->addWord(capText.c_str(), pendingDropCap_.style, false, false, 100, pendingDropCap_.typography,
+                              capSource);
     nextWordContinues = true;
     return;
   }
   // Borrowed, like deferredPageImage_ above: the page owns the line.
+  noteSourceSpan(capSource);
   deferredDropCapLine_ = capLine.get();
   currentPage->elements.push_back(std::move(capLine));
 
@@ -2101,7 +2199,9 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
           self->startNewTextBlock(centeredBlockStyle);
           self->italicUntilDepth = std::min(self->italicUntilDepth, self->depth);
           self->depth += 1;
+          self->sourceSynthetic_ = true;
           self->characterData(userData, alt.c_str(), alt.length());
+          self->sourceSynthetic_ = false;
           // Skip any child content (skip until parent as we pre-advanced depth above)
           self->skipUntilDepth = self->depth - 1;
           return;
@@ -2373,6 +2473,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                   self->pendingInlineImage_.alt = alt;
                   self->pendingInlineImage_.isRight =
                       (self->floatDepth_ > 0) && self->floatOpenSides_[self->floatDepth_ - 1];
+                  self->pendingInlineImage_.sourceOffset = self->saxParser_.sourceByteOffset();
                   self->pendingInlineImage_.active = true;
                   LOG_TRC("EHP", "Inline image deferred: w=%d h=%d", displayWidth, displayHeight);
                   // Don't flush the current text block — let it continue into the next paragraph.
@@ -2446,6 +2547,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                   LOG_ERR("EHP", "Failed to create PageImage");
                   return;
                 }
+                self->noteSourcePoint(self->saxParser_.sourceByteOffset());
                 self->currentPage->elements.push_back(std::move(pageImage));
                 self->currentPageNextY += displayHeight;
                 self->currentPageNextY += imageSpacingBottom;
@@ -3173,6 +3275,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         break;
       }
       const int index = self->pendingDropCap_.textLen++;
+      self->pendingDropCap_.sources[index] = self->characterOrigin(i);
       self->pendingDropCap_.text[index] = s[i];
       self->pendingDropCap_.transforms[index] = self->textTransform_;
     }
@@ -3180,21 +3283,30 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
     // Too much text for a drop cap — abandon capture and reroute everything captured
     // so far (plus the rest of this chunk) through the normal inline word flow.
     self->pendingDropCap_.active = false;
-    const std::string mapped = self->caseMappedDropCapText(std::string_view(s + i, len - i));
-    self->pendingDropCap_.textLen = 0;
-    const auto transform = self->textTransform_;
-    self->textTransform_ = CssTextTransform::None;  // mapped runs must not be transformed a second time
-    // SAX can cut the chunk inside a codepoint. The mapper preserves those raw
-    // suffix bytes: leave them buffered under the original transform so the next
-    // callback can complete the character before casing or emitting it.
-    const int completeBytes = utf8SafeTruncateBuffer(mapped.data(), static_cast<int>(mapped.size()));
-    characterData(userData, mapped.data(), completeBytes);
-    if (self->partWordBufferIndex > 0) {
-      if (self->flushPartWordBuffer()) self->nextWordContinues = true;
+    // A SAX chunk may end in a partial UTF-8 codepoint. Keep those raw suffix
+    // bytes in the ordinary buffer; case mapping waits for the following bytes.
+    const int complete = utf8SafeTruncateBuffer(self->pendingDropCap_.text, self->pendingDropCap_.textLen);
+    char suffix[4];
+    uint32_t origins[4];
+    const int suffixBytes = self->pendingDropCap_.textLen - complete;
+    for (int n = 0; n < suffixBytes; ++n) {
+      suffix[n] = self->pendingDropCap_.text[complete + n];
+      origins[n] = self->pendingDropCap_.sources[complete + n];
     }
-    self->textTransform_ = transform;
-    if (completeBytes < static_cast<int>(mapped.size()))
-      characterData(userData, mapped.data() + completeBytes, static_cast<int>(mapped.size()) - completeBytes);
+    self->pendingDropCap_.textLen = complete;
+    const float capMultiplier = self->pendingDropCap_.multiplier;
+    self->pendingDropCap_.multiplier =
+        self->currentTextBlock ? self->currentTextBlock->getBlockStyle().fontSizeMultiplier : 1.0f;
+    self->emitCapturedDropCapRun();
+    self->pendingDropCap_.multiplier = capMultiplier;
+    for (int n = 0; n < suffixBytes; ++n) {
+      self->partWordSources_[self->partWordBufferIndex] = origins[n];
+      self->partWordBuffer[self->partWordBufferIndex++] = suffix[n];
+    }
+    const int previous = self->sourceOriginIndex_;
+    self->sourceOriginIndex_ += i;
+    characterData(userData, s + i, len - i);
+    self->sourceOriginIndex_ = previous;
     return;
   }
 
@@ -3217,8 +3329,12 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
         if (self->currentTextBlock) {
           if (self->currentTextBlock->isEmpty()) {
-            self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR, false, false, self->effectiveSizePct,
-                                            wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_));
+            self->currentTextBlock->addWord(
+                " ", EpdFontFamily::REGULAR, false, false, self->effectiveSizePct,
+                wordTypography::pack(self->inheritedFamily_, self->inheritedTracking_),
+                {self->characterOrigin(i), self->characterOrigin(i) + 1, 0,
+                 self->characterOrigin(i) == self->sourceLookupTarget_.sourceOffset ? uint16_t(0)
+                                                                                    : uint16_t(UINT16_MAX)});
           }
           self->startNewTextBlock(self->currentTextBlock->getBlockStyle());
         }
@@ -3235,6 +3351,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
           if (!self->flushPartWordBuffer()) return;
           self->nextWordContinues = true;
         }
+        self->partWordSources_[self->partWordBufferIndex] = self->characterOrigin(i);
         self->partWordBuffer[self->partWordBufferIndex++] = ' ';
         self->preColumnMod8_ = (self->preColumnMod8_ + 1) & 7;
       }
@@ -3261,6 +3378,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         if (!self->flushPartWordBuffer()) return;
         if (preserveSpaces) self->nextWordContinues = true;
       }
+      self->partWordSources_[self->partWordBufferIndex] = self->characterOrigin(i);
       self->partWordBuffer[self->partWordBufferIndex++] = s[i];
       continue;
     }
@@ -3314,6 +3432,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         if (!self->flushPartWordBuffer()) return;
       }
 
+      self->partWordSources_[0] = self->characterOrigin(i);
       self->partWordBuffer[0] = ' ';
       self->partWordBuffer[1] = '\0';
       self->partWordBufferIndex = 1;
@@ -3333,6 +3452,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         if (!self->flushPartWordBuffer()) return;
       }
 
+      self->partWordSources_[0] = self->characterOrigin(i);
       self->partWordBuffer[0] = ' ';
       self->partWordBuffer[1] = '\0';
       self->partWordBufferIndex = 1;
@@ -3371,13 +3491,16 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
         // Incomplete UTF-8 sequence at the end — save it before flushing
         int overflow = self->partWordBufferIndex - safeLen;
         char saved[4];
+        uint32_t savedSources[4];
         for (int j = 0; j < overflow; j++) {
           saved[j] = self->partWordBuffer[safeLen + j];
+          savedSources[j] = self->partWordSources_[safeLen + j];
         }
         self->partWordBufferIndex = safeLen;
         if (!self->flushPartWordBuffer()) return;
         for (int j = 0; j < overflow; j++) {
           self->partWordBuffer[j] = saved[j];
+          self->partWordSources_[j] = savedSources[j];
         }
         self->partWordBufferIndex = overflow;
       } else {
@@ -3385,6 +3508,7 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
       }
     }
 
+    self->partWordSources_[self->partWordBufferIndex] = self->characterOrigin(i);
     self->partWordBuffer[self->partWordBufferIndex++] = s[i];
   }
 }
@@ -3399,7 +3523,10 @@ void ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const char* s, 
       return;
     }
     // Unknown entity: preserve original &...; sequence
+    auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+    self->sourceLiteralEntity_ = true;
     characterData(userData, s, len);
+    self->sourceLiteralEntity_ = false;
     return;
   }
   // Not an entity we recognize - skip it
@@ -3681,7 +3808,9 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
 
     const bool surroundingItalic = self->effectiveItalic;
     self->effectiveItalic = true;
+    self->sourceSynthetic_ = true;
     characterData(self, preview.c_str(), static_cast<int>(preview.size()));
+    self->sourceSynthetic_ = false;
     if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) {
       self->effectiveItalic = surroundingItalic;
       return;
@@ -3865,14 +3994,14 @@ bool ChapterHtmlSlimParser::setup(const size_t totalInflatedSize) {
   // Using DefaultHandlerExpand preserves normal entity expansion from DOCTYPE.
   // Chapter XHTML is HTML-flavored: enable bare-void-tag repair (<br>, <img>, ...).
   if (buildArena_) {
-    const size_t bytes = SaxParser::stateBytes();
+    const size_t bytes = SaxParser::stateBytes(true);
     if (void* state = buildArena_->alloc(bytes)) {
       saxParser_.setExternalState(state, bytes);
       LOG_DBG("EHP", "SAX parser state (%u bytes) in the build arena", static_cast<unsigned>(bytes));
     }
   }
   if (!saxParser_.init(this, startElement, endElement, characterData, defaultHandlerExpand,
-                       /*htmlVoidTagRepair=*/true)) {
+                       /*htmlVoidTagRepair=*/true, /*trackSourceOffsets=*/true)) {
     LOG_ERR("EHP", "Couldn't allocate memory for parser");
     return false;
   }
@@ -3890,7 +4019,12 @@ bool ChapterHtmlSlimParser::setup(const size_t totalInflatedSize) {
   // no-compaction heap cannot recover from (CLAUDE.md Resource Protocol rule 7,
   // docs/memory-allocation-strategy.md §9.6). The blocks are individually small, so this is
   // an allocation-COUNT fix; it is not expected to move contig on its own.
-  paragraphLutPerPage.reserve(estimatePagesForSpine(totalInflatedSize));
+  const size_t reservedPages = estimatePagesForSpine(totalInflatedSize);
+  if (ESP.getMaxAllocHeap() + LARGEST_FREE_BLOCK_SLACK < reservedPages * sizeof(ParagraphLutEntry) + 16) {
+    LOG_ERR("EHP", "Insufficient contiguous heap for source page LUT");
+    return false;
+  }
+  paragraphLutPerPage.reserve(reservedPages);
   // Anchors stream to a spill file (see setAnchorSpillPath), so nothing here scales with how
   // many a chapter has. Opened at setup rather than lazily so a chapter that cannot spill finds
   // out before it has recorded anything, and takes the resident fallback for all of them or for
@@ -4153,6 +4287,7 @@ ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_p
     LOG_ERR("EHP", "Dropping line: PageLine allocation failed");
     return ParsedText::LineProcessResult::Accepted;
   }
+  noteSourceLine(*pageLine->getBlock());
   currentPage->elements.push_back(std::move(pageLine));
 
   // On the first line of a block with a deferred inline image, fix the image's
@@ -4574,6 +4709,9 @@ void ChapterHtmlSlimParser::commitPendingRow() {
     }
   }
 
+  for (const auto& cell : lr.cells)
+    for (const auto& line : cell.lines) noteSourceLine(*line);
+  if (!pageSourceAnchor_.valid()) noteSourcePoint(saxParser_.sourceByteOffset());
   TableRow tr;
   tr.isHeaderRow = lr.isHeaderRow;
   tr.height = lr.height;

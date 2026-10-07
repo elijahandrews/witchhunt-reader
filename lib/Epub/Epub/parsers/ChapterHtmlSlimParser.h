@@ -49,13 +49,13 @@ class Epub;
 // entries for that 19-page spine and left most of the ladder in place.
 //
 // Erring low is cheap here because MAX_RESERVED_PAGES bounds the whole downside: even a spine
-// that saturates it reserves only 2 KB (Section's u32 LUT) and 4 KB (the 8-byte paragraph LUT).
+// that saturates it reserves only 2 KB (Section's u32 LUT) and 12 KB (the 24-byte source/paragraph LUT).
 // Past the cap the vector grows normally.
 //
 // 512 bytes of XHTML per rendered page, not 1024: Strange Pictures' Chapter 3 is 114,201 bytes
 // and lays out to 180 pages (634 B/page), so the old estimate (111 pages) had both LUTs doubling
 // at page 112 -- a 1.8 KB and a 0.9 KB allocation mid-parse, on a heap that a borrowed build
-// runs down to ~4 KB contiguous by then (device run 10). Overestimating costs 4 B + 8 B per
+// runs down to ~4 KB contiguous by then (device run 10). Overestimating costs 4 B + 24 B per
 // unused entry; underestimating costs a doubling while the heap is at its lowest.
 inline constexpr size_t estimatePagesForSpine(const size_t inflatedSize) {
   constexpr size_t XHTML_BYTES_PER_PAGE = 512;
@@ -98,6 +98,21 @@ class ChapterHtmlSlimParser final : public Print {
   // leave one char at end for null pointer
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
+  // One bounded word's decoded-byte origins; layout retains only its span/fragment anchor.
+  uint32_t partWordSources_[MAX_WORD_SIZE + 1];
+  SourceAnchor sourceLookupTarget_;
+  SourceAnchor pageSourceAnchor_;
+  uint32_t pageSourceMin_ = UINT32_MAX, pageSourceEnd_ = 0;
+  bool pageSourceHasText_ = false, pageSourceProbe_ = false;
+  const uint32_t* sourceOverride_ = nullptr;
+  int sourceOriginIndex_ = 0;
+  bool sourceSynthetic_ = false, sourceLiteralEntity_ = false;
+  uint32_t characterOrigin(int index) const;
+  void noteSourceLine(const TextBlock& line);
+  void noteSourceSpan(SourceWordSpan source);
+  void noteSourcePoint(uint32_t offset);
+  SourceWordSpan dropCapSource() const;
+
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
@@ -118,6 +133,7 @@ class ChapterHtmlSlimParser final : public Print {
     int16_t height = 0;
     std::string alt;
     bool active = false;
+    uint32_t sourceOffset = UINT32_MAX;
     bool isRight = false;  // true when float: right
     // epubFilePath is not stored — epub->getPath() is read at ImageBlock construction time
     // to avoid a redundant heap copy of a constant string.
@@ -142,6 +158,7 @@ class ChapterHtmlSlimParser final : public Print {
     bool inlineFallback = false;
     char text[16] = {};                    // drop caps are 1 glyph, occasionally with a leading quote
     CssTextTransform transforms[16] = {};  // case scope at capture time, including nested overrides
+    uint32_t sources[16] = {};
     int textLen = 0;
   };
   PendingDropCap pendingDropCap_;
@@ -492,6 +509,9 @@ class ChapterHtmlSlimParser final : public Print {
     uint32_t xhtmlByteOffset;  // byte offset of most recent body-child element start at page break
     uint16_t paragraphIndex;   // 1-based <p> index at page completion
     uint16_t listItemIndex;    // running <li> count at page completion (any depth)
+    uint32_t sourceOffset = UINT32_MAX, sourceMin = UINT32_MAX, sourceEnd = 0;
+    uint16_t sourceCharacterOffset = 0;
+    bool sourceProbeMatched = false;  // transient, never persisted
   };
   std::vector<ParagraphLutEntry> paragraphLutPerPage;  // deep LUT: one entry per page
 
@@ -882,6 +902,7 @@ class ChapterHtmlSlimParser final : public Print {
       label += len + 1;
     }
   }
+  void setSourceLookupTarget(SourceAnchor target) { sourceLookupTarget_ = target; }
   const std::vector<ParagraphLutEntry>& getParagraphLutPerPage() const { return paragraphLutPerPage; }
 
   // Supplies printed-page labels from NCX <pageList> for this chapter. `anchors` maps

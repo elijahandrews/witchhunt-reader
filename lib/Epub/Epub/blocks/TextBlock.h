@@ -12,6 +12,7 @@ class BuildArena;  // lib/Memory -- optional page-scoped storage for the arena b
 
 #include "Block.h"
 #include "BlockStyle.h"
+#include "Epub/SourceAnchor.h"
 
 // Represents a line of text on a page.
 //
@@ -89,6 +90,10 @@ inline constexpr size_t SOFT_HYPHEN_BYTES = 2;
 class TextBlock final : public Block {
  private:
   RenderStyle renderStyle;
+  SourceAnchor sourceAnchor_;
+  uint32_t sourceMin_ = UINT32_MAX;
+  uint32_t sourceEnd_ = 0;
+  bool sourceProbeMatched_ = false;
   uint16_t numWords = 0;
   uint16_t textBytes = 0;  // total size of the text region, including one NUL per word
   bool sizesPresent = false;
@@ -137,6 +142,10 @@ class TextBlock final : public Block {
   }
 
  public:
+  SourceAnchor sourceAnchor() const { return sourceAnchor_; }
+  uint32_t sourceMin() const { return sourceMin_; }
+  uint32_t sourceEnd() const { return sourceEnd_; }
+  bool sourceProbeMatched() const { return sourceProbeMatched_; }
   // Continuation retains bit7; ALL_SMALL_CAPS is stored in typography bit24.
   static constexpr uint8_t WORD_CONTINUES_BIT = 0x80;
 
@@ -160,6 +169,7 @@ class TextBlock final : public Block {
     const std::vector<std::string>* words = nullptr;
     const std::vector<EpdFontFamily::Style>* styles = nullptr;
     const std::vector<uint32_t>* typography = nullptr;
+    const std::vector<SourceWordSpan>* sources = nullptr;
     const std::vector<uint8_t>* sizes = nullptr;  // may be null/empty => uniform 100%
     // Layout's per-word "attaches to the previous word with no space" flags, indexed like
     // `words`. May be null, meaning every word is space-separated.

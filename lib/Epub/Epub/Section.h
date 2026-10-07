@@ -7,6 +7,7 @@
 
 #include "Epub.h"
 #include "FontSizeLadder.h"
+#include "SourceAnchor.h"
 #include "SpinePageIndex.h"
 
 class Page;
@@ -30,6 +31,9 @@ class Section {
   // Where the LUT sits in the cache file when `lut` could not be held (no heap block for it on a
   // long single-file book): page loads then read their offset from the file. 0 otherwise.
   uint32_t lutFileOffset_ = 0;
+  SourceAnchor sourceLookupTarget_;
+  std::optional<uint16_t> sourceLookupPage_;
+  uint32_t sourceLookupHash_ = 0;
   bool truncatedCache = false;
   bool embeddedStyleFallback = false;
   // Set by the last build when CSS lookup or publisher-font loading ran out of memory:
@@ -379,6 +383,15 @@ class Section {
   // Callers must treat that as "this page cannot be anchored on a paragraph" and fall back to
   // the page number; it is NOT an anchor on paragraph 0.
   std::optional<uint16_t> getParagraphIndexForPage(uint16_t page) const;
+  // Cached ranges are accepted only when exactly one page can contain the target.
+  // Overlap (split words, floats) requests a normal rebuild with an exact probe.
+  std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t page) const;
+  std::optional<uint16_t> getPageForSourceOffset(SourceAnchor target) const;
+  void setSourceLookupTarget(SourceAnchor target) {
+    sourceLookupTarget_ = target;
+    sourceLookupPage_.reset();
+  }
+  std::optional<uint16_t> sourceLookupPage() const;
 
  private:
   // Allocates buildState_ and runs Setup. Applies the low-heap embedded-CSS downgrade.

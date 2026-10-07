@@ -104,6 +104,7 @@ add_executable(EpubPipelineTest
   SpinePageIndexTest.cpp
   FootnotePreviewStoreTest.cpp
   FootnoteResolveSliceTest.cpp
+  SourceAnchorTest.cpp
   ParagraphAnchorTest.cpp
   LowHeapLoadTest.cpp
   TableRowFallbackArenaTest.cpp

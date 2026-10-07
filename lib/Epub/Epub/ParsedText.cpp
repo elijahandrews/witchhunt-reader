@@ -19,6 +19,16 @@
 constexpr int MAX_COST = std::numeric_limits<int>::max();
 
 namespace {
+SourceWordSpan sliceSource(SourceWordSpan source, const std::string& word, size_t first, size_t end) {
+  for (size_t c = 0; c < first; ++c)
+    if ((static_cast<unsigned char>(word[c]) & 0xc0) != 0x80) ++source.characterOffset;
+  if (source.probeByte != UINT16_MAX) {
+    source.probeByte = source.probeByte >= first && source.probeByte < end
+                           ? static_cast<uint16_t>(source.probeByte - first)
+                           : UINT16_MAX;
+  }
+  return source;
+}
 
 // Closing punctuation that should not have extra space inserted before it during justification.
 // Includes common closing brackets/quotes and sentence-ending marks. En/em dashes
@@ -198,16 +208,31 @@ static std::vector<TokenSpan> tokenizeBionicWord(const std::string& word) {
 }  // namespace
 
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
-                         const bool attachToPrevious, const uint8_t sizePct, const uint32_t typography) {
+                         const bool attachToPrevious, const uint8_t sizePct, const uint32_t typography,
+                         SourceWordSpan source) {
   if (word.empty()) return;
   if (wordGrowthRefused_) return;  // the parse is being aborted; see wordGrowthRefused()
 
+  std::string prefix;
+  if (source.probeByte != UINT16_MAX) prefix = utf8NfcNorm(word.substr(0, source.probeByte));
   word = utf8NfcNorm(std::move(word));
+  if (source.probeByte != UINT16_MAX) {
+    // A composing mark/Jamo belongs to the normalized cluster, rather than to the
+    // end of the independently normalized prefix. Keep only their common prefix.
+    size_t byte = 0;
+    while (byte < prefix.size() && byte < word.size() && prefix[byte] == word[byte]) ++byte;
+    while (byte > 0 && byte < word.size() && (static_cast<unsigned char>(word[byte]) & 0xc0) == 0x80) --byte;
+    if (byte == word.size() && byte > 0) {
+      --byte;
+      while (byte > 0 && (static_cast<unsigned char>(word[byte]) & 0xc0) == 0x80) --byte;
+    }
+    source.probeByte = static_cast<uint16_t>(byte);
+  }
 
   const size_t requiredSize = words.size() + 1;
   if (words.capacity() < requiredSize || wordStyles.capacity() < requiredSize ||
       wordContinues.capacity() < requiredSize || wordSizes.capacity() < requiredSize ||
-      wordTypography_.capacity() < requiredSize) {
+      wordTypography_.capacity() < requiredSize || wordSources_.capacity() < requiredSize) {
     size_t newCapacity = std::max<size_t>(16, words.capacity());
     while (newCapacity < requiredSize) {
       newCapacity *= 2;
@@ -218,9 +243,9 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
     // heap is nearly gone, and then a partial-cache abort beats a crash.
     {
       constexpr size_t ALLOC_HEADER_SLACK = 16;
-      const size_t needed =
-          newCapacity * (sizeof(std::string) + sizeof(EpdFontFamily::Style) + sizeof(uint8_t) + sizeof(uint32_t)) +
-          newCapacity / 8 + 5 * ALLOC_HEADER_SLACK;
+      const size_t needed = newCapacity * (sizeof(std::string) + sizeof(EpdFontFamily::Style) + sizeof(uint8_t) +
+                                           sizeof(uint32_t) + sizeof(SourceWordSpan)) +
+                            newCapacity / 8 + 6 * ALLOC_HEADER_SLACK;
       if (ESP.getMaxAllocHeap() < needed) {
         wordGrowthRefused_ = true;
         return;
@@ -231,6 +256,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
     wordContinues.reserve(newCapacity);
     wordSizes.reserve(newCapacity);
     wordTypography_.reserve(newCapacity);
+    wordSources_.reserve(newCapacity);
   }
 
   words.push_back(std::move(word));
@@ -242,6 +268,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   wordContinues.push_back(attachToPrevious);
   wordSizes.push_back(std::min(std::max(sizePct, MIN_WORD_SIZE_PCT), MAX_WORD_SIZE_PCT));
   wordTypography_.push_back(typography);
+  wordSources_.push_back(source);
 }
 
 bool ParsedText::foldUniformWordSizes() {
@@ -299,6 +326,7 @@ void ParsedText::layoutAndExtractLines(
   std::vector<EpdFontFamily::Style> savedStyles;
   std::vector<uint8_t> savedSizes;
   std::vector<uint32_t> savedTypography;
+  std::vector<SourceWordSpan> savedSources;
   std::vector<bool> savedContinues;
   bool savedIsContinuation = false;
   size_t savedBionicWatermark = 0;
@@ -307,6 +335,7 @@ void ParsedText::layoutAndExtractLines(
     savedStyles = wordStyles;
     savedSizes = wordSizes;
     savedTypography = wordTypography_;
+    savedSources = wordSources_;
     savedContinues = wordContinues;
     savedIsContinuation = isContinuation_;
     savedBionicWatermark = bionicTransformedUpTo_;
@@ -500,6 +529,7 @@ void ParsedText::layoutAndExtractLines(
           }
         }
 
+        const size_t remainderBytes = words[splitIndex + 1].size();
         std::string merged = words[splitIndex];
         if (removeInsertedHyphen && !merged.empty() && merged.back() == '-') {
           merged.pop_back();
@@ -510,6 +540,12 @@ void ParsedText::layoutAndExtractLines(
         wordStyles.erase(wordStyles.begin() + splitIndex + 1);
         wordContinues.erase(wordContinues.begin() + splitIndex + 1);
         wordSizes.erase(wordSizes.begin() + splitIndex + 1);
+        wordSources_[splitIndex].end = std::max(wordSources_[splitIndex].end, wordSources_[splitIndex + 1].end);
+        if (wordSources_[splitIndex + 1].probeByte != UINT16_MAX) {
+          wordSources_[splitIndex].probeByte =
+              static_cast<uint16_t>(words[splitIndex].size() - remainderBytes + wordSources_[splitIndex + 1].probeByte);
+        }
+        wordSources_.erase(wordSources_.begin() + splitIndex + 1);
         wordTypography_.erase(wordTypography_.begin() + splitIndex + 1);
       }
 
@@ -586,6 +622,7 @@ void ParsedText::layoutAndExtractLines(
     wordContinues.erase(wordContinues.begin(), wordContinues.begin() + consumed);
     wordSizes.erase(wordSizes.begin(), wordSizes.begin() + consumed);
     wordTypography_.erase(wordTypography_.begin(), wordTypography_.begin() + consumed);
+    wordSources_.erase(wordSources_.begin(), wordSources_.begin() + consumed);
     // All remaining words were already transformed before the flush; reset the
     // watermark so that words appended by addWord() are processed next time.
     bionicTransformedUpTo_ = words.size();
@@ -597,6 +634,7 @@ void ParsedText::layoutAndExtractLines(
     wordStyles = std::move(savedStyles);
     wordSizes = std::move(savedSizes);
     wordTypography_ = std::move(savedTypography);
+    wordSources_ = std::move(savedSources);
     wordContinues = std::move(savedContinues);
     isContinuation_ = savedIsContinuation;
     bionicTransformedUpTo_ = savedBionicWatermark;
@@ -633,6 +671,7 @@ void ParsedText::releaseLayoutScratch() {
     std::vector<bool>().swap(wordContinues);
     std::vector<uint8_t>().swap(wordSizes);
     std::vector<uint32_t>().swap(wordTypography_);
+    std::vector<SourceWordSpan>().swap(wordSources_);
   }
 }
 
@@ -643,6 +682,7 @@ void ParsedText::reset(const BlockStyle& newBlockStyle) {
   wordContinues.clear();
   wordSizes.clear();
   wordTypography_.clear();
+  wordSources_.clear();
   blockStyle = newBlockStyle;
   isContinuation_ = false;
   bionicTransformedUpTo_ = 0;
@@ -903,11 +943,13 @@ void ParsedText::applyBionicReadingTransform() {
   std::vector<bool> transformedSuffixContinues;
   std::vector<uint8_t> transformedSuffixSizes;
   std::vector<uint32_t> transformedSuffixTypography;
+  std::vector<SourceWordSpan> transformedSuffixSources;
   transformedSuffix.reserve((words.size() - suffixStart) * 2);
   transformedSuffixStyles.reserve(transformedSuffix.capacity());
   transformedSuffixContinues.reserve(transformedSuffix.capacity());
   transformedSuffixSizes.reserve(transformedSuffix.capacity());
   transformedSuffixTypography.reserve(transformedSuffix.capacity());
+  transformedSuffixSources.reserve(transformedSuffix.capacity());
 
   for (size_t i = suffixStart; i < words.size(); ++i) {
     std::string source = std::move(words[i]);
@@ -951,12 +993,16 @@ void ParsedText::applyBionicReadingTransform() {
             transformedSuffixContinues.push_back(attachToPrevious);
             transformedSuffixSizes.push_back(originalSize);
             transformedSuffixTypography.push_back(wordTypography_[i]);
+            transformedSuffixSources.push_back(
+                sliceSource(wordSources_[i], source, span.start, span.start + prefixByteCount));
 
             transformedSuffix.push_back(std::move(suffix));
             transformedSuffixStyles.push_back(originalStyle);
             transformedSuffixContinues.push_back(true);
             transformedSuffixSizes.push_back(originalSize);
             transformedSuffixTypography.push_back(wordTypography_[i]);
+            transformedSuffixSources.push_back(
+                sliceSource(wordSources_[i], source, span.start + prefixByteCount, span.end));
             attachToPrevious = true;
             continue;
           }
@@ -968,6 +1014,7 @@ void ParsedText::applyBionicReadingTransform() {
       transformedSuffixContinues.push_back(attachToPrevious);
       transformedSuffixSizes.push_back(originalSize);
       transformedSuffixTypography.push_back(wordTypography_[i]);
+      transformedSuffixSources.push_back(sliceSource(wordSources_[i], source, span.start, span.end));
       attachToPrevious = true;
     }
   }
@@ -978,12 +1025,14 @@ void ParsedText::applyBionicReadingTransform() {
   wordContinues.resize(suffixStart);
   wordSizes.resize(suffixStart);
   wordTypography_.resize(suffixStart);
+  wordSources_.resize(suffixStart);
   words.insert(words.end(), std::make_move_iterator(transformedSuffix.begin()),
                std::make_move_iterator(transformedSuffix.end()));
   wordStyles.insert(wordStyles.end(), transformedSuffixStyles.begin(), transformedSuffixStyles.end());
   wordContinues.insert(wordContinues.end(), transformedSuffixContinues.begin(), transformedSuffixContinues.end());
   wordSizes.insert(wordSizes.end(), transformedSuffixSizes.begin(), transformedSuffixSizes.end());
   wordTypography_.insert(wordTypography_.end(), transformedSuffixTypography.begin(), transformedSuffixTypography.end());
+  wordSources_.insert(wordSources_.end(), transformedSuffixSources.begin(), transformedSuffixSources.end());
   bionicTransformedUpTo_ = words.size();
 }
 
@@ -1231,6 +1280,8 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
     return false;
   }
 
+  const SourceWordSpan suffixSource = sliceSource(wordSources_[wordIndex], word, chosenOffset, word.size());
+  wordSources_[wordIndex] = sliceSource(wordSources_[wordIndex], word, 0, chosenOffset);
   // Split the word at the selected breakpoint and append a hyphen if required.
   std::string remainder = word.substr(chosenOffset);
   words[wordIndex].resize(chosenOffset);
@@ -1243,6 +1294,7 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   wordStyles.insert(wordStyles.begin() + wordIndex + 1, style);
   wordSizes.insert(wordSizes.begin() + wordIndex + 1, wordSizes[wordIndex]);
   wordTypography_.insert(wordTypography_.begin() + wordIndex + 1, wordTypography_[wordIndex]);
+  wordSources_.insert(wordSources_.begin() + wordIndex + 1, suffixSource);
 
   // Continuation flag handling after splitting a word into prefix + remainder.
   //
@@ -1389,6 +1441,7 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   range.styles = &wordStyles;
   range.sizes = &wordSizes;
   range.typography = &wordTypography_;
+  range.sources = &wordSources_;
   // Carried into the block so a reader-side consumer can tell one logical word from the
   // fragments layout split it into (bionic-reading halves, attached punctuation). Nothing on
   // the render path reads it; the xpos above already encodes the spacing.

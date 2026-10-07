@@ -32,11 +32,12 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
+// v84: source-text page anchors preserve position through reflow.
 // v83: display:block spans and heading block inheritance invalidate laid-out pages (#388).
 // v82: embedded fonts, named families, true caps and preformatted text.
 // v81: scaled glyph ink bounds preserve fractional baseline/side bearings.
 // v79: CSS case transforms and inherited line spacing invalidate cached text and positions.
-constexpr uint8_t SECTION_FILE_VERSION = 83;  // v78: a span indent (poem line shape) gives way
+constexpr uint8_t SECTION_FILE_VERSION = 84;  // v78: a span indent (poem line shape) gives way
                                               // before its line wraps; v77 pages of such poems
                                               // carry the wrapped lines
                                               // v77: the status byte records a heap-degraded
@@ -138,10 +139,24 @@ constexpr uint8_t kStatusSimplified = 1 << 4;
 // listItemIndex is the running <li> count at page-break time; together with
 // paragraphIndex it lets KOReader-supplied <p>- and <li>-anchored XPaths snap to
 // the exact page on download.
-constexpr uint32_t PARAGRAPH_LUT_ENTRY_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint16_t);
+constexpr uint32_t SOURCE_LUT_OFFSET = sizeof(uint32_t) + 2 * sizeof(uint16_t);
+constexpr uint32_t PARAGRAPH_LUT_ENTRY_SIZE = SOURCE_LUT_OFFSET + 3 * sizeof(uint32_t) + sizeof(uint16_t);
 inline uint32_t paragraphLutEntryOffset(uint32_t lutStart, uint16_t page) {
   return lutStart + page * PARAGRAPH_LUT_ENTRY_SIZE;
 }
+
+template <typename T>
+bool readChecked(FsFile& f, T& value) {
+  return f.read(&value, sizeof(value)) == static_cast<int>(sizeof(value));
+}
+
+bool readSourceEntry(FsFile& f, uint32_t offset, SourceAnchor& anchor, uint32_t& first, uint32_t& end) {
+  return f.seek(offset + SOURCE_LUT_OFFSET) && readChecked(f, anchor.sourceOffset) &&
+         readChecked(f, anchor.characterOffset) && readChecked(f, first) && readChecked(f, end) &&
+         ((first == UINT32_MAX && !anchor.valid() && end == 0) ||
+          (first < end && anchor.sourceOffset >= first && anchor.sourceOffset < end));
+}
+
 }  // namespace
 
 #include <HalSystem.h>  // feedWatchdog()
@@ -587,6 +602,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
 }
 
 bool Section::loadSectionFile(const BuildParams& p) {
+  if (sourceLookupHash_ != calculatePropertyHash(p)) sourceLookupPage_.reset();
   truncatedCache = false;
   imageHeaderDegraded_ = false;
   tableRowDegraded_ = false;
@@ -1416,6 +1432,7 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
     }
     st.visitorReady = true;
     finishInlineFootnotePreviewResolve(st);
+    st.visitor->setSourceLookupTarget(sourceLookupTarget_);
     if (!st.visitor->setup(st.inflatedSize)) {
       LOG_ERR("SCT", "Failed to set up chapter parser");
       file.close();
@@ -1717,6 +1734,12 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     serialization::writePod(file, entry.xhtmlByteOffset);
     serialization::writePod(file, entry.paragraphIndex);
     serialization::writePod(file, entry.listItemIndex);
+    serialization::writePod(file, entry.sourceOffset);
+    serialization::writePod(file, entry.sourceCharacterOffset);
+    serialization::writePod(file, entry.sourceMin);
+    serialization::writePod(file, entry.sourceEnd);
+    if (entry.sourceProbeMatched && !sourceLookupPage_)
+      sourceLookupPage_ = static_cast<uint16_t>(&entry - paragraphLut.data());
   }
 
   // Patch header with final parseComplete/pageCount and offsets.
@@ -1875,6 +1898,8 @@ bool Section::heapAllowsEmbeddedStyle(const size_t cssRuleCount, const bool aren
 
 bool Section::startBuild(const BuildParams& params, const std::function<void(int)>& progressFn,
                          const uint32_t requestedHash) {
+  sourceLookupPage_.reset();
+  sourceLookupHash_ = calculatePropertyHash(params);
   BuildParams p = params;
   const CssParser* css = epub->getCssParser();
   // Same predicate runBuildSetup() uses to decide setIndexArena(): an external scratch region
@@ -2612,17 +2637,18 @@ bool Section::readParagraphLutHeader(FsFile& outFile, uint16_t& outCount, uint32
 
   const uint32_t fileSize = outFile.size();
 
-  outFile.seek(header::kParagraphLut);
-  uint32_t paragraphLutOffset;
-  serialization::readPod(outFile, paragraphLutOffset);
+  uint32_t paragraphLutOffset = 0;
+  if (!outFile.seek(header::kParagraphLut) || !readChecked(outFile, paragraphLutOffset)) {
+    outFile.close();
+    return false;
+  }
   if (fileSize < sizeof(uint16_t) || paragraphLutOffset == 0 || paragraphLutOffset > fileSize - sizeof(uint16_t)) {
     outFile.close();
     return false;
   }
 
-  outFile.seek(paragraphLutOffset);
-  serialization::readPod(outFile, outCount);
-  if (outCount == 0) {
+  if (!outFile.seek(paragraphLutOffset) || !readChecked(outFile, outCount) || outCount == 0 ||
+      outCount > Page::MAX_PAGES_PER_SECTION || outCount != pageCount) {
     outFile.close();
     return false;
   }
@@ -2637,6 +2663,66 @@ bool Section::readParagraphLutHeader(FsFile& outFile, uint16_t& outCount, uint32
   outLutStart = paragraphLutOffset + sizeof(uint16_t);
 
   return true;
+}
+
+std::optional<uint16_t> Section::sourceLookupPage() const {
+  if (sourceLookupPage_) return sourceLookupPage_;
+  if (buildState_ && buildState_->visitor) {
+    const auto& pages = buildState_->visitor->getParagraphLutPerPage();
+    for (size_t i = 0; i < pages.size(); ++i)
+      if (pages[i].sourceProbeMatched) return static_cast<uint16_t>(i);
+  }
+  return std::nullopt;
+}
+
+std::optional<SourceAnchor> Section::getSourceAnchorForPage(uint16_t page) const {
+  if (buildState_ && buildState_->visitor) {
+    const auto& pages = buildState_->visitor->getParagraphLutPerPage();
+    if (page < pages.size() && pages[page].sourceOffset != UINT32_MAX)
+      return SourceAnchor{pages[page].sourceOffset, pages[page].sourceCharacterOffset};
+    return std::nullopt;
+  }
+  FsFile f;
+  uint16_t count;
+  uint32_t start;
+  if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
+  if (page >= count) {
+    f.close();
+    return std::nullopt;
+  }
+  SourceAnchor anchor;
+  uint32_t first = UINT32_MAX, end = 0;
+  const bool ok = readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end);
+  f.close();
+  return ok && anchor.valid() ? std::optional<SourceAnchor>(anchor) : std::nullopt;
+}
+
+std::optional<uint16_t> Section::getPageForSourceOffset(SourceAnchor target) const {
+  if (!target.valid()) return std::nullopt;
+  std::optional<uint16_t> match;
+  const auto accept = [&](uint16_t page, uint32_t first, uint32_t end) {
+    if (first == UINT32_MAX || target.sourceOffset < first || target.sourceOffset >= end) return true;
+    if (match) return false;  // never guess between overlapping source intervals
+    match = page;
+    return true;
+  };
+  // Future pages can overlap an interval already emitted. Only the exact live
+  // probe is safe before the full chapter has been laid out.
+  if (buildState_) return std::nullopt;
+  FsFile f;
+  uint16_t count;
+  uint32_t start;
+  if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
+  for (uint16_t page = 0; page < count; ++page) {
+    SourceAnchor anchor;
+    uint32_t first = UINT32_MAX, end = 0;
+    if (!readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end) || !accept(page, first, end)) {
+      f.close();
+      return std::nullopt;
+    }
+  }
+  f.close();
+  return match;
 }
 
 std::optional<uint16_t> Section::getPageForParagraphIndex(const uint16_t pIndex) const {
