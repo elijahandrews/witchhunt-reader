@@ -95,6 +95,7 @@ add_executable(EpubPipelineTest
   CssTypographyTest.cpp
   EpubFeatureTest.cpp
   BookTextSearchTest.cpp
+  BookSearchNavigationTest.cpp
   FingerprintTest.cpp
   LostTocRetryTest.cpp
   PageListSinkTest.cpp
