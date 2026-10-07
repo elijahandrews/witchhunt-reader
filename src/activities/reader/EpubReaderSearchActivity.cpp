@@ -96,6 +96,7 @@ void EpubReaderSearchActivity::loop() {
   navigator_.onPreviousList(selected_, rowCount(), [this] { requestUpdate(); }, pageItems());
 }
 void EpubReaderSearchActivity::render(RenderLock&&) {
+  const int selected = selected_.load();
   renderer.clearScreen();
   const auto rect = UITheme::getContentRect(renderer, true, true);
   renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 12, tr(STR_FIND_IN_BOOK), true, EpdFontFamily::BOLD);
@@ -126,11 +127,11 @@ void EpubReaderSearchActivity::render(RenderLock&&) {
     ListTouchBand::recordUniformRows(rect.x, rect.width, rect.y + 115, 58, 0, 0);
   } else {
     const int rows = pageItems();
-    const int first = (selected_ / rows) * rows;
+    const int first = (selected / rows) * rows;
     ListTouchBand::recordUniformRows(rect.x, rect.width, rect.y + 115, 58, first, std::min(rows, rowCount() - first));
     for (int i = first; i < rowCount() && i < first + rows; ++i) {
       const int y = rect.y + 115 + (i - first) * 58;
-      const bool ink = i != selected_;
+      const bool ink = i != selected;
       if (!ink) renderer.fillRect(rect.x, y, rect.width, 58);
       if (i == 0) {
         renderer.drawText(UI_10_FONT_ID, rect.x + 15, y + 16, tr(STR_BOOK_SEARCH_AGAIN), ink);

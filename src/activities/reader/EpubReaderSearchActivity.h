@@ -3,6 +3,7 @@
 #include <Epub.h>
 #include <Epub/BookSearchSession.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -28,7 +29,7 @@ class EpubReaderSearchActivity final : public Activity {
   BookSearchSession::Hit hit_;
   ButtonNavigator navigator_;
   std::string query_;
-  int selected_ = 0;
+  std::atomic<int> selected_{0};
   int shownSection_ = -1;
   unsigned long lastProgressPaint_ = 0;
   bool invalidQuery_ = false;
