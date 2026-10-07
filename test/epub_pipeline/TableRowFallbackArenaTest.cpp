@@ -12,8 +12,10 @@
 #include <BuildArena.h>
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include "Epub/Page.h"
 #include "Epub/Section.h"
 #include "GfxRenderer.h"
+#include "ZipFile.h"
 
 namespace fs = std::filesystem;
 
@@ -29,6 +32,38 @@ namespace {
 constexpr size_t kLentFramebufferBytes = 52272;  // the X3's secondary framebuffer
 
 using PageWords = std::vector<std::vector<std::string>>;
+
+// This fixture's body contains plain words and structural tags only. Read its
+// complete word stream independently of the layout/parser, so two builds losing
+// the same text cannot pass merely by agreeing with one another or a new golden.
+std::vector<std::string> sourceWords() {
+  const std::string path = std::string(CORPUS_DIR) + "/test_table_cell_overflow.epub";
+  ZipFile zip(path);
+  size_t size = 0;
+  std::unique_ptr<uint8_t, decltype(&std::free)> bytes(zip.readFileToMemory("OEBPS/chapter1.xhtml", &size), &std::free);
+  EXPECT_NE(bytes, nullptr);
+  if (!bytes) return {};
+  const std::string html(reinterpret_cast<const char*>(bytes.get()), size);
+  const auto start = html.find("<body>");
+  const auto end = html.find("</body>");
+  EXPECT_NE(start, std::string::npos);
+  EXPECT_NE(end, std::string::npos);
+  if (start == std::string::npos || end == std::string::npos) return {};
+  std::string plain;
+  bool tag = false;
+  for (size_t i = start; i < end; ++i) {
+    if (html[i] == '<') tag = true;
+    if (!tag) plain += html[i];
+    if (html[i] == '>') {
+      tag = false;
+      plain += ' ';
+    }
+  }
+  std::vector<std::string> words;
+  std::istringstream input(plain);
+  for (std::string word; input >> word;) words.push_back(std::move(word));
+  return words;
+}
 
 std::vector<std::string> wordsOn(const Page& page) {
   std::vector<std::string> out;
@@ -80,6 +115,8 @@ PageWords buildAndRead(const std::string& tag, const int viewportHeight, const b
 }  // namespace
 
 TEST(TableRowFallbackArena, ReplayedCellPagesReadBackLikeTheHeapBuild) {
+  const auto expected = sourceWords();
+  ASSERT_FALSE(expected.empty());
   for (const int viewportHeight : {300, 360, 420, 480, 540, 600, 700, 800}) {
     const std::string tag = std::to_string(viewportHeight);
     const PageWords heap = buildAndRead(tag + "_heap", viewportHeight, /*inArena=*/false);
@@ -89,5 +126,8 @@ TEST(TableRowFallbackArena, ReplayedCellPagesReadBackLikeTheHeapBuild) {
     for (size_t pg = 0; pg < heap.size(); ++pg) {
       EXPECT_EQ(heap[pg], arena[pg]) << "viewport " << viewportHeight << ", page " << pg;
     }
+    std::vector<std::string> actual;
+    for (const auto& page : heap) actual.insert(actual.end(), page.begin(), page.end());
+    EXPECT_EQ(actual, expected) << "viewport " << viewportHeight << ": fallback must preserve every word in order";
   }
 }

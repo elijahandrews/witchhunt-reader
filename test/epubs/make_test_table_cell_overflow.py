@@ -96,9 +96,9 @@ def sentences(first, count):
 
 
 def case(index, intro_sentences):
-    # Four columns make the first cell narrow: ~180 words need more lines than a grid cell may
-    # hold (MAX_CELL_LINES) while the row stays under the parser's row buffer budget, so the row
-    # is laid out, refused and replayed as paragraphs. The intro decides where on the page the
+    # Four columns make the first cell too long for the grid. With source-position metadata
+    # included in the row budget, its text streams to paragraphs before grid layout; previously
+    # MAX_CELL_LINES forced the same fallback after buffering. The intro decides where the
     # replay starts; the paragraph after it fills the page the replay crossed into, which is what
     # overwrote the moved line.
     base = index * 1000

@@ -374,103 +374,103 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=13 truncated=0 cssFallback=0
    W x=297 s=0 z=100 t=rain
    W x=345 s=0 z=100 t=kept
    W x=389 s=0 z=100 t=falling
-  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=on
-   W x=39 s=0 z=100 t=the.
-   W x=96 s=0 z=100 t=S1110
-   W x=154 s=0 z=100 t=Door
-   W x=213 s=0 z=100 t=closed
-   W x=283 s=0 z=100 t=softly
-   W x=357 s=0 z=100 t=the
-   W x=404 s=0 z=100 t=reader
+   W x=29 s=0 z=100 t=the.
+   W x=76 s=0 z=100 t=S1110
+   W x=124 s=0 z=100 t=Door
+   W x=173 s=0 z=100 t=closed
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=turned
-   W x=71 s=0 z=100 t=another
-   W x=159 s=0 z=100 t=page
-   W x=211 s=0 z=100 t=while
-   W x=267 s=0 z=100 t=the
-   W x=312 s=0 z=100 t=rain
-   W x=363 s=0 z=100 t=kept.
-   W x=420 s=0 z=100 t=S1111
-  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=Closed
-   W x=72 s=0 z=100 t=softly
-   W x=145 s=0 z=100 t=the
-   W x=191 s=0 z=100 t=reader
-   W x=260 s=0 z=100 t=turned
-   W x=332 s=0 z=100 t=another
-   W x=421 s=0 z=100 t=page
-  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=while.
-   W x=67 s=0 z=100 t=S1112
-   W x=119 s=0 z=100 t=Softly
-   W x=195 s=0 z=100 t=the
-   W x=241 s=0 z=100 t=reader
-   W x=310 s=0 z=100 t=turned
-   W x=382 s=0 z=100 t=another
-  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=10
-   W x=0 s=0 z=100 t=page
-   W x=46 s=0 z=100 t=while
-   W x=96 s=0 z=100 t=the
-   W x=135 s=0 z=100 t=rain
-   W x=180 s=0 z=100 t=kept
-   W x=221 s=0 z=100 t=falling
-   W x=297 s=0 z=100 t=on
-   W x=328 s=0 z=100 t=the
-   W x=367 s=0 z=100 t=old
-   W x=404 s=0 z=100 t=roof.
-  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=S1113
-   W x=52 s=0 z=100 t=The
-   W x=93 s=0 z=100 t=reader
-   W x=161 s=0 z=100 t=turned
-   W x=232 s=0 z=100 t=another
-   W x=320 s=0 z=100 t=page
-   W x=372 s=0 z=100 t=while
+   W x=18 s=0 z=100 t=softly
+   W x=84 s=0 z=100 t=the
+   W x=123 s=0 z=100 t=reader
+   W x=185 s=0 z=100 t=turned
+   W x=250 s=0 z=100 t=another
+   W x=332 s=0 z=100 t=page
+   W x=378 s=0 z=100 t=while
    W x=428 s=0 z=100 t=the
-  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=rain
-   W x=45 s=0 z=100 t=kept
-   W x=86 s=0 z=100 t=falling
-   W x=162 s=0 z=100 t=on.
-   W x=203 s=0 z=100 t=S1114
-   W x=250 s=0 z=100 t=Reader
-   W x=315 s=0 z=100 t=turned
-   W x=380 s=0 z=100 t=another
-  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=49 s=0 z=100 t=kept.
+   W x=104 s=0 z=100 t=S1111
+   W x=152 s=0 z=100 t=Closed
+   W x=221 s=0 z=100 t=softly
+   W x=291 s=0 z=100 t=the
+   W x=334 s=0 z=100 t=reader
+   W x=400 s=0 z=100 t=turned
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=another
+   W x=92 s=0 z=100 t=page
+   W x=148 s=0 z=100 t=while.
+   W x=218 s=0 z=100 t=S1112
+   W x=273 s=0 z=100 t=Softly
+   W x=352 s=0 z=100 t=the
+   W x=401 s=0 z=100 t=reader
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=turned
+   W x=68 s=0 z=100 t=another
+   W x=153 s=0 z=100 t=page
+   W x=202 s=0 z=100 t=while
+   W x=255 s=0 z=100 t=the
+   W x=297 s=0 z=100 t=rain
+   W x=345 s=0 z=100 t=kept
+   W x=389 s=0 z=100 t=falling
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=on
+   W x=32 s=0 z=100 t=the
+   W x=72 s=0 z=100 t=old
+   W x=110 s=0 z=100 t=roof.
+   W x=171 s=0 z=100 t=S1113
+   W x=218 s=0 z=100 t=The
+   W x=254 s=0 z=100 t=reader
+   W x=317 s=0 z=100 t=turned
+   W x=383 s=0 z=100 t=another
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=page
-   W x=47 s=0 z=100 t=while
-   W x=98 s=0 z=100 t=the
-   W x=138 s=0 z=100 t=rain
-   W x=184 s=0 z=100 t=kept
-   W x=226 s=0 z=100 t=falling
-   W x=303 s=0 z=100 t=on
-   W x=335 s=0 z=100 t=the
-   W x=375 s=0 z=100 t=old
-   W x=413 s=0 z=100 t=roof
-  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=and
-   W x=41 s=0 z=100 t=somewhere
-   W x=135 s=0 z=100 t=below
-   W x=187 s=0 z=100 t=a
-   W x=209 s=0 z=100 t=door.
-   W x=269 s=0 z=100 t=S1115
-   W x=319 s=0 z=100 t=Turned
-   W x=382 s=0 z=100 t=another
-  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=10
-   W x=0 s=0 z=100 t=page
-   W x=47 s=0 z=100 t=while
-   W x=98 s=0 z=100 t=the
-   W x=138 s=0 z=100 t=rain
-   W x=184 s=0 z=100 t=kept
-   W x=226 s=0 z=100 t=falling
-   W x=303 s=0 z=100 t=on
-   W x=335 s=0 z=100 t=the
-   W x=375 s=0 z=100 t=old
-   W x=413 s=0 z=100 t=roof
-  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=2
-   W x=0 s=0 z=100 t=and
-   W x=37 s=0 z=100 t=somewhere.
+   W x=48 s=0 z=100 t=while
+   W x=100 s=0 z=100 t=the
+   W x=141 s=0 z=100 t=rain
+   W x=188 s=0 z=100 t=kept
+   W x=231 s=0 z=100 t=falling
+   W x=309 s=0 z=100 t=on.
+   W x=352 s=0 z=100 t=S1114
+   W x=401 s=0 z=100 t=Reader
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=turned
+   W x=68 s=0 z=100 t=another
+   W x=153 s=0 z=100 t=page
+   W x=202 s=0 z=100 t=while
+   W x=255 s=0 z=100 t=the
+   W x=297 s=0 z=100 t=rain
+   W x=345 s=0 z=100 t=kept
+   W x=389 s=0 z=100 t=falling
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=on
+   W x=31 s=0 z=100 t=the
+   W x=70 s=0 z=100 t=old
+   W x=107 s=0 z=100 t=roof
+   W x=157 s=0 z=100 t=and
+   W x=196 s=0 z=100 t=somewhere
+   W x=288 s=0 z=100 t=below
+   W x=338 s=0 z=100 t=a
+   W x=358 s=0 z=100 t=door.
+   W x=416 s=0 z=100 t=S1115
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Turned
+   W x=65 s=0 z=100 t=another
+   W x=151 s=0 z=100 t=page
+   W x=201 s=0 z=100 t=while
+   W x=255 s=0 z=100 t=the
+   W x=298 s=0 z=100 t=rain
+   W x=347 s=0 z=100 t=kept
+   W x=392 s=0 z=100 t=falling
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=on
+   W x=29 s=0 z=100 t=the
+   W x=66 s=0 z=100 t=old
+   W x=101 s=0 z=100 t=roof
+   W x=149 s=0 z=100 t=and
+   W x=186 s=0 z=100 t=somewhere.
   LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=18 s=0 z=100 t=B1
   LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=1
@@ -1490,84 +1490,37 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=13 truncated=0 cssFallback=0
    W x=315 s=0 z=100 t=falling
    W x=393 s=0 z=100 t=on
    W x=426 s=0 z=100 t=the
-  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=old
-   W x=46 s=0 z=100 t=roof
-   W x=105 s=0 z=100 t=and
-   W x=153 s=0 z=100 t=somewhere
-   W x=254 s=0 z=100 t=below.
-   W x=323 s=0 z=100 t=S2103
-   W x=385 s=0 z=100 t=Another
+   W x=38 s=0 z=100 t=roof
+   W x=89 s=0 z=100 t=and
+   W x=129 s=0 z=100 t=somewhere
+   W x=222 s=0 z=100 t=below.
+   W x=283 s=0 z=100 t=S2103
+   W x=337 s=0 z=100 t=Another
+   W x=416 s=0 z=100 t=page
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=page
-   W x=54 s=0 z=100 t=while
-   W x=112 s=0 z=100 t=the
-   W x=159 s=0 z=100 t=rain
-   W x=212 s=0 z=100 t=kept
-   W x=261 s=0 z=100 t=falling
-   W x=345 s=0 z=100 t=on
-   W x=384 s=0 z=100 t=the
-   W x=431 s=0 z=100 t=old
-  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=roof.
-   W x=62 s=0 z=100 t=S2104
-   W x=118 s=0 z=100 t=Page
-   W x=169 s=0 z=100 t=while
-   W x=221 s=0 z=100 t=the
-   W x=262 s=0 z=100 t=rain
-   W x=309 s=0 z=100 t=kept
-   W x=352 s=0 z=100 t=falling
-   W x=430 s=0 z=100 t=on
-  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=the
-   W x=42 s=0 z=100 t=old
-   W x=82 s=0 z=100 t=roof
-   W x=135 s=0 z=100 t=and
-   W x=177 s=0 z=100 t=somewhere
-   W x=272 s=0 z=100 t=below
-   W x=325 s=0 z=100 t=a
-   W x=348 s=0 z=100 t=door
-   W x=399 s=0 z=100 t=closed
-  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=softly
-   W x=72 s=0 z=100 t=the.
-   W x=127 s=0 z=100 t=S2105
-   W x=188 s=0 z=100 t=While
-   W x=247 s=0 z=100 t=the
-   W x=292 s=0 z=100 t=rain
-   W x=343 s=0 z=100 t=kept
-   W x=390 s=0 z=100 t=falling
-  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=on
-   W x=37 s=0 z=100 t=the
-   W x=82 s=0 z=100 t=old
-   W x=125 s=0 z=100 t=roof
-   W x=181 s=0 z=100 t=and
-   W x=226 s=0 z=100 t=somewhere
-   W x=324 s=0 z=100 t=below
-   W x=380 s=0 z=100 t=a
-   W x=406 s=0 z=100 t=door.
-  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=10
-   W x=0 s=0 z=100 t=S2106
-   W x=58 s=0 z=100 t=The
-   W x=95 s=0 z=100 t=rain
-   W x=142 s=0 z=100 t=kept
-   W x=185 s=0 z=100 t=falling
-   W x=263 s=0 z=100 t=on
-   W x=296 s=0 z=100 t=the
-   W x=337 s=0 z=100 t=old
-   W x=376 s=0 z=100 t=roof
-   W x=428 s=0 z=100 t=and
-  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=somewhere.
-   W x=107 s=0 z=100 t=S2107
-   W x=169 s=0 z=100 t=Rain
-   W x=222 s=0 z=100 t=kept
-   W x=268 s=0 z=100 t=falling
-   W x=349 s=0 z=100 t=on
+   W x=0 s=0 z=100 t=while
+   W x=56 s=0 z=100 t=the
+   W x=101 s=0 z=100 t=rain
+   W x=152 s=0 z=100 t=kept
+   W x=199 s=0 z=100 t=falling
+   W x=281 s=0 z=100 t=on
+   W x=318 s=0 z=100 t=the
+   W x=363 s=0 z=100 t=old
+   W x=406 s=0 z=100 t=roof.
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
+   W x=0 s=0 z=100 t=S2104
+   W x=54 s=0 z=100 t=Page
+   W x=103 s=0 z=100 t=while
+   W x=153 s=0 z=100 t=the
+   W x=192 s=0 z=100 t=rain
+   W x=237 s=0 z=100 t=kept
+   W x=278 s=0 z=100 t=falling
+   W x=354 s=0 z=100 t=on
    W x=385 s=0 z=100 t=the
-   W x=429 s=0 z=100 t=old
-  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=424 s=0 z=100 t=old
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=roof
    W x=55 s=0 z=100 t=and
    W x=99 s=0 z=100 t=somewhere
@@ -1576,101 +1529,47 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=13 truncated=0 cssFallback=0
    W x=276 s=0 z=100 t=door
    W x=329 s=0 z=100 t=closed
    W x=396 s=0 z=100 t=softly
-  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=the
-   W x=40 s=0 z=100 t=reader
-   W x=103 s=0 z=100 t=turned.
-   W x=179 s=0 z=100 t=S2108
-   W x=231 s=0 z=100 t=Kept
-   W x=276 s=0 z=100 t=falling
-   W x=353 s=0 z=100 t=on
-   W x=385 s=0 z=100 t=the
-   W x=425 s=0 z=100 t=old
-  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=roof
-   W x=54 s=0 z=100 t=and
-   W x=97 s=0 z=100 t=somewhere
-   W x=193 s=0 z=100 t=below
-   W x=247 s=0 z=100 t=a
-   W x=271 s=0 z=100 t=door
-   W x=323 s=0 z=100 t=closed
-   W x=389 s=0 z=100 t=softly.
-  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=S2109
-   W x=52 s=0 z=100 t=Falling
-   W x=124 s=0 z=100 t=on
-   W x=155 s=0 z=100 t=the
-   W x=194 s=0 z=100 t=old
-   W x=231 s=0 z=100 t=roof
-   W x=281 s=0 z=100 t=and
-   W x=320 s=0 z=100 t=somewhere
-   W x=412 s=0 z=100 t=below
-  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=10
-   W x=0 s=0 z=100 t=a.
-   W x=33 s=0 z=100 t=S2110
-   W x=87 s=0 z=100 t=On
-   W x=117 s=0 z=100 t=the
-   W x=159 s=0 z=100 t=old
-   W x=199 s=0 z=100 t=roof
-   W x=252 s=0 z=100 t=and
-   W x=294 s=0 z=100 t=somewhere
-   W x=389 s=0 z=100 t=below
-   W x=442 s=0 z=100 t=a
-  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=door
-   W x=55 s=0 z=100 t=closed
-   W x=124 s=0 z=100 t=softly
+  LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=the.
+   W x=54 s=0 z=100 t=S2105
+   W x=114 s=0 z=100 t=While
+   W x=172 s=0 z=100 t=the
+   W x=216 s=0 z=100 t=rain
+   W x=266 s=0 z=100 t=kept
+   W x=312 s=0 z=100 t=falling
+   W x=393 s=0 z=100 t=on
+   W x=429 s=0 z=100 t=the
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=old
+   W x=40 s=0 z=100 t=roof
+   W x=93 s=0 z=100 t=and
+   W x=135 s=0 z=100 t=somewhere
+   W x=230 s=0 z=100 t=below
+   W x=283 s=0 z=100 t=a
+   W x=306 s=0 z=100 t=door.
+   W x=367 s=0 z=100 t=S2106
+   W x=426 s=0 z=100 t=The
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=rain
+   W x=46 s=0 z=100 t=kept
+   W x=88 s=0 z=100 t=falling
+   W x=165 s=0 z=100 t=on
    W x=197 s=0 z=100 t=the
-   W x=243 s=0 z=100 t=reader
-   W x=312 s=0 z=100 t=turned
-   W x=384 s=0 z=100 t=another
-  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=9
-   W x=0 s=0 z=100 t=page.
-   W x=61 s=0 z=100 t=S2111
-   W x=111 s=0 z=100 t=The
-   W x=151 s=0 z=100 t=old
-   W x=193 s=0 z=100 t=roof
-   W x=248 s=0 z=100 t=and
-   W x=292 s=0 z=100 t=somewhere
-   W x=389 s=0 z=100 t=below
-   W x=444 s=0 z=100 t=a
-  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=door
-   W x=55 s=0 z=100 t=closed
-   W x=124 s=0 z=100 t=softly
-   W x=197 s=0 z=100 t=the
-   W x=243 s=0 z=100 t=reader.
-   W x=322 s=0 z=100 t=S2112
-   W x=375 s=0 z=100 t=Old
-   W x=415 s=0 z=100 t=roof
-  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=and
-   W x=45 s=0 z=100 t=somewhere
-   W x=143 s=0 z=100 t=below
-   W x=199 s=0 z=100 t=a
-   W x=225 s=0 z=100 t=door
-   W x=279 s=0 z=100 t=closed.
-   W x=357 s=0 z=100 t=S2113
-   W x=410 s=0 z=100 t=Roof
-  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=and
-   W x=46 s=0 z=100 t=somewhere
-   W x=145 s=0 z=100 t=below
-   W x=202 s=0 z=100 t=a
-   W x=229 s=0 z=100 t=door
-   W x=284 s=0 z=100 t=closed
-   W x=353 s=0 z=100 t=softly
-   W x=426 s=0 z=100 t=the
-  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=reader
-   W x=66 s=0 z=100 t=turned
-   W x=135 s=0 z=100 t=another
-   W x=221 s=0 z=100 t=page
-   W x=271 s=0 z=100 t=while
-   W x=325 s=0 z=100 t=the.
-   W x=378 s=0 z=100 t=S2114
-   W x=430 s=0 z=100 t=And
-  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=237 s=0 z=100 t=old
+   W x=275 s=0 z=100 t=roof
+   W x=326 s=0 z=100 t=and
+   W x=366 s=0 z=100 t=somewhere.
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=S2107
+   W x=63 s=0 z=100 t=Rain
+   W x=117 s=0 z=100 t=kept
+   W x=164 s=0 z=100 t=falling
+   W x=246 s=0 z=100 t=on
+   W x=283 s=0 z=100 t=the
+   W x=328 s=0 z=100 t=old
+   W x=371 s=0 z=100 t=roof
+   W x=427 s=0 z=100 t=and
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=somewhere
    W x=96 s=0 z=100 t=below
    W x=150 s=0 z=100 t=a
@@ -1679,30 +1578,131 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=13 truncated=0 cssFallback=0
    W x=292 s=0 z=100 t=softly
    W x=362 s=0 z=100 t=the
    W x=405 s=0 z=100 t=reader
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=turned.
+   W x=84 s=0 z=100 t=S2108
+   W x=144 s=0 z=100 t=Kept
+   W x=197 s=0 z=100 t=falling
+   W x=282 s=0 z=100 t=on
+   W x=322 s=0 z=100 t=the
+   W x=370 s=0 z=100 t=old
+   W x=416 s=0 z=100 t=roof
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=and
+   W x=43 s=0 z=100 t=somewhere
+   W x=139 s=0 z=100 t=below
+   W x=193 s=0 z=100 t=a
+   W x=217 s=0 z=100 t=door
+   W x=269 s=0 z=100 t=closed
+   W x=335 s=0 z=100 t=softly.
+   W x=415 s=0 z=100 t=S2109
+  LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=Falling
+   W x=75 s=0 z=100 t=on
+   W x=109 s=0 z=100 t=the
+   W x=151 s=0 z=100 t=old
+   W x=191 s=0 z=100 t=roof
+   W x=244 s=0 z=100 t=and
+   W x=286 s=0 z=100 t=somewhere
+   W x=381 s=0 z=100 t=below
+   W x=434 s=0 z=100 t=a.
+  LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=S2110
+   W x=49 s=0 z=100 t=On
+   W x=74 s=0 z=100 t=the
+   W x=111 s=0 z=100 t=old
+   W x=146 s=0 z=100 t=roof
+   W x=194 s=0 z=100 t=and
+   W x=231 s=0 z=100 t=somewhere
+  LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=18 s=0 z=100 t=below
+   W x=73 s=0 z=100 t=a
+   W x=98 s=0 z=100 t=door
+   W x=151 s=0 z=100 t=closed
+   W x=218 s=0 z=100 t=softly
+   W x=289 s=0 z=100 t=the
+   W x=333 s=0 z=100 t=reader
+   W x=400 s=0 z=100 t=turned
+  LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=another
+   W x=86 s=0 z=100 t=page.
+   W x=146 s=0 z=100 t=S2111
+   W x=195 s=0 z=100 t=The
+   W x=234 s=0 z=100 t=old
+   W x=275 s=0 z=100 t=roof
+   W x=329 s=0 z=100 t=and
+   W x=372 s=0 z=100 t=somewhere
+  LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=below
+   W x=54 s=0 z=100 t=a
+   W x=78 s=0 z=100 t=door
+   W x=130 s=0 z=100 t=closed
+   W x=196 s=0 z=100 t=softly
+   W x=266 s=0 z=100 t=the
+   W x=309 s=0 z=100 t=reader.
+   W x=385 s=0 z=100 t=S2112
+   W x=435 s=0 z=100 t=Old
+  LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=roof
+   W x=57 s=0 z=100 t=and
+   W x=103 s=0 z=100 t=somewhere
+   W x=202 s=0 z=100 t=below
+   W x=259 s=0 z=100 t=a
+   W x=286 s=0 z=100 t=door
+   W x=341 s=0 z=100 t=closed.
+   W x=420 s=0 z=100 t=S2113
+  LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Roof
+   W x=58 s=0 z=100 t=and
+   W x=102 s=0 z=100 t=somewhere
+   W x=199 s=0 z=100 t=below
+   W x=254 s=0 z=100 t=a
+   W x=279 s=0 z=100 t=door
+   W x=332 s=0 z=100 t=closed
+   W x=399 s=0 z=100 t=softly
+  LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=42 s=0 z=100 t=reader
+   W x=107 s=0 z=100 t=turned
+   W x=175 s=0 z=100 t=another
+   W x=260 s=0 z=100 t=page
+   W x=309 s=0 z=100 t=while
+   W x=362 s=0 z=100 t=the.
+   W x=414 s=0 z=100 t=S2114
+  LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=And
+   W x=43 s=0 z=100 t=somewhere
+   W x=143 s=0 z=100 t=below
+   W x=201 s=0 z=100 t=a
+   W x=229 s=0 z=100 t=door
+   W x=285 s=0 z=100 t=closed
+   W x=355 s=0 z=100 t=softly
+   W x=429 s=0 z=100 t=the
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=turned
-   W x=73 s=0 z=100 t=another.
-   W x=173 s=0 z=100 t=S2115
-   W x=230 s=0 z=100 t=Somewhere
-   W x=333 s=0 z=100 t=below
-   W x=391 s=0 z=100 t=a
-   W x=419 s=0 z=100 t=door
+   W x=0 s=0 z=100 t=reader
+   W x=67 s=0 z=100 t=turned
+   W x=137 s=0 z=100 t=another.
+   W x=234 s=0 z=100 t=S2115
+   W x=288 s=0 z=100 t=Somewhere
+   W x=388 s=0 z=100 t=below
+   W x=443 s=0 z=100 t=a
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=closed
-   W x=69 s=0 z=100 t=softly
-   W x=142 s=0 z=100 t=the
-   W x=188 s=0 z=100 t=reader
-   W x=257 s=0 z=100 t=turned
-   W x=329 s=0 z=100 t=another
-   W x=418 s=0 z=100 t=page
-  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=7
-   W x=0 s=0 z=100 t=while
-   W x=48 s=0 z=100 t=the
-   W x=85 s=0 z=100 t=rain
-   W x=128 s=0 z=100 t=kept
-   W x=167 s=0 z=100 t=falling
-   W x=241 s=0 z=100 t=on
-   W x=270 s=0 z=100 t=the.
+   W x=0 s=0 z=100 t=door
+   W x=55 s=0 z=100 t=closed
+   W x=124 s=0 z=100 t=softly
+   W x=197 s=0 z=100 t=the
+   W x=243 s=0 z=100 t=reader
+   W x=312 s=0 z=100 t=turned
+   W x=384 s=0 z=100 t=another
+  LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=page
+   W x=44 s=0 z=100 t=while
+   W x=92 s=0 z=100 t=the
+   W x=129 s=0 z=100 t=rain
+   W x=172 s=0 z=100 t=kept
+   W x=211 s=0 z=100 t=falling
+   W x=285 s=0 z=100 t=on
+   W x=314 s=0 z=100 t=the.
   LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=18 s=0 z=100 t=B2
   LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=1
@@ -2973,24 +2973,24 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=13 truncated=0 cssFallback=0
    W x=385 s=0 z=100 t=another
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=page
-   W x=46 s=0 z=100 t=while
-   W x=96 s=0 z=100 t=the
-   W x=135 s=0 z=100 t=rain
-   W x=180 s=0 z=100 t=kept
-   W x=221 s=0 z=100 t=falling
-   W x=297 s=0 z=100 t=on
-   W x=328 s=0 z=100 t=the
-   W x=367 s=0 z=100 t=old
-   W x=404 s=0 z=100 t=roof.
+   W x=44 s=0 z=100 t=while
+   W x=92 s=0 z=100 t=the
+   W x=129 s=0 z=100 t=rain
+   W x=172 s=0 z=100 t=kept
+   W x=211 s=0 z=100 t=falling
+   W x=285 s=0 z=100 t=on
+   W x=314 s=0 z=100 t=the
+   W x=351 s=0 z=100 t=old
+   W x=386 s=0 z=100 t=roof.
   LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=8
-   W x=0 s=0 z=100 t=S3110
-   W x=59 s=0 z=100 t=Turned
-   W x=127 s=0 z=100 t=another
-   W x=216 s=0 z=100 t=page
-   W x=269 s=0 z=100 t=while
-   W x=326 s=0 z=100 t=the
+   W x=18 s=0 z=100 t=S3110
+   W x=74 s=0 z=100 t=Turned
+   W x=139 s=0 z=100 t=another
+   W x=225 s=0 z=100 t=page
+   W x=275 s=0 z=100 t=while
+   W x=329 s=0 z=100 t=the
    W x=372 s=0 z=100 t=rain
-   W x=424 s=0 z=100 t=kept
+   W x=421 s=0 z=100 t=kept
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=falling
    W x=82 s=0 z=100 t=on.
