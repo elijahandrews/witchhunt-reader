@@ -16,6 +16,7 @@
 #endif
 
 #include "EpubReaderActivity.h"
+#include "EpubReaderSearchActivity.h"
 
 #include <CooperativeAbort.h>
 #include <Epub/FootnotePreviews.h>
@@ -2373,6 +2374,27 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
               currentSpineIndex = chapter.spineIndex;
               section.reset();
             }
+          });
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::FIND_IN_BOOK: {
+      if (!epub) break;
+      suspendBackgroundWork();
+      startActivityForResult(
+          std::make_unique<EpubReaderSearchActivity>(renderer, mappedInput, epub),
+          [this](const ActivityResult& result) {
+            ReaderUtils::enforceExitFullRefresh(renderer);
+            if (!result.isCancelled) {
+              RenderLock lock(*this);
+              const auto& match = std::get<BookSearchResult>(result.data);
+              currentSpineIndex = match.spineIndex;
+              navTarget = NavigationTarget::makeSourceOffset(match.sourceOffset);
+              section.reset();
+              forceLoadLargeImages = false;
+              pageHasPlaceholders = false;
+            }
+            resumeBackgroundWork();
+            requestUpdate();
           });
       break;
     }

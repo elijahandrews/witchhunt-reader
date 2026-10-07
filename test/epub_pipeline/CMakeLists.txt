@@ -9,6 +9,8 @@ set(PIPELINE_SOURCES
   LoggingImpl.cpp
   # lib/Epub — the code under test
   ${REPO_ROOT}/lib/Epub/Epub.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/BookTextSearch.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/BookSearchSession.cpp
   ${REPO_ROOT}/lib/Epub/Epub/Section.cpp
   ${REPO_ROOT}/lib/Epub/Epub/SpinePageIndex.cpp
   ${REPO_ROOT}/lib/Epub/Epub/Page.cpp
@@ -92,6 +94,7 @@ add_executable(EpubPipelineTest
   EpubPipelineTest.cpp
   CssTypographyTest.cpp
   EpubFeatureTest.cpp
+  BookTextSearchTest.cpp
   FingerprintTest.cpp
   LostTocRetryTest.cpp
   PageListSinkTest.cpp

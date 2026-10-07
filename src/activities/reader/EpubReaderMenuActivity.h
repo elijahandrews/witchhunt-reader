@@ -24,6 +24,7 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
   enum class MenuAction {
     NONE,
     SELECT_CHAPTER,
+    FIND_IN_BOOK,
     FOOTNOTES,
     DICTIONARY,
     EMBEDDED_STYLE,

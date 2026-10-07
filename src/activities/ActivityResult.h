@@ -54,6 +54,11 @@ struct ChapterResult {
   std::optional<int> tocIndex;
 };
 
+struct BookSearchResult {
+  int spineIndex = 0;
+  uint32_t sourceOffset = 0;
+};
+
 struct PercentResult {
   int percent = 0;
 };
@@ -103,7 +108,7 @@ struct StarredPageResult {
 
 using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
                                    PageResult, SyncResult, NetworkModeResult, FootnoteResult, FilePathResult,
-                                   StarredPageResult, PrintedPageResult, DictionarySwitchResult>;
+                                   StarredPageResult, PrintedPageResult, DictionarySwitchResult, BookSearchResult>;
 
 struct ActivityResult {
   bool isCancelled = false;
