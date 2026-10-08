@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <array>
 #include <cstring>
+#include <vector>
 class HalDisplay {
 public:
   enum RefreshMode {
@@ -26,9 +27,30 @@ public:
   template <class... T> void triggerDisplay(const T &...) {}
   template <class... T> void triggerDisplayAsync(const T &...) {}
   template <class... T> void displayBuffer(const T &...) {}
-  template <class... T> void copyGrayscaleLsbBuffers(const T &...) {}
-  template <class... T> void copyGrayscaleMsbBuffers(const T &...) {}
-  template <class... T> void displayGrayBuffer(const T &...) {}
+  // Opt-in recording keeps existing renderer fixtures unchanged while checking
+  // prepared overlays at the actual GfxRenderer/HAL boundary.
+  bool recordGray = false;
+  std::vector<char> grayEvents;
+  std::array<uint8_t, 48000> uploadedLsb{}, uploadedMsb{};
+  bool grayKeptPowered = false;
+  void copyGrayscaleLsbBuffers(const uint8_t* plane) {
+    if (recordGray) {
+      grayEvents.push_back('L');
+      std::memcpy(uploadedLsb.data(), plane, uploadedLsb.size());
+    }
+  }
+  void copyGrayscaleMsbBuffers(const uint8_t* plane) {
+    if (recordGray) {
+      grayEvents.push_back('M');
+      std::memcpy(uploadedMsb.data(), plane, uploadedMsb.size());
+    }
+  }
+  void displayGrayBuffer(bool turnOff) {
+    if (recordGray) {
+      grayEvents.push_back('G');
+      grayKeptPowered = !turnOff;
+    }
+  }
   bool supportsAbsoluteGrayPlanes() { return false; }
   template <class... T> bool beginAbsoluteGrayPass(const T &...) {
     return false;
@@ -59,6 +81,6 @@ public:
   bool isRedRamSynced() { return true; }
   RefreshMode getLastRefreshMode() { return FULL_REFRESH; }
   uint8_t getLastDisplayModeByte() { return 0; }
-  void cleanupGrayscaleWithPreviousBuffer() {}
+  void cleanupGrayscaleWithPreviousBuffer() { if (recordGray) grayEvents.push_back('C'); }
   void syncRedRamFromFrameBuffer() {}
 };

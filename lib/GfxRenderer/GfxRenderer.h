@@ -896,6 +896,34 @@ class GfxRenderer {
     return t;
   }
 
+  // Apply overlay masks captured during the page's original BW draw. The caller
+  // must have completed that same page's BW refresh before entering: uploading
+  // masks while the controller scans its old/new planes would corrupt the turn.
+  // No glyph walk or framebuffer scratch is needed; the waveform and baseline
+  // cleanup are identical to renderGrayscalePlanesSequential(). The masks are
+  // borrowed for this synchronous call, in panel-native geometry.
+  template <typename AbortFn>
+  GrayscaleTimings displayPreparedGrayscale(const uint8_t* lsb, const uint8_t* msb, AbortFn shouldAbort) {
+    const unsigned long t0 = millis();
+    if (!lsb || !msb || shouldAbort()) return abandonGrayscalePass(0);
+    setRenderMode(BW);
+    copyGrayscaleLsbBuffers(lsb);
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    copyGrayscaleMsbBuffers(msb);
+    // The plane writes themselves take time. A turn queued during either write
+    // must still be able to discard this overlay before the physical gray flush.
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    GrayscaleTimings t;
+    const unsigned long tPlanes = millis();
+    t.planesMs = tPlanes - t0;
+    display.displayGrayBuffer(/*turnOffScreen=*/false);
+    const unsigned long tGray = millis();
+    t.displayMs = tGray - tPlanes;
+    cleanupGrayscaleWithPreviousBuffer();
+    t.restoreMs = millis() - tGray;
+    return t;
+  }
+
   // Same plane dance as renderGrayscalePlanesSequential(), but entered while an
   // async BW refresh is still in flight (triggerDisplayAsync()): the LSB plane
   // renders into the write framebuffer DURING the waveform — CPU/RAM work only,
