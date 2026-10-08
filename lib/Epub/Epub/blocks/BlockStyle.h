@@ -31,6 +31,10 @@ struct BlockStyle {
   // cap, effectiveWidth collapses to 1-2 words per line and justification dumps
   // the remaining space into a single gap.
   static constexpr float MAX_HORIZONTAL_INSET_EM = 4.0f;
+  // Four horizontal margin/padding contributions must fit the signed 16-bit
+  // inset sums. This also keeps deeply multiplied font scopes finite before
+  // converting em lengths to the layout's fixed-width pixel fields.
+  static float boundedComputedEm(const float em) { return std::max(0.0f, std::min(2047.0f, em)); }
 
   CssTextAlign alignment = CssTextAlign::Justify;
   // Layout only: final line positions encode this in the section cache.
@@ -165,29 +169,33 @@ struct BlockStyle {
   }
 
   // Create a BlockStyle from CSS style properties, resolving CssLength values to pixels
-  // emSize is the current font line height, used for em/rem unit conversion
+  // emSize is the element's computed font em; rootEmSize keeps rem at the
+  // reader root size. Four-argument callers retain their existing unit context.
   // paragraphAlignment is the user's paragraphAlignment setting preference
   static BlockStyle fromCssStyle(const CssStyle& cssStyle, const float emSize, const CssTextAlign paragraphAlignment,
-                                 const uint16_t viewportWidth = 0) {
+                                 const uint16_t viewportWidth = 0, const float rootEmSize = 0) {
     BlockStyle blockStyle;
     blockStyle.whiteSpace = cssStyle.whiteSpace;
     const float vw = viewportWidth;
     const auto maxHorizontalInsetPx = static_cast<int16_t>(emSize * MAX_HORIZONTAL_INSET_EM);
-    // Resolve all CssLength values to pixels using the current font's em size and viewport width
-    blockStyle.marginTop = cssStyle.marginTop.toPixelsInt16(emSize, vw);
-    blockStyle.marginBottom = cssStyle.marginBottom.toPixelsInt16(emSize, vw);
-    blockStyle.marginLeft = clampInset(cssStyle.marginLeft.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
-    blockStyle.marginRight = clampInset(cssStyle.marginRight.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
+    const auto pixels = [&](const CssLength& length) {
+      return length.toPixelsInt16(length.unit == CssUnit::Rem && rootEmSize > 0 ? rootEmSize : emSize, vw);
+    };
+    // Resolve relative lengths in their element or root font context.
+    blockStyle.marginTop = pixels(cssStyle.marginTop);
+    blockStyle.marginBottom = pixels(cssStyle.marginBottom);
+    blockStyle.marginLeft = clampInset(pixels(cssStyle.marginLeft), maxHorizontalInsetPx);
+    blockStyle.marginRight = clampInset(pixels(cssStyle.marginRight), maxHorizontalInsetPx);
 
-    blockStyle.paddingTop = cssStyle.paddingTop.toPixelsInt16(emSize, vw);
-    blockStyle.paddingBottom = cssStyle.paddingBottom.toPixelsInt16(emSize, vw);
-    blockStyle.paddingLeft = clampInset(cssStyle.paddingLeft.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
-    blockStyle.paddingRight = clampInset(cssStyle.paddingRight.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
+    blockStyle.paddingTop = pixels(cssStyle.paddingTop);
+    blockStyle.paddingBottom = pixels(cssStyle.paddingBottom);
+    blockStyle.paddingLeft = clampInset(pixels(cssStyle.paddingLeft), maxHorizontalInsetPx);
+    blockStyle.paddingRight = clampInset(pixels(cssStyle.paddingRight), maxHorizontalInsetPx);
 
     // For textIndent: if it's a percentage we can't resolve (no viewport width),
     // leave textIndentDefined=false so applyParagraphIndent() applies a pixel fallback
     if (cssStyle.hasTextIndent() && cssStyle.textIndent.isResolvable(vw)) {
-      blockStyle.textIndent = cssStyle.textIndent.toPixelsInt16(emSize, vw);
+      blockStyle.textIndent = pixels(cssStyle.textIndent);
       blockStyle.textIndentDefined = true;
     }
     blockStyle.textAlignDefined = cssStyle.hasTextAlign();

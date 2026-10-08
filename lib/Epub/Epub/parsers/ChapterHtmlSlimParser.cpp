@@ -2060,9 +2060,10 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     // ("feat: improve table rendering (#89)", Julia <julia@uxj.io>), which sizes the grid from
     // the table's block inset; we reuse BlockStyle::fromCssStyle so the 4em inset cap and the
     // em/percentage resolution stay shared with every other block.
-    const float tableEmSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));
+    const float rootEmSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));
+    const float tableEmSize = BlockStyle::boundedComputedEm(rootEmSize * self->typographyFontScale_);
     BlockStyle tableBlockStyle = BlockStyle::fromCssStyle(
-        cssStyle, tableEmSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth);
+        cssStyle, tableEmSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth, rootEmSize);
     self->addAncestorInsets(tableBlockStyle, tableEmSize);
     const int16_t horizontalInset = tableBlockStyle.totalHorizontalInset();
     self->currentTable->contentWidth = (horizontalInset > 0 && horizontalInset < self->viewportWidth)
@@ -2744,12 +2745,21 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
       self->currentFootnote.number[0] = '\0';
       self->currentFootnoteLinkTextLen = 0;
 
-      // Apply underline style to visually indicate the link
-      self->underlineUntilDepth = std::min(self->underlineUntilDepth, self->depth);
+      // The link underline is a default, not a publisher declaration. Preserve
+      // navigation metadata even when authored CSS selects none or line-through.
+      const uint8_t decoration = static_cast<uint8_t>(cssStyle.textDecoration);
+      const bool underline =
+          !cssStyle.hasTextDecoration() || (decoration & static_cast<uint8_t>(CssTextDecoration::Underline)) != 0;
+      if (underline) self->underlineUntilDepth = std::min(self->underlineUntilDepth, self->depth);
       StyleStackEntry entry;
       entry.depth = self->depth;
       entry.hasUnderline = true;
-      entry.underline = true;
+      entry.underline = underline;
+      if (cssStyle.hasTextDecoration()) {
+        entry.hasStrikethrough = true;
+        entry.strikethrough = (decoration & static_cast<uint8_t>(CssTextDecoration::LineThrough)) != 0;
+        if (entry.strikethrough) self->strikethroughUntilDepth = std::min(self->strikethroughUntilDepth, self->depth);
+      }
       // The generic inline path below never runs for an internal link, so vertical-align has to be
       // folded in here or it is lost. Publishers mark footnote references as
       // `a { vertical-align: super }` at least as often as they wrap them in <sup>, and those
@@ -2795,9 +2805,10 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     self->listStack.push_back({self->depth, name[0] == 'o', startCounter, cssStyle.listStyleNone});
   }
 
-  const float emSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));
+  const float rootEmSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));
+  const float emSize = BlockStyle::boundedComputedEm(rootEmSize * self->typographyFontScale_);
   auto userAlignmentBlockStyle = BlockStyle::fromCssStyle(
-      cssStyle, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth);
+      cssStyle, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth, rootEmSize);
   // As in CSS, a list's own padding-left replaces the default and its margin-left adds to it.
   if (isList && !cssStyle.hasPaddingLeft()) {
     userAlignmentBlockStyle.paddingLeft = static_cast<int16_t>(emSize * LIST_DEFAULT_PADDING_EM);
@@ -2820,7 +2831,7 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
   if (isBlockContainer && !self->currentTableCell) {
     if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
     BlockStyle containerTop = BlockStyle::fromCssStyle(
-        CssStyle{}, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth);
+        CssStyle{}, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth, rootEmSize);
     containerTop.lineHeightMultiplier = userAlignmentBlockStyle.lineHeightMultiplier;
     containerTop.lineHeightDefined = true;
     containerTop.marginTop = userAlignmentBlockStyle.marginTop;
@@ -2870,7 +2881,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
 
   if (matches(name, HEADER_TAGS, NUM_HEADER_TAGS)) {
     self->currentCssStyle = cssStyle;
-    auto headerBlockStyle = BlockStyle::fromCssStyle(cssStyle, emSize, CssTextAlign::Center, self->viewportWidth);
+    auto headerBlockStyle =
+        BlockStyle::fromCssStyle(cssStyle, emSize, CssTextAlign::Center, self->viewportWidth, rootEmSize);
     self->addAncestorInsets(headerBlockStyle, emSize);
     headerBlockStyle.textAlignDefined = true;
     if (self->embeddedStyle && cssStyle.hasTextAlign() &&
@@ -3220,7 +3232,8 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
         // margin-left on an inline span acts as a per-line indent (poem stanza pattern).
         // Applied immediately to the current block because the span closes before the
         // trailing <br>, so the indent must be on the block that receives the text.
-        const int16_t marginPx = cssStyle.marginLeft.toPixelsInt16(emSize, static_cast<float>(self->viewportWidth));
+        const int16_t marginPx = cssStyle.marginLeft.toPixelsInt16(
+            cssStyle.marginLeft.unit == CssUnit::Rem ? rootEmSize : emSize, static_cast<float>(self->viewportWidth));
         entry.hasMarginLeft = true;
         entry.marginLeftPx = marginPx;
         if (marginPx > 0 && self->currentTextBlock) {

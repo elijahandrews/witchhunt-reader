@@ -2,6 +2,7 @@
 
 #include <WordTypography.h>
 
+#include <algorithm>
 #include <cstdint>
 
 // Matches order of PARAGRAPH_ALIGNMENT in CrossPointSettings
@@ -47,7 +48,9 @@ struct CssLength {
 
   // Resolve to int16_t pixels (for BlockStyle fields)
   [[nodiscard]] int16_t toPixelsInt16(const float emSize, const float containerWidth = 0) const {
-    return static_cast<int16_t>(toPixels(emSize, containerWidth));
+    const float pixels = toPixels(emSize, containerWidth);
+    if (pixels != pixels) return 0;  // Invalid authored values must not reach a narrowing conversion.
+    return static_cast<int16_t>(std::max(-32768.0f, std::min(32767.0f, pixels)));
   }
 };
 

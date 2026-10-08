@@ -93,6 +93,7 @@ set(PIPELINE_INCLUDES
 add_executable(EpubPipelineTest
   EpubPipelineTest.cpp
   CssTypographyTest.cpp
+  ComputedTextCssTest.cpp
   EpubFeatureTest.cpp
   BookTextSearchTest.cpp
   BookSearchNavigationTest.cpp
