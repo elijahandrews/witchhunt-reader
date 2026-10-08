@@ -156,6 +156,7 @@ void ActivityManager::renderTaskLoop() {
       // on activity transitions like the rest, and every path that displays a page republishes
       // it (with an empty set when the page has no links), so a displayed page always describes
       // itself.
+      renderer.setDarkMode(SETTINGS.darkMode && currentActivity->allowsDarkMode());
       currentActivity->render(std::move(lock));
       // Cleared unconditionally on every exit path of render(): the call cannot throw
       // (-fno-exceptions) and every `return` inside it lands here.
@@ -400,6 +401,8 @@ void ActivityManager::loop() {
       currentActivity = std::move(pendingActivity);
       refreshWifiActivityFlag();
 
+      renderer.setDarkMode(SETTINGS.darkMode && currentActivity->allowsDarkMode());
+
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
 
@@ -453,6 +456,10 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
     // No current activity, safe to launch immediately
     currentActivity = std::move(newActivity);
     refreshWifiActivityFlag();
+    {
+      RenderLock lock;
+      renderer.setDarkMode(SETTINGS.darkMode && currentActivity->allowsDarkMode());
+    }
     currentActivity->onEnter();
   }
 }

@@ -30,6 +30,11 @@ class HalDisplay {
 
   // Frame buffer operations
   void clearScreen(uint8_t color = 0xFF) const;
+
+  // Invert panel output, keeping logical framebuffers unchanged. The caller
+  // holds the render lock; the SDK drains any pending refresh before switching.
+  bool setDarkMode(bool enabled);
+  bool isDarkMode() const;
   void drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                  bool fromProgmem = false) const;
   void drawImageTransparent(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,

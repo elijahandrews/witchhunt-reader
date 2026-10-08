@@ -330,7 +330,7 @@ Moving within a tab follows **[Moving through lists](#moving-through-lists)**.
 **EPUB Font** (submenu):
 - **Font Family**: Font used for EPUB reading. Includes built-in fonts (Bookerly, Noto Sans) plus any fonts installed on the SD card.
 - **Font Size**: 10pt to 26pt. 10pt to 20pt are typefaces designed at that size; 22, 24 and 26pt are the 20pt face enlarged.
-- **Text Anti-Aliasing**: Smooth grey edges on text. Slows page turns slightly. "ON" / "OFF"
+- **Text Anti-Aliasing**: Smooth grey edges on text. Slows page turns slightly. "ON" / "OFF". Dark Mode uses crisp black-and-white text; returning to light mode restores this preference.
 - **Fast AA** *(X3 only)*: Swaps the slow 53-frame grayscale waveform for a fast 7-frame LUT (~130 ms). Mid-tones appear slightly darker. "ON" / "OFF"
 - **Text Darkness**: Ink density for rendered text: "Normal" (default), "Dark", "Extra Dark", "Max Dark"
 
@@ -592,6 +592,7 @@ This feature can be disabled in the **[Controls Settings](#373-controls)** to he
 * **Return to Home:** Press the **Back** button to close the book and return to the **[Home](#31-home-screen)** screen.
 * **Return to Browse Files:** Press and hold the **Back** button to close the book and return to the **[Browse Files](#33-browse-files-screen)** screen.
 * **Reader Menu:** Press **Confirm** to open the reader menu, which includes: **[Table of Contents](#6-chapter-selection-screen)**, bookmarks, sync progress, reading statistics, quick per-book overrides (font, images, hyphenation, bionic reading…), take screenshot, and more. Its entries are grouped into tabs. While the tab bar is selected, **Confirm** moves to the next tab, and its button hint names that tab. **Hold Up / Down** to switch tabs: each opens where you left it. **Hold Back** to close the book and return Home, as **Go Home** does; changes made in the menu are kept.
+* **Dark Mode:** Choose **Settings → Display → Dark Mode**, or **Reader Menu → Settings → Dark Mode**. It is off by default and applies to books and menus. The reader-menu choice takes effect when you close the menu. Switching modes refreshes the whole screen and keeps your font and reading position. Cover, custom, and blank sleep screens retain their existing appearance; Quick Resume and page overlays follow the current mode.
 * **Your place is kept by paragraph as well as by page.** If a book is laid out differently the next time you open it, for example after you changed the font size from outside the book or after a firmware update re-indexed it, it opens at the paragraph you were reading rather than at a page number scaled to the new length.
 
 ### Supported Languages

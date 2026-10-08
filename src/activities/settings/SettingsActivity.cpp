@@ -316,7 +316,12 @@ void SettingsActivity::activateIndex(const int index) {
     return;
   }
 
-  setting.toggleValue();
+  if (setting.nameId == StrId::STR_DARK_MODE) {
+    RenderLock lock(*this);
+    setting.toggleValue();
+  } else {
+    setting.toggleValue();
+  }
   CrossPointSettings::normalizeDependentSettings(SETTINGS);
   SETTINGS.saveToFile();
   // Repaint: nothing else will. Every other way this list changes asks for an

@@ -72,6 +72,9 @@ class Activity {
   // while the host still owns the sectors.
   virtual bool requiresExclusiveStorageLoop() const { return false; }
   virtual bool isReaderActivity() const { return false; }
+  // Sleep covers keep their own color/filter policy; retained-page sleep still
+  // follows the same polarity as the page underneath it.
+  virtual bool allowsDarkMode() const { return true; }
   virtual bool usesWifi() const { return false; }
 
   // What a tap on the row at `index` should do, moving this screen's selection if it lands on a

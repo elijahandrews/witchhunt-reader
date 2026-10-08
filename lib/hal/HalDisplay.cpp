@@ -111,6 +111,15 @@ void HalDisplay::begin(bool seamless) {
 
 void HalDisplay::clearScreen(uint8_t color) const { einkDisplay.clearScreen(color); }
 
+bool HalDisplay::setDarkMode(const bool enabled) {
+  HalSpiBus::Lock spiLock;
+  if (einkDisplay.isInverted() == enabled) return false;
+  einkDisplay.setInverted(enabled);
+  return true;
+}
+
+bool HalDisplay::isDarkMode() const { return einkDisplay.isInverted(); }
+
 void HalDisplay::drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                            bool fromProgmem) const {
   einkDisplay.drawImage(imageData, x, y, w, h, fromProgmem);

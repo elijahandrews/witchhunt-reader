@@ -470,6 +470,16 @@ bool sleepCoverNeedsPreparing(const std::string& bookPath, bool cropped) {
 
 }  // namespace
 
+bool SleepActivity::usesQuickResume() const {
+  return SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
+         (fromTimeout &&
+          SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT);
+}
+
+bool SleepActivity::allowsDarkMode() const {
+  return usesQuickResume() || SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::OVERLAY;
+}
+
 void SleepActivity::onEnter() {
 #if CROSSPOINT_KOREADER_AUTOSYNC
   const uint64_t sleepPushSeq = KOReaderAutoSync::pushStashedSleepPushAsync();
@@ -489,11 +499,7 @@ void SleepActivity::renderSleepScreen() {
   // Quick Resume: paint a moon icon over the current page and keep the framebuffer
   // intact for the next wake. Applies always when the user picked Quick Resume as
   // sleep screen, or only on timeout sleeps when "Quick Resume on Timeout" is on.
-  const bool renderQuickResume =
-      SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
-      (fromTimeout &&
-       SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT);
-  if (renderQuickResume) {
+  if (usesQuickResume()) {
     return renderLastScreenSleepScreen();
   }
 
