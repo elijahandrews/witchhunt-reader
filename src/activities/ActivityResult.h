@@ -45,6 +45,8 @@ struct MenuResult {
   // reader overrides: -1 = default, 0 = off, 1 = on.
   int8_t guideDotsOverride = -1;
   int8_t inlineFootnotePreviewsOverride = -1;
+  int8_t singleRefreshTextAA = -1;  // -1: result did not come from the reader settings menu
+  int8_t readerPreRendering = -1;
   // Browse Files view (CrossPointSettings::FILE_BROWSER_VIEW), appended like the above.
   uint8_t browserView = 0;
 };

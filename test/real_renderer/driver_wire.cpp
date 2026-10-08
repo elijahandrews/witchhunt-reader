@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   EpdBus bus;
   Uc8279X4Driver driver;
   driver.begin(bus);
-  size_t cases = 0, abortCases = 0;
+  size_t cases = 0, abortCases = 0, directCases = 0;
   assert(driver.geometry().width == 800 && driver.geometry().height == 480);
   assert(driver.grayscaleCapabilities().encoding == GrayscaleEncoding::OverlayMasks);
   for (const auto& entry : std::filesystem::directory_iterator(argv[1])) {
@@ -49,6 +49,32 @@ int main(int argc, char** argv) {
       assert(bus.newPlane[i + 12000] == base[i]);
     }
     ++cases;
+    // The same actual-renderer selectors can drive a complete Direct frame.
+    // Preparation/upload must issue zero refreshes, followed by exactly one
+    // DRF. Consecutive pages must not sneak in a BW recovery/base activation.
+    for (bool turnOff : {false, true}) {
+      auto absoluteL = lsb, absoluteM = msb;
+      for (size_t i = 0; i < base.size(); ++i) {
+        absoluteL[i] = base[i] | lsb[i];
+        absoluteM[i] = absoluteL[i] ^ msb[i];
+      }
+      const auto beforeDirect = bus.refreshes;
+      driver.beginGrayscale(bus, base.data(), GrayscaleMode::Direct, RefreshMode::Full, turnOff);
+      driver.copyGrayscaleLsb(bus, absoluteL.data());
+      driver.copyGrayscaleMsb(bus, absoluteM.data());
+      assert(bus.refreshes == beforeDirect);
+      for (size_t i = 0; i < 12000; ++i) assert(bus.oldPlane[i] == 255 && bus.newPlane[i] == 255);
+      for (size_t i = 0; i < base.size(); ++i) {
+        assert(bus.oldPlane[i + 12000] == static_cast<uint8_t>(~absoluteL[i]));
+        assert(bus.newPlane[i + 12000] == static_cast<uint8_t>(~absoluteM[i]));
+      }
+      driver.displayGray(bus, base.data(), turnOff, nullptr, true);
+      assert(bus.refreshes == beforeDirect + 1);
+      // Mirror the full facade's post-Direct state invalidation.
+      driver.requestResync(1);
+      ++directCases;
+    }
+
     // Prepared-mask cancellation can leave zero, one or both selector planes
     // staged. It must never refresh them, and reseeding the baseline must make
     // the following ordinary page turn correct in every case.
@@ -77,6 +103,8 @@ int main(int argc, char** argv) {
   }
   assert(cases == 60);
   assert(abortCases == 180);
+  assert(directCases == 120);
+  std::cout << "Actual UC8279X4 Direct selectors/no-BW/single-activation checks=" << directCases << " passed\n";
   std::cout << "Actual UC8279X4 prepared-abort/no-refresh/next-BW checks=" << abortCases << " passed\n";
   std::cout << "Actual UC8279X4 wire inversion, gate offset, LUT68 and restored BW checks=" << cases << " passed\n";
 }

@@ -48,3 +48,6 @@ rotating, opening a menu, and using an image page. Font edges and background sho
 match the previous firmware; a prepared forward turn should avoid the glyph-replay
 work after the BW page appears. Hardware timing and physical appearance require a
 post-flash check; host tests do not simulate ink settling.
+
+The experimental branch also offers a Direct grayscale comparison and a switch
+for next-page preparation; see [page-turn antialiasing](page-turn-antialiasing.md).

@@ -85,6 +85,8 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
       currentPage(currentPage),
       totalPages(totalPages),
       bookProgressPercent(bookProgressPercent) {
+  pendingSingleRefreshTextAA = SETTINGS.singleRefreshTextAA;
+  pendingReaderPreRendering = SETTINGS.readerPreRendering;
   buildMenuItems(hasFootnotes, hasStarredPages, hasPrintedPages);
 }
 
@@ -94,7 +96,7 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
   auto& syncItems = tabMenuItems[static_cast<size_t>(MenuTab::Sync)];
   auto& toolsItems = tabMenuItems[static_cast<size_t>(MenuTab::Tools)];
   navigationItems.reserve(9);
-  settingsItems.reserve(13);
+  settingsItems.reserve(15);
   syncItems.reserve(2);
   toolsItems.reserve(8);
 
@@ -298,6 +300,22 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
         static_cast<EpubReaderMenuActivity*>(ctx)->pendingTextAntiAliasingOverride = threeStateOverrideFromSlot(v);
       }));
 
+  if (renderer.supportsDirectGrayscaleOption()) {
+    settingsItems.push_back(SettingInfo::DynamicEnumCtx(
+        StrId::STR_SINGLE_REFRESH_AA, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
+        [](const void* ctx) -> uint8_t {
+          return static_cast<const EpubReaderMenuActivity*>(ctx)->pendingSingleRefreshTextAA;
+        },
+        [](void* ctx, uint8_t v) { static_cast<EpubReaderMenuActivity*>(ctx)->pendingSingleRefreshTextAA = v; }));
+  }
+
+  settingsItems.push_back(SettingInfo::DynamicEnumCtx(
+      StrId::STR_READER_PRE_RENDER, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
+      [](const void* ctx) -> uint8_t {
+        return static_cast<const EpubReaderMenuActivity*>(ctx)->pendingReaderPreRendering;
+      },
+      [](void* ctx, uint8_t v) { static_cast<EpubReaderMenuActivity*>(ctx)->pendingReaderPreRendering = v; }));
+
   // Hyphenation: default / on / off (mirrors QuickOverrides)
   settingsItems.push_back(SettingInfo::DynamicEnumCtx(
       StrId::STR_HYPHENATION, {StrId::STR_DEFAULT_VALUE, StrId::STR_STATE_ON, StrId::STR_STATE_OFF}, self,
@@ -419,6 +437,8 @@ void EpubReaderMenuActivity::finishWithAction(MenuAction action) {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
+  payload.singleRefreshTextAA = static_cast<int8_t>(pendingSingleRefreshTextAA);
+  payload.readerPreRendering = static_cast<int8_t>(pendingReaderPreRendering);
   setResult(std::move(payload));
   finish();
 }
@@ -462,6 +482,8 @@ void EpubReaderMenuActivity::onBackPressed() {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
+  payload.singleRefreshTextAA = static_cast<int8_t>(pendingSingleRefreshTextAA);
+  payload.readerPreRendering = static_cast<int8_t>(pendingReaderPreRendering);
   result.data = std::move(payload);
   setResult(std::move(result));
   finish();

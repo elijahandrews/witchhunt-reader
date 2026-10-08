@@ -417,6 +417,10 @@ class CrossPointSettings {
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
+  // Experimental branch default. Reader-menu switch; ignored on unsupported
+  // panels and when text AA is disabled. Stable master has no Direct reader path.
+  uint8_t singleRefreshTextAA = 1;
+  uint8_t readerPreRendering = 1;
   // X3-only: when on, the AA refresh uses the 7-frame community grayscale LUT
   // (~130 ms panel time) instead of the OEM 53-frame LUT (~2.4 s). Mid-tones
   // run slightly darker than X4. Matches what papyrix-reader has shipped since

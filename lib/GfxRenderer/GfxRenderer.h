@@ -924,6 +924,24 @@ class GfxRenderer {
     return t;
   }
 
+  bool supportsDirectGrayscaleOption() const;
+  bool supportsDirectGrayscale() const;
+  GrayscaleTimings displayDirectGrayscalePlanes(const uint8_t* lsb, const uint8_t* msb);
+
+  // The caller converts complete prepared masks to absolute selectors using
+  // the current BW page, including live chrome. No BW page is displayed first.
+  // Cancellation is allowed before entry only; once begun, the synchronous
+  // transaction completes before a queued page turn can replace it.
+  template <typename AbortFn>
+  GrayscaleTimings displayPreparedDirectGrayscale(const uint8_t* lsb, const uint8_t* msb, AbortFn shouldAbort) {
+    if (!lsb || !msb || shouldAbort()) {
+      GrayscaleTimings t;
+      t.aborted = true;
+      return t;
+    }
+    return displayDirectGrayscalePlanes(lsb, msb);
+  }
+
   // Same plane dance as renderGrayscalePlanesSequential(), but entered while an
   // async BW refresh is still in flight (triggerDisplayAsync()): the LSB plane
   // renders into the write framebuffer DURING the waveform — CPU/RAM work only,

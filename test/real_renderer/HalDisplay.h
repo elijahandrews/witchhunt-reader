@@ -15,7 +15,7 @@ public:
                        DISPLAY_WIDTH_BYTES = 100;
   std::array<uint8_t, 48000> fb{};
   HalDisplay() { fb.fill(255); }
-  uint8_t *getFrameBuffer() { return fb.data(); }
+  uint8_t *getFrameBuffer() { return directSwapped ? directPrevious.data() : fb.data(); }
   int getDisplayWidth() const { return 800; }
   int getDisplayHeight() const { return 480; }
   int getDisplayWidthBytes() const { return 100; }
@@ -50,6 +50,26 @@ public:
       grayEvents.push_back('G');
       grayKeptPowered = !turnOff;
     }
+  }
+  bool directSupported = false, directSwapped = false;
+  std::array<uint8_t, 48000> directPrevious{};
+  struct DirectGrayTimings {
+    unsigned long uploadMs = 0, displayMs = 0, baselineMs = 0;
+  };
+  bool supportsDirectGrayPanel() { return directSupported; }
+  bool supportsDirectGrayPlanes() { return directSupported; }
+  bool displayDirectGrayPlanes(const uint8_t* lsb, const uint8_t* msb, DirectGrayTimings& t, bool turnOff) {
+    t = {};
+    if (!lsb || !msb || !directSupported) return false;
+    grayEvents.push_back('D');
+    copyGrayscaleLsbBuffers(lsb);
+    copyGrayscaleMsbBuffers(msb);
+    displayGrayBuffer(turnOff);
+    directSwapped = !directSwapped;
+    std::memcpy(getFrameBuffer(), directSwapped ? fb.data() : directPrevious.data(), fb.size());
+    grayEvents.push_back('S');
+    t = {1, 2, 3};
+    return true;
   }
   bool supportsAbsoluteGrayPlanes() { return false; }
   template <class... T> bool beginAbsoluteGrayPass(const T &...) {

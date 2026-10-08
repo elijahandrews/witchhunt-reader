@@ -435,6 +435,62 @@ void HalDisplay::cleanupGrayscaleWithPreviousBuffer() {
 
 bool HalDisplay::supportsGrayFrame() const { return einkDisplay.supportsGrayFrame(); }
 
+bool HalDisplay::supportsDirectGrayPanel() const {
+#if defined(EINK_DISPLAY_SINGLE_BUFFER_MODE) || !defined(BOARD_HAS_PSRAM) || !BOARD_HAS_PSRAM
+  return false;
+#else
+  // Stable hardware gate for presenting the setting. Temporary framebuffer
+  // loans and inversion affect a transaction, not whether the option exists.
+  return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro &&
+         BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279 &&
+         BoardConfig::ACTIVE.displayControllerVariant == 0x68;
+#endif
+}
+
+bool HalDisplay::supportsDirectGrayPlanes() const {
+#ifdef EINK_DISPLAY_SINGLE_BUFFER_MODE
+  return false;
+#else
+  if (!supportsDirectGrayPanel() || !einkDisplay.getFrameBuffer() || !einkDisplay.hasSecondaryBuffer()) return false;
+  const auto caps = einkDisplay.grayscaleCapabilities(freeink::GrayscaleMode::Direct);
+  return caps.encoding == freeink::GrayscaleEncoding::AbsolutePlanes && caps.base == freeink::GrayscaleBase::Combined;
+#endif
+}
+
+bool HalDisplay::displayDirectGrayPlanes(const uint8_t* lsb, const uint8_t* msb, DirectGrayTimings& timings,
+                                         const bool turnOffScreen) {
+  timings = {};
+  HalSpiBus::Lock spiLock;
+  if (!lsb || !msb || !supportsDirectGrayPlanes()) return false;
+  const unsigned long start = millis();
+  if (!einkDisplay.displayGrayscaleBase(freeink::GrayscaleMode::Direct, EInkDisplay::FULL_REFRESH, turnOffScreen))
+    return false;
+  // Full, non-null planes satisfy the SDK's complete-row contract. Keep the
+  // begin/uploads/activation together: abandoning one would require resetting
+  // the SDK's private pass state, not merely restoring a controller plane.
+  einkDisplay.copyGrayscaleLsbBuffers(lsb);
+  einkDisplay.copyGrayscaleMsbBuffers(msb);
+  const unsigned long uploaded = millis();
+  einkDisplay.displayGrayBuffer(turnOffScreen);
+  const unsigned long displayed = millis();
+#ifndef EINK_DISPLAY_SINGLE_BUFFER_MODE
+  // Direct does not swap SDK buffers. Promote the complete BW page only AFTER
+  // the blocking refresh, then copy it into the new write buffer so UI patches,
+  // menu snapshots and future framebuffer loans all see this page. Do not
+  // reseed controller RAM here: the SDK retains its required post-Direct resync.
+  einkDisplay.swapBuffers();
+  einkDisplay.syncWriteBufferFromActive();
+#endif
+  timings.uploadMs = uploaded - start;
+  timings.displayMs = displayed - uploaded;
+  timings.baselineMs = millis() - displayed;
+  lastRefreshMode = FULL_REFRESH;
+  lastDisplayModeByte = refreshModeToByte(FULL_REFRESH);
+  LOG_INF("DISP", "Direct quality AA: upload=%lums display=%lums baseline=%lums", timings.uploadMs, timings.displayMs,
+          timings.baselineMs);
+  return true;
+}
+
 bool HalDisplay::supportsAbsoluteGrayPlanes() const {
   return einkDisplay.grayscaleCapabilities(freeink::GrayscaleMode::Absolute).supported();
 }

@@ -171,6 +171,9 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   // Font family uses a DynamicEnumCtx in SettingsList (no valuePtr) so the generic
   // loop above skips it. Save manually.
   doc["fontFamily"] = s.fontFamily;
+  // Reader-menu-only setting, not a SettingsList row.
+  doc["singleRefreshTextAA"] = s.singleRefreshTextAA;
+  doc["readerPreRendering"] = s.readerPreRendering;
   // Stamps which generation of gesture defaults this file was written against.
   // See CrossPointSettings::GESTURE_DEFAULTS_VERSION.
   doc["gestureDefaultsV"] = s.gestureDefaultsVersion;
@@ -338,6 +341,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   // loop above skips it. Load manually.
   s.fontFamily = clamp(doc["fontFamily"] | (uint8_t)CrossPointSettings::BOOKERLY,
                        CrossPointSettings::BUILTIN_FONT_COUNT, CrossPointSettings::BOOKERLY);
+  // Missing keys adopt this experimental branch's default; an explicit Off survives reload.
+  s.singleRefreshTextAA = clamp(doc["singleRefreshTextAA"] | (uint8_t)1, (uint8_t)2, (uint8_t)1);
+  s.readerPreRendering = clamp(doc["readerPreRendering"] | (uint8_t)1, (uint8_t)2, (uint8_t)1);
   // Frontlight switch: dynamic in SettingsList, so it needs loading manually too.
   s.frontlightOn = (doc["frontlightOn"] | 0) ? 1 : 0;
   const char* dictName = doc["dictionaryName"] | "";

@@ -3518,6 +3518,29 @@ void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuff
 
 void GfxRenderer::displayGrayBuffer() const { display.displayGrayBuffer(fadingFix); }
 
+bool GfxRenderer::supportsDirectGrayscaleOption() const { return display.supportsDirectGrayPanel(); }
+
+bool GfxRenderer::supportsDirectGrayscale() const { return display.supportsDirectGrayPlanes(); }
+
+GfxRenderer::GrayscaleTimings GfxRenderer::displayDirectGrayscalePlanes(const uint8_t* lsb, const uint8_t* msb) {
+  GrayscaleTimings t;
+  HalDisplay::DirectGrayTimings direct;
+  if (!display.displayDirectGrayPlanes(lsb, msb, direct, fadingFix)) {
+    t.aborted = true;
+    return t;
+  }
+  // A full quality waveform satisfies a pending stronger-refresh override.
+  // Failed/unsupported calls leave it armed for the ordinary fallback path.
+  consumeRefreshOverride(HalDisplay::FULL_REFRESH);
+  noteRefresh(HalDisplay::FULL_REFRESH);
+  frameBuffer = display.getFrameBuffer();
+  setRenderMode(BW);
+  t.planesMs = direct.uploadMs;
+  t.displayMs = direct.displayMs;
+  t.restoreMs = direct.baselineMs;
+  return t;
+}
+
 bool GfxRenderer::supportsAbsoluteGrayPlanes() const { return display.supportsAbsoluteGrayPlanes(); }
 
 bool GfxRenderer::beginAbsoluteGrayPass(const HalDisplay::RefreshMode fallback) const {

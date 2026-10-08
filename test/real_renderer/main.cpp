@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iostream>
 int runPreparedGrayscaleChecks(GfxRenderer&, HalDisplay&);
+int runDirectGrayscaleChecks();
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
@@ -138,5 +139,6 @@ int main(int argc, char** argv) {
 #ifdef WITCH_TEST_OUTLINE
   if (argc > 2) result |= runOutlineChecks(g, d, argv[2]);
 #endif
+  result |= runDirectGrayscaleChecks();
   return result;
 }

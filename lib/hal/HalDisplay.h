@@ -133,6 +133,22 @@ class HalDisplay {
 
   void displayGrayBuffer(bool turnOffScreen = false);
 
+  // Experimental reader path, deliberately restricted to the observed X4 Pro
+  // UC8279/LUT68 panel. Uses the SDK's existing Direct quality waveform: one
+  // activation, but potentially slower/flashing compared with sparse text AA.
+  bool supportsDirectGrayPanel() const;  // stable menu visibility, independent of temporary buffer loans
+  bool supportsDirectGrayPlanes() const;
+  struct DirectGrayTimings {
+    unsigned long uploadMs = 0;
+    unsigned long displayMs = 0;
+    unsigned long baselineMs = 0;
+  };
+  // Both full absolute planes and the matching logical BW framebuffer must be
+  // complete before entry. Once begun, the pass finishes atomically; callers
+  // check cancellation first. No allocation or intermediate BW activation.
+  bool displayDirectGrayPlanes(const uint8_t* lsb, const uint8_t* msb, DirectGrayTimings& timings,
+                               bool turnOffScreen = false);
+
   // Ported from crosspoint-reader PR #3469 ("fix: vertical banding on X3
   // grayscale images", Bryan O'Sullivan / @bos). The diagnosis, the plane
   // encoding and the measurements are his: on a UC8279 X3 the checkerboard
