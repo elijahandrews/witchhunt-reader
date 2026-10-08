@@ -111,6 +111,15 @@ The text continues beside the marker and wraps at the hanging inset. This is ori
 <p>The gap above this line is two em at the heading size.</p>
 <p><a class="plain-link" href="#destination">This link has no underline.</a></p>
 <p id="destination">The link remains navigable. Its neighboring text keeps the usual body style.</p>"""),
+    ("Small font strokes", """<p>Choose Bookerly HD at 10 pt with Normal darkness and anti-aliasing enabled. Let the page settle before comparing the strokes.</p>
+<p>Regular: Tt Hh Nn Ii Ll</p>
+<p><strong>Bold: Tt Hh Nn Ii Ll</strong></p>
+<p><em>Italic: Tt Hh Nn Ii Ll</em></p>
+<p><strong><em>Bold italic: Tt Hh Nn Ii Ll</em></strong></p>
+<p>TALL TENTS TEST TINY TILES. Tall tents shelter the trail at twilight.</p>
+<p>The thin thread turns twice, then settles beside a little lantern.</p>
+<p>Combining accents: T&#x301; t&#x301; Cafe&#x301;.</p>
+<p>The T crossbars should meet their stems evenly. Compare the upright strokes with H, N, I, and L in each style.</p>"""),
 ]
 
 def build(output):

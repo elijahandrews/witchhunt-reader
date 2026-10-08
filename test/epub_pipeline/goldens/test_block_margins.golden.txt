@@ -19,52 +19,52 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=148 x=0 align=2 mult=1.400 hfid=0 words=2
    W x=139 s=1 z=100 t=Bravo
    W x=228 s=1 z=100 t=bottom
-  LINE y=200 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=207 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=3.
    W x=24 s=0 z=100 t=BR
    W x=50 s=0 z=100 t=PARAGRAPH:
-  LINE y=224 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=231 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Charlie
    W x=72 s=0 z=100 t=top
-  LINE y=248 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=255 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Charlie
    W x=72 s=0 z=100 t=bottom
-  LINE y=290 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=297 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=4.
    W x=25 s=0 z=100 t=SPACER:
-  LINE y=332 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=339 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=Delta
    W x=57 s=0 z=100 t=after
    W x=112 s=0 z=100 t=the
    W x=149 s=0 z=100 t=spacer
-  LINE y=356 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=363 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=5.
    W x=26 s=0 z=100 t=NESTED:
-  LINE y=380 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=387 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Echo
    W x=49 s=0 z=100 t=inner
-  LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=429 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=6.
    W x=27 s=0 z=100 t=PADDING:
-  LINE y=446 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=453 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Foxtrot
    W x=71 s=0 z=100 t=first
-  LINE y=470 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=477 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Foxtrot
    W x=71 s=0 z=100 t=second
-  LINE y=512 x=0 align=0 mult=1.000 hfid=0 words=2
+  LINE y=519 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=7.
    W x=28 s=0 z=100 t=FIGURE:
-  IMG y=536 x=210 w=40 h=40 src=<cache>/epub_<hash>/img_1d4d5ffb3eb10210.png
-  LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=2
+  IMG y=543 x=210 w=40 h=40 src=<cache>/epub_<hash>/img_1d4d5ffb3eb10210.png
+  LINE y=583 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Golf
    W x=44 s=0 z=100 t=caption
-  LINE y=618 x=0 align=0 mult=1.000 hfid=0 words=3
+  LINE y=625 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=8.
    W x=22 s=0 z=100 t=FIGURE
    W x=80 s=0 z=100 t=ONLY:
-  IMG y=660 x=210 w=40 h=40 src=<cache>/epub_<hash>/img_1d4d5ffb3eb10210.png
-  LINE y=718 x=0 align=0 mult=1.000 hfid=0 words=2
+  IMG y=667 x=210 w=40 h=40 src=<cache>/epub_<hash>/img_1d4d5ffb3eb10210.png
+  LINE y=725 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=9.
    W x=23 s=0 z=100 t=ITEM:
  PAGE 1 elements=9 footnotes=0

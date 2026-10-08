@@ -4,24 +4,24 @@ SPINE 0 href=EPUB/text/cover.xhtml pages=1 truncated=0 cssFallback=0
   IMG y=0 x=2 w=456 h=760 src=<cache>/epub_<hash>/img_07b22faa91ec6d21.png
 SPINE 1 href=EPUB/text/title_page.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=2 footnotes=0
-  LINE y=54 x=0 align=2 mult=2.000 hfid=0 words=3
+  LINE y=108 x=0 align=2 mult=2.000 hfid=0 words=3
    W x=19 s=1 z=100 f=5 ls=0 t=Tables?
    W x=159 s=1 z=100 f=5 ls=0 t=In
    W x=215 s=1 z=100 f=5 ls=0 t=CrossPoint?
-  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=1
+  LINE y=174 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 f=5 ls=0 t=2026-02-18
 SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=5 footnotes=0
-  LINE y=54 x=0 align=2 mult=2.000 hfid=0 words=3
+  LINE y=108 x=0 align=2 mult=2.000 hfid=0 words=3
    W x=56 s=1 z=100 f=5 ls=0 t=Some
    W x=162 s=1 z=100 f=5 ls=0 t=small
    W x=282 s=1 z=100 f=5 ls=0 t=tables
-  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=174 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 f=5 ls=0 t=2
    W x=13 s=0 z=100 f=5 ls=0 t=columns,
    W x=96 s=0 z=100 f=5 ls=0 t=2
    W x=109 s=0 z=100 f=5 ls=0 t=rows
-  TABLE y=157 x=0 w=460 h=71 cols=2 border=1 rows=2
+  TABLE y=211 x=0 w=460 h=71 cols=2 border=1 rows=2
    ROW h=34 hdr=1 cells=2
     CELL 0 hdr=1 span=1 lines=1
      LN words=2
@@ -38,12 +38,12 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
     CELL 1 hdr=0 span=1 lines=1
      LN words=1
       W x=18 s=0 z=100 f=5 ls=0 t=Text
-  LINE y=228 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=282 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 f=5 ls=0 t=3
    W x=14 s=0 z=100 f=5 ls=0 t=columns,
    W x=97 s=0 z=100 f=5 ls=0 t=2
    W x=110 s=0 z=100 f=5 ls=0 t=rows
-  TABLE y=265 x=0 w=460 h=71 cols=3 border=1 rows=2
+  TABLE y=319 x=0 w=460 h=71 cols=3 border=1 rows=2
    ROW h=34 hdr=1 cells=3
     CELL 0 hdr=1 span=1 lines=1
      LN words=2
@@ -69,16 +69,16 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
       W x=18 s=0 z=100 f=5 ls=0 t=Oho
 SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=18 footnotes=0
-  LINE y=54 x=0 align=2 mult=2.000 hfid=0 words=3
+  LINE y=108 x=0 align=2 mult=2.000 hfid=0 words=3
    W x=84 s=1 z=100 f=5 ls=0 t=Some
    W x=190 s=1 z=100 f=5 ls=0 t=big
    W x=254 s=1 z=100 f=5 ls=0 t=tables
-  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=174 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 f=5 ls=0 t=2
    W x=13 s=0 z=100 f=5 ls=0 t=columns,
    W x=96 s=0 z=100 f=5 ls=0 t=1
    W x=108 s=0 z=100 f=5 ls=0 t=row
-  LINE y=157 x=0 align=0 mult=1.000 hfid=0 words=11
+  LINE y=211 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=18 s=0 z=100 f=5 ls=0 t=This
    W x=58 s=0 z=100 f=5 ls=0 t=is
    W x=80 s=0 z=100 f=5 ls=0 t=one
@@ -90,7 +90,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=353 s=0 z=100 f=5 ls=0 t=part
    W x=396 s=0 z=100 f=5 ls=0 t=of
    W x=425 s=0 z=100 f=5 ls=0 t=the
-  LINE y=176 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=first
    W x=49 s=0 z=100 f=5 ls=0 t=cell
    W x=89 s=0 z=100 f=5 ls=0 t=of
@@ -100,7 +100,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=247 s=0 z=100 f=5 ls=0 t=is
    W x=268 s=0 z=100 f=5 ls=0 t=quite
    W x=317 s=0 z=100 f=5 ls=0 t=nice.
-  LINE y=195 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=249 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 f=5 ls=0 t=This
    W x=59 s=0 z=100 f=5 ls=0 t=is
    W x=82 s=0 z=100 f=5 ls=0 t=the
@@ -110,7 +110,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=264 s=0 z=100 f=5 ls=0 t=will
    W x=302 s=0 z=100 f=5 ls=0 t=probably
    W x=377 s=0 z=100 f=5 ls=0 t=overflow
-  LINE y=214 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=268 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=into
    W x=50 s=0 z=100 f=5 ls=0 t=the
    W x=92 s=0 z=100 f=5 ls=0 t=next
@@ -120,14 +120,14 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=314 s=0 z=100 f=5 ls=0 t=dolor
    W x=374 s=0 z=100 f=5 ls=0 t=sit
    W x=410 s=0 z=100 f=5 ls=0 t=amet,
-  LINE y=233 x=0 align=0 mult=1.000 hfid=0 words=6
+  LINE y=287 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 f=5 ls=0 t=consetetur
    W x=116 s=0 z=100 f=5 ls=0 t=sadipscing
    W x=221 s=0 z=100 f=5 ls=0 t=elitr,
    W x=291 s=0 z=100 f=5 ls=0 t=sed
    W x=337 s=0 z=100 f=5 ls=0 t=diam
    W x=393 s=0 z=100 f=5 ls=0 t=nonumy
-  LINE y=252 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=306 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=5 ls=0 t=eirmod
    W x=62 s=0 z=100 f=5 ls=0 t=tempor
    W x=126 s=0 z=100 f=5 ls=0 t=invidunt
@@ -136,7 +136,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=305 s=0 z=100 f=5 ls=0 t=et
    W x=333 s=0 z=100 f=5 ls=0 t=dolore
    W x=400 s=0 z=100 f=5 ls=0 t=magna
-  LINE y=271 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=325 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=aliquyam
    W x=84 s=0 z=100 f=5 ls=0 t=erat,
    W x=140 s=0 z=100 f=5 ls=0 t=sed
@@ -146,7 +146,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=349 s=0 z=100 f=5 ls=0 t=vero
    W x=399 s=0 z=100 f=5 ls=0 t=eos
    W x=438 s=0 z=100 f=5 ls=0 t=et
-  LINE y=290 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=344 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=accusam
    W x=79 s=0 z=100 f=5 ls=0 t=et
    W x=109 s=0 z=100 f=5 ls=0 t=justo
@@ -156,7 +156,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=319 s=0 z=100 f=5 ls=0 t=ea
    W x=351 s=0 z=100 f=5 ls=0 t=rebum.
    W x=416 s=0 z=100 f=5 ls=0 t=Stet
-  LINE y=309 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=363 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=clita
    W x=58 s=0 z=100 f=5 ls=0 t=kasd
    W x=109 s=0 z=100 f=5 ls=0 t=gubergren,
@@ -164,7 +164,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=252 s=0 z=100 f=5 ls=0 t=sea
    W x=296 s=0 z=100 f=5 ls=0 t=takimata
    W x=390 s=0 z=100 f=5 ls=0 t=sanctus
-  LINE y=328 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=382 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=est
    W x=37 s=0 z=100 f=5 ls=0 t=Lorem
    W x=97 s=0 z=100 f=5 ls=0 t=ipsum
@@ -174,7 +174,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=300 s=0 z=100 f=5 ls=0 t=Lorem
    W x=360 s=0 z=100 f=5 ls=0 t=ipsum
    W x=411 s=0 z=100 f=5 ls=0 t=dolor
-  LINE y=347 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=401 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=sit
    W x=40 s=0 z=100 f=5 ls=0 t=amet,
    W x=104 s=0 z=100 f=5 ls=0 t=consetetur
@@ -182,7 +182,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=315 s=0 z=100 f=5 ls=0 t=elitr,
    W x=380 s=0 z=100 f=5 ls=0 t=sed
    W x=421 s=0 z=100 f=5 ls=0 t=diam
-  LINE y=366 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=420 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=5 ls=0 t=nonumy
    W x=71 s=0 z=100 f=5 ls=0 t=eirmod
    W x=132 s=0 z=100 f=5 ls=0 t=tempor
@@ -191,7 +191,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=307 s=0 z=100 f=5 ls=0 t=labore
    W x=371 s=0 z=100 f=5 ls=0 t=et
    W x=398 s=0 z=100 f=5 ls=0 t=dolore
-  LINE y=385 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=439 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=5 ls=0 t=magna
    W x=65 s=0 z=100 f=5 ls=0 t=aliquyam
    W x=149 s=0 z=100 f=5 ls=0 t=erat,
@@ -200,7 +200,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=285 s=0 z=100 f=5 ls=0 t=voluptua.
    W x=387 s=0 z=100 f=5 ls=0 t=At
    W x=414 s=0 z=100 f=5 ls=0 t=vero
-  LINE y=404 x=0 align=0 mult=1.000 hfid=0 words=10
+  LINE y=458 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 f=5 ls=0 t=eos
    W x=39 s=0 z=100 f=5 ls=0 t=et
    W x=67 s=0 z=100 f=5 ls=0 t=accusam
@@ -211,7 +211,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=346 s=0 z=100 f=5 ls=0 t=et
    W x=374 s=0 z=100 f=5 ls=0 t=ea
    W x=404 s=0 z=100 f=5 ls=0 t=rebum.
-  LINE y=423 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=477 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=Stet
    W x=59 s=0 z=100 f=5 ls=0 t=clita
    W x=121 s=0 z=100 f=5 ls=0 t=kasd
@@ -219,7 +219,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=286 s=0 z=100 f=5 ls=0 t=no
    W x=327 s=0 z=100 f=5 ls=0 t=sea
    W x=375 s=0 z=100 f=5 ls=0 t=takimata
-  LINE y=442 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=496 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=sanctus
    W x=75 s=0 z=100 f=5 ls=0 t=est
    W x=109 s=0 z=100 f=5 ls=0 t=Lorem

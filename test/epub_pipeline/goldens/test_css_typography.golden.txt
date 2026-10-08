@@ -355,13 +355,13 @@ SPINE 3 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
    W x=107 s=0 z=100 t=at
    W x=140 s=0 z=100 t=120
    W x=177 s=0 z=100 t=percent
-  LINE y=76 x=0 align=0 mult=0.750 hfid=0 words=5
+  LINE y=77 x=0 align=0 mult=0.750 hfid=0 words=5
    W x=0 s=0 z=100 t=MONDAY,
    W x=49 s=0 z=100 t=THE
    W x=74 s=0 z=100 t=FIFTH
    W x=105 s=0 z=100 t=OF
    W x=121 s=0 z=100 t=OCTOBER
-  LINE y=103 x=0 align=0 mult=1.000 hfid=0 words=9
+  LINE y=101 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=The
    W x=36 s=0 z=100 t=heading
    W x=114 s=0 z=100 t=should
@@ -371,29 +371,29 @@ SPINE 3 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
    W x=320 s=0 z=100 t=date
    W x=368 s=0 z=100 t=should
    W x=438 s=0 z=100 t=be
-  LINE y=127 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=125 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=smaller
    W x=72 s=0 z=100 t=and
    W x=109 s=0 z=100 t=ALL
    W x=147 s=0 z=100 t=UPPERCASE.
-  LINE y=160 x=0 align=2 mult=1.400 hfid=0 words=3
+  LINE y=158 x=0 align=2 mult=1.400 hfid=0 words=3
    W x=75 s=1 z=100 t=Inline
    W x=168 s=1 z=100 t=CSS
    W x=228 s=1 z=100 t=percentages
-  LINE y=194 x=0 align=0 mult=1.200 hfid=0 words=6
+  LINE y=192 x=0 align=0 mult=1.200 hfid=0 words=6
    W x=0 s=0 z=100 t=An
    W x=30 s=0 z=100 t=inline
    W x=99 s=0 z=100 t=heading
    W x=189 s=0 z=100 t=at
    W x=222 s=0 z=100 t=120
    W x=259 s=0 z=100 t=percent
-  LINE y=232 x=0 align=0 mult=0.750 hfid=0 words=5
+  LINE y=231 x=0 align=0 mult=0.750 hfid=0 words=5
    W x=0 s=0 z=100 t=MONDAY,
    W x=49 s=0 z=100 t=THE
    W x=74 s=0 z=100 t=FIFTH
    W x=105 s=0 z=100 t=OF
    W x=121 s=0 z=100 t=OCTOBER
-  LINE y=259 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=255 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=This
    W x=39 s=0 z=100 t=is
    W x=60 s=0 z=100 t=normal
@@ -1121,7 +1121,7 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
    W x=90 s=0 z=100 t=AND
    W x=106 s=0 z=100 t=THIN
    W x=124 s=0 z=100 t=STROKES
-  LINE y=368 x=0 align=0 mult=1.000 hfid=0 words=7
+  LINE y=363 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=All
    W x=40 s=0 z=100 t=samples
    W x=118 s=0 z=100 t=should
@@ -1129,41 +1129,41 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
    W x=277 s=0 z=100 t=their
    W x=336 s=0 z=100 t=strokes,
    W x=423 s=0 z=100 t=with
-  LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=6
+  LINE y=387 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=smooth
    W x=71 s=0 z=100 t=edges
    W x=123 s=0 z=100 t=when
    W x=167 s=0 z=100 t=antialiasing
    W x=288 s=0 z=100 t=is
    W x=309 s=0 z=100 t=enabled.
-  LINE y=425 x=0 align=0 mult=1.000 hfid=0 words=6
+  LINE y=420 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=Baseline
    W x=80 s=0 z=100 t=reference:
    W x=174 s=0 z=100 t=HNT
    W x=201 s=0 z=100 t=HINTING
    W x=260 s=0 z=100 t=NTHHE
    W x=307 s=0 z=100 t=ANMT
-  LINE y=458 x=0 align=0 mult=0.750 hfid=0 words=4
+  LINE y=453 x=0 align=0 mult=0.750 hfid=0 words=4
    W x=0 s=0 z=100 t=HNT
    W x=21 s=0 z=100 t=HINTING
    W x=66 s=0 z=100 t=NTHHE
    W x=102 s=0 z=100 t=ANMT
-  LINE y=485 x=0 align=0 mult=0.900 hfid=0 words=4
+  LINE y=477 x=0 align=0 mult=0.900 hfid=0 words=4
    W x=0 s=0 z=100 t=HNT
    W x=24 s=0 z=100 t=HINTING
    W x=77 s=0 z=100 t=NTHHE
    W x=119 s=0 z=100 t=ANMT
-  LINE y=516 x=0 align=0 mult=1.200 hfid=0 words=4
+  LINE y=507 x=0 align=0 mult=1.200 hfid=0 words=4
    W x=0 s=0 z=100 t=HNT
    W x=32 s=0 z=100 t=HINTING
    W x=103 s=0 z=100 t=NTHHE
    W x=159 s=0 z=100 t=ANMT
-  LINE y=554 x=0 align=0 mult=0.750 hfid=0 words=4
+  LINE y=546 x=0 align=0 mult=0.750 hfid=0 words=4
    W x=0 s=0 z=100 f=0 ls=17 t=HNT
    W x=25 s=0 z=100 f=0 ls=17 t=HINTING
    W x=78 s=0 z=100 f=0 ls=17 t=NTHHE
    W x=120 s=0 z=100 f=0 ls=17 t=ANMT
-  LINE y=581 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=570 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Stroke
    W x=65 s=0 z=100 t=joins:
    W x=124 s=0 z=100 t=fT
@@ -1172,25 +1172,25 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
    W x=285 s=0 z=100 t=AVATAR
    W x=340 s=0 z=100 t=P.
    W x=365 s=0 z=100 t=P,
-  LINE y=614 x=0 align=0 mult=0.750 hfid=0 words=6
+  LINE y=603 x=0 align=0 mult=0.750 hfid=0 words=6
    W x=0 s=2 z=100 t=fT
    W x=17 s=2 z=100 t=office
    W x=63 s=2 z=100 t=affinity
    W x=123 s=2 z=100 t=AVATAR
    W x=165 s=2 z=100 t=P.
    W x=184 s=2 z=100 t=P,
-  LINE y=641 x=0 align=0 mult=0.750 hfid=0 words=4
+  LINE y=627 x=0 align=0 mult=0.750 hfid=0 words=4
    W x=0 s=2 z=100 f=0 ls=-11 t=fT
    W x=14 s=2 z=100 f=0 ls=-11 t=office
    W x=54 s=2 z=100 f=0 ls=-11 t=affinity
    W x=107 s=2 z=100 f=0 ls=-11 t=AVATAR
-  LINE y=668 x=0 align=0 mult=1.000 hfid=0 words=5
+  LINE y=651 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=Wide
    W x=38 s=0 z=100 t=punctuation:
    W x=159 s=0 z=100 t=—
    W x=172 s=0 z=100 t=⸻
    W x=189 s=0 z=100 t=—
-  LINE y=701 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=684 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Solid
    W x=53 s=0 z=100 t=strokes
    W x=124 s=0 z=100 t=must
@@ -1199,7 +1199,7 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
    W x=257 s=0 z=100 t=where
    W x=307 s=0 z=100 t=letters
    W x=377 s=0 z=100 t=overlap.
-  LINE y=734 x=0 align=0 mult=1.000 hfid=0 words=8
+  LINE y=717 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Garamond
    W x=91 s=0 z=100 t=has
    W x=135 s=0 z=100 t=contrasting
