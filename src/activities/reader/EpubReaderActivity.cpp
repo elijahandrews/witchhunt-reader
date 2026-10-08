@@ -63,6 +63,7 @@
 #include "RecentBooksStore.h"
 #include "SdCardFontGlobals.h"
 #include "SilentRestart.h"
+#include "SingleRefreshGrayscale.h"
 #include "StarredPagesActivity.h"
 #include "activities/home/BookInfoActivity.h"
 #include "activities/settings/DictionarySelectionActivity.h"
@@ -5428,6 +5429,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // With AA enabled on X4 the refresh goes out async so the grayscale planes
   // can render during the waveform (inline AA below); everywhere else the
   // trigger blocks through the waveform exactly as before.
+  // Explicit manual cleaning retains its requested BW refresh. The Direct
+  // quality bank can redraw the complete page after menus/popups or images.
+  const bool directAaAllowed = forceRefreshModeNextRender_ < 0;
   HalDisplay::RefreshMode pageRefreshMode;
   // A buffer lent for a build-through is not a degraded one: the X3 diffs against its own copy of
   // the frame on screen, so it keeps the normal cadence (see BG_BUILD_THROUGH_PAGES).
@@ -5509,12 +5513,18 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   if (aaPreempted) {
     LOG_DBG("ERS", "Inline AA skipped: page preempted by navigation");
   }
+  const bool directAaThisRender = aaEnabledForThisRender && !singlePushAaThisRender && directAaAllowed &&
+                                  !aaPreempted &&
+                                  tryDisplayPreparedDirectGrayscale(*page, orientedMarginLeft, contentTop);
   const bool inlineAaThisRender =
-      aaEnabledForThisRender && !singlePushAaThisRender && inlineAaAvailable && !aaPreempted;
+      aaEnabledForThisRender && !singlePushAaThisRender && !directAaThisRender && inlineAaAvailable && !aaPreempted;
   // Anything that cannot run AA inline defers it, rather than only the X3 doing so.
-  const bool deferredAaThisRender = aaEnabledForThisRender && !singlePushAaThisRender && !inlineAaAvailable;
+  const bool deferredAaThisRender =
+      aaEnabledForThisRender && !singlePushAaThisRender && !directAaThisRender && !inlineAaAvailable;
   lastRenderStats.textAntiAliasing = inlineAaThisRender || deferredAaThisRender;
-  if (capLsb) {
+  if (directAaThisRender) {
+    // The complete page has already arrived through one atomic Direct transaction.
+  } else if (capLsb) {
     // Hand the captured planes to the controller, then base + greys go out as
     // one waveform. Cheap: the planes were filled by the page render that just
     // ran, so nothing is walked twice.
@@ -5555,11 +5565,10 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     pendingHalfRefreshAfterImagePage = true;
   }
 
-  if (singlePushAaThisRender) {
-    // Nothing to schedule and nothing to restore: the planes were staged before
-    // the page render and went out with it in one waveform. No deferred pass, so
-    // no second refresh for the idle loop to run and nothing for a page turn to
-    // preempt half-way.
+  if (singlePushAaThisRender || directAaThisRender) {
+    // The complete captured page went out in one waveform. Direct uploads its
+    // absolute planes after drawing; combined-overlay panels stage theirs before
+    // the trigger. Neither strategy owes a later text-weight touch-up.
     LOG_DBG("ERS", "Single-push AA (captured): render=%lums display=%lums", tBwRender - tPrewarm, tDisplay - tBwRender);
     lastRenderStats.usedGrayscale = true;
     lastRenderStats.textAntiAliasing = true;
@@ -5805,6 +5814,35 @@ void EpubReaderActivity::displayBuildPage(RenderLock& lock, const Page& page, co
   WakeTrace::logSummary();
 }
 
+bool EpubReaderActivity::tryDisplayPreparedDirectGrayscale(const Page& page, const int left, const int top) {
+#if defined(BOARD_HAS_PSRAM) && BOARD_HAS_PSRAM
+  if (!SETTINGS.singleRefreshTextAA) return false;
+  const bool compatible = preparedGrayscaleAvailable() && renderer.supportsDirectGrayscale() &&
+                          !secondaryBufferDegraded_ && renderer.hasSecondaryBuffer();
+  if (!singleRefreshTextAaEligible(SETTINGS.singleRefreshTextAA, compatible, getEffectiveTextAntiAliasing(),
+                                   page.hasImages(), preparedGrayscale_.matches(preparedGrayscaleKey(left, top)),
+                                   aaPreemptedByNavigation()))
+    return false;
+  if (!convertPreparedOverlayToAbsolute(renderer.getFrameBuffer(), preparedGrayscale_.lsb(), preparedGrayscale_.msb(),
+                                        48000))
+    return false;
+  // Conversion consumes the overlay representation even if the initial abort
+  // gate rejects the transaction. A fallback must replay from the actual page.
+  preparedGrayscale_.invalidate();
+  const auto timings = renderer.displayPreparedDirectGrayscale(preparedGrayscale_.lsb(), preparedGrayscale_.msb(),
+                                                               [&] { return aaPreemptedByNavigation(); });
+  LOG_DBG("ERS", "Experimental Direct AA: spine=%d page=%d prepare=%lums upload=%lums gray=%lums aborted=%d",
+          currentSpineIndex, section ? section->currentPage : -1, preparedGrayscaleDrawMs_, timings.planesMs,
+          timings.displayMs, timings.aborted ? 1 : 0);
+  return !timings.aborted;
+#else
+  (void)page;
+  (void)left;
+  (void)top;
+  return false;
+#endif
+}
+
 bool EpubReaderActivity::preparedGrayscaleAvailable() const {
 #if defined(BOARD_HAS_PSRAM) && BOARD_HAS_PSRAM
   // Keep the C3 and other panels on their existing paths. UC8279 still owes two
@@ -5982,10 +6020,18 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // out as one waveform, exactly as a freshly rendered page does. Anything else
   // falls through to the B/W display plus the two-push AA replay below.
   const bool singlePushThisPage = preRenderedPlanesStaged_ && !secondaryBufferDegraded_;
+  const bool directThisPage = !singlePushThisPage && forceRefreshModeNextRender_ < 0 &&
+                              tryDisplayPreparedDirectGrayscale(page, orientedMarginLeft, contentTop);
   preRenderedPlanesStaged_ = false;
   // Lent for a build-through rather than lost to an OOM: the X3 diffs against its own copy of
   // the frame on screen, so the normal cadence stays correct (and AA stays off below).
-  if (secondaryBufferDegraded_ && !backgroundBuildThrough_) {
+  if (directThisPage) {
+    // Preserve page-budget bookkeeping; the SDK quality bank supplies the waveform.
+    if (forceHalfRefreshThisPage)
+      pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+    else
+      (void)ReaderUtils::nextRefreshCycleMode(pagesUntilFullRefresh);
+  } else if (secondaryBufferDegraded_ && !backgroundBuildThrough_) {
     renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else if (singlePushThisPage) {
@@ -6026,9 +6072,9 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   if (aaPreempted) {
     LOG_DBG("ERS", "AA replay skipped: page preempted by navigation");
   }
-  if (!singlePushThisPage && !aaPreempted && getEffectiveTextAntiAliasing() && renderer.hasSecondaryBuffer() &&
-      !secondaryBufferDegraded_) {
-    if (prepared) {
+  if (!singlePushThisPage && !directThisPage && !aaPreempted && getEffectiveTextAntiAliasing() &&
+      renderer.hasSecondaryBuffer() && !secondaryBufferDegraded_) {
+    if (prepared && preparedGrayscale_.matches(preparedGrayscaleKey(orientedMarginLeft, contentTop))) {
       renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
       const auto gt = renderer.displayPreparedGrayscale(preparedGrayscale_.lsb(), preparedGrayscale_.msb(),
                                                         [&] { return aaPreemptedByNavigation(); });
@@ -6774,6 +6820,20 @@ void EpubReaderActivity::openReaderMenu() {
         const auto& menu = std::get<MenuResult>(result.data);
         applyOrientation(menu.orientation);
         applyTextDarkness(menu.textDarkness);
+        if (menu.singleRefreshTextAA >= 0 && menu.singleRefreshTextAA <= 1 &&
+            SETTINGS.singleRefreshTextAA != menu.singleRefreshTextAA) {
+          {
+            RenderLock lock(*this);
+            SETTINGS.singleRefreshTextAA = static_cast<uint8_t>(menu.singleRefreshTextAA);
+            pendingGrayscale_ = {};
+            pendingPreRender = false;
+            usePreRenderedBuffer = false;
+            preRenderedPage = {};
+            preRenderedPlanesStaged_ = false;
+            preparedGrayscale_.invalidate();
+          }
+          SETTINGS.saveToFile();
+        }
         toggleAutoPageTurn(menu.pageTurnOption);
         applyBookReaderOverrides(
             menu.embeddedStyleOverride, menu.imageRenderingOverride, menu.fontFamilyOverride, menu.sdFontFamilyOverride,

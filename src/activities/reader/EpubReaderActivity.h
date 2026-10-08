@@ -427,6 +427,7 @@ class EpubReaderActivity final : public Activity {
   PreparedGrayscaleCache preparedGrayscale_;
   unsigned long preparedGrayscaleDrawMs_ = 0;
   bool preparedGrayscaleAvailable() const;
+  bool tryDisplayPreparedDirectGrayscale(const Page& page, int left, int top);
   PreparedGrayscaleCache::Key preparedGrayscaleKey(int left, int top) const;
   uint32_t beginPreparedGrayscaleCapture(const Page& page, int left, int top);
   // Debug-only Background B (section pre-analysis) progress, surfaced as a small

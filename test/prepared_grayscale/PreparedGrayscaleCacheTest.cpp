@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdlib>
 #include <unordered_set>
 
 #include "PreparedGrayscaleCache.h"
+#include "SingleRefreshGrayscale.h"
 
 namespace {
 class PreparedGrayscaleCacheTest : public testing::Test {
@@ -121,3 +123,67 @@ TEST_F(PreparedGrayscaleCacheTest, MissingAllocatorDoesNotAllocateOrLeaveReadyMa
   EXPECT_FALSE(cache.matches(key()));
 }
 }  // namespace
+
+TEST(SingleRefreshGrayscaleTest, ConvertsEveryInkLevelAndDarknessWithoutChangingBw) {
+  // Independent absolute selector truth table: white=11, black=00,
+  // light=01, dark=10 (first digit is LSB). Keep all byte phases covered.
+  for (unsigned darkness = 0; darkness < 5; ++darkness) {
+    std::array<uint8_t, 48000> bw{}, lsb{}, msb{};
+    for (size_t byte = 0; byte < bw.size(); ++byte) {
+      for (unsigned bit = 0; bit < 8; ++bit) {
+        const unsigned raw = (byte + bit) % 4;
+        const uint8_t mask = 1u << bit;
+        if (!raw) bw[byte] |= mask;
+        if (raw == 2 && darkness == 0) lsb[byte] |= mask;
+        if ((raw == 1 || raw == 2) && (darkness == 0 || darkness == 4 || (darkness == 1 && raw == 1)))
+          msb[byte] |= mask;
+      }
+    }
+    const auto original = bw;
+    ASSERT_TRUE(convertPreparedOverlayToAbsolute(bw.data(), lsb.data(), msb.data(), bw.size()));
+    ASSERT_EQ(bw, original);
+    for (size_t byte = 0; byte < bw.size(); ++byte) {
+      unsigned expectedL = 0, expectedM = 0;
+      for (unsigned bit = 0; bit < 8; ++bit) {
+        const unsigned raw = (byte + bit) % 4;
+        unsigned code = 0;
+        if (!raw)
+          code = 3;
+        else if (darkness == 0 && raw == 1)
+          code = 2;
+        else if (darkness == 0 && raw == 2)
+          code = 1;
+        else if ((darkness == 1 && raw == 1) || (darkness == 4 && (raw == 1 || raw == 2)))
+          code = 2;
+        expectedL |= (code & 1) << bit;
+        expectedM |= ((code >> 1) & 1) << bit;
+      }
+      ASSERT_EQ(lsb[byte], expectedL) << "darkness=" << darkness << " byte=" << byte;
+      ASSERT_EQ(msb[byte], expectedM) << "darkness=" << darkness << " byte=" << byte;
+    }
+  }
+}
+
+TEST(SingleRefreshGrayscaleTest, RejectsNullEmptyAndAliasedPlanesBeforeMutation) {
+  uint8_t bw = 0x55, lsb = 0x33, msb = 0x0f;
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(nullptr, &lsb, &msb, 1));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, nullptr, &msb, 1));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, &lsb, nullptr, 1));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, &lsb, &msb, 0));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, &bw, &msb, 1));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, &lsb, &bw, 1));
+  EXPECT_FALSE(convertPreparedOverlayToAbsolute(&bw, &lsb, &lsb, 1));
+  EXPECT_EQ(bw, 0x55);
+  EXPECT_EQ(lsb, 0x33);
+  EXPECT_EQ(msb, 0x0f);
+}
+
+TEST(SingleRefreshGrayscaleTest, OptInAndRuntimeExclusionsLeaveOrdinaryPagesOnFallback) {
+  EXPECT_FALSE(singleRefreshTextAaEligible(false, true, true, false, true, false));
+  EXPECT_TRUE(singleRefreshTextAaEligible(true, true, true, false, true, false));
+  EXPECT_FALSE(singleRefreshTextAaEligible(true, false, true, false, true, false));
+  EXPECT_FALSE(singleRefreshTextAaEligible(true, true, false, false, true, false));
+  EXPECT_FALSE(singleRefreshTextAaEligible(true, true, true, true, true, false));
+  EXPECT_FALSE(singleRefreshTextAaEligible(true, true, true, false, false, false));
+  EXPECT_FALSE(singleRefreshTextAaEligible(true, true, true, false, true, true));
+}
