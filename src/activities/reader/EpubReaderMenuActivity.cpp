@@ -85,7 +85,6 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
       currentPage(currentPage),
       totalPages(totalPages),
       bookProgressPercent(bookProgressPercent) {
-  pendingDarkMode = SETTINGS.darkMode;
   buildMenuItems(hasFootnotes, hasStarredPages, hasPrintedPages);
 }
 
@@ -95,7 +94,7 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
   auto& syncItems = tabMenuItems[static_cast<size_t>(MenuTab::Sync)];
   auto& toolsItems = tabMenuItems[static_cast<size_t>(MenuTab::Tools)];
   navigationItems.reserve(9);
-  settingsItems.reserve(14);
+  settingsItems.reserve(13);
   syncItems.reserve(2);
   toolsItems.reserve(8);
 
@@ -299,11 +298,6 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
         static_cast<EpubReaderMenuActivity*>(ctx)->pendingTextAntiAliasingOverride = threeStateOverrideFromSlot(v);
       }));
 
-  settingsItems.push_back(SettingInfo::DynamicEnumCtx(
-      StrId::STR_DARK_MODE, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
-      [](const void* ctx) -> uint8_t { return static_cast<const EpubReaderMenuActivity*>(ctx)->pendingDarkMode; },
-      [](void* ctx, uint8_t v) { static_cast<EpubReaderMenuActivity*>(ctx)->pendingDarkMode = v; }));
-
   // Hyphenation: default / on / off (mirrors QuickOverrides)
   settingsItems.push_back(SettingInfo::DynamicEnumCtx(
       StrId::STR_HYPHENATION, {StrId::STR_DEFAULT_VALUE, StrId::STR_STATE_ON, StrId::STR_STATE_OFF}, self,
@@ -425,7 +419,6 @@ void EpubReaderMenuActivity::finishWithAction(MenuAction action) {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
-  payload.darkMode = static_cast<int8_t>(pendingDarkMode);
   setResult(std::move(payload));
   finish();
 }
@@ -469,7 +462,6 @@ void EpubReaderMenuActivity::onBackPressed() {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
-  payload.darkMode = static_cast<int8_t>(pendingDarkMode);
   result.data = std::move(payload);
   setResult(std::move(result));
   finish();

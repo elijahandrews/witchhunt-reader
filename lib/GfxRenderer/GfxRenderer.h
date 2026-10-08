@@ -177,9 +177,6 @@ class GfxRenderer {
 
  private:
   mutable std::atomic<unsigned int> refreshOverride = REFRESH_OVERRIDE_NONE;
-  // Polarity changes require a complete refresh even when a caller replaces or
-  // clears its normal one-shot override before painting the next screen.
-  mutable std::atomic<bool> polarityRefreshPending_{false};
   // Atomically consume a pending setNextDisplayRefreshMode() override: if one is set, clear it
   // and return its mode; otherwise return `requested`. Shared by displayBuffer() and
   // triggerDisplay() so the override is honored on BOTH the blocking and non-blocking display
@@ -375,9 +372,6 @@ class GfxRenderer {
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix.store(enabled, std::memory_order_relaxed); }
 
-  void setDarkMode(bool enabled);
-  bool isDarkMode() const { return display.isDarkMode(); }
-
   // Screen ops
   int getScreenWidth() const;
   int getScreenHeight() const;
@@ -416,13 +410,12 @@ class GfxRenderer {
   // intermediate refresh (which would consume the override) detect that a deliberate-transition
   // override is pending and react accordingly.
   bool hasRefreshOverridePending() const {
-    return polarityRefreshPending_.load(std::memory_order_acquire) ||
-           refreshOverride.load(std::memory_order_acquire) != REFRESH_OVERRIDE_NONE;
+    return refreshOverride.load(std::memory_order_acquire) != REFRESH_OVERRIDE_NONE;
   }
   // Discard a pending setNextDisplayRefreshMode() override without applying it, so the next display
   // uses its own requested mode. Use when the armed override should move to a later refresh — e.g.
   // the reader keeps the indexing popup FAST but forces the following content page to HALF itself.
-  void clearRefreshOverride() const { refreshOverride.store(REFRESH_OVERRIDE_NONE, std::memory_order_release); }
+  void clearRefreshOverride() const { consumeRefreshOverride(HalDisplay::FAST_REFRESH); }
 
   // FAST refreshes a non-reader screen may accumulate before another ghost-clearing HALF earns
   // its cost. Deliberately far below the reader's refreshFrequencyPages (15): a page turn

@@ -302,8 +302,6 @@ inline void buildSettings(const RowSink& emit) {
            .withSubmenu(StrId::STR_MENU_DISP_LIGHT)
            .requiring(SettingRequires::ReadingLight));
 
-  emit(SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode, "darkMode", StrId::STR_CAT_DISPLAY));
-
   // --- Reader ---
   // General reader settings
   emit(SettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,

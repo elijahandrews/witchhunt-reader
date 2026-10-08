@@ -2902,11 +2902,6 @@ void GfxRenderer::invertScreen() const {
 }
 
 void GfxRenderer::displayWindow(int logX, int logY, int logW, int logH, bool turnOffScreen) const {
-  if (polarityRefreshPending_.load(std::memory_order_acquire)) {
-    triggerDisplay(HalDisplay::FULL_REFRESH, turnOffScreen);
-    completeDisplay();
-    return;
-  }
   // Translate logical rectangle to physical panel coordinates using the same
   // rotation rules as rotateCoordinates(). Physical (x=source, y=gate row).
   uint16_t physX, physY, physW, physH;
@@ -2958,28 +2953,21 @@ void GfxRenderer::setNextDisplayRefreshMode(const HalDisplay::RefreshMode refres
   refreshOverride.store(encodeRefreshMode(refreshMode), std::memory_order_release);
 }
 
-void GfxRenderer::setDarkMode(const bool enabled) {
-  if (display.setDarkMode(enabled)) {
-    polarityRefreshPending_.store(true, std::memory_order_release);
-  }
-}
-
 HalDisplay::RefreshMode GfxRenderer::consumeRefreshOverride(const HalDisplay::RefreshMode requested) const {
-  const bool polarityChange = polarityRefreshPending_.exchange(false, std::memory_order_acq_rel);
   unsigned int overrideValue = refreshOverride.load(std::memory_order_acquire);
   if (overrideValue == REFRESH_OVERRIDE_NONE) {
-    return polarityChange ? HalDisplay::FULL_REFRESH : requested;
+    return requested;
   }
   unsigned int expected = overrideValue;
   if (refreshOverride.compare_exchange_strong(expected, REFRESH_OVERRIDE_NONE, std::memory_order_acq_rel,
                                               std::memory_order_acquire)) {
-    return polarityChange ? HalDisplay::FULL_REFRESH : decodeRefreshMode(overrideValue);
+    return decodeRefreshMode(overrideValue);
   }
   if (expected != REFRESH_OVERRIDE_NONE) {
     refreshOverride.store(REFRESH_OVERRIDE_NONE, std::memory_order_release);
-    return polarityChange ? HalDisplay::FULL_REFRESH : decodeRefreshMode(expected);
+    return decodeRefreshMode(expected);
   }
-  return polarityChange ? HalDisplay::FULL_REFRESH : requested;
+  return requested;
 }
 
 void GfxRenderer::triggerDisplay(const HalDisplay::RefreshMode mode, const bool turnOffScreen) const {

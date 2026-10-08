@@ -130,7 +130,6 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
   int8_t pendingGuideDotsOverride = -1;
   int8_t pendingParagraphAlignmentOverride = -1;
   int8_t pendingTextAntiAliasingOverride = -1;
-  uint8_t pendingDarkMode = 0;
   int8_t pendingHyphenationOverride = -1;
   int8_t pendingFontSizeNormalizationOverride = -1;
   int8_t pendingInlineFootnotePreviewsOverride = -1;

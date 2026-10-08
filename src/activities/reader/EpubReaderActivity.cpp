@@ -2911,9 +2911,6 @@ uint8_t EpubReaderActivity::getEffectiveImageRendering() const {
 }
 
 bool EpubReaderActivity::getEffectiveTextAntiAliasing() const {
-  // The SDK deliberately uses crisp BW for inverted output. Keep the saved
-  // global/book preferences intact so light mode restores their AA setting.
-  if (SETTINGS.darkMode) return false;
   if (bookTextAntiAliasingOverride >= 0) {
     return bookTextAntiAliasingOverride != 0;
   }
@@ -6671,13 +6668,6 @@ void EpubReaderActivity::openReaderMenu() {
       [this](const ActivityResult& result) {
         const auto& menu = std::get<MenuResult>(result.data);
         applyOrientation(menu.orientation);
-        if (menu.darkMode >= 0 && menu.darkMode <= 1 && SETTINGS.darkMode != menu.darkMode) {
-          {
-            RenderLock lock(*this);
-            SETTINGS.darkMode = static_cast<uint8_t>(menu.darkMode);
-          }
-          SETTINGS.saveToFile();
-        }
         applyTextDarkness(menu.textDarkness);
         toggleAutoPageTurn(menu.pageTurnOption);
         applyBookReaderOverrides(

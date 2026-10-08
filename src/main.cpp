@@ -718,9 +718,6 @@ void setupDisplayAndFonts(bool seamless = false, bool skipSdFontDiscovery = fals
   // boot before the measurement catches up. Seed-only: a live measurement always wins.
   display.seedLastFastRefreshMs(SETTINGS.measuredFastRefreshMs);
   renderer.begin();
-  // Quick Resume may paint a saved logical framebuffer before any activity is
-  // entered. Apply the persisted output polarity before that first paint.
-  renderer.setDarkMode(SETTINGS.darkMode);
   activityManager.begin();
   LOG_DBG("MAIN", "Display initialized");
 

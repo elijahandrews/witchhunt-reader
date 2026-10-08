@@ -55,7 +55,7 @@ def main():
         "clang", *sanitizers, "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
-    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "dark_mode.cpp", output / "GfxRenderer.cpp"]
+    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (

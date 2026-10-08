@@ -16,7 +16,6 @@
 #include <fstream>
 #include <iostream>
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
-int runDarkModeChecks(GfxRenderer&, HalDisplay&);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
 #endif
@@ -137,6 +136,5 @@ int main(int argc, char** argv) {
 #ifdef WITCH_TEST_OUTLINE
   if (argc > 2) result |= runOutlineChecks(g, d, argv[2]);
 #endif
-  result |= runDarkModeChecks(g, d);
   return result;
 }
