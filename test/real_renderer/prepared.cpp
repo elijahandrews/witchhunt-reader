@@ -23,6 +23,13 @@ void paintPage(GfxRenderer& g, float scale) {
   }
   g.drawRect(16, 20, width - 32, height - 40, true);
 }
+void paintLiveChrome(GfxRenderer& g) {
+  // Deliberately overlap glyph fringes: live UI must erase their retained gray
+  // selectors as well as repainting the BW framebuffer.
+  g.fillRect(0, 20, g.getScreenWidth(), 26, false);
+  g.fillRect(18, 26, 19, 7, true);
+  g.drawLine(8, 44, g.getScreenWidth() - 8, 44, 1, true);
+}
 }  // namespace
 
 int runPreparedGrayscaleChecks(GfxRenderer& g, HalDisplay& d) {
@@ -71,6 +78,25 @@ int runPreparedGrayscaleChecks(GfxRenderer& g, HalDisplay& d) {
         g.eraseOpaqueGlyphs([&] { paintPage(g, scale); });
         const Plane legacyM = d.fb;
         legacyReplayUs += micros(start);
+
+        g.setRenderMode(GfxRenderer::BW);
+        Plane freshL{}, freshM{}, retainedL = capturedL, retainedM = capturedM;
+        d.fb.fill(255);
+        g.beginGrayCapture(freshL.data(), freshM.data());
+        paintPage(g, scale);
+        paintLiveChrome(g);
+        g.endGrayCapture();
+        const Plane freshChromeBw = d.fb;
+        d.fb = capturedBw;
+        g.beginGrayCapture(retainedL.data(), retainedM.data());
+        paintLiveChrome(g);
+        g.endGrayCapture();
+        ++checks;
+        if (d.fb != freshChromeBw || retainedL != freshL || retainedM != freshM || !d.grayEvents.empty()) {
+          ++failures;
+          std::cerr << "Retained chrome differs: orientation=" << int(orientation) << " darkness=" << int(darkness)
+                    << " scale=" << scale << '\n';
+        }
         ++checks;
         if (capturedBw != legacyBw || capturedL != legacyL || capturedM != legacyM) {
           ++failures;

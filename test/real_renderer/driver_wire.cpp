@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   EpdBus bus;
   Uc8279X4Driver driver;
   driver.begin(bus);
-  size_t cases = 0;
+  size_t cases = 0, abortCases = 0;
   assert(driver.geometry().width == 800 && driver.geometry().height == 480);
   assert(driver.grayscaleCapabilities().encoding == GrayscaleEncoding::OverlayMasks);
   for (const auto& entry : std::filesystem::directory_iterator(argv[1])) {
@@ -49,7 +49,34 @@ int main(int argc, char** argv) {
       assert(bus.newPlane[i + 12000] == base[i]);
     }
     ++cases;
+    // Prepared-mask cancellation can leave zero, one or both selector planes
+    // staged. It must never refresh them, and reseeding the baseline must make
+    // the following ordinary page turn correct in every case.
+    for (int uploaded : {0, 1, 2}) {
+      driver.display(bus, base.data(), base.data(), RefreshMode::Fast, false);
+      const unsigned refreshesBefore = bus.refreshes;
+      if (uploaded >= 1) driver.copyGrayscaleLsb(bus, lsb.data());
+      if (uploaded >= 2) driver.copyGrayscaleMsb(bus, msb.data());
+      driver.cleanupGrayscaleBuffers(bus, base.data());
+      assert(bus.refreshes == refreshesBefore);
+      assert(bus.oldPlane.size() == 60000);
+      for (size_t i = 0; i < base.size(); ++i) assert(bus.oldPlane[i + 12000] == base[i]);
+      auto next = base;
+      for (size_t i = 0; i < next.size(); ++i) next[i] ^= static_cast<uint8_t>(0xA5u + i);
+      assert(driver.displayStart(bus, next.data(), base.data(), RefreshMode::Fast, false));
+      driver.displayFinish(bus, next.data());
+      assert(bus.refreshes == refreshesBefore + 1);
+      assert(bus.oldPlane.size() == 60000 && bus.newPlane.size() == 60000);
+      for (size_t i = 0; i < 12000; ++i) assert(bus.oldPlane[i] == 255 && bus.newPlane[i] == 255);
+      for (size_t i = 0; i < next.size(); ++i) {
+        assert(bus.oldPlane[i + 12000] == next[i]);
+        assert(bus.newPlane[i + 12000] == next[i]);
+      }
+      ++abortCases;
+    }
   }
   assert(cases == 60);
+  assert(abortCases == 180);
+  std::cout << "Actual UC8279X4 prepared-abort/no-refresh/next-BW checks=" << abortCases << " passed\n";
   std::cout << "Actual UC8279X4 wire inversion, gate offset, LUT68 and restored BW checks=" << cases << " passed\n";
 }
