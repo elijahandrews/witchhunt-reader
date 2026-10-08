@@ -56,6 +56,7 @@ class Epub {
   bool parseTocNavFile() const;
   bool parsePageMapFile() const;
   void parseCssFiles() const;
+  bool collectCssMediaUsage(std::vector<uint8_t>& usage, bool& retry) const;
   bool compileDocumentStyles() const;
   bool documentStyleCachesValid() const;
   void discoverCssFilesFromZip();

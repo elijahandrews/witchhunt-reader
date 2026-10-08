@@ -26,6 +26,7 @@
 #include "Epub/HashUtils.h"
 #include "Epub/ImageFormatDetector.h"
 #include "Epub/SpinePageIndex.h"
+#include "Epub/css/CssMedia.h"
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
 #include "Epub/parsers/PageListSink.h"
@@ -551,7 +552,7 @@ void Epub::discoverCssFilesFromZip() {
 
 namespace {
 constexpr size_t MAX_DOCUMENT_HEAD_BYTES = 64 * 1024;
-constexpr uint8_t DOCUMENT_CSS_INDEX_VERSION = 1;
+constexpr uint8_t DOCUMENT_CSS_INDEX_VERSION = 2;  // media-type filtering of linked/head styles
 constexpr uint32_t DOCUMENT_CSS_INDEX_HEADER = 3;  // version, u16 spine count
 uint32_t documentCssHashStart(const uint16_t count) {
   uint32_t hash = (2166136261u ^ DOCUMENT_CSS_INDEX_VERSION) * 16777619u;
@@ -562,9 +563,17 @@ uint32_t documentCssHashStart(const uint16_t count) {
 class HeadStyleExtractor {
  public:
   explicit HeadStyleExtractor(const std::string& path) : path_(path) {}
+  HeadStyleExtractor(const std::string& documentPath, const std::vector<std::string>& cssFiles,
+                     std::vector<uint8_t>& usage)
+      : path_(documentPath), cssFiles_(&cssFiles), usage_(&usage) {}
   bool init() { return parser_.init(this, start, end, text, nullptr, true); }
   bool feed(const uint8_t* data, size_t size) { return parser_.feed(data, size) && !failed_; }
   bool stopped() const { return parser_.isStopped(); }
+  bool reliable() const {
+    return !(parser_.truncationFlags() &
+             (SaxParser::kTruncElemName | SaxParser::kTruncAttrName | SaxParser::kTruncAttrValue |
+              SaxParser::kTruncMaxAttrs | SaxParser::kTruncMaxDepth));
+  }
   bool hasStyles() const { return hasStyles_; }
   bool finish() {
     const bool okay = !failed_;
@@ -587,12 +596,37 @@ class HeadStyleExtractor {
       self.inHead_ = true;
     else if (tag(name, "body"))
       self.parser_.stop();
-    else if (self.inHead_ && tag(name, "style")) {
+    else if (self.inHead_ && tag(name, "link") && self.usage_) {
+      const char *href = nullptr, *rel = nullptr, *media = nullptr;
+      for (int i = 0; atts && atts[i]; i += 2) {
+        if (tag(atts[i], "href")) href = atts[i + 1];
+        if (tag(atts[i], "rel")) rel = atts[i + 1];
+        if (tag(atts[i], "media")) media = atts[i + 1];
+      }
+      if (!href || !rel) return;
+      bool stylesheet = false;
+      std::string_view relations(rel);
+      while (!(relations = cssMedia::trim(relations)).empty()) {
+        size_t end = 0;
+        while (end < relations.size() && !cssMedia::space(relations[end])) ++end;
+        stylesheet |= cssMedia::equal(relations.substr(0, end), "stylesheet");
+        relations.remove_prefix(end);
+      }
+      if (!stylesheet) return;
+      const auto slash = self.path_.find_last_of('/');
+      const auto path = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(
+          (slash == std::string::npos ? std::string() : self.path_.substr(0, slash + 1)) + href));
+      for (size_t i = 0; i < self.cssFiles_->size(); ++i) {
+        if (path != (*self.cssFiles_)[i]) continue;
+        (*self.usage_)[i] |= 1;  // a document explicitly references this stylesheet
+        if (!media || cssMedia::mayMatchScreen(media)) (*self.usage_)[i] |= 2;
+        break;
+      }
+    } else if (self.inHead_ && tag(name, "style")) {
       self.inStyle_ = true;
       for (int i = 0; atts && atts[i]; i += 2) {
-        // Conditional media queries retain the existing CSS resolver's limits.
         if (tag(atts[i], "type") && strcmp(atts[i + 1], "text/css") != 0) self.inStyle_ = false;
-        if (tag(atts[i], "media") && strcmp(atts[i + 1], "print") == 0) self.inStyle_ = false;
+        if (tag(atts[i], "media") && !cssMedia::mayMatchScreen(atts[i + 1])) self.inStyle_ = false;
       }
     }
   }
@@ -608,18 +642,74 @@ class HeadStyleExtractor {
   }
   static void text(void* data, const char* text, int size) {
     auto& self = *static_cast<HeadStyleExtractor*>(data);
-    if (!self.inStyle_ || size <= 0 || self.failed_) return;
+    if (self.usage_ || !self.inStyle_ || size <= 0 || self.failed_) return;
     if (!self.file_ && !Storage.openFileForWrite("EBP", self.path_, self.file_)) self.failed_ = true;
     if (!self.failed_ && self.file_.write(reinterpret_cast<const uint8_t*>(text), size) != static_cast<size_t>(size))
       self.failed_ = true;
     self.hasStyles_ = true;
   }
   const std::string& path_;
+  const std::vector<std::string>* cssFiles_ = nullptr;
+  std::vector<uint8_t>* usage_ = nullptr;
   SaxParser parser_;
   FsFile file_;
   bool inHead_ = false, inStyle_ = false, hasStyles_ = false, failed_ = false;
 };
 }  // namespace
+
+bool Epub::collectCssMediaUsage(std::vector<uint8_t>& usage, bool& retry) const {
+  // One byte per already-discovered stylesheet, retained only during compilation.
+  // The book-wide merge remains the compatibility fallback for unreferenced CSS.
+  usage.assign(cssFiles.size(), 0);
+  retry = false;
+  if (usage.empty()) return true;
+  const auto keepAll = [&]() {
+    std::fill(usage.begin(), usage.end(), 3);
+    retry = true;
+    return true;
+  };
+  ZipFile zip(filepath);
+  primeZip(zip);
+  for (int i = 0; i < getSpineItemsCount(); ++i) {
+    if (CooperativeAbort::shouldAbortLongTask()) {
+      CooperativeAbort::markAborted();
+      return false;
+    }
+    const std::string path = FsHelpers::normalisePath(getSpineItem(i).href);
+    ZipFile::FileStatSlim stat{};
+    if (!zip.loadFileStatSlim(path.c_str(), &stat)) return keepAll();
+    const size_t ringBytes =
+        stat.method == 0 ? 0
+                         : InflateReader::ringSizeFor(std::min<size_t>(stat.uncompressedSize, MAX_DOCUMENT_HEAD_BYTES));
+    const size_t readerBytes = ringBytes + 1024 + 2 * alignof(std::max_align_t);
+    BuildArena* arena =
+        loadScratch_ && loadScratch_->valid() && loadScratch_->capacity() - loadScratch_->used() >= readerBytes
+            ? loadScratch_
+            : nullptr;
+    if (ESP.getFreeHeap() < SaxParser::stateBytes() + 8 * 1024 + (arena ? 0 : readerBytes)) return keepAll();
+    HeadStyleExtractor head(path, cssFiles, usage);
+    ZipFile::EntryReader reader(zip, 1024, arena);
+    if (!head.init() || !reader.open(stat, MAX_DOCUMENT_HEAD_BYTES)) return keepAll();
+    uint8_t buffer[192];
+    bool done = false, valid = true;
+    while (!done && !head.stopped()) {
+      size_t produced = 0;
+      if (!reader.step(buffer, sizeof(buffer), &produced, &done)) return keepAll();
+      if (!head.feed(buffer, produced)) {
+        valid = false;
+        break;
+      }
+    }
+    // An unseen link might enable a previously excluded sheet. Keep the historical
+    // merge when a malformed/oversized head makes this book-wide inventory partial.
+    if (!valid || !head.stopped() || !head.reliable()) {
+      std::fill(usage.begin(), usage.end(), 3);
+      break;
+    }
+  }
+  adoptZipDetails(zip);
+  return true;
+}
 
 bool Epub::compileDocumentStyles() const {
   const auto root = getCachePath() + "/doc_css";
@@ -728,6 +818,7 @@ bool Epub::documentStyleCache(const int spineIndex, std::string& path, bool& tru
 }
 
 bool Epub::documentStyleCachesValid() const {
+  if (Storage.exists((getCachePath() + "/doc_css/.media_retry").c_str())) return false;
   FsFile index;
   if (!Storage.openFileForRead("EBP", getCachePath() + "/doc_css/index.bin", index)) return false;
   uint8_t version = 0;
@@ -779,8 +870,17 @@ void Epub::parseCssFiles() const {
   }
 
   Storage.removeDir((getCachePath() + "/doc_css").c_str());
+  std::vector<uint8_t> cssMediaUsage;
+  bool retryMediaInventory = false;
+  if (!collectCssMediaUsage(cssMediaUsage, retryMediaInventory)) {
+    cssParser->abortCacheCompile();
+    cssParser->clear();
+    return;
+  }
   bool skippedForLowHeap = false;
-  for (const auto& cssPath : cssFiles) {
+  for (size_t cssIndex = 0; cssIndex < cssFiles.size(); ++cssIndex) {
+    const auto& cssPath = cssFiles[cssIndex];
+    if (cssMediaUsage[cssIndex] == 1) continue;
     LOG_DBG("EBP", "Parsing CSS file: %s", cssPath.c_str());
 
     // Check CSS file size before decompressing - skip files that are too large
@@ -844,6 +944,15 @@ void Epub::parseCssFiles() const {
 
   // Head styles stay in per-spine rule caches; only their font identities are shared.
   if (!skippedForLowHeap && !compileDocumentStyles()) skippedForLowHeap = true;
+
+  // Keep the existing merged styles usable for this open after a transient scan
+  // failure, but force a healthy open to retry the media inventory. The sentinel
+  // does not hide usable per-document rules from the current layout pass.
+  if (!skippedForLowHeap && retryMediaInventory) {
+    FsFile retry;
+    if (!Storage.openFileForWrite("EBP", getCachePath() + "/doc_css/.media_retry", retry) || retry.write(1) != 1)
+      skippedForLowHeap = true;
+  }
 
   // A stylesheet skipped for low heap must NOT produce a persisted cache: an incomplete (or
   // empty) index loads as valid on every later open — hasCache() then short-circuits the

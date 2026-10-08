@@ -1,4 +1,4 @@
-BOOK title=EPUB Feature Specimens lang=en spine=9 toc=9 reliableToc=1
+BOOK title=EPUB Feature Specimens lang=en spine=11 toc=11 reliableToc=1
 SPINE 0 href=OPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=7 footnotes=0
   LINE y=0 x=0 align=1 mult=1.000 hfid=0 words=3
@@ -3303,3 +3303,117 @@ SPINE 8 href=OPS/Heads/ch8.xhtml pages=6 truncated=0 cssFallback=0
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=stone
    W x=57 s=0 z=100 t=wall.
+SPINE 9 href=OPS/Heads/ch9.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=11 footnotes=0
+  LINE y=18 x=18 align=0 mult=1.200 hfid=0 words=3
+   W x=0 s=0 z=100 t=Screen
+   W x=74 s=0 z=100 t=stylesheet
+   W x=194 s=0 z=100 t=active
+  LINE y=47 x=18 align=0 mult=1.000 hfid=0 words=9
+   W x=0 s=0 z=100 t=This
+   W x=43 s=0 z=100 t=chapter
+   W x=117 s=0 z=100 t=has
+   W x=160 s=0 z=100 t=an
+   W x=193 s=0 z=100 t=extra
+   W x=249 s=0 z=100 t=body
+   W x=293 s=0 z=100 t=inset
+   W x=348 s=0 z=100 t=on
+   W x=381 s=0 z=100 t=both
+  LINE y=71 x=18 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=sides.
+   W x=60 s=0 z=100 t=The
+   W x=96 s=0 z=100 t=diamond
+   W x=172 s=0 z=100 t=below
+   W x=223 s=0 z=100 t=shares
+   W x=291 s=0 z=100 t=the
+   W x=331 s=0 z=100 t=first
+   W x=383 s=0 z=100 t=line
+  LINE y=95 x=18 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=of
+   W x=28 s=0 z=100 t=its
+   W x=59 s=0 z=100 t=paragraph.
+  IMG y=122 x=18 w=15 h=15 src=<cache>/epub_<hash>/img_2fadbca68484fa5f.png
+  LINE y=119 x=54 align=0 mult=1.000 hfid=0 words=10
+   W x=-21 s=0 z=100 t= 
+   W x=-11 s=0 z=100 t= 
+   W x=-1 s=0 z=100 t= 
+   W x=9 s=0 z=100 t= 
+   W x=19 s=1 z=100 t=Orchard
+   W x=99 s=1 z=100 t=path.
+   W x=164 s=0 z=100 t=The
+   W x=201 s=0 z=100 t=text
+   W x=247 s=0 z=100 t=continues
+   W x=343 s=0 z=100 t=beside
+  LINE y=143 x=54 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=the
+   W x=37 s=0 z=100 t=marker
+   W x=98 s=0 z=100 t=and
+   W x=135 s=0 z=100 t=wraps
+   W x=182 s=0 z=100 t=at
+   W x=210 s=0 z=100 t=the
+   W x=247 s=0 z=100 t=hanging
+   W x=327 s=0 z=100 t=inset.
+  LINE y=167 x=54 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=This
+   W x=39 s=0 z=100 t=is
+   W x=60 s=0 z=100 t=original
+   W x=141 s=0 z=100 t=diagnostic
+   W x=239 s=0 z=100 t=text
+   W x=281 s=0 z=100 t=for
+   W x=317 s=0 z=100 t=checking
+  LINE y=191 x=54 align=0 mult=1.000 hfid=0 words=2
+   W x=0 s=0 z=100 t=paragraph
+   W x=93 s=0 z=100 t=shape.
+  LINE y=215 x=18 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=After
+   W x=51 s=0 z=100 t=the
+   W x=88 s=0 z=100 t=marker,
+   W x=157 s=0 z=100 t=this
+   W x=200 s=0 z=100 t=paragraph
+   W x=293 s=0 z=100 t=returns
+   W x=365 s=0 z=100 t=to
+   W x=393 s=0 z=100 t=the
+  LINE y=239 x=18 align=0 mult=1.000 hfid=0 words=3
+   W x=0 s=0 z=100 t=normal
+   W x=68 s=0 z=100 t=body
+   W x=108 s=0 z=100 t=inset.
+SPINE 10 href=OPS/Heads/ch10.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=6 footnotes=1
+  LINE y=0 x=0 align=0 mult=1.700 hfid=0 words=2
+   W x=0 s=0 z=100 t=Scaled
+   W x=107 s=0 z=100 t=heading
+  LINE y=77 x=0 align=0 mult=1.000 hfid=0 words=11
+   W x=0 s=0 z=100 t=The
+   W x=36 s=0 z=100 t=gap
+   W x=74 s=0 z=100 t=above
+   W x=134 s=0 z=100 t=this
+   W x=180 s=0 z=100 t=line
+   W x=224 s=0 z=100 t=is
+   W x=248 s=0 z=100 t=two
+   W x=285 s=0 z=100 t=em
+   W x=313 s=0 z=100 t=at
+   W x=344 s=0 z=100 t=the
+   W x=384 s=0 z=100 t=heading
+  LINE y=101 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=0 s=0 z=100 t=size.
+  LINE y=125 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=4 z=100 t=This
+   W x=39 s=4 z=100 t=link
+   W x=79 s=4 z=100 t=has
+   W x=118 s=4 z=100 t=no
+   W x=147 s=4 z=100 t=underline.
+  LINE y=149 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=The
+   W x=38 s=0 z=100 t=link
+   W x=83 s=0 z=100 t=remains
+   W x=159 s=0 z=100 t=navigable.
+   W x=268 s=0 z=100 t=Its
+   W x=307 s=0 z=100 t=neighboring
+   W x=421 s=0 z=100 t=text
+  LINE y=173 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=keeps
+   W x=47 s=0 z=100 t=the
+   W x=84 s=0 z=100 t=usual
+   W x=142 s=0 z=100 t=body
+   W x=182 s=0 z=100 t=style.
+  FN n=This link has no underline. href=#destination

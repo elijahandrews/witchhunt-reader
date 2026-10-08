@@ -95,7 +95,7 @@ class CssParser {
   // v21: persist text-transform and line-height; older caches discarded both.
   // v23: named font stacks, monospace, distinct all-small-caps/inherit and white-space modes.
   // v24: keep display:inline apart from display:block (#388); prior caches conflated them.
-  static constexpr uint8_t CSS_CACHE_VERSION = 24;
+  static constexpr uint8_t CSS_CACHE_VERSION = 25;  // filter linked/head styles by screen media type
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;

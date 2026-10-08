@@ -19,6 +19,15 @@ def png():
             pixels.append(0 if ink else 255)
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width,height,8,0,0,0,0)) + chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND",b"")
 
+def marker_png():
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    pixels = bytearray()
+    for y in range(15):
+        pixels.append(0)
+        pixels.extend(0 if abs(x - 7) + abs(y - 7) <= 6 else 255 for x in range(15))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB",15,15,8,0,0,0,0)) + chunk(b"IDAT",zlib.compress(pixels)) + chunk(b"IEND",b"")
+
 CSS = """
 p, pre { margin:0; text-indent:0; }
 .wrap {white-space:pre-wrap}
@@ -92,21 +101,36 @@ returns to the glass.</pre>
  passages should remain reachable after changing font size or selecting a search result.</p>
 <section><div>""" + numbered_paragraph() + "</div></section>"),
 ]
+CHAPTERS += [
+    ("Media and image markers", """<p class="media-check">Screen stylesheet active</p>
+<p>This chapter has an extra body inset on both sides. The diamond below shares the first line of its paragraph.</p>
+<p class="image-marker"><img src="../marker.png" width="15" height="15"/>&#160;&#160;&#160;&#160;<strong>Orchard path.</strong>
+The text continues beside the marker and wraps at the hanging inset. This is original diagnostic text for checking paragraph shape.</p>
+<p>After the marker, this paragraph returns to the normal body inset.</p>"""),
+    ("Scaled spacing and plain links", """<p class="scaled-heading">Scaled heading</p>
+<p>The gap above this line is two em at the heading size.</p>
+<p><a class="plain-link" href="#destination">This link has no underline.</a></p>
+<p id="destination">The link remains navigable. Its neighboring text keeps the usual body style.</p>"""),
+]
+
 def build(output):
     files = {
       "mimetype":"application/epub+zip",
       "META-INF/container.xml":'<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
       "OPS/style.css":CSS, "OPS/equation.png":png(),
+      "OPS/marker.png":marker_png(),
+      "OPS/alternate-device.css":".media-check {text-transform:uppercase;font-size:60%;margin-left:0}",
       "OPS/Fonts/One.ttf":static_font(), "OPS/Fonts/Two.ttf":static_font(wide=True),
     }
     manifest='<item id="css" href="style.css" media-type="text/css"/><item id="image" href="equation.png" media-type="image/png"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
     manifest += '<item id="font1" href="Fonts/One.ttf" media-type="font/ttf"/><item id="font2" href="Fonts/Two.ttf" media-type="font/ttf"/>'
+    manifest += '<item id="marker" href="marker.png" media-type="image/png"/><item id="alternate" href="alternate-device.css" media-type="text/css"/>'
     spine='';nav=''
     for i,(title,body) in enumerate(CHAPTERS):
         path = f"Heads/ch{i}.xhtml" if i >= 4 else f"ch{i}.xhtml"
         sheet = "../style.css" if i >= 4 else "style.css"
         head = ""
-        if i >= 4:
+        if 4 <= i <= 8:
             source = "One" if i == 4 else "Two"
             transform = "uppercase" if i == 4 else "lowercase"
             # Declaration deliberately precedes @font-face; document-local aliases are discovered first.
@@ -115,6 +139,14 @@ def build(output):
               p {{font-weight:normal}}
               @font-face {{font-family:'Chapter Face';src:url('../Fonts/{source}.ttf') format('truetype')}}
             ]]></style>"""
+        if i == 9:
+            head = '''<link rel="stylesheet" href="../alternate-device.css" media="amzn-mobi"/>
+              <style>body {margin:1em} .media-check {font-size:120%;text-align:center}
+              .image-marker {margin-left:2em;text-indent:-2em;text-align:left}</style>
+              <style media="amzn-mobi">.media-check {text-decoration:line-through}</style>'''
+        if i == 10:
+            head = '''<style>.scaled-heading {font-size:170%;margin-bottom:2em;text-align:center}
+              .plain-link {text-decoration:none}</style>'''
         files[f"OPS/{path}"]=f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{title}</title><link rel="stylesheet" type="text/css" href="{sheet}"/>{head}</head><body>{body}</body></html>'
         manifest+=f'<item id="c{i}" href="{path}" media-type="application/xhtml+xml"/>'
         spine+=f'<itemref idref="c{i}"/>'

@@ -37,7 +37,8 @@ namespace {
 // v82: embedded fonts, named families, true caps and preformatted text.
 // v81: scaled glyph ink bounds preserve fractional baseline/side bearings.
 // v79: CSS case transforms and inherited line spacing invalidate cached text and positions.
-constexpr uint8_t SECTION_FILE_VERSION = 84;  // v78: a span indent (poem line shape) gives way
+constexpr uint8_t SECTION_FILE_VERSION = 85;  // v85: body insets, inline markers and computed CSS spacing
+                                              // v78: a span indent (poem line shape) gives way
                                               // before its line wraps; v77 pages of such poems
                                               // carry the wrapped lines
                                               // v77: the status byte records a heap-degraded

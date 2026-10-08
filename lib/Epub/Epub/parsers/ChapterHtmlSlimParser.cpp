@@ -245,8 +245,8 @@ constexpr size_t MAX_BACKGROUND_PICTURE_SCOPES = 4;
 // whose <br>-separated lines each become a block of their own and must keep the inset of the
 // paragraph they belong to. <ul>/<ol> are how a list's items get their indent: in CSS an item
 // starts at the list's content edge, and its own margin-left only adds to that.
-const char* INSET_CONTAINER_TAGS[] = {"div", "blockquote", "section", "article", "aside", "main",
-                                      "p",   "li",         "pre",     "ul",      "ol"};
+const char* INSET_CONTAINER_TAGS[] = {"body", "div", "blockquote", "section", "article", "aside",
+                                      "main", "p",   "li",         "pre",     "ul",      "ol"};
 constexpr int NUM_INSET_CONTAINER_TAGS = sizeof(INSET_CONTAINER_TAGS) / sizeof(INSET_CONTAINER_TAGS[0]);
 
 // A list's padding-left when the book states none -- the stand-in for the browser default
@@ -1268,6 +1268,16 @@ void ChapterHtmlSlimParser::endExternalPageBreakAnchors() {
 
 void ChapterHtmlSlimParser::attachPendingFloatImage(BlockStyle& bs) {
   if (!pendingInlineImage_.active) return;
+  if (pendingInlineImage_.isPrefix) {
+    // Reserve only the first line's advance. The image is materialised with that
+    // line after page-fit/spacing decisions, so it cannot be stranded on the
+    // preceding page when the paragraph starts close to the bottom edge.
+    if (!pendingInlineImage_.prefixAttached) {
+      bs.firstLineExtraIndent += pendingInlineImage_.width + pendingInlineImage_.prefixSpace;
+      pendingInlineImage_.prefixAttached = true;
+    }
+    return;
+  }
   if (!currentPage) currentPage.reset(new (std::nothrow) Page());
 
   const int16_t imgH = pendingInlineImage_.height;
@@ -2158,6 +2168,22 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
   const bool mathAltImage = strcmp(mathLocalName, "math") == 0 && self->imageRendering == 0 &&
                             getAttribute(atts, "altimg") && *getAttribute(atts, "altimg");
   if (matches(name, IMAGE_TAGS, NUM_IMAGE_TAGS) || mathAltImage) {
+    // The bounded prefix slot holds one image. Drain it in source order before
+    // another image can take the slot or go through the block-image path.
+    if (self->pendingInlineImage_.active && self->pendingInlineImage_.isPrefix && self->currentTextBlock) {
+      if (self->partWordBufferIndex > 0 && !self->flushPartWordBuffer()) return;
+      if (self->currentTextBlock->isEmpty()) {
+        self->attachPendingFloatImage(self->currentTextBlock->getBlockStyle());
+        self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR);
+      }
+      self->makePages();
+      if (self->streamFailed || self->layoutFailed || !self->currentTextBlock) return;
+      auto style = self->currentTextBlock->getBlockStyle();
+      style.firstLineExtraIndent = 0;
+      style.marginTop = style.paddingTop = 0;
+      self->currentTextBlock->reset(style);
+      self->wordsExtractedInBlock = 0;
+    }
     std::string src;
     std::string alt;
     // Explicit width/height from the markup (e.g. an SVG cover: <image width="455" height="751" .../>,
@@ -2534,7 +2560,18 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                 //   attachPendingFloatImage() splits anything taller than the remaining page into
                 //   a continuation tile on the next page; capping at viewportHeight keeps that
                 //   single-continuation split correct (tileB never exceeds one page).
-                const bool isInlineCandidate = self->floatDepth_ > 0 && displayWidth <= self->viewportWidth / 2 &&
+                const bool prefixCandidate =
+                    self->floatDepth_ == 0 && self->currentBlockOwnerDepth_ >= 0 && self->currentTextBlock &&
+                    self->currentTextBlock->isEmpty() && self->partWordBufferIndex == 0 &&
+                    !self->pendingInlineImage_.active && !self->deferredPageImage_ && self->activeFloatBottom_ == 0 &&
+                    !self->pendingDropCap_.active &&
+                    (!imgStyle.hasDisplay() || imgStyle.display != CssDisplay::Block) &&
+                    (self->currentTextBlock->getBlockStyle().alignment == CssTextAlign::Left ||
+                     self->currentTextBlock->getBlockStyle().alignment == CssTextAlign::Justify) &&
+                    displayWidth <= self->effectiveLineHeight(self->currentTextBlock->getBlockStyle()) &&
+                    displayHeight <= self->effectiveLineHeight(self->currentTextBlock->getBlockStyle());
+                const bool isInlineCandidate = (self->floatDepth_ > 0 || prefixCandidate) &&
+                                               displayWidth <= self->viewportWidth / 2 &&
                                                displayHeight <= self->viewportHeight;
                 if (isInlineCandidate) {
                   self->pendingInlineImage_.cachedPath = std::move(cachedImagePath);
@@ -2546,6 +2583,9 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
                       (self->floatDepth_ > 0) && self->floatOpenSides_[self->floatDepth_ - 1];
                   self->pendingInlineImage_.sourceOffset = self->saxParser_.sourceByteOffset();
                   self->pendingInlineImage_.active = true;
+                  self->pendingInlineImage_.isPrefix = prefixCandidate;
+                  self->pendingInlineImage_.prefixAttached = false;
+                  self->pendingInlineImage_.prefixSpace = 0;
                   LOG_TRC("EHP", "Inline image deferred: w=%d h=%d", displayWidth, displayHeight);
                   // Don't flush the current text block — let it continue into the next paragraph.
                   if (mathAltImage) self->skipUntilDepth = self->depth;
@@ -3464,6 +3504,15 @@ void ChapterHtmlSlimParser::characterData(void* userData, const char* s, const i
     }
 
     if (isWhitespace(s[i])) {
+      if (self->pendingInlineImage_.active && self->pendingInlineImage_.isPrefix && self->currentTextBlock &&
+          self->currentTextBlock->isEmpty() && self->partWordBufferIndex == 0) {
+        const auto& bs = self->currentTextBlock->getBlockStyle();
+        const auto face = self->renderer.resolveTextFont(self->effectiveFontId(bs), self->inheritedFamily_,
+                                                         bs.fontSizeMultiplier * self->effectiveSizePct / 100.0f);
+        self->pendingInlineImage_.prefixSpace = self->renderer.getTextAdvanceXSpaced(
+            face.fontId, " ", EpdFontFamily::REGULAR,
+            bs.fontSizeMultiplier * self->effectiveSizePct / 100.0f * face.scale, self->inheritedTracking_);
+      }
       // Currently looking at whitespace, if there's anything in the partWordBuffer, flush it
       if (self->partWordBufferIndex > 0) {
         if (!self->flushPartWordBuffer()) return;
@@ -3668,6 +3717,16 @@ void ChapterHtmlSlimParser::endElementBody(ChapterHtmlSlimParser* self, const ch
   const bool headerOrBlockTag = isHeaderOrBlock(name);
   const bool tableStructuralTag = isTableStructuralTag(name);
   const bool closesBlockSpan = self->blockSpan_.depth == self->depth - 1;
+
+  // A small inline marker without following text still belongs to its own
+  // paragraph. A blank layout token gives it the normal baseline and spacing,
+  // without inserting searchable text or leaking the marker to the next block.
+  if (self->pendingInlineImage_.active && self->pendingInlineImage_.isPrefix &&
+      self->currentBlockOwnerDepth_ == self->depth - 1 && self->currentTextBlock && self->currentTextBlock->isEmpty() &&
+      self->partWordBufferIndex == 0) {
+    self->attachPendingFloatImage(self->currentTextBlock->getBlockStyle());
+    self->currentTextBlock->addWord(" ", EpdFontFamily::REGULAR);
+  }
 
   if (self->currentTable && self->currentTable->depth > 1 && strcmp(name, "table") == 0) {
     self->partWordBufferIndex = 0;
@@ -4363,6 +4422,26 @@ ParsedText::LineProcessResult ChapterHtmlSlimParser::addLineToPage(std::unique_p
         xOffset = static_cast<int16_t>(xOffset + z.width);
       }
     }
+  }
+  if (isFirstLineOfBlock && pendingInlineImage_.active && pendingInlineImage_.isPrefix &&
+      pendingInlineImage_.prefixAttached && line->wordCount()) {
+    const auto box = line->wordBox(renderer, 0, fontId, xOffset, currentPageNextY);
+    const int baseline = box.y + renderer.getFontAscenderSizeScaled(box.fontId, box.scale);
+    auto image = makeUniqueNoThrow<ImageBlock>(pendingInlineImage_.cachedPath, pendingInlineImage_.width,
+                                               pendingInlineImage_.height, pendingInlineImage_.alt, epub->getPath(),
+                                               pendingInlineImage_.epubEntryPath);
+    auto placed = image ? makeUniqueNoThrow<PageImage>(
+                              std::move(image), box.x - pendingInlineImage_.width - pendingInlineImage_.prefixSpace,
+                              std::max<int>(currentPageNextY, baseline - pendingInlineImage_.height))
+                        : nullptr;
+    if (placed) {
+      noteSourcePoint(pendingInlineImage_.sourceOffset);
+      currentPage->elements.push_back(std::move(placed));
+    }
+    pendingInlineImage_.active = false;
+    pendingInlineImage_.cachedPath.clear();
+    pendingInlineImage_.epubEntryPath.clear();
+    pendingInlineImage_.alt.clear();
   }
   auto pageLine = makeUniqueNoThrow<PageLine>(std::move(line), xOffset, currentPageNextY);
   if (!pageLine) {

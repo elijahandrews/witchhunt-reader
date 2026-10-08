@@ -132,6 +132,9 @@ class ChapterHtmlSlimParser final : public Print {
     int16_t height = 0;
     std::string alt;
     bool active = false;
+    bool isPrefix = false;        // small, nonfloating image opening a text paragraph
+    bool prefixAttached = false;  // its advance is already in firstLineExtraIndent
+    int16_t prefixSpace = 0;      // one collapsed space between the image and its first word
     uint32_t sourceOffset = UINT32_MAX;
     bool isRight = false;  // true when float: right
     // epubFilePath is not stored — epub->getPath() is read at ImageBlock construction time
