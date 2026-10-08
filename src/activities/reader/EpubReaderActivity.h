@@ -24,6 +24,7 @@
 #include "EpubReaderMenuActivity.h"
 #include "KOReaderAutoSync.h"
 #include "KOReaderSyncWorker.h"
+#include "PreparedGrayscaleCache.h"
 #include "ProgressMapper.h"
 #include "ReaderUtils.h"
 #include "activities/Activity.h"
@@ -421,6 +422,13 @@ class EpubReaderActivity final : public Activity {
   // because a stale plane pair belongs to a page that is no longer in the
   // framebuffer.
   bool preRenderedPlanesStaged_ = false;
+  // Reusable UC8279 overlays: 2x48,000 bytes, allocated only from PSRAM.
+  // Unlike the single-push staged flag, these never imply controller RAM writes.
+  PreparedGrayscaleCache preparedGrayscale_;
+  unsigned long preparedGrayscaleDrawMs_ = 0;
+  bool preparedGrayscaleAvailable() const;
+  PreparedGrayscaleCache::Key preparedGrayscaleKey(int left, int top) const;
+  uint32_t beginPreparedGrayscaleCapture(const Page& page, int left, int top);
   // Debug-only Background B (section pre-analysis) progress, surfaced as a small
   // status-bar overlay when DEBUG_BACKGROUND_WORK is enabled. Background A's state is
   // derived at draw time from pendingPreRender / preRenderedPage, so only B needs a

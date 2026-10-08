@@ -1,0 +1,4 @@
+add_executable(PreparedGrayscaleCacheTest PreparedGrayscaleCacheTest.cpp)
+target_include_directories(PreparedGrayscaleCacheTest PRIVATE ${REPO_ROOT}/src/activities/reader)
+target_link_libraries(PreparedGrayscaleCacheTest PRIVATE crosspoint_test_common GTest::gtest_main)
+gtest_discover_tests(PreparedGrayscaleCacheTest)

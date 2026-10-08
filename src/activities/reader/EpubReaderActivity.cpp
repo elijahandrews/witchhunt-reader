@@ -17,6 +17,7 @@
 
 #include "EpubReaderActivity.h"
 
+#include <BoardConfig.h>
 #include <CooperativeAbort.h>
 #include <Epub/FootnotePreviews.h>
 #include <Epub/FootnoteShape.h>
@@ -876,6 +877,7 @@ void EpubReaderActivity::onExit() {
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
+  preparedGrayscale_.release();
   // Release any deferred AA page before tearing down the section/epub.
   pendingGrayscale_ = {};
   // Abort any in-flight Background-B build (deletes its partial cache file) before the
@@ -1361,6 +1363,7 @@ void EpubReaderActivity::startActivityForResult(std::unique_ptr<Activity>&& acti
     usePreRenderedBuffer = false;
     preRenderedPage = {};
     preRenderedPlanesStaged_ = false;
+    preparedGrayscale_.invalidate();
   }
   Activity::startActivityForResult(std::move(activity), std::move(resultHandler));
 }
@@ -1393,6 +1396,8 @@ void EpubReaderActivity::suspendBackgroundWork() {
     // (renderPageContentOnly draws there, not into the secondary), which is exactly
     // what the overlay is about to draw over.
     preRenderedPage = {};
+    preRenderedPlanesStaged_ = false;
+    preparedGrayscale_.invalidate();
   }
   LOG_INF("ERS", "Background work suspended for a dictionary interaction");
 }
@@ -2764,6 +2769,7 @@ void EpubReaderActivity::stopAutomaticPageTurn() {
   usePreRenderedBuffer = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   pendingGrayscale_ = {};
   section.reset();
 }
@@ -3443,6 +3449,7 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   // turning onto the final page would otherwise show the penultimate page.)
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   pendingPreRender = false;
   requestUpdate();
 }
@@ -3468,6 +3475,7 @@ void EpubReaderActivity::jumpPages(const bool isForwardTurn, const int count) {
   }
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   pendingPreRender = false;
   requestUpdate();
 }
@@ -3710,6 +3718,7 @@ bool EpubReaderActivity::dropStagedWorkIfPositionMoved(const char* where) {
   pendingPreRender = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   return true;
 }
 
@@ -5027,6 +5036,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   if (pass != RenderPass::PreRender && pass != RenderPass::BufferDisplay && preRenderedPage.ready) {
     preRenderedPage.ready = false;
     preRenderedPlanesStaged_ = false;
+    preparedGrayscale_.invalidate();
   }
 
   switch (pass) {
@@ -5348,8 +5358,8 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // The buffers are panel-native full-page planes, allocated per render and
   // freed with this scope — together ~130 KB on this panel, which is the whole
   // cost of the approach and why it is gated on supportsGrayFrame(). A board
-  // that cannot use them keeps the staged path and never allocates; an
-  // allocation failure falls back the same way.
+  // that cannot use them keeps its existing replay or the reusable PSRAM
+  // capture below. An allocation failure keeps the existing replay.
   const size_t capPlaneBytes = static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight();
   std::unique_ptr<uint8_t[]> capLsb, capMsb;
   if (singlePushAaThisRender) {
@@ -5364,6 +5374,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
       capLsb.reset();  // OOM: the staged path below runs unchanged
     }
   }
+
+  const auto preparedCapture = capLsb ? 0 : beginPreparedGrayscaleCapture(*page, orientedMarginLeft, contentTop);
+  const auto preparedDrawStarted = millis();
 
   logReaderMemSnapshot("before_bw_render");
   page->render(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop, effectiveForceLoad,
@@ -5404,6 +5417,10 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // the window on purpose and costs nothing: UI chrome is 1-bit, so it produces
   // no anti-aliased pixels for the capture to record.
   renderer.endGrayCapture();
+  if (preparedCapture && (!fcm->getDecompressor() || !fcm->getDecompressor()->getStats().fallbackOomGlyphs)) {
+    preparedGrayscale_.commit(preparedCapture);
+    preparedGrayscaleDrawMs_ = millis() - preparedDrawStarted;
+  }
   fcm->logStats("bw_render");
   const auto tBwRender = millis();
   logReaderMemSnapshot("after_bw_render");
@@ -5549,9 +5566,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     lastRenderStats.phases = {tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, 0, 0, 0, 0, 0, millis() - t0};
   } else if (inlineAaThisRender) {
     // Inline AA (X4): the BW waveform is still running from triggerDisplayAsync().
-    // Render the grayscale planes now — the LSB plane lands inside the waveform
-    // window, so after the wait only the LSB SPI write, the MSB plane and the
-    // short gray flush remain. The AA touch-up then reads as the tail of the
+    // Prepared text masks need only the existing two-plane upload after BW
+    // completes. Other pages still render the LSB inside the BW waveform, then
+    // finish the MSB and gray flush. The AA touch-up then reads as the tail of the
     // page refresh instead of a separate later update (issue #71).
     renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
     const int aaFontId = getEffectiveReaderFontId();
@@ -5561,19 +5578,33 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     // still worth setting: latching planeAborted means the pass aborts even if the input signal
     // has been drained by the loop task before the predicate below is evaluated.
     bool planeAborted = false;
-    const auto gt = renderer.renderGrayscalePlanesInterleaved(
-        [&](GfxRenderer::RenderMode) {
-          if (!pagePtr->renderTextOnly(renderer, aaFontId, orientedMarginLeft, contentTop, /*abortable=*/true)) {
-            planeAborted = true;
-            return;
-          }
-          if (!renderer.isErasingOpaqueGlyphs())
-            pagePtr->renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
-        },
-        // Re-checked here because the up-front gate can only see the gesture as it stands when
-        // the render begins; the pass itself is ~1 s long, so most presses during a burst land
-        // after that decision and would otherwise be unstoppable.
-        [&] { return planeAborted || aaPreemptedByNavigation(); });
+    const bool prepared = preparedGrayscale_.matches(preparedGrayscaleKey(orientedMarginLeft, contentTop));
+    const auto gt = [&]() {
+      if (prepared) {
+        renderer.finishDisplayAsync();
+        return renderer.displayPreparedGrayscale(preparedGrayscale_.lsb(), preparedGrayscale_.msb(),
+                                                 [&] { return aaPreemptedByNavigation(); });
+      }
+      return renderer.renderGrayscalePlanesInterleaved(
+          [&](GfxRenderer::RenderMode) {
+            if (!pagePtr->renderTextOnly(renderer, aaFontId, orientedMarginLeft, contentTop, /*abortable=*/true)) {
+              planeAborted = true;
+              return;
+            }
+            if (!renderer.isErasingOpaqueGlyphs())
+              pagePtr->renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
+          },
+          // Re-checked here because the up-front gate can only see the gesture as it stands when
+          // the render begins; the pass itself is ~1 s long, so most presses during a burst land
+          // after that decision and would otherwise be unstoppable.
+          [&] { return planeAborted || aaPreemptedByNavigation(); });
+    }();
+    if (prepared)
+      LOG_DBG("ERS",
+              "Prepared AA fresh: spine=%d page=%d prepare=%lums upload=%lums gray=%lums restore=%lums aborted=%d",
+              currentSpineIndex, section ? section->currentPage : -1, preparedGrayscaleDrawMs_, gt.planesMs,
+              gt.displayMs, gt.restoreMs, gt.aborted ? 1 : 0);
+    preparedGrayscale_.invalidate();
     LOG_DBG("ERS", "Inline AA%s: planes=%lums gray=%lums restore=%lums", gt.aborted ? " ABORTED" : "", gt.planesMs,
             gt.displayMs, gt.restoreMs);
     checkHeapIntegrity("after_inline_aa");
@@ -5597,6 +5628,8 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     lastRenderStats.usedGrayscale = true;
     lastRenderStats.phases = {tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, 0, 0, 0, 0, 0, tDisplay - t0};
   }
+
+  preparedGrayscale_.invalidate();
 
   // Collect font stats before releasing the lock (these read renderer state).
   if (const auto* cacheManager = renderer.getFontCacheManager()) {
@@ -5772,6 +5805,53 @@ void EpubReaderActivity::displayBuildPage(RenderLock& lock, const Page& page, co
   WakeTrace::logSummary();
 }
 
+bool EpubReaderActivity::preparedGrayscaleAvailable() const {
+#if defined(BOARD_HAS_PSRAM) && BOARD_HAS_PSRAM
+  // Keep the C3 and other panels on their existing paths. UC8279 still owes two
+  // waveforms: these planes stay in PSRAM until the visible BW refresh completes.
+  return BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279 &&
+         renderer.supportsAsyncRefresh() && !renderer.isX3() && !renderer.supportsGrayFrame() &&
+         static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight() == 48000;
+#else
+  return false;
+#endif
+}
+
+PreparedGrayscaleCache::Key EpubReaderActivity::preparedGrayscaleKey(const int left, const int top) const {
+  return {section.get(),
+          currentSpineIndex,
+          section ? section->currentPage : -1,
+          getEffectiveReaderFontId(),
+          left,
+          top,
+          static_cast<uint8_t>(renderer.getOrientation()),
+          renderer.getTextDarkness()};
+}
+
+uint32_t EpubReaderActivity::beginPreparedGrayscaleCapture(const Page& page, const int left, const int top) {
+  preparedGrayscale_.invalidate();
+  preparedGrayscaleDrawMs_ = 0;
+#if defined(BOARD_HAS_PSRAM) && BOARD_HAS_PSRAM
+  if (preparedGrayscaleAvailable() && !page.hasImages() && getEffectiveTextAntiAliasing() &&
+      renderer.hasSecondaryBuffer() && !secondaryBufferDegraded_) {
+    const auto token = preparedGrayscale_.begin(
+        48000, preparedGrayscaleKey(left, top),
+        [](size_t bytes) -> void* { return heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); },
+        [](void* memory) { heap_caps_free(memory); });
+    if (token)
+      renderer.beginGrayCapture(preparedGrayscale_.lsb(), preparedGrayscale_.msb());
+    else
+      LOG_DBG("ERS", "Prepared AA PSRAM unavailable; using existing replay");
+    return token;
+  }
+#else
+  (void)page;
+  (void)left;
+  (void)top;
+#endif
+  return 0;
+}
+
 uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int orientedMarginTop,
                                                    const int orientedMarginRight, const int orientedMarginBottom,
                                                    const int orientedMarginLeft) {
@@ -5799,6 +5879,7 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
   // Buffers live only for this function; the planes are handed to the controller
   // before it returns and the display consumes them at the page turn.
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   std::unique_ptr<uint8_t[]> capLsb, capMsb;
   const bool wantCapture = renderer.supportsGrayFrame() && getEffectiveTextAntiAliasing() && !page.hasImages();
   if (wantCapture) {
@@ -5815,9 +5896,17 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
     }
   }
 
+  // UC8279 masks stay in RAM until BufferDisplay; never stage its controller
+  // while the previous page is still visible. Single-push panels remain above.
+  const auto preparedCapture = capLsb ? 0 : beginPreparedGrayscaleCapture(page, orientedMarginLeft, contentTop);
+  const auto preparedDrawStarted = millis();
   renderer.clearScreen();
   page.render(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop);
   renderer.endGrayCapture();
+  if (preparedCapture && (!fcm->getDecompressor() || !fcm->getDecompressor()->getStats().fallbackOomGlyphs)) {
+    preparedGrayscale_.commit(preparedCapture);
+    preparedGrayscaleDrawMs_ = millis() - preparedDrawStarted;
+  }
   if (capLsb) {
     renderer.copyGrayscaleLsbBuffers(capLsb.get());
     renderer.copyGrayscaleMsbBuffers(capMsb.get());
@@ -5877,7 +5966,11 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // The pixels came from the pre-render, but the Page is in hand here and the links have to
   // describe what is going on screen NOW — the pre-render measured the page AFTER this one.
   publishPageLinkTargets(page, orientedMarginLeft, contentTop);
+  const bool prepared = getEffectiveTextAntiAliasing() && !secondaryBufferDegraded_ && renderer.hasSecondaryBuffer() &&
+                        preparedGrayscale_.matches(preparedGrayscaleKey(orientedMarginLeft, contentTop));
+  if (prepared) renderer.beginGrayCapture(preparedGrayscale_.lsb(), preparedGrayscale_.msb());
   renderStatusBar();
+  renderer.endGrayCapture();
 
   // Pre-rendered pages are text-only (image pages are excluded from pre-rendering), so
   // imagePageWithAA never applies here. The image-page follow-up half-refresh can still carry
@@ -5935,33 +6028,44 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   }
   if (!singlePushThisPage && !aaPreempted && getEffectiveTextAntiAliasing() && renderer.hasSecondaryBuffer() &&
       !secondaryBufferDegraded_) {
-    const int fontId = getEffectiveReaderFontId();
-    // Re-warm the page's glyph BITMAPS before the AA replay. The pre-render pass warmed
-    // them, but background work since may have dropped or re-wired the cache (B's
-    // build slices reset the font accumulation to the metadata-only flash tables) —
-    // and replaying against a metadata-only table dereferences a null bitmap base
-    // (observed: Load access fault at glyph->dataOffset + heap corruption). When the
-    // cache is still warm this is nearly free via the prewarm coverage fast-path.
-    {
-      auto* fcm = renderer.getFontCacheManager();
-      auto scope = fcm->createPrewarmScope();
-      page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop);  // scan pass
-      scope.endScanAndPrewarm();
+    if (prepared) {
+      renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
+      const auto gt = renderer.displayPreparedGrayscale(preparedGrayscale_.lsb(), preparedGrayscale_.msb(),
+                                                        [&] { return aaPreemptedByNavigation(); });
+      LOG_DBG("ERS",
+              "Prepared AA cached: spine=%d page=%d prepare=%lums upload=%lums gray=%lums restore=%lums aborted=%d",
+              currentSpineIndex, section ? section->currentPage : -1, preparedGrayscaleDrawMs_, gt.planesMs,
+              gt.displayMs, gt.restoreMs, gt.aborted ? 1 : 0);
+    } else {
+      const int fontId = getEffectiveReaderFontId();
+      // Re-warm the page's glyph BITMAPS before the AA replay. The pre-render pass warmed
+      // them, but background work since may have dropped or re-wired the cache (B's
+      // build slices reset the font accumulation to the metadata-only flash tables) —
+      // and replaying against a metadata-only table dereferences a null bitmap base
+      // (observed: Load access fault at glyph->dataOffset + heap corruption). When the
+      // cache is still warm this is nearly free via the prewarm coverage fast-path.
+      {
+        auto* fcm = renderer.getFontCacheManager();
+        auto scope = fcm->createPrewarmScope();
+        page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop);  // scan pass
+        scope.endScanAndPrewarm();
+      }
+      renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
+      // No waveform to hide behind on this path (displayBuffer() above already returned), so the
+      // per-element abort translates directly into saved wall-clock on both devices.
+      bool planeAborted = false;
+      const auto gt = renderer.renderGrayscalePlanesSequential(
+          [&](GfxRenderer::RenderMode) {
+            planeAborted = !page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop, /*abortable=*/true);
+          },
+          [&] { return planeAborted || aaPreemptedByNavigation(); });
+      if (gt.aborted) {
+        LOG_DBG("ERS", "AA replay aborted mid-pass: page preempted by navigation");
+      }
+      // timings not otherwise recorded for the pre-rendered path
     }
-    renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
-    // No waveform to hide behind on this path (displayBuffer() above already returned), so the
-    // per-element abort translates directly into saved wall-clock on both devices.
-    bool planeAborted = false;
-    const auto gt = renderer.renderGrayscalePlanesSequential(
-        [&](GfxRenderer::RenderMode) {
-          planeAborted = !page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop, /*abortable=*/true);
-        },
-        [&] { return planeAborted || aaPreemptedByNavigation(); });
-    if (gt.aborted) {
-      LOG_DBG("ERS", "AA replay aborted mid-pass: page preempted by navigation");
-    }
-    // timings not otherwise recorded for the pre-rendered path
   }
+  preparedGrayscale_.invalidate();
   checkHeapIntegrity("after_bufferdisplay_aa");
 }
 
@@ -5987,6 +6091,7 @@ void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered() {
   renderPageContentOnly(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  preparedGrayscale_.invalidate();
   pendingPreRender = false;
   usePreRenderedBuffer = false;
 }
@@ -6926,6 +7031,7 @@ bool EpubReaderActivity::handleForcedRefresh(const HalDisplay::RefreshMode mode)
     usePreRenderedBuffer = false;
     preRenderedPage.ready = false;
     preRenderedPlanesStaged_ = false;
+    preparedGrayscale_.invalidate();
     forceRefreshModeNextRender_ = static_cast<int8_t>(mode);
   }
   requestUpdate();
