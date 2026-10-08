@@ -4,6 +4,8 @@ This is a conservative media-type filter. Viewport-dependent conditions remain u
 
 Body margins and padding now use the same container layout as nested blocks. Horizontal insets compose once with child insets and the reader's outer viewport. Small images opening a left-aligned or justified paragraph can share its first text line, including paragraphs with hanging indents. Marker images move with their text across a page break and keep the following words' source anchors. Larger illustrations and centered image paragraphs retain block layout.
 
+Authored link decoration now takes precedence over the reader's default underline while preserving navigation. Margins, padding, and indents written in `em` use the element's computed font size; `rem` retains the reader root size. Large values saturate safely in the layout's fixed-width fields.
+
 The synthetic EPUB's final two chapters demonstrate alternate-device stylesheet exclusion, body insets, an inline image marker with nonbreaking spaces, enlarged-heading spacing, and a link with an explicitly disabled underline. Existing search and long-paragraph navigation specimens remain unchanged. Host tests use original synthetic content and validate warm-cache reload, incomplete heads, page layout, image placement, and source-anchor relocation.
 
 CSS cache version 25, document-style index version 2, and section cache version 85 automatically rebuild prior style/layout caches. No on-disk field layout changed.
