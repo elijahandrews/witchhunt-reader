@@ -187,3 +187,29 @@ TEST(SingleRefreshGrayscaleTest, OptInAndRuntimeExclusionsLeaveOrdinaryPagesOnFa
   EXPECT_FALSE(singleRefreshTextAaEligible(true, true, true, false, false, false));
   EXPECT_FALSE(singleRefreshTextAaEligible(true, true, true, false, true, true));
 }
+
+TEST(SingleRefreshGrayscaleTest, FourStrategiesKeepForegroundAaIndependentOfNextPagePreparation) {
+  for (bool direct : {false, true})
+    for (bool preRender : {false, true}) {
+      EXPECT_EQ(singleRefreshTextAaEligible(direct, true, true, false, true, false), direct);
+      EXPECT_EQ(readerCanPrepareNextPage(preRender, false, 7, 12), preRender);
+      EXPECT_EQ(readerCanConsumeNextPage(preRender, true, true, true, 7, 12, 8), preRender);
+      // A ready page left over from the previous setting cannot be consumed
+      // after Off, but foreground masks can still present the same current text.
+      EXPECT_FALSE(readerCanConsumeNextPage(false, true, true, true, 7, 12, 8));
+    }
+}
+
+TEST(SingleRefreshGrayscaleTest, NavigationAndSectionEdgesNeverConsumeUnrelatedPreparedPixels) {
+  EXPECT_FALSE(readerCanPrepareNextPage(true, false, -1, 12));
+  EXPECT_FALSE(readerCanPrepareNextPage(true, false, 0, 0));
+  EXPECT_FALSE(readerCanPrepareNextPage(true, false, 11, 12));
+  EXPECT_FALSE(readerCanPrepareNextPage(true, true, 7, 12));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, false, true, true, 7, 12, 8));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, true, false, true, 7, 12, 8));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, true, true, false, 7, 12, 8));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, true, true, true, 7, 12, 7));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, true, true, true, 7, 12, 9));
+  EXPECT_FALSE(readerCanConsumeNextPage(true, true, true, true, 11, 12, 12));
+  EXPECT_TRUE(readerCanConsumeNextPage(true, true, true, true, 10, 12, 11));
+}

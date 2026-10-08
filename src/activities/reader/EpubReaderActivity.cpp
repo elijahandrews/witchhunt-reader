@@ -1285,7 +1285,7 @@ void EpubReaderActivity::runDeferredGrayscalePass() {
   // A panel that runs AA inline never holds off the pre-render, so this re-request
   // would just be a redundant trigger there — skip it to keep that refresh sequence
   // unchanged.
-  if (usesDeferredAa() && pendingPreRender) {
+  if (SETTINGS.readerPreRendering && usesDeferredAa() && pendingPreRender) {
     requestUpdate();
   }
 }
@@ -1562,7 +1562,9 @@ void EpubReaderActivity::stepBackgroundSectionBuild() {
   // nice-to-have (page-turn latency), not correctness — but a floor that rejects it constantly is
   // still evidence the floors are mistuned.
   const bool preRenderWanted =
-      !preRenderedPage.ready && !backgroundBuildThrough_ && section->currentPage + 1 < section->pageCount &&
+      !preRenderedPage.ready &&
+      readerCanPrepareNextPage(SETTINGS.readerPreRendering, backgroundBuildThrough_, section->currentPage,
+                               section->pageCount) &&
       lastRenderedSpineIndex_ == currentSpineIndex && lastRenderedPageIndex_ == section->currentPage &&
       (preRenderRearmSpine_ != currentSpineIndex || preRenderRearmPage_ != section->currentPage);
   if (preRenderWanted && preRenderFree < PRE_RENDER_MIN_FREE_HEAP_BYTES) {
@@ -3390,8 +3392,10 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
       isForwardTurn && section && preRenderedPage.ready && preRenderedPage.spineIndex == currentSpineIndex;
   const int expectedNextPage = (section ? section->currentPage + 1 : -1);
 
-  if (isForwardTurn && section && preRenderedPage.ready && !preRenderedPage.incomplete &&
-      preRenderedPage.spineIndex == currentSpineIndex && preRenderedPage.pageIndex == section->currentPage + 1) {
+  if (section && readerCanConsumeNextPage(SETTINGS.readerPreRendering, isForwardTurn,
+                                          preRenderedPage.ready && !preRenderedPage.incomplete,
+                                          preRenderedPage.spineIndex == currentSpineIndex, section->currentPage,
+                                          section->pageCount, preRenderedPage.pageIndex)) {
     // Fast path: the frame buffer already holds the next page content. Advance state here on the
     // loop task, then hand off to render() via usePreRenderedBuffer — all display work (status
     // bar, flush, AA pass) stays on the render task where it belongs.
@@ -3738,10 +3742,10 @@ EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {
   // the prior waveform + post-waveform SPI work has settled; otherwise we fall through
   // to a full render that waits for the waveform naturally. The helper may still bail to
   // Normal at runtime if the page load fails / is an image page.
-  if (usePreRenderedBuffer && !renderer.isRefreshPending()) {
+  if (SETTINGS.readerPreRendering && usePreRenderedBuffer && !renderer.isRefreshPending()) {
     return RenderPass::BufferDisplay;
   }
-  if (pendingPreRender) {
+  if (SETTINGS.readerPreRendering && pendingPreRender) {
     return RenderPass::PreRender;
   }
   if (!section) {
@@ -3783,7 +3787,7 @@ void EpubReaderActivity::serviceFinishedBookLaunch() {
 bool EpubReaderActivity::renderBufferDisplayPass(const RenderLayout& layout) {
   // Fast-display pass: frame buffer holds pre-rendered content; superimpose live status bar,
   // flush to display, and run the AA pass — all on the render task with no SD font re-read.
-  if (!section) {
+  if (!SETTINGS.readerPreRendering || !section) {
     return false;
   }
   auto p = section->loadPageFromSectionFile();
@@ -3805,7 +3809,8 @@ bool EpubReaderActivity::renderBufferDisplayPass(const RenderLayout& layout) {
 
   // Not during a build-through: the X3's frame buffer is the only one, and it must keep the page
   // on screen until the buffer goes back (see BG_BUILD_THROUGH_PAGES).
-  if (!backgroundBuildThrough_ && section->currentPage + 1 < section->pageCount) {
+  if (readerCanPrepareNextPage(SETTINGS.readerPreRendering, backgroundBuildThrough_, section->currentPage,
+                               section->pageCount)) {
     pendingPreRender = true;
     markStagedForCurrentPage();
     requestUpdate();
@@ -3818,7 +3823,8 @@ bool EpubReaderActivity::renderBufferDisplayPass(const RenderLayout& layout) {
 
 void EpubReaderActivity::renderPreRenderPass(const RenderLayout& layout) {
   // Pre-render pass: render next page content into the frame buffer (no status bar, no flush).
-  if (!section || preRenderedPage.ready || backgroundWorkSuspended_ || backgroundBuildThrough_) {
+  if (!SETTINGS.readerPreRendering || !section || preRenderedPage.ready || backgroundWorkSuspended_ ||
+      backgroundBuildThrough_) {
     return;
   }
   const int nextPage = section->currentPage + 1;
@@ -5018,6 +5024,13 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     return;
   }
 
+  if (!SETTINGS.readerPreRendering && (pendingPreRender || usePreRenderedBuffer || preRenderedPage.ready)) {
+    pendingPreRender = usePreRenderedBuffer = false;
+    preRenderedPage = {};
+    preRenderedPlanesStaged_ = false;
+    preparedGrayscale_.invalidate();
+  }
+
   // Classify the pass, then consume the pre-render flags.
   const RenderPass pass = classifyRenderPass();
   // First render() to get this far after a book open. Re-marking on later renders is harmless:
@@ -5521,8 +5534,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // Anything that cannot run AA inline defers it, rather than only the X3 doing so.
   const bool deferredAaThisRender =
       aaEnabledForThisRender && !singlePushAaThisRender && !directAaThisRender && !inlineAaAvailable;
-  lastRenderStats.textAntiAliasing = inlineAaThisRender || deferredAaThisRender;
+  lastRenderStats.textAntiAliasing = directAaThisRender || inlineAaThisRender || deferredAaThisRender;
   if (directAaThisRender) {
+    lastRenderStats.usedGrayscale = true;
     // The complete page has already arrived through one atomic Direct transaction.
   } else if (capLsb) {
     // Hand the captured planes to the controller, then base + greys go out as
@@ -5664,7 +5678,9 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // result is discarded — no correctness issue.
   // Not during a build-through: on the X3 the post-waveform frame sync reads this very buffer
   // when there is no second one (see BG_BUILD_THROUGH_PAGES).
-  if (!preRenderedPage.ready && !backgroundBuildThrough_ && section && section->currentPage + 1 < section->pageCount) {
+  if (!preRenderedPage.ready && section &&
+      readerCanPrepareNextPage(SETTINGS.readerPreRendering, backgroundBuildThrough_, section->currentPage,
+                               section->pageCount)) {
     pendingPreRender = true;
     markStagedForCurrentPage();
     // Do NOT request the update while a deferred AA is owed: isUpdateSuperseded()
@@ -5845,8 +5861,8 @@ bool EpubReaderActivity::tryDisplayPreparedDirectGrayscale(const Page& page, con
 
 bool EpubReaderActivity::preparedGrayscaleAvailable() const {
 #if defined(BOARD_HAS_PSRAM) && BOARD_HAS_PSRAM
-  // Keep the C3 and other panels on their existing paths. UC8279 still owes two
-  // waveforms: these planes stay in PSRAM until the visible BW refresh completes.
+  // Keep the C3 and other panels on their existing paths. These masks stay
+  // in PSRAM until the foreground chooses overlay AA or complete Direct planes.
   return BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279 &&
          renderer.supportsAsyncRefresh() && !renderer.isX3() && !renderer.supportsGrayFrame() &&
          static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight() == 48000;
@@ -6820,11 +6836,15 @@ void EpubReaderActivity::openReaderMenu() {
         const auto& menu = std::get<MenuResult>(result.data);
         applyOrientation(menu.orientation);
         applyTextDarkness(menu.textDarkness);
-        if (menu.singleRefreshTextAA >= 0 && menu.singleRefreshTextAA <= 1 &&
-            SETTINGS.singleRefreshTextAA != menu.singleRefreshTextAA) {
+        const bool directChanged = menu.singleRefreshTextAA >= 0 && menu.singleRefreshTextAA <= 1 &&
+                                   SETTINGS.singleRefreshTextAA != menu.singleRefreshTextAA;
+        const bool preRenderChanged = menu.readerPreRendering >= 0 && menu.readerPreRendering <= 1 &&
+                                      SETTINGS.readerPreRendering != menu.readerPreRendering;
+        if (directChanged || preRenderChanged) {
           {
             RenderLock lock(*this);
-            SETTINGS.singleRefreshTextAA = static_cast<uint8_t>(menu.singleRefreshTextAA);
+            if (directChanged) SETTINGS.singleRefreshTextAA = static_cast<uint8_t>(menu.singleRefreshTextAA);
+            if (preRenderChanged) SETTINGS.readerPreRendering = static_cast<uint8_t>(menu.readerPreRendering);
             pendingGrayscale_ = {};
             pendingPreRender = false;
             usePreRenderedBuffer = false;
