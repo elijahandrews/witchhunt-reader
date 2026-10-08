@@ -1209,9 +1209,15 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
         }
       }
       // covered / dstPixelArea is 3x the ink fraction (raw already carries the x3 of the
-      // source encoding); round to the nearest level 0..3. Mirrors the source font's raw
-      // encoding so the drawMask logic is identical to the body-text per-pixel path.
-      const uint8_t raw = static_cast<uint8_t>(std::min<int64_t>(3, (covered + dstPixelAreaFP / 2) / dstPixelAreaFP));
+      // source encoding). Exact half levels occur frequently when reducing an HD
+      // font's already-quantized 2-bit raster. Always rounding them upward adds
+      // extra ink along stems. Use nearest-even ties without another division;
+      // non-ties retain the same nearest-level result and every draw path shares it.
+      int64_t rounded = (covered + dstPixelAreaFP / 2) / dstPixelAreaFP;
+      if ((rounded & 1) && !(dstPixelAreaFP & 1) && rounded * dstPixelAreaFP - covered == dstPixelAreaFP / 2) {
+        --rounded;
+      }
+      const uint8_t raw = static_cast<uint8_t>(std::min<int64_t>(3, rounded));
       if ((drawMask >> raw) & 0x01) {
         emit(dstX, dstY, raw);
       }

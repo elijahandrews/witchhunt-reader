@@ -223,7 +223,17 @@ def scale_model(glyph, baseline, scale=SCALE):
                     overlap = max(0, min(xb, sx + 1) - max(xa, sx))
                     overlap *= max(0, min(yb, sy + 1) - max(ya, sy))
                     ink += glyph['pixels'][sy * width + sx] * overlap
-            pixels.append(min(3, math.floor(ink * scale * scale + 0.5 + 1e-10)))
+            coverage = ink * scale * scale
+            if baseline:
+                # Keep the modern model's exact ties consistent with the renderer.
+                # Snap only floating-point projection noise before Python's
+                # nearest-even rounding; retain the historical model below.
+                half = math.floor(coverage) + 0.5
+                if math.isclose(coverage, half, rel_tol=0, abs_tol=1e-10):
+                    coverage = half
+                pixels.append(min(3, round(coverage)))
+            else:
+                pixels.append(min(3, math.floor(coverage + 0.5 + 1e-10)))
     return dict(w=scaled_width, h=scaled_height, left=x0, top=-y0,
                 advance=glyph['advance'] * scale, pixels=pixels)
 

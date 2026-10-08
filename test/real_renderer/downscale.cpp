@@ -19,13 +19,13 @@ int recordedCount();
 namespace {
 using Plane = std::array<uint8_t, 48000>;
 bool bit(const Plane& p, int x, int y) { return p[(479 - x) * 100 + y / 8] & (0x80 >> (y % 8)); }
-void save(const char* path, const Plane& bw, const Plane& lsb, const Plane& msb) {
+void save(const char* path, const Plane& bw, const Plane& lsb, const Plane& msb, bool gray = true) {
   std::ofstream out(path, std::ios::binary);
   out << "P5\n480 800\n255\n";
   for (int y = 0; y < 800; ++y)
     for (int x = 0; x < 480; ++x) {
       const bool l = bit(lsb, x, y), m = bit(msb, x, y);
-      const uint8_t v = bit(bw, x, y) ? 255 : m ? (l ? 85 : 170) : 0;
+      const uint8_t v = bit(bw, x, y) ? 255 : gray && m ? (l ? 85 : 170) : 0;
       out.write(reinterpret_cast<const char*>(&v), 1);
     }
 }
@@ -50,6 +50,25 @@ void sample(GfxRenderer& g, HalDisplay& d, int id, const char* path) {
   }
   g.endGrayCapture();
   save(path, d.fb, lsb, msb);
+}
+
+void sampleNativeWeight(GfxRenderer& g, HalDisplay& d, int id) {
+  Plane lsb{}, msb{};
+  g.setRenderMode(GfxRenderer::BW);
+  g.setTextDarkness(0);
+  d.fb.fill(255);
+  g.beginGrayCapture(lsb.data(), msb.data());
+  int y = 18;
+  for (auto style : {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC}) {
+    for (const char* text : {"Tt Hh Nn Ii Ll Mm Ww", "The tall tree stood still."}) {
+      g.drawTextSpaced(id, 16, y, text, true, style, 1.0f, 0);
+      y += g.getLineHeight(id) + 8;
+    }
+    y += 24;
+  }
+  g.endGrayCapture();
+  save("sd-font-native-aa.pgm", d.fb, lsb, msb);
+  save("sd-font-native-bw.pgm", d.fb, lsb, msb, false);
 }
 
 void set(Plane& p, int x, int y, bool value) {
@@ -85,7 +104,14 @@ std::vector<uint8_t> reference(const uint8_t* bitmap, bool twoBit, int sw, int s
                                  (std::min(bottom, y + 1.0) - std::max(top, double(y)));
     }
   std::vector<uint8_t> result(w * h);
-  for (size_t i = 0; i < result.size(); ++i) result[i] = std::clamp(int(std::floor(coverage[i] + 0.5 + 1e-12)), 0, 3);
+  for (size_t i = 0; i < result.size(); ++i) {
+    const int lower = std::floor(coverage[i]);
+    // The independent floating-point projection can land a few ulps away from
+    // an exact half. Resolve that tie to the even level; all other values round
+    // to the nearest level without changing the coverage calculation.
+    const bool tie = std::abs(coverage[i] - lower - 0.5) < 1e-12;
+    result[i] = std::clamp(tie ? lower + (lower & 1) : int(std::floor(coverage[i] + 0.5)), 0, 3);
+  }
   return result;
 }
 
@@ -173,13 +199,20 @@ void checkGlyph(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fami
 }
 
 void checkFamily(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& family) {
-  for (float scale : {0.5f, 0.75f, 0.9f})
+  for (float scale : {0.5f, 0.75f, 0.9f, 1.0f})
     for (auto style : {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC})
       for (char c = 'A'; c <= 'Z'; ++c) {
         const char text[] = {c, 0};
         checkGlyph(g, d, id, family, text, c, scale, style, false);
         checkGlyph(g, d, id, family, text, c, scale, style, true);
       }
+  // Native HD body text reduces the raster by 2x even when its CSS scale is 1.
+  // Include lowercase stems, curves and ascenders in the same plane oracle.
+  for (auto style : {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC})
+    for (char c : std::string("thnilomw")) {
+      const char text[] = {c, 0};
+      for (bool spaced : {false, true}) checkGlyph(g, d, id, family, text, c, 1.0f, style, spaced);
+    }
   for (auto style :
        {EpdFontFamily::SMALL_CAPS, static_cast<EpdFontFamily::Style>(EpdFontFamily::BOLD | EpdFontFamily::SMALL_CAPS),
         static_cast<EpdFontFamily::Style>(EpdFontFamily::ITALIC | EpdFontFamily::SMALL_CAPS),
@@ -192,6 +225,63 @@ void checkFamily(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fam
       checkGlyph(g, d, id, family, "A", 'A', scale, all, spaced);
       checkGlyph(g, d, id, family, "a", 'a', scale, all, spaced);
     }
+}
+
+// Thirteen 2x2 tiles cover every quarter-level average from 0 through 3.
+// The literal expected sequence independently fixes endpoints, monotonicity,
+// exact half ties, and their immediate neighbors. In particular, a 0.75-level
+// hairline survives, while a 0.5 fringe does not always gain an extra ink level.
+void checkCoverageTies(GfxRenderer& g, HalDisplay& d) {
+  constexpr uint8_t expected[] = {0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3};
+  constexpr int width = 26, height = 2;
+  std::array<uint8_t, width * height / 4> bitmap{};
+  for (int total = 0; total <= 12; ++total)
+    for (int pixel = 0; pixel < 4; ++pixel) {
+      const int raw = std::clamp(total - pixel * 3, 0, 3);
+      const int i = (pixel / 2) * width + total * 2 + pixel % 2;
+      bitmap[i / 4] |= raw << (6 - 2 * (i % 4));
+    }
+  const EpdGlyph glyphs[] = {{width, height, width * 16, 0, height, uint16_t(bitmap.size()), 0},
+                             {width, height, width * 16, 0, height, uint16_t(bitmap.size()), 0}};
+  const EpdUnicodeInterval intervals[] = {{'A', 'A', 0}, {0x1f130, 0x1f130, 1}};
+  EpdFontData data{};
+  data.bitmap = bitmap.data();
+  data.glyph = glyphs;
+  data.intervals = intervals;
+  data.intervalCount = 2;
+  data.is2Bit = true;
+  data.ascender = height;
+  data.advanceY = 4;
+  EpdFont font(&data);
+  EpdFontFamily family(&font);
+  g.insertScaledFont(4, family, .5f);
+  for (const char* text : {"A", "\xf0\x9f\x84\xb0"}) {
+    // ASCII takes the scaled cache; the non-BMP alias exercises direct sampling.
+    for (int repeat = 0; repeat < 2; ++repeat) {
+      Plane lsb{}, msb{};
+      g.setTextDarkness(0);
+      g.setRenderMode(GfxRenderer::BW);
+      d.fb.fill(255);
+      g.beginGrayCapture(lsb.data(), msb.data());
+      g.drawTextSpaced(4, 30, 100, text, true, EpdFontFamily::REGULAR, 1.0f, 0);
+      g.endGrayCapture();
+      bool ok = true;
+      for (int x = 0; x <= 12; ++x) {
+        const int raw = bit(d.fb, 30 + x, 100) ? 0 : bit(msb, 30 + x, 100) ? (bit(lsb, 30 + x, 100) ? 2 : 1) : 3;
+        ok &= raw == expected[x];
+      }
+      ++checks;
+      if (!ok) {
+        ++failures;
+        std::cerr << "Area coverage exact ties/neighbors/endpoints fail\n";
+      }
+    }
+  }
+  for (bool spaced : {false, true}) {
+    checkGlyph(g, d, 4, family, "A", 'A', 1.0f, EpdFontFamily::REGULAR, spaced);
+    checkGlyph(g, d, 4, family, "\xf0\x9f\x84\xb0", 0x1f130, 1.0f, EpdFontFamily::REGULAR, spaced);
+  }
+  g.removeFont(4);
 }
 
 // Cropping is a storage choice, not a placement choice. Adding transparent
@@ -389,6 +479,7 @@ void checkScanMetrics(GfxRenderer& g, const EpdFontFamily& font) {
 int runDownscaleChecks(GfxRenderer& g, HalDisplay& d, const EpdFontFamily& book, const EpdFontFamily& sans,
                        const char* path) {
   checkScanMetrics(g, book);
+  checkCoverageTies(g, d);
   failures += runOverlapChecks(g, d, 1, book);
   failures += runOverlapChecks(g, d, 2, sans);
   checkPaddingInvariance(g, d);
@@ -458,6 +549,7 @@ int runDownscaleChecks(GfxRenderer& g, HalDisplay& d, const EpdFontFamily& book,
     CpFontFixture fixture(path);
     g.insertScaledFont(3, fixture.family(), fixture.rasterScale());
     sample(g, d, 3, "sd-font.pgm");
+    sampleNativeWeight(g, d, 3);
     checkLocalFontMetrics(g, d, 3);
     checkScaledEntryPoints(g, d, 3, fixture.family());
     checkFamily(g, d, 3, fixture.family());

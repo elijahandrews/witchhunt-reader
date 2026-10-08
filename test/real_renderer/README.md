@@ -48,6 +48,12 @@ logical ink levels, not the physical e-ink waveform. `frame.png` remains the
 original BW smoke sheet. The EPUB's “Reduced uppercase strokes” chapter supplies
 matching original text for device testing.
 
+`sd-font-native-aa.png` and `sd-font-native-bw.png` show the same native-size
+uppercase/lowercase stem specimen in all four styles, before and after the gray
+overlay. For example, pass a local 10pt HD font to inspect small body text without
+an additional CSS reduction. The initial BW image draws every nonzero fringe
+as black and is intentionally heavier than the settled AA image.
+
 These cases reproduced missing Garamond strokes and jagged Bookerly capitals
 before the fix. Shrinking now integrates all contributing source pixels and
 retains antialiased coverage. The previous nearest-neighbor downscaler discarded
@@ -62,6 +68,16 @@ Legacy small caps and synthesized sizes must report bounds containing the ink.
 Scaled entry-point tests cover ligatures, combining accents, kerning and scale
 cancellation; drawing and measurement use the same glyph walk. Scan-mode tests
 also ensure measurement continues to request the needed font glyphs.
+
+Area coverage rounds exact halfway values to the nearest even level. HD rasters
+already contain quantized coverage, so half-level samples are common; always
+rounding upward adds ink to their fringes. Nearest-even reduces this directional
+bias without changing non-ties, source outlines, spacing or darkness mappings.
+It does not make quantization lossless or guarantee zero bias for every glyph.
+Thirteen synthetic 2x2 tiles verify every quarter-level average, including exact
+ties, their neighbors, transparent/solid endpoints and a surviving thin stroke.
+The same checks exercise cached/direct sampling and all five darkness settings;
+native capitals and lowercase stems also use the independent area projection.
 
 ## Outline references and quality criteria
 
