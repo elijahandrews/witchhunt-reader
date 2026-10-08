@@ -18,6 +18,13 @@ void screenshot(const char* name, const std::array<uint8_t, 48000>& pixels) {
 
 int runDarkModeChecks(GfxRenderer& g, HalDisplay& d) {
   assert(!g.isDarkMode());
+  assert(g.supportsTextAntiAliasing());
+  d.invertedTextAaSupported = false;
+  g.setDarkMode(true);
+  assert(!g.supportsTextAntiAliasing());
+  d.invertedTextAaSupported = true;
+  assert(g.supportsTextAntiAliasing());
+  g.setDarkMode(false);
   const auto draw = [&] {
     g.clearScreen();
     g.drawText(1, 20, 40, "Clear text in either mode");

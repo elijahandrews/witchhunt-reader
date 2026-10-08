@@ -150,3 +150,39 @@ raster bounds and advances against known design units.
 Use `--sanitize` for AddressSanitizer and UndefinedBehaviorSanitizer throughout
 the renderer, SD loader, optional outline backend and display-driver audit.
 The same host-versus-panel limitations still apply.
+
+## Dark text anti-aliasing
+
+The same run also compares actual light and dark glyph rendering. Each font
+gets 60 scenes: four orientations, three scales and five darkness settings.
+The scenes include regular, bold, italic and bold italic with and without
+small caps, all-small-caps, kerning, ligatures, combining accents, overlapping
+italic strokes, underlines, opaque shapes and clipping at the screen edge.
+Every BW and overlay-mask byte must match across polarity changes, captured
+and staged AA, and cold and warm glyph caches. Metrics must also remain equal.
+The existing source-area oracle continues to check the weight of those glyphs.
+
+`--cpfont` adds the supplied four-face family, including its authored v6 caps.
+`--outline` adds the supplied single outline face at three point sizes; style
+fallback in that single-face family does not test separate bold/italic files.
+`light-aa-*.png` and `dark-aa-*.png` show original synthetic text from these
+exact production planes. `input-provenance.json` records local input hashes.
+
+The emitted `dark-aa-*.bin` files are then replayed through the complete
+production `FreeInkDisplay` facade and UC8279 X4 Pro driver, copied unchanged.
+Only electrical I/O is replaced by the SDK's recording bus. An independent
+typed four-tone table checks both selector planes and their inversion on the
+wire, the 120-row gate offset, one activation per AA overlay, the literal
+native LUT bytes, repeated dark pages, and restoration of the physical
+controller baseline while both host framebuffers retain logical polarity.
+`dark-sdk-audit/source-provenance.json` records every copied SDK source hash.
+HAL, interruption and buffer-loan recovery tests live in
+[`test/dark_mode`](../dark_mode/README.md).
+
+The PNGs use ideal linear coverage and its exact complement. They do not
+predict e-ink reflectance. Native LUT68's two middle rows are identical, so
+four logical coverage selectors do not establish four distinct physical gray
+levels. The dark bank reverses SOURCE drive for the complemented selectors
+while keeping native timing and VCOM unchanged; its physical appearance and
+ghosting still require panel validation. This audit verifies the existing
+BW-then-AA path and does not add prepared pages or Direct refresh experiments.

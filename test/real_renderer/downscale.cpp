@@ -8,6 +8,7 @@
 #include <iostream>
 
 #include "CpFontFixture.h"
+#include "DarkAaFixture.h"
 
 int runOverlapChecks(GfxRenderer&, HalDisplay&, int, const EpdFontFamily&);
 
@@ -488,6 +489,8 @@ int runDownscaleChecks(GfxRenderer& g, HalDisplay& d, const EpdFontFamily& book,
   sample(g, d, 1, "bookerly.pgm");
   checkFamily(g, d, 1, book);
   checkFamily(g, d, 2, sans);
+  runDarkAaFontChecks(g, d, 1, "bookerly");
+  runDarkAaFontChecks(g, d, 2, "sans");
   // A one-pixel cross exactly BETWEEN the old point samples disappeared entirely
   // at 50%. Both 1-bit and 2-bit fixtures must preserve it. A non-BMP alias takes
   // the uncached path and must produce the same pixels as the cached ASCII glyph.
@@ -554,6 +557,7 @@ int runDownscaleChecks(GfxRenderer& g, HalDisplay& d, const EpdFontFamily& book,
     checkScaledEntryPoints(g, d, 3, fixture.family());
     checkFamily(g, d, 3, fixture.family());
     failures += runOverlapChecks(g, d, 3, fixture.family());
+    runDarkAaFontChecks(g, d, 3, "sd-font");
     g.removeFont(3);
   }
   std::cout << "Scaled glyph coverage, capture, staged AA and cache checks=" << checks << " failures=" << failures

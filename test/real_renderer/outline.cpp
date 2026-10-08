@@ -8,6 +8,8 @@
 #include <iostream>
 #include <vector>
 
+#include "DarkAaFixture.h"
+
 namespace {
 using Plane = std::array<uint8_t, 48000>;
 bool bit(const Plane& p, int x, int y) { return p[(479 - x) * 100 + y / 8] & (0x80 >> (y % 8)); }
@@ -92,6 +94,12 @@ int runOutlineChecks(GfxRenderer& renderer, HalDisplay& display, const char* pat
       assert(capsScale == 1);
       ++checks;
     }
+    renderer.endGrayCapture();
+    const auto saved = display.fb;
+    const auto fixtureLabel = "outline-" + std::to_string(int(points * 10));
+    runDarkAaFontChecks(renderer, display, 9, fixtureLabel.c_str());
+    display.fb = saved;
+    renderer.beginGrayCapture(lsb.data(), msb.data());
     renderer.removeFont(9);
     ++checks;
   }

@@ -62,7 +62,8 @@ def run(repo, output, sanitize=False):
 
     hal = (repo / "lib/hal/HalDisplay.cpp").read_text()
     signatures = ("HalDisplay::HalDisplay()", "HalDisplay::~HalDisplay()",
-                  "bool HalDisplay::setDarkMode(", "bool HalDisplay::isDarkMode() const")
+                  "bool HalDisplay::setDarkMode(", "bool HalDisplay::isDarkMode() const",
+                  "bool HalDisplay::supportsTextAntiAliasing() const")
     definitions = [definition(hal, signature) for signature in signatures]
     (output / "HalDarkProduction.cpp").write_text(
         '#include <HalDisplay.h>\n'

@@ -2,7 +2,9 @@
 """Bridge production-renderer planes through the actual UC8279 X4 Pro driver."""
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -37,6 +39,10 @@ def run(repo, output, sanitize=False):
         shutil.copy2(sdk / name, destination)
     (output / "sdk/src/bus").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "driver_shims/bus/EpdBus.h", output / "sdk/src/bus/EpdBus.h")
+    # Driver capability checks use the real board/controller enum contract.
+    # The renderer still uses its orientation/viewable-inset shim separately.
+    (output / "driver-board").mkdir(exist_ok=True)
+    shutil.copy2(sdk / "test/host/pro_stubs/BoardConfig.h", output / "driver-board/BoardConfig.h")
 
     includes = [output, source, repo / "test/zip_entry_reader", repo / "test/shims"] + [
         repo / "lib" / name
@@ -67,6 +73,7 @@ def run(repo, output, sanitize=False):
     renderer += [str(path) for path in files] + ["-o", str(output / "driver_fixtures")]
     wire = [
         "clang++", *sanitizers, "-std=c++20", "-O1",
+        "-I" + str(output / "driver-board"),
         "-I" + str(source / "driver_shims"), "-I" + str(output / "sdk/src"),
         str(source / "driver_wire.cpp"), str(output / "sdk/src/driver/Uc8279X4Driver.cpp"),
         "-o", str(output / "driver_wire"),
@@ -79,6 +86,51 @@ def run(repo, output, sanitize=False):
         stale.unlink()
     subprocess.run([str(output / "driver_fixtures")], cwd=output, check=True)
     subprocess.run([str(output / "driver_wire"), str(output)], check=True)
+
+
+def run_dark_sdk(repo, output, fixtures, sanitize=False):
+    """Replay actual real-renderer glyph planes through the complete SDK facade."""
+    repo, output, fixtures = Path(repo).resolve(), Path(output).resolve(), Path(fixtures).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    sdk = repo / "freeink-sdk/libs/display/FreeInkDisplay"
+    source = Path(__file__).resolve().parent
+    copied = []
+
+    def copy(src, destination):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, destination)
+        assert destination.read_bytes() == src.read_bytes()
+        copied.append({"path": str(src.relative_to(repo)),
+                       "sha256": hashlib.sha256(src.read_bytes()).hexdigest()})
+
+    drivers = ("Ssd1677", "Uc8179", "Uc8279X4")
+    paths = ["src/FreeInkDisplay.cpp", "src/driver/PanelDriver.h", "include/FreeInkDisplay.h",
+             "include/EInkDisplay.h", "include/GrayscaleCapabilities.h"]
+    paths += [f"src/driver/{driver}Driver.{ext}" for driver in drivers for ext in ("h", "cpp")]
+    paths += [f"src/lut/{name}" for name in ("Ssd1677Luts.h", "Uc8279X3Luts.h", "UltraChipDirectGrayLuts.h")]
+    for name in paths:
+        copy(sdk / name, output / "sdk" / name)
+    # Same electrical stubs and unchanged recording bus as SDK run_pro.py.
+    for name in ("Arduino.h", "BoardConfig.h", "SPI.h", "esp_heap_caps.h"):
+        copy(sdk / "test/host/pro_stubs" / name, output / name)
+    copy(sdk / "test/host/pro_stubs/EpdBus.h", output / "sdk/src/bus/EpdBus.h")
+    (output / "source-provenance.json").write_text(json.dumps(copied, indent=2) + "\n")
+    sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if sanitize else []
+    command = [os.environ.get("CXX", "clang++"), "-std=c++20", "-O1", "-g", *sanitizers,
+               "-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-function", "-DARDUINO=1",
+               "-DFREEINK_DRIVER_SSD1677=1", "-DFREEINK_DRIVER_UC8179=1", "-DFREEINK_DRIVER_UC8279_X4=1",
+               "-DBOARD_HAS_PSRAM=1", "-DFREEINK_FB_PSRAM=1", "-I" + str(output),
+               "-I" + str(output / "sdk/include"), "-I" + str(output / "sdk/src"),
+               str(source / "dark_sdk_wire.cpp"), str(output / "sdk/src/FreeInkDisplay.cpp")]
+    command += [str(output / f"sdk/src/driver/{driver}Driver.cpp") for driver in drivers]
+    command += ["-o", str(output / "dark_sdk_wire")]
+    (output / "build-command.json").write_text(json.dumps(command, indent=2) + "\n")
+    subprocess.run(command, check=True)
+    env = os.environ.copy()
+    if sanitize:
+        env.setdefault("ASAN_OPTIONS", "detect_leaks=0:halt_on_error=1")
+        env.setdefault("UBSAN_OPTIONS", "halt_on_error=1")
+    subprocess.run([str(output / "dark_sdk_wire"), str(fixtures)], check=True, env=env)
 
 
 if __name__ == "__main__":

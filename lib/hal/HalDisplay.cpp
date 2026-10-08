@@ -444,6 +444,10 @@ void HalDisplay::cleanupGrayscaleWithPreviousBuffer() {
 
 bool HalDisplay::supportsGrayFrame() const { return einkDisplay.supportsGrayFrame(); }
 
+bool HalDisplay::supportsTextAntiAliasing() const {
+  return einkDisplay.grayscaleCapabilities(freeink::GrayscaleMode::Overlay).supported();
+}
+
 bool HalDisplay::supportsAbsoluteGrayPlanes() const {
   return einkDisplay.grayscaleCapabilities(freeink::GrayscaleMode::Absolute).supported();
 }

@@ -138,6 +138,10 @@ class HalDisplay {
 
   void displayGrayBuffer(bool turnOffScreen = false);
 
+  // Overlay support for the current panel and output polarity. Inverted AA is
+  // opt-in at the driver; unsupported panels keep their monochrome fallback.
+  bool supportsTextAntiAliasing() const;
+
   // Ported from crosspoint-reader PR #3469 ("fix: vertical banding on X3
   // grayscale images", Bryan O'Sullivan / @bos). The diagnosis, the plane
   // encoding and the measurements are his: on a UC8279 X3 the checkerboard

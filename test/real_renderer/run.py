@@ -2,7 +2,9 @@
 """Build the production renderer and save its framebuffer as a PNG."""
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -32,6 +34,16 @@ def main():
     source = Path(__file__).parent.resolve()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    inputs = {"renderer": repo / "lib/GfxRenderer/GfxRenderer.cpp",
+              "renderer_header": repo / "lib/GfxRenderer/GfxRenderer.h"}
+    if args.cpfont:
+        inputs["local_cpfont"] = args.cpfont.resolve()
+    if args.outline:
+        inputs["local_outline"] = args.outline.resolve()
+    (output / "input-provenance.json").write_text(json.dumps({
+        name: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        for name, path in inputs.items()
+    }, indent=2) + "\n")
 
     # Adapt only the device cache-budget assertion for pointers on a 64-bit host.
     # Copy the .cpp byte-for-byte to retain its adjacent quoted header include.
@@ -55,7 +67,7 @@ def main():
         "clang", *sanitizers, "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
-    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "dark_mode.cpp", output / "GfxRenderer.cpp"]
+    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "dark_mode.cpp", source / "dark_aa.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (
@@ -91,9 +103,15 @@ def main():
     subprocess.run(command, check=True)
     run_args = [str(args.cpfont.resolve()) if args.cpfont else "-"] if (args.cpfont or args.outline) else []
     if args.outline: run_args.append(str(args.outline.resolve()))
+    for stale in output.glob("dark-aa-*.bin"):
+        stale.unlink()
+    env = os.environ.copy()
+    if args.sanitize:
+        env.setdefault("ASAN_OPTIONS", "detect_leaks=0:halt_on_error=1")
+        env.setdefault("UBSAN_OPTIONS", "halt_on_error=1")
     render = subprocess.run(
         [str(output / "real_render")] + run_args,
-        cwd=output, check=False,
+        cwd=output, check=False, env=env,
     )
 
     # Preserve the framebuffer pixels, including diagnostic images from failing runs.
@@ -113,6 +131,7 @@ def main():
     render.check_returncode()
     import driver_audit
     driver_audit.run(repo, output / "driver-audit", sanitize=args.sanitize)
+    driver_audit.run_dark_sdk(repo, output / "dark-sdk-audit", output, sanitize=args.sanitize)
 
 
 if __name__ == "__main__":

@@ -828,6 +828,7 @@ class GfxRenderer {
   // waveform, i.e. when beginGrayCapture() + displayGrayscaleFrame() is
   // available instead of the base-then-overlay pair.
   bool supportsGrayFrame() const;
+  bool supportsTextAntiAliasing() const { return display.supportsTextAntiAliasing(); }
   // Display the framebuffer composed with the planes handed to
   // copyGrayscale*Buffers(), in one refresh. Resyncs the cached framebuffer
   // pointer afterwards for the same reason triggerDisplay() does: the display
@@ -836,9 +837,10 @@ class GfxRenderer {
   // Deferred form: see HalDisplay::triggerGrayscaleFrame. Caller owes completeDisplay().
   void triggerGrayscaleFrame(HalDisplay::RefreshMode mode) const;
 
-  // Staged glyph AA composes black ink on the B/W page; callbacks must draw
-  // text with black=true and omit white background fills. White text uses
-  // ordinary BW or an absolute-plane pass.
+  // Staged glyph AA composes logical black ink on the B/W page; callbacks must
+  // draw with black=true and omit white background fills. Output inversion is
+  // handled by a driver that advertises supportsTextAntiAliasing(). Explicit
+  // logical white text still uses ordinary BW or an absolute-plane pass.
   // Render both grayscale planes sequentially into the BW framebuffer, streaming
   // each plane to the controller immediately after rendering it. No extra allocation
   // needed — the BW framebuffer is the scratch pad for both passes.

@@ -2911,9 +2911,9 @@ uint8_t EpubReaderActivity::getEffectiveImageRendering() const {
 }
 
 bool EpubReaderActivity::getEffectiveTextAntiAliasing() const {
-  // The SDK deliberately uses crisp BW for inverted output. Keep the saved
-  // global/book preferences intact so light mode restores their AA setting.
-  if (SETTINGS.darkMode) return false;
+  // A driver must opt in for the active polarity. Keep the user's preference
+  // intact when the current panel cannot render inverted gray edges.
+  if (!renderer.supportsTextAntiAliasing()) return false;
   if (bookTextAntiAliasingOverride >= 0) {
     return bookTextAntiAliasingOverride != 0;
   }

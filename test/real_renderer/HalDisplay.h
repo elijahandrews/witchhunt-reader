@@ -15,6 +15,8 @@ class HalDisplay {
     return changed;
   }
   bool isDarkMode() const { return darkMode; }
+  bool invertedTextAaSupported = true;
+  bool supportsTextAntiAliasing() const { return !darkMode || invertedTextAaSupported; }
   std::array<uint8_t, 48000> presented{};
   RefreshMode presentedMode = FAST_REFRESH;
   bool presentedPowerOff = false;
