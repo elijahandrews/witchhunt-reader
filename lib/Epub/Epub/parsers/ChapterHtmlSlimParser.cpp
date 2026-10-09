@@ -1902,6 +1902,15 @@ void ChapterHtmlSlimParser::startElement(void* userData, const char* name, const
     if (!styleAttr.empty()) cssStyle.applyOver(self->inlineStyleFor(styleAttr));
   }
 
+  // The reader already reserves its screen/bezel margins. Optionally remove only
+  // the publisher's outer page box, after stylesheet and inline declarations have
+  // been resolved. Descendant blocks keep their own margins, padding and indents,
+  // even when they share a class with the body. Never mutate the cached CssStyle.
+  if (self->ignorePublisherPageMargins_ && (strcmp(name, "html") == 0 || strcmp(name, "body") == 0)) {
+    cssStyle.marginTop = cssStyle.marginBottom = cssStyle.marginLeft = cssStyle.marginRight = CssLength{};
+    cssStyle.paddingTop = cssStyle.paddingBottom = cssStyle.paddingLeft = cssStyle.paddingRight = CssLength{};
+  }
+
   // The HTML `hidden` attribute means display:none, and outranks the CSS that got
   // us here -- it is applied after the cascade above for that reason. EPUBs use it
   // to carry notes, answers and alternate-language blocks that must not be shown.

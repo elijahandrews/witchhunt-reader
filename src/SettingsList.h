@@ -388,6 +388,9 @@ inline void buildSettings(const RowSink& emit) {
   emit(SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",
                           StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_SPACING));
+  emit(SettingInfo::Toggle(StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, &CrossPointSettings::ignorePublisherPageMargins,
+                           "ignorePublisherPageMargins", StrId::STR_CAT_READER)
+           .withSubmenu(StrId::STR_MENU_READER_SPACING));
   emit(SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                          {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}, "lineSpacing", StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_SPACING));

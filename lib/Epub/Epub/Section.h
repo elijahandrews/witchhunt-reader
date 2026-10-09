@@ -191,6 +191,7 @@ class Section {
     bool hyphenationEnabled = false;
     bool fontSizeNormalization = true;
     bool embeddedStyle = false;
+    bool ignorePublisherPageMargins = false;
     uint32_t publisherFontHash = 0;
     bool bionicReadingEnabled = false;
     bool inlineFootnotePreviews = false;

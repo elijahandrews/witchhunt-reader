@@ -345,6 +345,11 @@ uint32_t Section::calculatePropertyHash(const BuildParams& p) {
     append(&INLINE_FOOTNOTE_PREVIEW_LAYOUT_VERSION, sizeof(INLINE_FOOTNOTE_PREVIEW_LAYOUT_VERSION));
   }
   append(&p.imageRendering, sizeof(p.imageRendering));
+  // Keep the existing cache key when off (or CSS is disabled). Only the override
+  // needs a new pagination variant; old/default layouts remain reusable.
+  if (p.embeddedStyle && p.ignorePublisherPageMargins) {
+    append(&p.ignorePublisherPageMargins, sizeof(p.ignorePublisherPageMargins));
+  }
 
   return fnv1a(buffer, offset);
 }
@@ -1151,6 +1156,7 @@ Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
       [this, &st](std::unique_ptr<Page> page) { st.lut.emplace_back(this->onPageComplete(std::move(page))); },
       p.embeddedStyle, st.contentBase, st.imageBasePath, p.imageRendering, std::move(tocAnchors), st.progressFn,
       st.cssParser, epub->getImageManifest());
+  st.visitor->setIgnorePublisherPageMargins(p.ignorePublisherPageMargins);
   st.visitor->loadDocumentStyles(spineIndex);
   // Load printed-page list entries (NCX <pageList> or EPUB 3 nav page-list) for this
   // chapter's href, if any, straight into the parser's packed store (no intermediate vector of

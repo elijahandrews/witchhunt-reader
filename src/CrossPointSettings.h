@@ -469,6 +469,8 @@ class CrossPointSettings {
 
   // Reader screen margin settings
   uint8_t screenMargin = 5;
+  // Override only EPUB html/body margin and padding; keep descendant block spacing.
+  uint8_t ignorePublisherPageMargins = 0;
 
   // Extra clearance from the panel edge, on TOP of the board profile's own viewableInsets --
   // see GfxRenderer::setViewablePaddingProvider. The profile says where the case covers the

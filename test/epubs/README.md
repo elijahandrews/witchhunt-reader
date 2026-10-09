@@ -74,3 +74,14 @@ layout in table cells remains a separate layout limitation.
   turn to check that deliberate navigation updates the reading position.
 
 These checks use original synthetic text. No personal library content is included.
+
+## Publisher page margins
+
+The existing **Media and image markers** chapter in `test_epub_features.epub`
+has a one-em body margin and a separate hanging indent around its diamond marker.
+Keep **Embedded Style** on. Under **Settings → Reader → Spacing**, toggle
+**Ignore publisher page margins**, then reopen the chapter. With it on, ordinary
+text should move outward to the reader's screen margin. The diamond and its
+hanging paragraph should retain their relative positions, and the styled heading
+should retain its size and alignment. Turning the option off should restore the
+body inset. Other chapters without outer margins should keep their layout.

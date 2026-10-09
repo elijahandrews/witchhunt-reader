@@ -1299,6 +1299,7 @@ Section::BuildParams EpubReaderActivity::makeSectionBuildParams() const {
   p.hyphenationEnabled = getEffectiveHyphenation();
   p.fontSizeNormalization = getEffectiveFontSizeNormalization();
   p.embeddedStyle = lastRenderStats.embeddedStyle;
+  p.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins != 0;
   p.publisherFontHash = p.embeddedStyle && embeddedFonts_ ? embeddedFonts_->fingerprint() : 0;
   p.bionicReadingEnabled = getEffectiveBionicReading();
   // The SETTING, nothing else. Availability is guaranteed by construction: a preview-enabled
@@ -6576,6 +6577,7 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   p.hyphenationEnabled = effectiveHyphenation;
   p.fontSizeNormalization = effectiveFontSizeNormalization;
   p.embeddedStyle = effectiveEmbeddedStyle;
+  p.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins != 0;
   p.publisherFontHash = effectiveEmbeddedStyle ? embeddedFonts.fingerprint() : 0;
   p.bionicReadingEnabled = effectiveBionicReading;
   p.inlineFootnotePreviews = effectiveInlineFootnotePreviews;

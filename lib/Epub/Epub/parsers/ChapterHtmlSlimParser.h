@@ -216,6 +216,7 @@ class ChapterHtmlSlimParser final : public Print {
   CssStyle resolveDocumentStyle(const std::string& tag, const std::string& classes, const std::string& id = {}) const;
   EpubImageManifest* imageManifest;
   bool embeddedStyle;
+  bool ignorePublisherPageMargins_ = false;
   uint8_t imageRendering;
   std::string contentBase;
   std::string imageBasePath;
@@ -802,6 +803,8 @@ class ChapterHtmlSlimParser final : public Print {
   // Called before setup. Rules live only in this visitor, independent of another
   // chapter's foreground/background build; the durable font catalog is book-wide.
   bool loadDocumentStyles(int spineIndex);
+  // Set before setup(); this affects the resolved element copy, not shared CSS caches.
+  void setIgnorePublisherPageMargins(bool ignore) { ignorePublisherPageMargins_ = ignore; }
   [[nodiscard]] bool documentStylesDegraded() const {
     return documentCssFailed_ || (cssParser && cssParser->fontCatalogFailureEpoch() != fontCatalogStartEpoch_) ||
            (documentCss_ && documentCss_->getResolveStats().lowHeapSkips > 0);

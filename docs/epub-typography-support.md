@@ -34,6 +34,20 @@ Extracted font caches are checked against their ZIP entry CRC and repaired when
 possible. Font contents participate in the pagination cache key. Devices without PSRAM use
 existing fallback fonts.
 
+## Page margins
+
+**Settings → Reader → Spacing → Ignore publisher page margins** removes margin
+and padding on EPUB `html` and `body` elements, including inline styles. It is
+off by default. Enable it with **Embedded Style** still on to use the reader’s
+**Reader Screen Margin** without adding the publisher’s outer page spacing.
+The device’s bezel clearance and **Screen Edge Margin** still apply.
+
+Paragraph indents, heading spacing, quotations, lists, and other nested block
+spacing remain intact. A publisher’s margins on a wrapper `div` are retained;
+this option does not guess which nested blocks represent an entire page. It
+does not change TXT/Markdown layout. Reopen the book after changing it; the
+reader builds a separate pagination cache for the new layout as needed.
+
 ## SD fonts
 
 Existing v4/v5 fonts remain supported. The converter’s `--small-caps` option writes
