@@ -16,7 +16,7 @@ QuickOverridesActivity::QuickOverridesActivity(
     const int8_t initialBionicReadingOverride, const int8_t initialGuideDotsOverride,
     const int8_t initialParagraphAlignmentOverride, const int8_t initialTextAntiAliasingOverride,
     const int8_t initialHyphenationOverride, const int8_t initialFontSizeNormalizationOverride,
-    const int8_t initialInlineFootnotePreviewsOverride)
+    const int8_t initialInlineFootnotePreviewsOverride, const int8_t initialIgnorePublisherPageMarginsOverride)
     : MenuListActivity("QuickOverrides", renderer, mappedInput),
       pendingEmbeddedStyleOverride(initialEmbeddedStyleOverride),
       pendingImageRenderingOverride(initialImageRenderingOverride),
@@ -29,7 +29,8 @@ QuickOverridesActivity::QuickOverridesActivity(
       pendingTextAntiAliasingOverride(initialTextAntiAliasingOverride),
       pendingHyphenationOverride(initialHyphenationOverride),
       pendingFontSizeNormalizationOverride(initialFontSizeNormalizationOverride),
-      pendingInlineFootnotePreviewsOverride(initialInlineFootnotePreviewsOverride) {
+      pendingInlineFootnotePreviewsOverride(initialInlineFootnotePreviewsOverride),
+      pendingIgnorePublisherPageMarginsOverride(initialIgnorePublisherPageMarginsOverride) {
   buildMenuItems();
 }
 
@@ -54,7 +55,7 @@ int8_t threeStateOverrideFromSlot(uint8_t slot) {
 }  // namespace
 
 void QuickOverridesActivity::buildMenuItems() {
-  menuItems.reserve(10);
+  menuItems.reserve(12);
 
   auto* self = this;
 
@@ -67,6 +68,19 @@ void QuickOverridesActivity::buildMenuItems() {
       },
       [](void* ctx, uint8_t v) {
         static_cast<QuickOverridesActivity*>(ctx)->pendingEmbeddedStyleOverride = threeStateOverrideFromSlot(v);
+      }));
+
+  // Publisher outer page margins: default / on / off for this book only.
+  menuItems.push_back(SettingInfo::DynamicEnumCtx(
+      StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, {StrId::STR_DEFAULT_VALUE, StrId::STR_STATE_ON, StrId::STR_STATE_OFF},
+      self,
+      [](const void* ctx) -> uint8_t {
+        return threeStateSlotFromOverride(
+            static_cast<const QuickOverridesActivity*>(ctx)->pendingIgnorePublisherPageMarginsOverride);
+      },
+      [](void* ctx, uint8_t v) {
+        static_cast<QuickOverridesActivity*>(ctx)->pendingIgnorePublisherPageMarginsOverride =
+            threeStateOverrideFromSlot(v);
       }));
 
   // Image rendering: default(-1) / display(0) / placeholder(1) / suppress(2)
@@ -225,13 +239,14 @@ void QuickOverridesActivity::finishWithResult(bool cancelled) {
   payload.fontFamilyOverride = pendingFontFamilyOverride;
   payload.sdFontFamilyOverride = pendingSdFontFamilyOverride;
   payload.fontSizeOverride = pendingFontSizeOverride;
-  payload.bionicReadingOverride = (pendingBionicReadingOverride > 0) ? 1 : 0;
+  payload.bionicReadingOverride = pendingBionicReadingOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.paragraphAlignmentOverride = pendingParagraphAlignmentOverride;
   payload.textAntiAliasingOverride = pendingTextAntiAliasingOverride;
   payload.hyphenationOverride = pendingHyphenationOverride;
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
+  payload.ignorePublisherPageMarginsOverride = pendingIgnorePublisherPageMarginsOverride;
   result.data = std::move(payload);
   setResult(std::move(result));
   finish();

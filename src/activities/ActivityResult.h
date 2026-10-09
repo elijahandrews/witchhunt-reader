@@ -29,7 +29,7 @@ struct MenuResult {
   std::string sdFontFamilyOverride;
   int8_t fontSizeOverride = -1;
   uint8_t textDarkness = 1;
-  uint8_t bionicReadingOverride = 0;
+  int8_t bionicReadingOverride = -1;
   int8_t paragraphAlignmentOverride = -1;
   int8_t textAntiAliasingOverride = -1;
   int8_t hyphenationOverride = -1;
@@ -47,6 +47,7 @@ struct MenuResult {
   int8_t inlineFootnotePreviewsOverride = -1;
   // Browse Files view (CrossPointSettings::FILE_BROWSER_VIEW), appended like the above.
   uint8_t browserView = 0;
+  int8_t ignorePublisherPageMarginsOverride = -1;
 };
 
 struct ChapterResult {

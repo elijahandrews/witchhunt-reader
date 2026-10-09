@@ -4707,7 +4707,7 @@ void ChapterHtmlSlimParser::makePages() {
     currentPageNextY += blockStyle.paddingBottom;
   }
 
-  // Extra paragraph spacing if enabled (default behavior).
+  // Extra paragraph spacing when the reader explicitly enables it.
   // Suppressed between lines within a <pre> block so code/preformatted text is not
   // double-spaced; the last line of the block is flushed after </pre> is closed and
   // preUntilDepth has already been reset, so it still receives normal paragraph spacing.

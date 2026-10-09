@@ -79,9 +79,12 @@ These checks use original synthetic text. No personal library content is include
 
 The existing **Media and image markers** chapter in `test_epub_features.epub`
 has a one-em body margin and a separate hanging indent around its diamond marker.
-Keep **Embedded Style** on. Under **Settings → Reader → Spacing**, toggle
-**Ignore publisher page margins**, then reopen the chapter. With it on, ordinary
+Keep **Embedded Style** on. In the **reader menu → Settings**, change
+**Ignore publisher page margins** to **On**, then return to the chapter. Ordinary
 text should move outward to the reader's screen margin. The diamond and its
 hanging paragraph should retain their relative positions, and the styled heading
-should retain its size and alignment. Turning the option off should restore the
-body inset. Other chapters without outer margins should keep their layout.
+should retain its size and alignment. **Off** restores the body inset; **Default**
+follows **Settings → Reader → Spacing → Ignore publisher page margins**.
+Other chapters without outer margins should keep their layout. Reopen the book
+to check persistence, and open a second book to check that its choice is independent.
+Repeat the toggle from **Quick Overrides** and check that the passage stays visible.

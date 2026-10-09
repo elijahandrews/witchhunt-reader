@@ -770,6 +770,7 @@ void EpubReaderActivity::onEnter() {
   bookFontSizeNormalizationOverride = currentBook.fontSizeNormalizationOverride;
   bookGuideDotsOverride = currentBook.guideDotsOverride;
   bookInlineFootnotePreviewsOverride = currentBook.inlineFootnotePreviewsOverride;
+  bookIgnorePublisherPageMarginsOverride = currentBook.ignorePublisherPageMarginsOverride;
   logReaderMemSnapshot("onEnter_after_recent_books");
 
   // Take the scaled-glyph cache now, before any page is laid out. It is never released, and
@@ -1299,7 +1300,7 @@ Section::BuildParams EpubReaderActivity::makeSectionBuildParams() const {
   p.hyphenationEnabled = getEffectiveHyphenation();
   p.fontSizeNormalization = getEffectiveFontSizeNormalization();
   p.embeddedStyle = lastRenderStats.embeddedStyle;
-  p.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins != 0;
+  p.ignorePublisherPageMargins = getEffectiveIgnorePublisherPageMargins();
   p.publisherFontHash = p.embeddedStyle && embeddedFonts_ ? embeddedFonts_->fingerprint() : 0;
   p.bionicReadingEnabled = getEffectiveBionicReading();
   // The SETTING, nothing else. Availability is guaranteed by construction: a preview-enabled
@@ -2792,13 +2793,13 @@ void EpubReaderActivity::toggleAutoPageTurn(const uint8_t selectedPageTurnOption
 void EpubReaderActivity::applyBookReaderOverrides(const int8_t embeddedStyleOverride,
                                                   const int8_t imageRenderingOverride, const int8_t fontFamilyOverride,
                                                   const std::string& sdFontFamilyOverride,
-                                                  const int8_t fontSizeOverride, const bool bionicReadingOverride,
+                                                  const int8_t fontSizeOverride, const int8_t bionicReadingOverride,
                                                   const int8_t paragraphAlignmentOverride) {
   applyBookReaderOverrides(embeddedStyleOverride, imageRenderingOverride, fontFamilyOverride, sdFontFamilyOverride,
-                           fontSizeOverride, static_cast<int8_t>(bionicReadingOverride ? 1 : 0),
-                           paragraphAlignmentOverride, bookTextAntiAliasingOverride, bookHyphenationOverride,
-                           bookFontSizeNormalizationOverride, bookGuideDotsOverride,
-                           bookInlineFootnotePreviewsOverride);
+                           fontSizeOverride, bionicReadingOverride, paragraphAlignmentOverride,
+                           bookTextAntiAliasingOverride, bookHyphenationOverride, bookFontSizeNormalizationOverride,
+                           bookGuideDotsOverride, bookInlineFootnotePreviewsOverride,
+                           bookIgnorePublisherPageMarginsOverride);
 }
 
 void EpubReaderActivity::applyBookReaderOverrides(
@@ -2806,7 +2807,7 @@ void EpubReaderActivity::applyBookReaderOverrides(
     const std::string& sdFontFamilyOverride, const int8_t fontSizeOverride, const int8_t bionicReadingOverride,
     const int8_t paragraphAlignmentOverride, const int8_t textAntiAliasingOverride, const int8_t hyphenationOverride,
     const int8_t fontSizeNormalizationOverride, const int8_t guideDotsOverride,
-    const int8_t inlineFootnotePreviewsOverride) {
+    const int8_t inlineFootnotePreviewsOverride, const int8_t ignorePublisherPageMarginsOverride) {
   if (!epub) {
     return;
   }
@@ -2831,7 +2832,8 @@ void EpubReaderActivity::applyBookReaderOverrides(
       bookParagraphAlignmentOverride == paragraphAlignmentOverride &&
       bookTextAntiAliasingOverride == textAntiAliasingOverride && bookHyphenationOverride == hyphenationOverride &&
       bookFontSizeNormalizationOverride == fontSizeNormalizationOverride &&
-      bookInlineFootnotePreviewsOverride == inlineFootnotePreviewsOverride;
+      bookInlineFootnotePreviewsOverride == inlineFootnotePreviewsOverride &&
+      bookIgnorePublisherPageMarginsOverride == ignorePublisherPageMarginsOverride;
 
   if (layoutOverridesUnchanged && bookGuideDotsOverride == guideDotsOverride) {
     return;
@@ -2849,11 +2851,12 @@ void EpubReaderActivity::applyBookReaderOverrides(
   bookFontSizeNormalizationOverride = fontSizeNormalizationOverride;
   bookGuideDotsOverride = guideDotsOverride;
   bookInlineFootnotePreviewsOverride = inlineFootnotePreviewsOverride;
+  bookIgnorePublisherPageMarginsOverride = ignorePublisherPageMarginsOverride;
   RECENT_BOOKS.setReaderOverrides(
       epub->getPath(), bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
       bookSdFontFamilyOverride, bookFontSizeOverride, bookBionicReadingOverride, bookParagraphAlignmentOverride,
       bookTextAntiAliasingOverride, bookHyphenationOverride, bookFontSizeNormalizationOverride, bookGuideDotsOverride,
-      bookInlineFootnotePreviewsOverride);
+      bookInlineFootnotePreviewsOverride, bookIgnorePublisherPageMarginsOverride);
 
   if (layoutOverridesUnchanged) {
     // Only guide dots changed: persisted above, and the repaint on resume picks
@@ -2888,6 +2891,13 @@ void EpubReaderActivity::applyBookReaderOverrides(
 
   captureSourceBeforeReflow();
   section.reset();
+}
+
+bool EpubReaderActivity::getEffectiveIgnorePublisherPageMargins() const {
+  if (bookIgnorePublisherPageMarginsOverride >= 0) {
+    return bookIgnorePublisherPageMarginsOverride != 0;
+  }
+  return SETTINGS.ignorePublisherPageMargins != 0;
 }
 
 bool EpubReaderActivity::getEffectiveEmbeddedStyle() const {
@@ -6459,6 +6469,9 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   // hash from the reader's whenever an override is set, and this path then silently rebuilds
   // a duplicate section variant during sleep preparation.
   const RecentBook currentBook = RECENT_BOOKS.getBookByPath(filePath);
+  const bool effectiveIgnorePublisherPageMargins = currentBook.ignorePublisherPageMarginsOverride >= 0
+                                                       ? currentBook.ignorePublisherPageMarginsOverride != 0
+                                                       : SETTINGS.ignorePublisherPageMargins != 0;
   const bool effectiveEmbeddedStyle =
       currentBook.embeddedStyleOverride >= 0 ? currentBook.embeddedStyleOverride != 0 : SETTINGS.embeddedStyle != 0;
   const bool effectiveHyphenation =
@@ -6577,7 +6590,7 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
   p.hyphenationEnabled = effectiveHyphenation;
   p.fontSizeNormalization = effectiveFontSizeNormalization;
   p.embeddedStyle = effectiveEmbeddedStyle;
-  p.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins != 0;
+  p.ignorePublisherPageMargins = effectiveIgnorePublisherPageMargins;
   p.publisherFontHash = effectiveEmbeddedStyle ? embeddedFonts.fingerprint() : 0;
   p.bionicReadingEnabled = effectiveBionicReading;
   p.inlineFootnotePreviews = effectiveInlineFootnotePreviews;
@@ -6612,20 +6625,21 @@ bool EpubReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gf
 
 void EpubReaderActivity::openQuickOverrides() {
   ReaderUtils::enforceExitFullRefresh(renderer);
-  startActivityForResult(
-      std::make_unique<QuickOverridesActivity>(
-          renderer, mappedInput, bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
-          bookSdFontFamilyOverride, bookFontSizeOverride, bookBionicReadingOverride, bookGuideDotsOverride,
-          bookParagraphAlignmentOverride, bookTextAntiAliasingOverride, bookHyphenationOverride,
-          bookFontSizeNormalizationOverride, bookInlineFootnotePreviewsOverride),
-      [this](const ActivityResult& result) {
-        const auto& menu = std::get<MenuResult>(result.data);
-        applyBookReaderOverrides(
-            menu.embeddedStyleOverride, menu.imageRenderingOverride, menu.fontFamilyOverride, menu.sdFontFamilyOverride,
-            menu.fontSizeOverride, static_cast<int8_t>(menu.bionicReadingOverride), menu.paragraphAlignmentOverride,
-            menu.textAntiAliasingOverride, menu.hyphenationOverride, menu.fontSizeNormalizationOverride,
-            menu.guideDotsOverride, menu.inlineFootnotePreviewsOverride);
-      });
+  startActivityForResult(std::make_unique<QuickOverridesActivity>(
+                             renderer, mappedInput, bookEmbeddedStyleOverride, bookImageRenderingOverride,
+                             bookFontFamilyOverride, bookSdFontFamilyOverride, bookFontSizeOverride,
+                             bookBionicReadingOverride, bookGuideDotsOverride, bookParagraphAlignmentOverride,
+                             bookTextAntiAliasingOverride, bookHyphenationOverride, bookFontSizeNormalizationOverride,
+                             bookInlineFootnotePreviewsOverride, bookIgnorePublisherPageMarginsOverride),
+                         [this](const ActivityResult& result) {
+                           const auto& menu = std::get<MenuResult>(result.data);
+                           applyBookReaderOverrides(
+                               menu.embeddedStyleOverride, menu.imageRenderingOverride, menu.fontFamilyOverride,
+                               menu.sdFontFamilyOverride, menu.fontSizeOverride, menu.bionicReadingOverride,
+                               menu.paragraphAlignmentOverride, menu.textAntiAliasingOverride, menu.hyphenationOverride,
+                               menu.fontSizeNormalizationOverride, menu.guideDotsOverride,
+                               menu.inlineFootnotePreviewsOverride, menu.ignorePublisherPageMarginsOverride);
+                         });
 }
 
 void EpubReaderActivity::openReaderMenu() {
@@ -6663,20 +6677,20 @@ void EpubReaderActivity::openReaderMenu() {
       std::make_unique<EpubReaderMenuActivity>(
           renderer, mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent, SETTINGS.orientation,
           !currentPageFootnotes.empty(), bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
-          bookSdFontFamilyOverride, bookFontSizeOverride, SETTINGS.textDarkness, getEffectiveBionicReading(),
+          bookSdFontFamilyOverride, bookFontSizeOverride, SETTINGS.textDarkness, bookBionicReadingOverride,
           bookGuideDotsOverride, bookParagraphAlignmentOverride, bookTextAntiAliasingOverride, bookHyphenationOverride,
-          bookFontSizeNormalizationOverride, bookInlineFootnotePreviewsOverride, !bookmarkStore.isEmpty(),
-          isCurrentPageStarred, hasPrintedPages),
+          bookFontSizeNormalizationOverride, bookInlineFootnotePreviewsOverride, bookIgnorePublisherPageMarginsOverride,
+          !bookmarkStore.isEmpty(), isCurrentPageStarred, hasPrintedPages),
       [this](const ActivityResult& result) {
         const auto& menu = std::get<MenuResult>(result.data);
         applyOrientation(menu.orientation);
         applyTextDarkness(menu.textDarkness);
         toggleAutoPageTurn(menu.pageTurnOption);
-        applyBookReaderOverrides(
-            menu.embeddedStyleOverride, menu.imageRenderingOverride, menu.fontFamilyOverride, menu.sdFontFamilyOverride,
-            menu.fontSizeOverride, static_cast<bool>(menu.bionicReadingOverride), menu.paragraphAlignmentOverride,
-            menu.textAntiAliasingOverride, menu.hyphenationOverride, menu.fontSizeNormalizationOverride,
-            menu.guideDotsOverride, menu.inlineFootnotePreviewsOverride);
+        applyBookReaderOverrides(menu.embeddedStyleOverride, menu.imageRenderingOverride, menu.fontFamilyOverride,
+                                 menu.sdFontFamilyOverride, menu.fontSizeOverride, menu.bionicReadingOverride,
+                                 menu.paragraphAlignmentOverride, menu.textAntiAliasingOverride,
+                                 menu.hyphenationOverride, menu.fontSizeNormalizationOverride, menu.guideDotsOverride,
+                                 menu.inlineFootnotePreviewsOverride, menu.ignorePublisherPageMarginsOverride);
         if (!result.isCancelled) {
           onReaderMenuConfirm(static_cast<EpubReaderMenuActivity::MenuAction>(menu.action));
         }

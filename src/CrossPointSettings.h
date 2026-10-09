@@ -415,7 +415,7 @@ class CrossPointSettings {
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
   // Text rendering settings
-  uint8_t extraParagraphSpacing = 1;
+  uint8_t extraParagraphSpacing = 0;
   uint8_t textAntiAliasing = 1;
   // X3-only: when on, the AA refresh uses the 7-frame community grayscale LUT
   // (~130 ms panel time) instead of the OEM 53-frame LUT (~2.4 s). Mid-tones

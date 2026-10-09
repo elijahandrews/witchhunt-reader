@@ -54,11 +54,12 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
                                   const int8_t initialEmbeddedStyleOverride, const int8_t initialImageRenderingOverride,
                                   const int8_t initialFontFamilyOverride,
                                   const std::string& initialSdFontFamilyOverride, const int8_t initialFontSizeOverride,
-                                  const uint8_t initialTextDarkness, const bool initialBionicReadingOverride,
+                                  const uint8_t initialTextDarkness, const int8_t initialBionicReadingOverride,
                                   const int8_t initialGuideDotsOverride, const int8_t initialParagraphAlignmentOverride,
                                   const int8_t initialTextAntiAliasingOverride, const int8_t initialHyphenationOverride,
                                   const int8_t initialFontSizeNormalizationOverride,
-                                  const int8_t initialInlineFootnotePreviewsOverride, const bool hasStarredPages,
+                                  const int8_t initialInlineFootnotePreviewsOverride,
+                                  const int8_t initialIgnorePublisherPageMarginsOverride, const bool hasStarredPages,
                                   const bool isCurrentPageStarred, const bool hasPrintedPages);
 
   void onExit() override;
@@ -126,13 +127,14 @@ class EpubReaderMenuActivity final : public TabbedUiListActivity {
   std::string pendingSdFontFamilyOverride;
   int8_t pendingFontSizeOverride = -1;
   uint8_t pendingTextDarkness = 1;
-  bool pendingBionicReading = false;
+  int8_t pendingBionicReadingOverride = -1;
   int8_t pendingGuideDotsOverride = -1;
   int8_t pendingParagraphAlignmentOverride = -1;
   int8_t pendingTextAntiAliasingOverride = -1;
   int8_t pendingHyphenationOverride = -1;
   int8_t pendingFontSizeNormalizationOverride = -1;
   int8_t pendingInlineFootnotePreviewsOverride = -1;
+  int8_t pendingIgnorePublisherPageMarginsOverride = -1;
 
   static constexpr const char* pageTurnLabels[] = {"", "1", "3", "6", "12"};
 

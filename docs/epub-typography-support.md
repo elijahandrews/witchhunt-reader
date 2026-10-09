@@ -45,8 +45,18 @@ The device’s bezel clearance and **Screen Edge Margin** still apply.
 Paragraph indents, heading spacing, quotations, lists, and other nested block
 spacing remain intact. A publisher’s margins on a wrapper `div` are retained;
 this option does not guess which nested blocks represent an entire page. It
-does not change TXT/Markdown layout. Reopen the book after changing it; the
-reader builds a separate pagination cache for the new layout as needed.
+does not change TXT/Markdown layout. The reader builds a separate pagination
+cache for the new layout as needed.
+
+For one book, open the **reader menu → Settings → Ignore publisher page margins**
+(also available in **Quick Overrides**). Choose **On**, **Off**, or **Default** to
+follow the global setting. Returning to the book applies the change immediately
+through the reader’s position-preserving reflow; reopening retains the choice.
+
+**Extra Paragraph Spacing** now defaults to **Off**. This removes the reader’s
+optional extra half-line gap while preserving publisher paragraph margins.
+An existing saved preference is retained; it can be changed under
+**Settings → Reader → Spacing**.
 
 ## SD fonts
 
