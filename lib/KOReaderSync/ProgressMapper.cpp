@@ -98,6 +98,21 @@ bool isChapterStartXPath(const std::string& xpath) {
   return true;
 }
 
+// The paragraph LUT locates starts, not offsets inside a paragraph. A first direct text node
+// can follow a long nested element, so even text()[1].0 is not proof of the paragraph's start.
+bool isExactParagraphStartXPath(const std::string& xpath) {
+  const size_t paragraph = xpath.find("/p[");
+  if (paragraph == std::string::npos) return false;
+  const size_t close = xpath.find(']', paragraph + 3);
+  if (close == std::string::npos) return false;
+  if (close + 1 == xpath.size()) return true;
+  if (xpath[close + 1] != '.' || close + 2 == xpath.size()) return false;
+  for (size_t i = close + 2; i < xpath.size(); ++i) {
+    if (xpath[i] != '0') return false;
+  }
+  return true;
+}
+
 // Page progress within a spine item. Page numbers are 0-based and totalPages is 1-based, so the
 // last page is (totalPages - 1). Dividing by (totalPages - 1) maps page 0 to intra=0 and the last
 // page to intra=1, which is what KOReader expects when round-tripping. Dividing by totalPages
@@ -127,6 +142,7 @@ CrossPointPosition ProgressMapper::peekRemote(const KOReaderPosition& koPos, con
     if (ChapterXPathIndexer::tryExtractParagraphIndexFromXPath(koPos.xpath, pIndex)) {
       result.paragraphIndex = pIndex;
       result.hasParagraphIndex = true;
+      result.isExactParagraphStart = isExactParagraphStartXPath(koPos.xpath);
     }
   }
   return result;
@@ -249,6 +265,7 @@ CrossPointPosition ProgressMapper::toCrossPoint(const std::shared_ptr<Epub>& epu
     if (ChapterXPathIndexer::tryExtractParagraphIndexFromXPath(koPos.xpath, pIndex)) {
       result.paragraphIndex = pIndex;
       result.hasParagraphIndex = true;
+      result.isExactParagraphStart = isExactParagraphStartXPath(koPos.xpath);
     }
   }
 

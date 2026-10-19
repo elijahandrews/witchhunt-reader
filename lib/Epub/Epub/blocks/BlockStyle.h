@@ -31,8 +31,39 @@ struct BlockStyle {
   // cap, effectiveWidth collapses to 1-2 words per line and justification dumps
   // the remaining space into a single gap.
   static constexpr float MAX_HORIZONTAL_INSET_EM = 4.0f;
+  // Four horizontal margin/padding contributions must fit the signed 16-bit
+  // inset sums. This also keeps deeply multiplied font scopes finite before
+  // converting em lengths to the layout's fixed-width pixel fields.
+  static float boundedComputedEm(const float em) { return std::max(0.0f, std::min(2047.0f, em)); }
 
   CssTextAlign alignment = CssTextAlign::Justify;
+  // Layout only: final line positions encode this in the section cache.
+  CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
+  bool whitespaceIndentDefault = false;
+  bool whitespaceAlignmentDefault = false;
+
+  // Computed inherited hyphen policy and first-line overrides. Layout-only: the
+  // emitted TextBlock stores the selected per-word flags, not these declarations.
+  CssHyphens hyphens = CssHyphens::Inherit;
+  uint8_t hyphenateLimitBefore = 2, hyphenateLimitAfter = 2, hyphenateLimitLines = 0;
+  bool firstLineStyleDefined = false;
+  uint8_t firstLineSmallCaps = 0;
+  bool firstLineSmallCapsDefined = false;
+  int16_t firstLineTracking = 0;
+  bool firstLineTrackingDefined = false;
+  bool firstLineLigaturesNone = false;
+  bool firstLineLigaturesDefined = false;
+  uint8_t firstLineFontStyle(uint8_t style) const {
+    return firstLineSmallCapsDefined ? static_cast<uint8_t>((style & ~0xc0u) | (firstLineSmallCaps == 2   ? 0xc0u
+                                                                                : firstLineSmallCaps == 1 ? 0x40u
+                                                                                                          : 0u))
+                                     : style;
+  }
+  uint32_t firstLineWordTypography(uint32_t typography) const {
+    if (firstLineTrackingDefined) typography = (typography & ~0xffffu) | static_cast<uint16_t>(firstLineTracking);
+    if (firstLineLigaturesDefined) typography = (typography & ~(1u << 25)) | (firstLineLigaturesNone ? 1u << 25 : 0u);
+    return typography;
+  }
 
   // Spacing (in pixels)
   int16_t marginTop = 0;
@@ -66,6 +97,8 @@ struct BlockStyle {
   //    is then a small residual (usually 1.0) applied on top, so glyphs stay crisp.
   // h1=1.6, h2=1.4, h3=1.2 are the default desired multipliers when no explicit CSS size.
   float fontSizeMultiplier = 1.0f;
+  float lineHeightMultiplier = 1.0f;  // resolved inherited CSS line spacing; layout only
+  bool lineHeightDefined = false;
   // 32-bit font-id hash (fontIds.h); 0 = use the body font + fontSizeMultiplier. Must be a
   // full int — a uint8_t would truncate the hash and the heading would render nothing.
   int32_t headingFontId = 0;
@@ -90,6 +123,21 @@ struct BlockStyle {
   // applied on top of the parent's style to get the combined style.
   BlockStyle getCombinedBlockStyle(const BlockStyle& child) const {
     BlockStyle combinedBlockStyle;
+    combinedBlockStyle.whiteSpace = child.whiteSpace;
+    combinedBlockStyle.hyphens = child.hyphens;
+    combinedBlockStyle.hyphenateLimitBefore = child.hyphenateLimitBefore;
+    combinedBlockStyle.hyphenateLimitAfter = child.hyphenateLimitAfter;
+    combinedBlockStyle.hyphenateLimitLines = child.hyphenateLimitLines;
+    // A pending parent's first line reaches its first text child. Once consumed,
+    // the parser clears these flags, so neither continuations nor siblings inherit it.
+    const BlockStyle& first = child.firstLineStyleDefined ? child : *this;
+    combinedBlockStyle.firstLineStyleDefined = first.firstLineStyleDefined;
+    combinedBlockStyle.firstLineSmallCaps = first.firstLineSmallCaps;
+    combinedBlockStyle.firstLineSmallCapsDefined = first.firstLineSmallCapsDefined;
+    combinedBlockStyle.firstLineTracking = first.firstLineTracking;
+    combinedBlockStyle.firstLineTrackingDefined = first.firstLineTrackingDefined;
+    combinedBlockStyle.firstLineLigaturesNone = first.firstLineLigaturesNone;
+    combinedBlockStyle.firstLineLigaturesDefined = first.firstLineLigaturesDefined;
 
     // Vertical margins between a parent and its child collapse (CSS collapsing margins):
     // the combined margin is the larger of the two, not their sum. Without this, a
@@ -112,20 +160,33 @@ struct BlockStyle {
     combinedBlockStyle.paddingLeft = child.paddingLeft;
     combinedBlockStyle.paddingRight = child.paddingRight;
     // Text indent: use child's if defined
-    if (child.textIndentDefined) {
+    if (whitespaceIndentDefault && child.whiteSpace != CssWhiteSpace::Pre &&
+        child.whiteSpace != CssWhiteSpace::PreWrap && !child.textIndentDefined) {
+      // An empty/hidden preformatted sibling must not donate its synthetic zero indent.
+      combinedBlockStyle.textIndent = child.textIndent;
+      combinedBlockStyle.textIndentDefined = false;
+    } else if (child.textIndentDefined) {
+      combinedBlockStyle.whitespaceIndentDefault = child.whitespaceIndentDefault;
       combinedBlockStyle.textIndent = child.textIndent;
       combinedBlockStyle.textIndentDefined = true;
       combinedBlockStyle.textIndentYields = child.textIndentYields;
     } else {
+      combinedBlockStyle.whitespaceIndentDefault = whitespaceIndentDefault;
       combinedBlockStyle.textIndent = textIndent;
       combinedBlockStyle.textIndentDefined = textIndentDefined;
       combinedBlockStyle.textIndentYields = textIndentYields;
     }
     // Text align: use child's if defined
-    if (child.textAlignDefined) {
+    if (whitespaceAlignmentDefault && child.whiteSpace != CssWhiteSpace::Pre &&
+        child.whiteSpace != CssWhiteSpace::PreWrap && !child.textAlignDefined) {
+      combinedBlockStyle.alignment = child.alignment;
+      combinedBlockStyle.textAlignDefined = false;
+    } else if (child.textAlignDefined) {
+      combinedBlockStyle.whitespaceAlignmentDefault = child.whitespaceAlignmentDefault;
       combinedBlockStyle.alignment = child.alignment;
       combinedBlockStyle.textAlignDefined = true;
     } else {
+      combinedBlockStyle.whitespaceAlignmentDefault = whitespaceAlignmentDefault;
       combinedBlockStyle.alignment = alignment;
       combinedBlockStyle.textAlignDefined = textAlignDefined;
     }
@@ -135,6 +196,9 @@ struct BlockStyle {
     // fontSizeMultiplier: use child's if != 1.0, else parent's
     combinedBlockStyle.fontSizeMultiplier =
         (child.fontSizeMultiplier != 1.0f) ? child.fontSizeMultiplier : fontSizeMultiplier;
+    combinedBlockStyle.lineHeightMultiplier =
+        child.lineHeightDefined ? child.lineHeightMultiplier : lineHeightMultiplier;
+    combinedBlockStyle.lineHeightDefined = child.lineHeightDefined || lineHeightDefined;
     // headingFontId: use child's if set, else parent's, so inline children of a heading
     // (e.g. <em> inside an <h2>) inherit the taller heading font.
     combinedBlockStyle.headingFontId = (child.headingFontId != 0) ? child.headingFontId : headingFontId;
@@ -142,28 +206,37 @@ struct BlockStyle {
   }
 
   // Create a BlockStyle from CSS style properties, resolving CssLength values to pixels
-  // emSize is the current font line height, used for em/rem unit conversion
+  // emSize is the element's computed font em; rootEmSize keeps rem at the
+  // reader root size. Four-argument callers retain their existing unit context.
   // paragraphAlignment is the user's paragraphAlignment setting preference
   static BlockStyle fromCssStyle(const CssStyle& cssStyle, const float emSize, const CssTextAlign paragraphAlignment,
-                                 const uint16_t viewportWidth = 0) {
+                                 const uint16_t viewportWidth = 0, const float rootEmSize = 0) {
     BlockStyle blockStyle;
+    blockStyle.whiteSpace = cssStyle.whiteSpace;
+    blockStyle.hyphens = cssStyle.hasHyphens() ? cssStyle.hyphens : CssHyphens::Inherit;
+    blockStyle.hyphenateLimitBefore = cssStyle.hyphenateLimitBefore;
+    blockStyle.hyphenateLimitAfter = cssStyle.hyphenateLimitAfter;
+    blockStyle.hyphenateLimitLines = cssStyle.hyphenateLimitLines;
     const float vw = viewportWidth;
     const auto maxHorizontalInsetPx = static_cast<int16_t>(emSize * MAX_HORIZONTAL_INSET_EM);
-    // Resolve all CssLength values to pixels using the current font's em size and viewport width
-    blockStyle.marginTop = cssStyle.marginTop.toPixelsInt16(emSize, vw);
-    blockStyle.marginBottom = cssStyle.marginBottom.toPixelsInt16(emSize, vw);
-    blockStyle.marginLeft = clampInset(cssStyle.marginLeft.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
-    blockStyle.marginRight = clampInset(cssStyle.marginRight.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
+    const auto pixels = [&](const CssLength& length) {
+      return length.toPixelsInt16(length.unit == CssUnit::Rem && rootEmSize > 0 ? rootEmSize : emSize, vw);
+    };
+    // Resolve relative lengths in their element or root font context.
+    blockStyle.marginTop = pixels(cssStyle.marginTop);
+    blockStyle.marginBottom = pixels(cssStyle.marginBottom);
+    blockStyle.marginLeft = clampInset(pixels(cssStyle.marginLeft), maxHorizontalInsetPx);
+    blockStyle.marginRight = clampInset(pixels(cssStyle.marginRight), maxHorizontalInsetPx);
 
-    blockStyle.paddingTop = cssStyle.paddingTop.toPixelsInt16(emSize, vw);
-    blockStyle.paddingBottom = cssStyle.paddingBottom.toPixelsInt16(emSize, vw);
-    blockStyle.paddingLeft = clampInset(cssStyle.paddingLeft.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
-    blockStyle.paddingRight = clampInset(cssStyle.paddingRight.toPixelsInt16(emSize, vw), maxHorizontalInsetPx);
+    blockStyle.paddingTop = pixels(cssStyle.paddingTop);
+    blockStyle.paddingBottom = pixels(cssStyle.paddingBottom);
+    blockStyle.paddingLeft = clampInset(pixels(cssStyle.paddingLeft), maxHorizontalInsetPx);
+    blockStyle.paddingRight = clampInset(pixels(cssStyle.paddingRight), maxHorizontalInsetPx);
 
     // For textIndent: if it's a percentage we can't resolve (no viewport width),
     // leave textIndentDefined=false so applyParagraphIndent() applies a pixel fallback
     if (cssStyle.hasTextIndent() && cssStyle.textIndent.isResolvable(vw)) {
-      blockStyle.textIndent = cssStyle.textIndent.toPixelsInt16(emSize, vw);
+      blockStyle.textIndent = pixels(cssStyle.textIndent);
       blockStyle.textIndentDefined = true;
     }
     blockStyle.textAlignDefined = cssStyle.hasTextAlign();
@@ -173,8 +246,25 @@ struct BlockStyle {
     } else {
       blockStyle.alignment = paragraphAlignment;
     }
+    if (blockStyle.whiteSpace == CssWhiteSpace::Pre || blockStyle.whiteSpace == CssWhiteSpace::PreWrap) {
+      // Preserved code columns cannot be expanded by prose justification or paragraph indents.
+      if (!cssStyle.hasTextAlign()) {
+        blockStyle.alignment = CssTextAlign::Left;
+        blockStyle.textAlignDefined = true;
+        blockStyle.whitespaceAlignmentDefault = true;
+      }
+      if (!cssStyle.hasTextIndent()) {
+        blockStyle.textIndent = 0;
+        blockStyle.textIndentDefined = true;
+        blockStyle.whitespaceIndentDefault = true;
+      }
+    }
     if (cssStyle.hasFontSizeMultiplier()) {
       blockStyle.fontSizeMultiplier = cssStyle.fontSizeMultiplier;
+    }
+    if (cssStyle.hasLineHeight()) {
+      blockStyle.lineHeightMultiplier = cssStyle.lineHeightMultiplier;
+      blockStyle.lineHeightDefined = true;
     }
     return blockStyle;
   }

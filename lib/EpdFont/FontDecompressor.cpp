@@ -184,9 +184,9 @@ bool FontDecompressor::GroupStream::extractGlyph(const uint32_t alignedOffset, c
   uint8_t outByte = 0;
   uint8_t outBits = 0;
   uint32_t writeIdx = 0;
-  for (uint8_t y = 0; y < glyph.height; y++) {
+  for (uint16_t y = 0; y < glyph.height; y++) {
     if (!readExact(row, rowStride)) return false;
-    for (uint8_t x = 0; x < glyph.width; x++) {
+    for (uint16_t x = 0; x < glyph.width; x++) {
       outByte = static_cast<uint8_t>((outByte << 2) | ((row[x / 4] >> ((3 - (x % 4)) * 2)) & 0x3));
       outBits += 2;
       if (outBits == 8) {

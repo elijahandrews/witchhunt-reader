@@ -64,11 +64,12 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
     const int totalPages, const int bookProgressPercent, const uint8_t currentOrientation, const bool hasFootnotes,
     const int8_t initialEmbeddedStyleOverride, const int8_t initialImageRenderingOverride,
     const int8_t initialFontFamilyOverride, const std::string& initialSdFontFamilyOverride,
-    const int8_t initialFontSizeOverride, const uint8_t initialTextDarkness, const bool initialBionicReadingOverride,
+    const int8_t initialFontSizeOverride, const uint8_t initialTextDarkness, const int8_t initialBionicReadingOverride,
     const int8_t initialGuideDotsOverride, const int8_t initialParagraphAlignmentOverride,
     const int8_t initialTextAntiAliasingOverride, const int8_t initialHyphenationOverride,
     const int8_t initialFontSizeNormalizationOverride, const int8_t initialInlineFootnotePreviewsOverride,
-    const bool hasStarredPages, const bool isCurrentPageStarred, const bool hasPrintedPages)
+    const int8_t initialIgnorePublisherPageMarginsOverride, const bool hasStarredPages, const bool isCurrentPageStarred,
+    const bool hasPrintedPages)
     : TabbedUiListActivity("EpubReaderMenu", renderer, mappedInput),
       currentPageStarred(isCurrentPageStarred),
       pendingOrientation(currentOrientation),
@@ -78,13 +79,14 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
       pendingSdFontFamilyOverride(initialSdFontFamilyOverride),
       pendingFontSizeOverride(initialFontSizeOverride),
       pendingTextDarkness(initialTextDarkness),
-      pendingBionicReading(initialBionicReadingOverride),
+      pendingBionicReadingOverride(initialBionicReadingOverride),
       pendingGuideDotsOverride(initialGuideDotsOverride),
       pendingParagraphAlignmentOverride(initialParagraphAlignmentOverride),
       pendingTextAntiAliasingOverride(initialTextAntiAliasingOverride),
       pendingHyphenationOverride(initialHyphenationOverride),
       pendingFontSizeNormalizationOverride(initialFontSizeNormalizationOverride),
       pendingInlineFootnotePreviewsOverride(initialInlineFootnotePreviewsOverride),
+      pendingIgnorePublisherPageMarginsOverride(initialIgnorePublisherPageMarginsOverride),
       title(title),
       currentPage(currentPage),
       totalPages(totalPages),
@@ -97,8 +99,8 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
   auto& settingsItems = tabMenuItems[static_cast<size_t>(MenuTab::Settings)];
   auto& syncItems = tabMenuItems[static_cast<size_t>(MenuTab::Sync)];
   auto& toolsItems = tabMenuItems[static_cast<size_t>(MenuTab::Tools)];
-  navigationItems.reserve(8);
-  settingsItems.reserve(13);
+  navigationItems.reserve(9);
+  settingsItems.reserve(14);
   syncItems.reserve(3);
   toolsItems.reserve(8);
 
@@ -108,6 +110,7 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
   visibleTabs[visibleTabCount++] = MenuTab::Tools;
 
   navigationItems.push_back(SettingInfo::Action(StrId::STR_SELECT_CHAPTER, SettingAction::None));
+  navigationItems.push_back(SettingInfo::Action(StrId::STR_FIND_IN_BOOK, SettingAction::None));
   navigationItems.push_back(SettingInfo::Action(StrId::STR_GO_TO_PERCENT, SettingAction::None));
   if (hasPrintedPages) {
     navigationItems.push_back(SettingInfo::Action(StrId::STR_GO_TO_PRINTED_PAGE, SettingAction::None));
@@ -151,6 +154,19 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
           s->pendingEmbeddedStyleOverride = 1;
         else
           s->pendingEmbeddedStyleOverride = 0;
+      }));
+
+  // Publisher outer page margins: default / on / off for this book only.
+  settingsItems.push_back(SettingInfo::DynamicEnumCtx(
+      StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, {StrId::STR_DEFAULT_VALUE, StrId::STR_STATE_ON, StrId::STR_STATE_OFF},
+      self,
+      [](const void* ctx) -> uint8_t {
+        return threeStateSlotFromOverride(
+            static_cast<const EpubReaderMenuActivity*>(ctx)->pendingIgnorePublisherPageMarginsOverride);
+      },
+      [](void* ctx, uint8_t v) {
+        static_cast<EpubReaderMenuActivity*>(ctx)->pendingIgnorePublisherPageMarginsOverride =
+            threeStateOverrideFromSlot(v);
       }));
 
   // Image rendering: cycles default(-1) -> display(0) -> placeholder(1) -> suppress(2)
@@ -272,11 +288,14 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
           .withSelectorActivity());
 
   settingsItems.push_back(SettingInfo::DynamicEnumCtx(
-      StrId::STR_BIONIC_READING, {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, self,
+      StrId::STR_BIONIC_READING, {StrId::STR_DEFAULT_VALUE, StrId::STR_STATE_ON, StrId::STR_STATE_OFF}, self,
       [](const void* ctx) -> uint8_t {
-        return static_cast<const EpubReaderMenuActivity*>(ctx)->pendingBionicReading ? 1 : 0;
+        return threeStateSlotFromOverride(
+            static_cast<const EpubReaderMenuActivity*>(ctx)->pendingBionicReadingOverride);
       },
-      [](void* ctx, uint8_t v) { static_cast<EpubReaderMenuActivity*>(ctx)->pendingBionicReading = (v != 0); }));
+      [](void* ctx, uint8_t v) {
+        static_cast<EpubReaderMenuActivity*>(ctx)->pendingBionicReadingOverride = threeStateOverrideFromSlot(v);
+      }));
 
   // Guide dots: default / on / off (mirrors QuickOverrides)
   settingsItems.push_back(SettingInfo::DynamicEnumCtx(
@@ -373,6 +392,8 @@ EpubReaderMenuActivity::MenuAction EpubReaderMenuActivity::actionForNameId(StrId
   switch (nameId) {
     case StrId::STR_SELECT_CHAPTER:
       return MenuAction::SELECT_CHAPTER;
+    case StrId::STR_FIND_IN_BOOK:
+      return MenuAction::FIND_IN_BOOK;
     case StrId::STR_GO_TO_PERCENT:
       return MenuAction::GO_TO_PERCENT;
     case StrId::STR_GO_TO_PRINTED_PAGE:
@@ -433,7 +454,7 @@ void EpubReaderMenuActivity::finishWithAction(MenuAction action) {
                      pendingSdFontFamilyOverride,
                      pendingFontSizeOverride,
                      pendingTextDarkness,
-                     static_cast<uint8_t>(pendingBionicReading),
+                     pendingBionicReadingOverride,
                      pendingParagraphAlignmentOverride,
                      pendingTextAntiAliasingOverride,
                      pendingHyphenationOverride};
@@ -441,6 +462,7 @@ void EpubReaderMenuActivity::finishWithAction(MenuAction action) {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
+  payload.ignorePublisherPageMarginsOverride = pendingIgnorePublisherPageMarginsOverride;
   setResult(std::move(payload));
   finish();
 }
@@ -476,7 +498,7 @@ void EpubReaderMenuActivity::onBackPressed() {
                      pendingSdFontFamilyOverride,
                      pendingFontSizeOverride,
                      pendingTextDarkness,
-                     static_cast<uint8_t>(pendingBionicReading),
+                     pendingBionicReadingOverride,
                      pendingParagraphAlignmentOverride,
                      pendingTextAntiAliasingOverride,
                      pendingHyphenationOverride};
@@ -484,6 +506,7 @@ void EpubReaderMenuActivity::onBackPressed() {
   payload.fontSizeNormalizationOverride = pendingFontSizeNormalizationOverride;
   payload.guideDotsOverride = pendingGuideDotsOverride;
   payload.inlineFootnotePreviewsOverride = pendingInlineFootnotePreviewsOverride;
+  payload.ignorePublisherPageMarginsOverride = pendingIgnorePublisherPageMarginsOverride;
   result.data = std::move(payload);
   setResult(std::move(result));
   finish();
@@ -512,6 +535,10 @@ std::string EpubReaderMenuActivity::getItemValueString(int index) const {
       const auto defaultEffective = (SETTINGS.embeddedStyle != 0) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
       return std::string(tr(STR_DEFAULT_VALUE)) + " (" + defaultEffective + ")";
     }
+    if (item.nameId == StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS && pendingIgnorePublisherPageMarginsOverride < 0) {
+      const auto defaultEffective = (SETTINGS.ignorePublisherPageMargins != 0) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
+      return std::string(tr(STR_DEFAULT_VALUE)) + " (" + defaultEffective + ")";
+    }
     if (item.nameId == StrId::STR_IMAGES && pendingImageRenderingOverride < 0) {
       const auto label = item.getEnumOptionLabel(static_cast<uint8_t>(SETTINGS.imageRendering + 1));
       if (!label.empty()) return std::string(tr(STR_DEFAULT_VALUE)) + " (" + label + ")";
@@ -537,6 +564,10 @@ std::string EpubReaderMenuActivity::getItemValueString(int index) const {
     }
     if (item.nameId == StrId::STR_HYPHENATION && pendingHyphenationOverride < 0) {
       const auto defaultEffective = (SETTINGS.hyphenationEnabled != 0) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
+      return std::string(tr(STR_DEFAULT_VALUE)) + " (" + defaultEffective + ")";
+    }
+    if (item.nameId == StrId::STR_BIONIC_READING && pendingBionicReadingOverride < 0) {
+      const auto defaultEffective = (SETTINGS.bionicReading != 0) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
       return std::string(tr(STR_DEFAULT_VALUE)) + " (" + defaultEffective + ")";
     }
     if (item.nameId == StrId::STR_GUIDE_DOTS && pendingGuideDotsOverride < 0) {

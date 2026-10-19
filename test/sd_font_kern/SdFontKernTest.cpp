@@ -135,22 +135,18 @@ void appendUtf8(std::string& s, const uint32_t cp) {
 
 }  // namespace
 
-// 'D' claims left class 7 in a font with two: it must kern as nothing, while A and B
-// keep their pairs.
-TEST(SdFontKern, ClassIdPastTheMatrixIsUnkerned) {
-  const std::string path = writeTemp(buildFont({{'A', 1}, {'B', 2}, {'D', 7}}, {{'B', 1}, {'C', 2}}, 2, 2));
+// Invalid class IDs are rejected before any matrix lookup. Valid classes remain usable.
+TEST(SdFontKern, ClassIdPastTheMatrixIsRejected) {
+  const std::string bad = writeTemp(buildFont({{'A', 1}, {'B', 2}, {'D', 7}}, {{'B', 1}, {'C', 2}}, 2, 2));
   SdCardFont font;
-  ASSERT_TRUE(font.load(path.c_str()));
-  ASSERT_EQ(0, font.prewarm("ABCD", 0x01, /*metadataOnly=*/false, /*loadKernLigatureData=*/true));
-
+  EXPECT_FALSE(font.load(bad.c_str()));
+  const std::string good = writeTemp(buildFont({{'A', 1}, {'B', 2}}, {{'B', 1}, {'C', 2}}, 2, 2));
+  ASSERT_TRUE(font.load(good.c_str()));
+  ASSERT_EQ(0, font.prewarm("ABCD", 0x01, false, true));
   const EpdFont* epd = font.getEpdFont(0);
   ASSERT_NE(nullptr, epd);
-  ASSERT_NE(nullptr, epd->data->kernMatrix) << "the kern build failed instead of skipping the bad entry";
-  EXPECT_EQ(2u, epd->data->kernLeftEntryCount);
-  EXPECT_EQ(2u, epd->data->kernLeftClassCount);
   EXPECT_EQ(kernValue(1, 1), epd->getKerning('A', 'B'));
   EXPECT_EQ(kernValue(2, 2), epd->getKerning('B', 'C'));
-  EXPECT_EQ(0, epd->getKerning('D', 'B'));
 }
 
 // Every one of the 255 left and right classes on one page. Before the counters were

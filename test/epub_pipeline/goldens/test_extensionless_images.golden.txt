@@ -30,7 +30,7 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=221 s=0 z=100 t=.jpg.
   IMG y=62 x=210 w=40 h=60 src=<cache>/epub_<hash>/img_01d41785c4f5f95a.jpg
 SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
- PAGE 0 elements=4 footnotes=0
+ PAGE 0 elements=5 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=3
    W x=132 s=1 z=100 t=Not
    W x=193 s=1 z=100 t=An
@@ -46,9 +46,9 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=62 x=0 align=2 mult=1.000 hfid=0 words=2
    W x=136 s=2 z=100 t=[Image:
    W x=207 s=2 z=100 t=TEXTSTAYSALT]
-  LINE y=86 x=0 align=2 mult=1.000 hfid=0 words=2
-   W x=139 s=2 z=100 t=[Image:
-   W x=210 s=2 z=100 t=SVGSTAYSALT]
+  IMG y=94 x=18 w=10 h=10 src=<cache>/epub_<hash>/img_74c80c2d23758aa4.svg
+  LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
+   W x=28 s=0 z=100 t= 
 SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=4 footnotes=0
   LINE y=0 x=0 align=2 mult=1.600 hfid=0 words=2

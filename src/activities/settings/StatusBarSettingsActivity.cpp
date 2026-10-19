@@ -46,6 +46,7 @@ constexpr StatusBarItem toggleItem(StrId label, uint8_t CrossPointSettings::* fi
 }
 
 const StatusBarItem statusBarItems[] = {
+    toggleItem(StrId::STR_SHOW_STATUS_BAR, &CrossPointSettings::statusBarVisible),
     enumItem(StrId::STR_STATUS_ITEMS_POSITION, &CrossPointSettings::statusBarItemsPosition, statusItemsPositionNames,
              CrossPointSettings::STATUS_BAR_ITEMS_POSITION::STATUS_BAR_ITEMS_BOTTOM),
     toggleItem(StrId::STR_CHAPTER_PAGE_COUNT, &CrossPointSettings::statusBarChapterPageCount),
@@ -292,6 +293,7 @@ void StatusBarSettingsActivity::afterUiRender() {
   const Rect previewRect{content.x + previewHorizontalInset, labelY + labelHeight + metrics.verticalSpacing / 2,
                          content.width - previewHorizontalInset * 2, previewHeight};
   renderer.drawRect(previewRect.x, previewRect.y, previewRect.width, previewRect.height);
+  if (!SETTINGS.statusBarVisible) return;
   drawPreviewProgressBar(renderer, previewRect, SETTINGS.statusBarUpperProgressBar,
                          SETTINGS.statusBarUpperProgressBarThickness, true);
   drawPreviewProgressBar(renderer, previewRect, SETTINGS.statusBarLowerProgressBar,

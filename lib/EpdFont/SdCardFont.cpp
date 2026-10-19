@@ -12,6 +12,8 @@
 #include <memory>
 #include <new>
 
+#include "CpFontFormat.h"
+
 static_assert(sizeof(EpdGlyph) == 16, "EpdGlyph must be 16 bytes to match .cpfont file layout");
 static_assert(sizeof(EpdUnicodeInterval) == 12, "EpdUnicodeInterval must be 12 bytes to match .cpfont file layout");
 static_assert(sizeof(EpdKernClassEntry) == 3, "EpdKernClassEntry must be 3 bytes to match .cpfont file layout");
@@ -31,7 +33,6 @@ static uint32_t fnv1a(const uint8_t* data, size_t len, uint32_t hash = FNV_OFFSE
 
 // .cpfont magic bytes
 static constexpr char CPFONT_MAGIC[8] = {'C', 'P', 'F', 'O', 'N', 'T', '\0', '\0'};
-static constexpr uint16_t CPFONT_VERSION = 4;
 static constexpr uint32_t HEADER_SIZE = 32;
 static constexpr uint32_t STYLE_TOC_ENTRY_SIZE = 32;
 // Working headroom left outside the mini bitmap arena's single contiguous block, for the
@@ -88,6 +89,7 @@ void SdCardFont::freeStyleMiniData(PerStyle& s) {
   s.miniData.kernRightCodepoints = nullptr;
   s.miniData.kernRightClassIds = nullptr;
   s.miniData.kernMatrix = nullptr;
+  s.miniData.kernMatrixWide = nullptr;
   s.miniData.kernRowOffsets = nullptr;  // SD fonts are always dense; see EpdFontData::kernRowOffsets
   s.miniData.kernSparseCols = nullptr;
   s.miniData.kernSparseValues = nullptr;
@@ -102,6 +104,7 @@ void SdCardFont::freeStyleMiniData(PerStyle& s) {
   s.stubData.kernRightCodepoints = nullptr;
   s.stubData.kernRightClassIds = nullptr;
   s.stubData.kernMatrix = nullptr;
+  s.stubData.kernMatrixWide = nullptr;
   s.stubData.kernRowOffsets = nullptr;
   s.stubData.kernSparseCols = nullptr;
   s.stubData.kernSparseValues = nullptr;
@@ -157,6 +160,7 @@ void SdCardFont::freeStyleMiniKern(PerStyle& s) {
   s.miniKernRightEntryCount = 0;
   s.miniKernLeftClassCount = 0;
   s.miniKernRightClassCount = 0;
+  s.miniKernReady = false;
 }
 
 void SdCardFont::freeStyleAll(PerStyle& s) {
@@ -169,6 +173,7 @@ void SdCardFont::freeStyleAll(PerStyle& s) {
   s.intervalsOwner = -1;
   freeStyleKernLigatureData(s);
   s.present = false;
+  s.caps = {};
 }
 
 // --- Global free/cleanup ---
@@ -180,6 +185,8 @@ void SdCardFont::freeAll() {
   }
   styleCount_ = 0;
   contentHash_ = 0;
+  rasterDensity_ = 1;
+  fileSize_ = 0;
   loaded_ = false;
   metadataOwned_ = true;
   mmapDataBase_ = nullptr;
@@ -281,37 +288,40 @@ void SdCardFont::clearOverflow() {
 
 // --- Per-style kern/ligature ---
 
-void SdCardFont::applyKernLigaturePointers(const PerStyle& s, EpdFontData& data) const {
-  // Kern data uses the per-page mini tables (renumbered class IDs). The full
-  // kern matrix is never resident — see PerStyle::miniKernMatrix comment.
-  data.kernLeftClasses = s.miniKernLeftClasses;
-  data.kernRightClasses = s.miniKernRightClasses;
+void SdCardFont::applyKernLigaturePointers(const PerStyle& s, EpdFontData& data, bool mapped) const {
+  // Layout on mmap fonts can use the full flash tables without a RAM copy.
+  // SD uses the bounded glyph cache's mini matrix, including cumulative layout
+  // glyphs so measuring an earlier word remains valid after the cache grows.
+  data.kernLeftClasses = mapped ? s.kernLeftClasses : s.miniKernLeftClasses;
+  data.kernRightClasses = mapped ? s.kernRightClasses : s.miniKernRightClasses;
   // Packed form, as stored in the .cpfont; the split arrays are built-in only.
   data.kernLeftCodepoints = nullptr;
   data.kernLeftClassIds = nullptr;
   data.kernRightCodepoints = nullptr;
   data.kernRightClassIds = nullptr;
-  data.kernMatrix = s.miniKernMatrix;
+  const auto* matrix =
+      mapped ? mmapDataBase_ + s.kernMatrixFileOffset : reinterpret_cast<const uint8_t*>(s.miniKernMatrix);
+  data.kernMatrix = rasterDensity_ == 2 ? nullptr : reinterpret_cast<const int8_t*>(matrix);
+  data.kernMatrixWide = rasterDensity_ == 2 ? matrix : nullptr;
   // The .cpfont format stores a dense matrix and is mapped in place, so SD fonts never use the
   // sparse form the built-in fonts switched to. Set explicitly rather than relying on the
   // caller's initialisation: getKerning() picks the representation by which pointer is non-null.
   data.kernRowOffsets = nullptr;
   data.kernSparseCols = nullptr;
   data.kernSparseValues = nullptr;
-  data.kernLeftEntryCount = s.miniKernLeftEntryCount;
-  data.kernRightEntryCount = s.miniKernRightEntryCount;
-  data.kernLeftClassCount = s.miniKernLeftClassCount;
-  data.kernRightClassCount = s.miniKernRightClassCount;
+  data.kernLeftEntryCount = mapped ? s.header.kernLeftEntryCount : s.miniKernLeftEntryCount;
+  data.kernRightEntryCount = mapped ? s.header.kernRightEntryCount : s.miniKernRightEntryCount;
+  data.kernLeftClassCount = mapped ? s.header.kernLeftClassCount : s.miniKernLeftClassCount;
+  data.kernRightClassCount = mapped ? s.header.kernRightClassCount : s.miniKernRightClassCount;
   // Ligatures are small (typically < 1KB) so they stay resident.
   data.ligaturePairs = s.ligaturePairs;
   data.ligaturePairCount = s.header.ligaturePairCount;
 }
 
 bool SdCardFont::loadStyleKernLigatureData(PerStyle& s, bool ligatureOnly) {
-  // During metadata-only (layout) prewarms, skip the kern class tables: the kern
-  // matrix is never built at layout time so getKerning() returns 0 regardless.
-  // Skipping them saves ~4KB per style (~17KB total for 4 styles), preventing OOM
-  // on low-heap devices when long paragraphs try to grow their word vector.
+  // The initial ligature expansion pass needs only substitutions. A layout
+  // caller that requests kerning later loads class maps and the cache's mini
+  // matrix too; otherwise measured and rendered word widths would disagree.
   const bool wantKern = !ligatureOnly && s.header.kernLeftEntryCount > 0;
   const bool wantLig = s.header.ligaturePairCount > 0;
 
@@ -510,7 +520,9 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
 
   // Step 4: allocate the three mini buffers. The matrix is <1KB in practice
   // (<30 × <30 × 1 byte) so fragmentation is a non-issue.
-  const uint32_t matrixBytes = static_cast<uint32_t>(numLeft) * numRight;
+  const uint32_t entryBytes = rasterDensity_ == 2 ? 2u : 1u;
+  const uint32_t miniRowBytes = static_cast<uint32_t>(numRight) * entryBytes;
+  const uint32_t matrixBytes = static_cast<uint32_t>(numLeft) * miniRowBytes;
   s.miniKernLeftClasses = allocArray<EpdKernClassEntry>(miniLeftCount);
   s.miniKernRightClasses = allocArray<EpdKernClassEntry>(miniRightCount);
   s.miniKernMatrix = allocArray<int8_t>(matrixBytes);
@@ -551,7 +563,7 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
   // the file. This bounds the heap spike at KERN_CHUNK_BYTES instead of the full
   // matrix size (~28 KB for Literata). Falls back to per-row reads if the chunk
   // buffer allocation fails.
-  const uint32_t rowBytes = s.header.kernRightClassCount;
+  const uint32_t rowBytes = static_cast<uint32_t>(s.header.kernRightClassCount) * entryBytes;
 
   // Build a sorted-by-oldL mapping so we sweep the source forward.
   // Reuse the usedLeft/usedRight scratch slots — both are fully consumed after
@@ -574,16 +586,16 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
 
   if (mmapDataBase_) {
     // Mmap fast-path: kern matrix is at a fixed offset in the flash mapping.
-    // Each row is a contiguous array of kernRightClassCount int8_t values.
+    // Each row holds byte entries in V4, two-byte little-endian entries in V5.
     // Direct pointer read — no heap allocation, no SD I/O.
     const int8_t* matrixBase = reinterpret_cast<const int8_t*>(mmapDataBase_ + s.kernMatrixFileOffset);
     for (uint8_t k = 0; k < numLeft; k++) {
       const uint8_t oldL = sortedOldL[k];
       const uint8_t newL = sortedNewL[k];
       const int8_t* srcRow = matrixBase + (oldL - 1u) * rowBytes;
-      int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * numRight;
+      int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * miniRowBytes;
       for (uint16_t newR = 1; newR <= numRight; newR++) {
-        miniRow[newR - 1] = srcRow[newToOldRight[newR] - 1u];
+        memcpy(miniRow + (newR - 1u) * entryBytes, srcRow + (newToOldRight[newR] - 1u) * entryBytes, entryBytes);
       }
     }
     LOG_DBG("SDCF", "Built mini kern (mmap): %u×%u=%u bytes", numLeft, numRight, matrixBytes);
@@ -620,9 +632,9 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
           chunkSeeks++;
         }
         const int8_t* srcRow = chunkBuf.get() + (rowFileOff - chunkStart);
-        int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * numRight;
+        int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * miniRowBytes;
         for (uint16_t newR = 1; newR <= numRight; newR++) {
-          miniRow[newR - 1] = srcRow[newToOldRight[newR] - 1u];
+          memcpy(miniRow + (newR - 1u) * entryBytes, srcRow + (newToOldRight[newR] - 1u) * entryBytes, entryBytes);
         }
       }
       LOG_DBG("SDCF", "Built mini kern (chunked %uB): %u×%u=%u bytes, %u seeks", KERN_CHUNK_BYTES, numLeft, numRight,
@@ -650,9 +662,10 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
           freeStyleMiniKern(s);
           return false;
         }
-        int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * numRight;
+        int8_t* miniRow = s.miniKernMatrix + (newL - 1u) * miniRowBytes;
         for (uint16_t newR = 1; newR <= numRight; newR++) {
-          miniRow[newR - 1] = rowBuf[newToOldRight[newR] - 1u];
+          memcpy(miniRow + (newR - 1u) * entryBytes, rowBuf.get() + (newToOldRight[newR] - 1u) * entryBytes,
+                 entryBytes);
         }
       }
     }
@@ -665,25 +678,283 @@ bool SdCardFont::buildMiniKernMatrix(PerStyle& s, const uint32_t* codepoints, ui
   return true;
 }
 
+// Build kerning for the complete cumulative metadata cache, not merely the
+// latest paragraph's codepoints. The existing MAX_PAGE_GLYPHS cap bounds this
+// exactly as it bounds a full page prewarm; the full source matrix is never
+// allocated. Repeated queries on an unchanged cache reuse the mini matrix.
+bool SdCardFont::ensureCachedKernMatrix(PerStyle& s, HalFile& file, const uint32_t* requested,
+                                        uint32_t requestedCount) {
+  if (!loadStyleKernLigatureData(s)) return false;
+  if (s.miniKernReady && requestedCount == 0) return true;
+  if (s.header.kernLeftEntryCount == 0 || s.header.kernRightEntryCount == 0) {
+    s.miniKernReady = true;
+    return true;
+  }
+  if (requestedCount > MAX_PAGE_GLYPHS) return false;
+  auto cps = makeScratch<uint32_t>(s.miniGlyphCount + requestedCount);
+  if (!cps) return false;
+  uint32_t count = 0;
+  for (uint32_t iv = 0; iv < s.miniIntervalCount; ++iv) {
+    const auto& interval = s.miniIntervals[iv];
+    for (uint32_t cp = interval.first; cp <= interval.last; ++cp) {
+      if (count >= s.miniGlyphCount) return false;
+      cps[count++] = cp;
+    }
+  }
+  if (count != s.miniGlyphCount) return false;
+  // Kerning classes are independent of glyph coverage (e.g. fallback glyphs).
+  // Keep every resident glyph and the bounded current request, sorted/unique.
+  for (uint32_t i = 0; i < requestedCount; ++i) cps[count++] = requested[i];
+  std::sort(cps.get(), cps.get() + count);
+  count = static_cast<uint32_t>(std::unique(cps.get(), cps.get() + count) - cps.get());
+  if (!file && !mmapDataBase_ && !Storage.openFileForRead("SDCF", filePath_, file)) return false;
+  s.miniKernReady = buildMiniKernMatrix(s, cps.get(), count, file);
+  return s.miniKernReady;
+}
+
 // --- Glyph miss callback ---
 
 void SdCardFont::applyGlyphMissCallback(uint8_t styleIdx) {
   styleProviders_[styleIdx].self = this;
   styleProviders_[styleIdx].styleIdx = styleIdx;
   styles_[styleIdx].stubData.provider = &styleProviders_[styleIdx];
+  auto& s = styles_[styleIdx];
+  s.stubData.glyphFeatureCtx = &styleProviders_[styleIdx];
+  s.stubData.capsGlyph = s.caps.glyphCount ? &SdCardFont::onCapsGlyph : nullptr;
+  s.stubData.alternateKerning = s.caps.glyphCount ? &SdCardFont::onAlternateKerning : nullptr;
+  s.miniData.capsGlyph = s.stubData.capsGlyph;
+  s.miniData.alternateKerning = s.stubData.alternateKerning;
+}
+
+// --- V6 authored small capitals ---
+
+bool SdCardFont::readAt(HalFile& file, uint32_t offset, void* out, size_t count) const {
+  if (offset > fileSize_ || count > fileSize_ - offset) return false;
+  if (mmapDataBase_) {
+    memcpy(out, mmapDataBase_ + offset, count);
+    return true;
+  }
+  if (!file && !Storage.openFileForRead("SDCF", filePath_, file)) return false;
+  return (file.position() == offset || file.seekSet(offset)) &&
+         file.read(static_cast<uint8_t*>(out), count) == static_cast<int>(count);
+}
+
+// All supported versions use sorted codepoint maps with 1-based matrix IDs.
+// Validate before exposing either mmap pointers or lazy SD tables to kerning
+// lookup. Class 0 remains valid: it explicitly means no kerning in legacy files.
+// A fixed stack buffer bounds validation memory independently of map size.
+bool SdCardFont::validateKernClassMaps(const PerStyle& s, HalFile& file) const {
+  constexpr uint32_t CHUNK_ENTRIES = 64;
+  uint8_t chunk[CHUNK_ENTRIES * sizeof(EpdKernClassEntry)];
+  for (unsigned side = 0; side < 2; ++side) {
+    const uint32_t offset = side ? s.kernRightFileOffset : s.kernLeftFileOffset;
+    const uint32_t count = side ? s.header.kernRightEntryCount : s.header.kernLeftEntryCount;
+    const uint8_t classes = side ? s.header.kernRightClassCount : s.header.kernLeftClassCount;
+    uint16_t previous = 0;
+    for (uint32_t first = 0; first < count; first += CHUNK_ENTRIES) {
+      const uint32_t entries = std::min(CHUNK_ENTRIES, count - first);
+      if (!readAt(file, offset + first * sizeof(EpdKernClassEntry), chunk, entries * sizeof(EpdKernClassEntry)))
+        return false;
+      for (uint32_t i = 0; i < entries; ++i) {
+        const auto* entry = chunk + i * sizeof(EpdKernClassEntry);
+        const uint16_t cp = readU16(entry);
+        if (((first || i) && cp <= previous) || entry[2] > classes) return false;
+        previous = cp;
+      }
+    }
+  }
+  return true;
+}
+
+bool SdCardFont::validateV6Style(PerStyle& s, HalFile& file) {
+  if (!s.header.intervalCount || !s.header.glyphCount || !s.fullIntervals) return false;
+  uint32_t expectedIndex = 0, previousEnd = 0;
+  for (uint32_t i = 0; i < s.header.intervalCount; ++i) {
+    const auto& interval = s.fullIntervals[i];
+    if (interval.first > interval.last || interval.last > 0x10FFFF || (i && interval.first <= previousEnd) ||
+        interval.offset != expectedIndex)
+      return false;
+    expectedIndex += interval.last - interval.first + 1;
+    previousEnd = interval.last;
+  }
+  if (expectedIndex != s.header.glyphCount) return false;
+  uint32_t styleEnd = static_cast<uint32_t>(fileSize_);
+  for (const auto& other : styles_) {
+    if (!other.present || &other == &s) continue;
+    if (other.intervalsFileOffset == s.intervalsFileOffset) return false;
+    if (other.intervalsFileOffset > s.intervalsFileOffset) styleEnd = std::min(styleEnd, other.intervalsFileOffset);
+  }
+  auto& caps = s.caps;
+  const uint32_t normalEnd = caps.offset ? caps.offset : styleEnd;
+  if (normalEnd < s.bitmapFileOffset || normalEnd > styleEnd) return false;
+  // Require tight sequential bitmap bounds, so a malformed feature cannot
+  // overlap ordinary glyphs, another style, or an unrelated part of the file.
+  const auto validateGlyphs = [&](uint32_t start, uint32_t count, uint32_t bitmapBytes) {
+    uint32_t expectedOffset = 0;
+    uint8_t record[16];
+    for (uint32_t i = 0; i < count; ++i) {
+      if (!readAt(file, start + i * 16, record, sizeof(record))) return false;
+      const uint32_t width = record[0] + 256u * record[10];
+      const uint32_t height = record[1] + 256u * record[11];
+      const uint64_t bytes = (uint64_t(width) * height + 3) / 4;
+      const uint32_t length = readU16(record + 8), offset = readU32(record + 12);
+      if (bytes != length || offset != expectedOffset || offset > bitmapBytes || length > bitmapBytes - offset)
+        return false;
+      expectedOffset += length;
+    }
+    return expectedOffset == bitmapBytes;
+  };
+  if (!validateGlyphs(s.glyphsFileOffset, s.header.glyphCount, normalEnd - s.bitmapFileOffset)) return false;
+  if (!caps.offset) return true;
+  uint8_t header[24];
+  if (!readAt(file, caps.offset, header, sizeof(header)) || memcmp(header, "SCAP", 4) || header[4] != 1 || header[5] ||
+      readU16(header + 12) || readU16(header + 14))
+    return false;
+  caps.smcpCount = readU16(header + 6);
+  caps.c2scCount = readU16(header + 8);
+  caps.glyphCount = readU16(header + 10);
+  caps.kernCount = readU32(header + 16);
+  caps.bitmapBytes = readU32(header + 20);
+  if (!caps.glyphCount || !(caps.smcpCount || caps.c2scCount)) return false;
+  uint64_t cursor = uint64_t(caps.offset) + sizeof(header);
+  const auto advance = [&](uint64_t bytes, uint32_t& offset) {
+    if (cursor > styleEnd || bytes > styleEnd - cursor) return false;
+    offset = static_cast<uint32_t>(cursor);
+    cursor += bytes;
+    return true;
+  };
+  if (!advance(uint64_t(caps.smcpCount) * 6, caps.smcpOffset) ||
+      !advance(uint64_t(caps.c2scCount) * 6, caps.c2scOffset) ||
+      !advance(uint64_t(caps.glyphCount) * 16, caps.glyphOffset) ||
+      !advance(uint64_t(caps.kernCount) * 10, caps.kernOffset) || !advance(caps.bitmapBytes, caps.bitmapOffset) ||
+      cursor != styleEnd)
+    return false;
+  std::unique_ptr<uint8_t[]> referenced(new (std::nothrow) uint8_t[(caps.glyphCount + 7u) / 8u]());
+  if (!referenced) return false;
+  for (unsigned mode = 1; mode <= 2; ++mode) {
+    const uint32_t count = mode == 1 ? caps.smcpCount : caps.c2scCount;
+    const uint32_t offset = mode == 1 ? caps.smcpOffset : caps.c2scOffset;
+    uint32_t previous = 0;
+    uint8_t entry[6];
+    for (uint32_t i = 0; i < count; ++i) {
+      if (!readAt(file, offset + i * 6, entry, sizeof(entry))) return false;
+      const uint32_t cp = readU32(entry);
+      const uint16_t id = readU16(entry + 4);
+      if ((i && cp <= previous) || cp > 0x10FFFF || findGlobalGlyphIndex(s, cp) < 0 || id >= caps.glyphCount)
+        return false;
+      referenced[id / 8] |= uint8_t(1u << (id % 8));
+      previous = cp;
+    }
+  }
+  for (uint32_t i = 0; i < caps.glyphCount; ++i)
+    if (!(referenced[i / 8] & (1u << (i % 8)))) return false;
+  if (!validateGlyphs(caps.glyphOffset, caps.glyphCount, caps.bitmapBytes)) return false;
+  const auto validKey = [&](uint32_t key) {
+    return key >= EPD_ALTERNATE_GLYPH_BASE ? key - EPD_ALTERNATE_GLYPH_BASE < caps.glyphCount
+                                           : findGlobalGlyphIndex(s, key) >= 0;
+  };
+  uint32_t previousLeft = 0, previousRight = 0;
+  uint8_t pair[10];
+  for (uint32_t i = 0; i < caps.kernCount; ++i) {
+    if (!readAt(file, caps.kernOffset + i * 10, pair, sizeof(pair))) return false;
+    const uint32_t left = readU32(pair), right = readU32(pair + 4);
+    if (!validKey(left) || !validKey(right) || (left < EPD_ALTERNATE_GLYPH_BASE && right < EPD_ALTERNATE_GLYPH_BASE) ||
+        !readI16(pair + 8) || (i && (left < previousLeft || (left == previousLeft && right <= previousRight))))
+      return false;
+    previousLeft = left;
+    previousRight = right;
+  }
+  return true;
+}
+
+uint32_t SdCardFont::onCapsGlyph(void* ctx, uint32_t cp, uint8_t mode) {
+  if (!ctx || (mode != 1 && mode != 2)) return 0;
+  auto& oc = *static_cast<StyleProvider*>(ctx);
+  auto& self = *oc.self;
+  if (!self.loaded_ || oc.styleIdx >= MAX_STYLES) return 0;
+  auto& caps = self.styles_[oc.styleIdx].caps;
+  if (caps.lastMode == mode && caps.lastCp == cp) return caps.lastKey;
+  FsFile file;
+  uint32_t low = 0, high = mode == 1 ? caps.smcpCount : caps.c2scCount;
+  const uint32_t offset = mode == 1 ? caps.smcpOffset : caps.c2scOffset;
+  uint32_t result = 0;
+  while (low < high) {
+    const uint32_t mid = low + (high - low) / 2;
+    uint8_t entry[6];
+    if (!self.readAt(file, offset + mid * 6, entry, sizeof(entry))) return 0;  // Retry transient SD failures.
+    const uint32_t source = readU32(entry);
+    if (source < cp)
+      low = mid + 1;
+    else if (source > cp)
+      high = mid;
+    else {
+      result = EPD_ALTERNATE_GLYPH_BASE + readU16(entry + 4);
+      break;
+    }
+  }
+  caps.lastCp = cp;
+  caps.lastMode = mode;
+  caps.lastKey = result;
+  return result;
+}
+
+int16_t SdCardFont::onAlternateKerning(void* ctx, uint32_t left, uint32_t right) {
+  if (!ctx) return 0;
+  auto& oc = *static_cast<StyleProvider*>(ctx);
+  auto& self = *oc.self;
+  if (!self.loaded_ || oc.styleIdx >= MAX_STYLES) return 0;
+  auto& caps = self.styles_[oc.styleIdx].caps;
+  if (caps.kernCached && caps.lastLeft == left && caps.lastRight == right) return caps.lastKern;
+  FsFile file;
+  uint32_t low = 0, high = caps.kernCount;
+  int16_t result = 0;
+  while (low < high) {
+    const uint32_t mid = low + (high - low) / 2;
+    uint8_t pair[10];
+    if (!self.readAt(file, caps.kernOffset + mid * 10, pair, sizeof(pair))) return 0;
+    const uint32_t l = readU32(pair), r = readU32(pair + 4);
+    if (l < left || (l == left && r < right))
+      low = mid + 1;
+    else if (l > left || r > right)
+      high = mid;
+    else {
+      result = readI16(pair + 8);
+      break;
+    }
+  }
+  caps.lastLeft = left;
+  caps.lastRight = right;
+  caps.lastKern = result;
+  caps.kernCached = true;
+  return result;
 }
 
 // --- Compute per-style file offsets from a base data offset ---
 
-void SdCardFont::computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset) {
+bool SdCardFont::computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset, size_t fileSize) const {
+  // Calculate in 64 bits before narrowing, rejecting wrapped offsets and truncated
+  // metadata before either SD seeks or direct mmap access can use them.
+  uint64_t offset = baseOffset;
   s.intervalsFileOffset = baseOffset;
-  s.glyphsFileOffset = s.intervalsFileOffset + s.header.intervalCount * sizeof(EpdUnicodeInterval);
-  s.kernLeftFileOffset = s.glyphsFileOffset + s.header.glyphCount * sizeof(EpdGlyph);
-  s.kernRightFileOffset = s.kernLeftFileOffset + s.header.kernLeftEntryCount * sizeof(EpdKernClassEntry);
-  s.kernMatrixFileOffset = s.kernRightFileOffset + s.header.kernRightEntryCount * sizeof(EpdKernClassEntry);
-  s.ligatureFileOffset =
-      s.kernMatrixFileOffset + static_cast<uint32_t>(s.header.kernLeftClassCount) * s.header.kernRightClassCount;
-  s.bitmapFileOffset = s.ligatureFileOffset + s.header.ligaturePairCount * sizeof(EpdLigaturePair);
+  offset += uint64_t(s.header.intervalCount) * sizeof(EpdUnicodeInterval);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.glyphsFileOffset = static_cast<uint32_t>(offset);
+  offset += uint64_t(s.header.glyphCount) * sizeof(EpdGlyph);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.kernLeftFileOffset = static_cast<uint32_t>(offset);
+  offset += uint64_t(s.header.kernLeftEntryCount) * sizeof(EpdKernClassEntry);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.kernRightFileOffset = static_cast<uint32_t>(offset);
+  offset += uint64_t(s.header.kernRightEntryCount) * sizeof(EpdKernClassEntry);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.kernMatrixFileOffset = static_cast<uint32_t>(offset);
+  offset += uint64_t(s.header.kernLeftClassCount) * s.header.kernRightClassCount * (rasterDensity_ == 2 ? 2u : 1u);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.ligatureFileOffset = static_cast<uint32_t>(offset);
+  offset += uint64_t(s.header.ligaturePairCount) * sizeof(EpdLigaturePair);
+  if (offset > fileSize || offset > UINT32_MAX) return false;
+  s.bitmapFileOffset = static_cast<uint32_t>(offset);
+  return true;
 }
 
 // --- Interval table sharing ---
@@ -763,21 +1034,40 @@ bool SdCardFont::load(const char* path) {
     return false;
   }
 
-  uint16_t fileVersion = readU16(headerBuf + 8);
-  if (fileVersion != CPFONT_VERSION) {
-    LOG_ERR("SDCF", "Unsupported version: %u (expected %u)", fileVersion, CPFONT_VERSION);
+  const uint16_t fileVersion = readU16(headerBuf + 8);
+  const uint8_t density = cpfont::rasterDensity(headerBuf);
+  if (!density) {
+    LOG_ERR("SDCF", "Unsupported font version/density: %u/%u", fileVersion, headerBuf[13]);
     file.close();
     return false;
   }
-
-  // Begin content hash: accumulate global header.
-  // KNOWN LIMITATION: hash covers global header + per-style TOC only, not the
-  // payload sections (intervals / glyph metrics / kern / ligature / bitmap). A
-  // font edit that alters payload bytes without changing any TOC count would
-  // produce the same contentHash and could leave stale EPUB section caches.
-  // Acceptable in practice because generate-sd-fonts.sh regeneration almost
-  // always changes interval/glyph/kern counts; revisit if we see real-world
-  // mismatches.
+  if (fileVersion >= 5) {
+    uint32_t crc = 0xFFFFFFFFu;
+    uint8_t chunk[512];
+    size_t remaining = file.fileSize() - HEADER_SIZE;
+    while (remaining) {
+      const size_t count = std::min(remaining, sizeof(chunk));
+      if (file.read(chunk, count) != static_cast<int>(count)) {
+        file.close();
+        return false;
+      }
+      crc = cpfont::crc32Update(crc, chunk, count);
+      remaining -= count;
+    }
+    if ((crc ^ 0xFFFFFFFFu) != readU32(headerBuf + 14) || !file.seekSet(HEADER_SIZE)) {
+      LOG_ERR("SDCF", "Invalid v5 font checksum");
+      file.close();
+      return false;
+    }
+  }
+  rasterDensity_ = density;
+  fileSize_ = file.fileSize();
+  if (fileSize_ > UINT32_MAX) {
+    file.close();
+    return false;
+  }
+  // V5 header includes a checksum of the TOC and bitmap payload, making the
+  // section-cache font ID sensitive to regenerated outlines and raster policy.
   uint32_t hash = fnv1a(headerBuf, HEADER_SIZE);
 
   bool is2Bit = (readU16(headerBuf + 10) & 1) != 0;
@@ -806,11 +1096,19 @@ bool SdCardFont::load(const char* path) {
 
     uint8_t styleId = tocBuf[0];
     if (styleId >= MAX_STYLES) {
+      if (fileVersion == 6) {
+        freeAll();
+        return false;
+      }
       LOG_ERR("SDCF", "Invalid styleId %u in TOC", styleId);
       continue;
     }
 
     auto& s = styles_[styleId];
+    if (fileVersion == 6 && s.present) {
+      freeAll();
+      return false;
+    }
     s.present = true;
     s.header.intervalCount = readU32(tocBuf + 4);
     s.header.glyphCount = readU32(tocBuf + 8);
@@ -828,14 +1126,29 @@ bool SdCardFont::load(const char* path) {
     static constexpr uint32_t MAX_INTERVALS = 4096;
     static constexpr uint32_t MAX_GLYPHS = 65536;
     if (s.header.intervalCount > MAX_INTERVALS || s.header.glyphCount > MAX_GLYPHS) {
+      if (fileVersion == 6) {
+        freeAll();
+        return false;
+      }
       LOG_ERR("SDCF", "Style %u: unreasonable counts (intervals=%u, glyphs=%u)", styleId, s.header.intervalCount,
               s.header.glyphCount);
       s.present = false;
       continue;
     }
 
+    s.caps.offset = fileVersion == 6 ? readU32(tocBuf + 28) : 0;
     uint32_t dataOffset = readU32(tocBuf + 24);
-    computeStyleFileOffsets(s, dataOffset);
+    if (fileVersion == 6 &&
+        (tocBuf[1] || tocBuf[2] || tocBuf[3] || dataOffset < HEADER_SIZE + numStyles * STYLE_TOC_ENTRY_SIZE)) {
+      freeAll();
+      return false;
+    }
+    if (!computeStyleFileOffsets(s, dataOffset, file.fileSize())) {
+      LOG_ERR("SDCF", "Style %u: metadata out of bounds", styleId);
+      file.close();
+      freeAll();
+      return false;
+    }
   }
 
   styleCount_ = numStyles;
@@ -875,12 +1188,20 @@ bool SdCardFont::load(const char* path) {
       }
     }
 
+    // Validate ordinary maps in every version before kerning can index the
+    // matrix; V6 also validates its glyph and authored-capital feature tables.
+    if (!validateKernClassMaps(s, file) || (fileVersion == 6 && !validateV6Style(s, file))) {
+      freeAll();
+      return false;
+    }
+
     // Initialize stub data
     memset(&s.stubData, 0, sizeof(s.stubData));
     s.stubData.advanceY = s.header.advanceY;
     s.stubData.ascender = s.header.ascender;
     s.stubData.descender = s.header.descender;
     s.stubData.is2Bit = s.header.is2Bit;
+    s.stubData.wideGlyphs = rasterDensity_ == 2;
 
     s.epdFont.data = &s.stubData;
     applyGlyphMissCallback(i);
@@ -889,7 +1210,7 @@ bool SdCardFont::load(const char* path) {
   file.close();
   loaded_ = true;
 
-  LOG_DBG("SDCF", "Loaded: %s (v%u, %u styles)", path, CPFONT_VERSION, styleCount_);
+  LOG_DBG("SDCF", "Loaded: %s (v%u, %u styles)", path, fileVersion, styleCount_);
   for (uint8_t i = 0; i < MAX_STYLES; i++) {
     if (!styles_[i].present) continue;
     const auto& h = styles_[i].header;
@@ -922,10 +1243,20 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
     return false;
   }
   const uint16_t fileVersion = mmapU16(base + 8);
-  if (fileVersion != CPFONT_VERSION) {
-    LOG_ERR("SDCF", "loadFromMmap: unsupported version %u (expected %u)", fileVersion, CPFONT_VERSION);
+  const uint8_t density = cpfont::rasterDensity(base);
+  if (!density) {
+    LOG_ERR("SDCF", "loadFromMmap: unsupported version/density %u/%u", fileVersion, base[13]);
     return false;
   }
+  if (fileVersion >= 5 &&
+      (cpfont::crc32Update(0xFFFFFFFFu, base + HEADER_SIZE, size - HEADER_SIZE) ^ 0xFFFFFFFFu) != readU32(base + 14)) {
+    LOG_ERR("SDCF", "loadFromMmap: invalid v5 font checksum");
+    return false;
+  }
+  rasterDensity_ = density;
+  if (size > UINT32_MAX) return false;
+  fileSize_ = size;
+  mmapDataBase_ = base;  // Also makes cleanup safe if a later mapped table fails validation.
 
   // Content hash: accumulate global header
   uint32_t hash = fnv1a(base, HEADER_SIZE);
@@ -949,11 +1280,19 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
 
     const uint8_t styleId = tocEntry[0];
     if (styleId >= MAX_STYLES) {
+      if (fileVersion == 6) {
+        freeAll();
+        return false;
+      }
       LOG_ERR("SDCF", "loadFromMmap: invalid styleId %u in TOC", styleId);
       continue;
     }
 
     auto& s = styles_[styleId];
+    if (fileVersion == 6 && s.present) {
+      freeAll();
+      return false;
+    }
     s.present = true;
     s.header.intervalCount = mmapU32(tocEntry + 4);
     s.header.glyphCount = mmapU32(tocEntry + 8);
@@ -970,13 +1309,27 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
     static constexpr uint32_t MAX_INTERVALS = 4096;
     static constexpr uint32_t MAX_GLYPHS = 65536;
     if (s.header.intervalCount > MAX_INTERVALS || s.header.glyphCount > MAX_GLYPHS) {
+      if (fileVersion == 6) {
+        freeAll();
+        return false;
+      }
       LOG_ERR("SDCF", "loadFromMmap: style %u unreasonable counts", styleId);
       s.present = false;
       continue;
     }
 
+    s.caps.offset = fileVersion == 6 ? readU32(tocEntry + 28) : 0;
     const uint32_t dataOffset = mmapU32(tocEntry + 24);
-    computeStyleFileOffsets(s, dataOffset);
+    if (fileVersion == 6 &&
+        (tocEntry[1] || tocEntry[2] || tocEntry[3] || dataOffset < HEADER_SIZE + numStyles * STYLE_TOC_ENTRY_SIZE)) {
+      freeAll();
+      return false;
+    }
+    if (!computeStyleFileOffsets(s, dataOffset, size)) {
+      LOG_ERR("SDCF", "loadFromMmap: style %u metadata out of bounds", styleId);
+      freeAll();
+      return false;
+    }
   }
 
   styleCount_ = numStyles;
@@ -990,12 +1343,10 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
   // fields) would cause LoadAccessFault. We copy once at load time; subsequent
   // accesses are safe via naturally-aligned heap pointers.
   // metadataOwned_ = true so freeStyleAll() will delete[] these arrays.
-  // mmapDataBase_ is kept for the kern MATRIX (buildMiniKernMatrix reads it as
-  // raw bytes — no alignment requirement) and for glyph metrics (glyphsFileOffset
-  // follows intervalCount*12 bytes which keeps 4-byte alignment for style 0; for
-  // styles ≥1 the glyph section alignment is also guaranteed because EpdGlyph is
-  // 16 bytes and intervals are 12 bytes — both multiples of 4 — so the combined
-  // section size is always 4-byte aligned).
+  // mmapDataBase_ is kept for kerning matrices (read as raw bytes, including
+  // LE int16 v5 entries) and packed EpdGlyph records. Later styles can start at
+  // any byte offset after variable-length matrices and bitmaps. EpdGlyph has
+  // explicit alignment 1, so mapped metric access does not assume alignment.
   for (uint8_t i = 0; i < MAX_STYLES; i++) {
     auto& s = styles_[i];
     if (!s.present) continue;
@@ -1055,12 +1406,19 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
       s.ligLoaded = true;
     }
 
+    FsFile featureFile;  // readAt uses the mmap bytes and never opens this handle.
+    if (!validateKernClassMaps(s, featureFile) || (fileVersion == 6 && !validateV6Style(s, featureFile))) {
+      freeAll();
+      return false;
+    }
+
     // Initialize stub data
     memset(&s.stubData, 0, sizeof(s.stubData));
     s.stubData.advanceY = s.header.advanceY;
     s.stubData.ascender = s.header.ascender;
     s.stubData.descender = s.header.descender;
     s.stubData.is2Bit = s.header.is2Bit;
+    s.stubData.wideGlyphs = rasterDensity_ == 2;
     s.stubData.ligaturePairs = s.ligaturePairs;
     s.stubData.ligaturePairCount = s.header.ligaturePairCount;
 
@@ -1068,8 +1426,8 @@ bool SdCardFont::loadFromMmap(const uint8_t* base, size_t size, const char* sdPa
     applyGlyphMissCallback(i);
   }
 
-  // Store the SD path so the bitmap overflow handler can open the .cpfont from SD
-  // for glyph bitmap data at draw time (metadata comes from flash, bitmaps from SD).
+  // Retain optional source provenance. readAt() serves overflow glyph metrics
+  // and bitmaps directly from this mapping, without opening the SD source.
   if (sdPath && strlen(sdPath) < sizeof(filePath_)) {
     strncpy(filePath_, sdPath, sizeof(filePath_) - 1);
     filePath_[sizeof(filePath_) - 1] = '\0';
@@ -1273,24 +1631,16 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
                              bool loadKernLigatureData) {
   auto& s = styles_[styleIdx];
 
-  // ---- Mmap metadata fast-path ----
-  // For mmap fonts, fullIntervals and the glyph array are directly pointer-
-  // accessible in flash. A metadata-only prewarm needs no heap copy and no SD
-  // reads — wire miniData to the flash-resident tables once and return. The full
-  // interval table covers every codepoint in the font, so allCpsCovered is
-  // trivially always true for metadata queries.
-  //
-  // Full (bitmap) prewarms still go through the normal path: bitmaps are not in
-  // the mmap region and must be read from SD.
+  // Mapped metadata can cover the entire font without allocating a glyph or
+  // kerning table. Switching from a FULL mini cache must restore those full
+  // tables too: a newly measured word may use classes absent from that page.
   if (mmapDataBase_ && metadataOnly) {
-    if (s.miniMode == PerStyle::MiniMode::NONE) {
-      // First call: wire miniData directly to flash-resident data.
-      // miniGlyphs/miniIntervals stay null — miniData.glyph and .intervals
-      // point into flash and must not be freed via freeStyleMiniData.
-      memset(&s.miniData, 0, sizeof(s.miniData));
+    const auto* mappedGlyphs = reinterpret_cast<const EpdGlyph*>(mmapDataBase_ + s.glyphsFileOffset);
+    if (s.miniMode != PerStyle::MiniMode::METADATA || s.miniData.glyph != mappedGlyphs) {
+      freeStyleMiniData(s);
       s.miniData.intervals = s.fullIntervals;
       s.miniData.intervalCount = s.header.intervalCount;
-      s.miniData.glyph = reinterpret_cast<const EpdGlyph*>(mmapDataBase_ + s.glyphsFileOffset);
+      s.miniData.glyph = mappedGlyphs;
       s.miniData.advanceY = s.header.advanceY;
       s.miniData.ascender = s.header.ascender;
       s.miniData.descender = s.header.descender;
@@ -1298,10 +1648,16 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
       s.miniData.ligaturePairs = s.ligaturePairs;
       s.miniData.ligaturePairCount = s.header.ligaturePairCount;
       s.miniData.provider = &styleProviders_[styleIdx];
+      s.miniData.wideGlyphs = rasterDensity_ == 2;
+      s.miniData.glyphFeatureCtx = &styleProviders_[styleIdx];
+      s.miniData.capsGlyph = s.stubData.capsGlyph;
+      s.miniData.alternateKerning = s.stubData.alternateKerning;
       s.epdFont.data = &s.miniData;
       s.miniMode = PerStyle::MiniMode::METADATA;
     }
-    // Subsequent calls: miniData is already wired; nothing to do.
+    // Classes and ligatures are already resident or mapped. Wiring them here
+    // costs no SD reads, even when the caller did not request them explicitly.
+    applyKernLigaturePointers(s, s.miniData, /*mapped=*/true);
     return 0;
   }
 
@@ -1313,19 +1669,15 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
     // For metadata-only calls, METADATA or FULL cache both satisfy layout queries.
     // For full (bitmap) calls, only FULL satisfies — METADATA lacks bitmap data.
     if (metadataOnly || s.miniMode == PerStyle::MiniMode::FULL) {
-      // Ensure ligature metadata is wired if requested but not yet wired.
-      if (loadKernLigatureData && !s.ligLoaded) {
-        loadStyleKernLigatureData(s, /*ligatureOnly=*/true);
+      if (!metadataOnly || loadKernLigatureData) {
+        FsFile file;
+        const bool ready = ensureCachedKernMatrix(s, file);
+        if (file) file.close();
+        // Rewire even after a failed build: do not leave pointers into freed
+        // mini tables. A later call can retry because miniKernReady stays false.
+        applyKernLigaturePointers(s, s.miniData);
+        if (!ready) return static_cast<int>(cpCount);
       }
-      if (loadKernLigatureData && s.ligLoaded && s.miniData.ligaturePairs == nullptr) {
-        if (s.miniMode == PerStyle::MiniMode::FULL) {
-          applyKernLigaturePointers(s, s.miniData);
-        } else {
-          s.miniData.ligaturePairs = s.ligaturePairs;
-          s.miniData.ligaturePairCount = s.header.ligaturePairCount;
-        }
-      }
-      // Already wired into miniData; nothing else to do.
       return 0;
     }
   }
@@ -1593,7 +1945,7 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
   FsFile file;
 
   if (toReadCount > 0) {
-    if (!Storage.openFileForRead("SDCF", filePath_, file)) {
+    if (!mmapDataBase_ && !Storage.openFileForRead("SDCF", filePath_, file)) {
       LOG_ERR("SDCF", "Failed to reopen .cpfont for prewarm (style %u)", styleIdx);
       freeArray(readOrder);
       freeArray(needsRead);
@@ -1602,25 +1954,19 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
       return static_cast<int>(cpCount);
     }
 
-    // Read glyph metadata. lastReadIndex tracks sequential reads to skip redundant
-    // seeks; INT32_MIN guarantees the first iteration always seeks to the correct
-    // offset (otherwise when gIdx == 0, the "gIdx != lastReadIndex + 1" check would
-    // be false and we'd read from the file's current position — the header — which
-    // decodes to a garbage EpdGlyph with a massive advanceX, inflating any word
-    // containing that codepoint beyond page width).
+    // readAt copies mapped metrics directly, so a cached flash font needs no
+    // SD source for full prewarm either. For SD it seeks only when necessary;
+    // lastReadIndex tracks those nonsequential reads for diagnostics.
     int32_t lastReadIndex = INT32_MIN;
     for (uint32_t i = 0; i < toReadCount; i++) {
       uint32_t mapIdx = readOrder[i];
       int32_t gIdx = mappings[mapIdx].globalIndex;
 
       uint32_t fileOff = s.glyphsFileOffset + static_cast<uint32_t>(gIdx) * sizeof(EpdGlyph);
-      if (gIdx != lastReadIndex + 1) {
-        file.seekSet(fileOff);
-        seekCount++;
-      }
-      if (file.read(reinterpret_cast<uint8_t*>(&s.miniGlyphs[mapIdx]), sizeof(EpdGlyph)) != sizeof(EpdGlyph)) {
+      if (!mmapDataBase_ && gIdx != lastReadIndex + 1) seekCount++;
+      if (!readAt(file, fileOff, &s.miniGlyphs[mapIdx], sizeof(EpdGlyph))) {
         LOG_ERR("SDCF", "Prewarm: short glyph read (style %u, glyph %d)", styleIdx, gIdx);
-        file.close();
+        if (file) file.close();
         freeArray(readOrder);
         freeArray(needsRead);
         freeArray(mappings);
@@ -1729,41 +2075,13 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
   uint32_t sdTime = millis() - sdStart;
   freeArray(mappings);
 
-  // Kern/ligature wiring strategy:
-  //   - Full render prewarm (!metadataOnly): load persistent kern classes +
-  //     ligatures AND build the per-page mini kern matrix. The matrix is
-  //     page-scoped — built once per render, amortized over the page draw.
-  //   - Layout-only prewarm with loadKernLigatureData: load only the persistent
-  //     kern classes + ligature pairs (cheap, idempotent) and skip the mini
-  //     kern matrix. Ligatures are needed for correct word-width measurement
-  //     (e.g. "fi" must measure as one glyph). Per-pair kern tweaks would be
-  //     <1px adjustments and are too expensive to rebuild per paragraph
-  //     (each rebuild does N seeks + reads against SD; observed cost ~24ms
-  //     per style per call). EpdFont::getKerning() returns 0 cleanly when
-  //     kernMatrix is null, so layout uses ligatures + zero-kern (small layout
-  //     drift acceptable; full kerning is applied at page-render time).
+  // Render and explicitly requested layout kerning use the same adjustments.
+  // Metadata caches can accumulate several requests, so build from the entire
+  // resident glyph set and reuse it until that set changes. This avoids both
+  // zero-kern layout drift and repeated SD reads for already covered words.
   bool kernLigOk = false;
-  if (!metadataOnly) {
-    if (loadStyleKernLigatureData(s)) {
-      // Reuse the file handle from the bitmap pass to avoid a redundant
-      // Storage.openFileForRead() inside buildMiniKernMatrix (fix A).
-      // Mmap fonts need no handle at all: buildMiniKernMatrix reads the matrix
-      // straight from the mapping and never touches `file`, and the bitmap pass
-      // above no longer opens one — so don't open it just to pass it in.
-      if (!file && !mmapDataBase_) {
-        if (!Storage.openFileForRead("SDCF", filePath_, file)) {
-          LOG_ERR("SDCF", "Failed to open .cpfont for kern matrix (style %u)", styleIdx);
-        } else {
-          kernLigOk = buildMiniKernMatrix(s, codepoints, cpCount, file);
-        }
-      } else {
-        kernLigOk = buildMiniKernMatrix(s, codepoints, cpCount, file);
-      }
-    }
-  } else if (loadKernLigatureData) {
-    loadStyleKernLigatureData(s, /*ligatureOnly=*/true);
-    // Don't set kernLigOk → mini kern matrix stays null on miniData, but
-    // ligatures are still resident on stubData (set in loadStyleKernLigatureData).
+  if (!metadataOnly || loadKernLigatureData) {
+    kernLigOk = ensureCachedKernMatrix(s, file, codepoints, cpCount);
   }
 
   if (file) file.close();
@@ -1782,17 +2100,17 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
   s.miniData.ascender = s.header.ascender;
   s.miniData.descender = s.header.descender;
   s.miniData.is2Bit = s.header.is2Bit;
+  s.miniData.wideGlyphs = rasterDensity_ == 2;
   if (kernLigOk) {
-    // Full prewarm: wire mini kern matrix + class tables + ligatures.
     applyKernLigaturePointers(s, s.miniData);
   } else if (loadKernLigatureData && s.ligLoaded) {
-    // Layout-only prewarm: wire ligatures so applyLigatures() works (e.g. "fi"
-    // measures correctly). Skip the kern matrix — getKerning() returns 0
-    // cleanly when kernMatrix is null. Per-pair kern is applied at render time.
     s.miniData.ligaturePairs = s.ligaturePairs;
     s.miniData.ligaturePairCount = s.header.ligaturePairCount;
   }
   s.miniData.provider = &styleProviders_[styleIdx];
+  s.miniData.glyphFeatureCtx = &styleProviders_[styleIdx];
+  s.miniData.capsGlyph = s.stubData.capsGlyph;
+  s.miniData.alternateKerning = s.stubData.alternateKerning;
 
   s.epdFont.data = &s.miniData;
   s.miniMode = metadataOnly ? PerStyle::MiniMode::METADATA : PerStyle::MiniMode::FULL;
@@ -1803,6 +2121,11 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
   stats_.uniqueGlyphs += validCount;
   stats_.bitmapBytes += totalBitmapSize;
 
+  if ((!metadataOnly || loadKernLigatureData) && !kernLigOk) {
+    // Glyphs remain usable, but signal that the requested layout/render data
+    // was not completely prepared rather than silently claiming success.
+    return missed + static_cast<int>(cpCount);
+  }
   return missed;
 }
 
@@ -1863,7 +2186,9 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
 
   if (!self->loaded_ || styleIdx >= MAX_STYLES || !self->styles_[styleIdx].present) return nullptr;
   auto& s = self->styles_[styleIdx];
-  if (!s.fullIntervals) return nullptr;
+  const bool alternate = codepoint >= EPD_ALTERNATE_GLYPH_BASE;
+  if ((!alternate && !s.fullIntervals) || (alternate && codepoint - EPD_ALTERNATE_GLYPH_BASE >= s.caps.glyphCount))
+    return nullptr;
 
   // Diagnostic (throttled): first few misses are logged verbosely, then every 64th miss.
   s.onDemandMissCount++;
@@ -1889,7 +2214,8 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
   }
 
   // Look up global glyph index via full intervals
-  int32_t globalIdx = self->findGlobalGlyphIndex(s, codepoint);
+  int32_t globalIdx =
+      alternate ? static_cast<int32_t>(codepoint - EPD_ALTERNATE_GLYPH_BASE) : self->findGlobalGlyphIndex(s, codepoint);
   if (globalIdx < 0) return nullptr;
 
   // Pick overflow slot (ring buffer). Read into temporaries first so the
@@ -1898,50 +2224,28 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
   const bool overwriteOccupied = self->overflow_[slot].occupied;
   self->overflowNext_ = (slot + 1) % OVERFLOW_CAPACITY;
 
-  // Read glyph metadata into temporary
+  // Read into the same bounded overflow ring for SD and mmap, preserving the
+  // bitmap identity contract used by GfxRenderer. No alternate bitmap table copy.
   FsFile file;
-  if (!Storage.openFileForRead("SDCF", self->filePath_, file)) {
-    LOG_ERR("SDCF", "Overflow: failed to open .cpfont");
-    return nullptr;
-  }
-
   EpdGlyph tempGlyph;
-  uint32_t glyphFileOff = s.glyphsFileOffset + static_cast<uint32_t>(globalIdx) * sizeof(EpdGlyph);
-  if (!file.seekSet(glyphFileOff)) {
-    LOG_ERR("SDCF", "Overflow: seek failed for glyph metadata U+%04X style %u", codepoint, styleIdx);
-    file.close();
+  const uint32_t glyphBase = alternate ? s.caps.glyphOffset : s.glyphsFileOffset;
+  const uint32_t bitmapBase = alternate ? s.caps.bitmapOffset : s.bitmapFileOffset;
+  if (!self->readAt(file, glyphBase + static_cast<uint32_t>(globalIdx) * sizeof(EpdGlyph), &tempGlyph,
+                    sizeof(tempGlyph)))
     return nullptr;
-  }
-  if (file.read(reinterpret_cast<uint8_t*>(&tempGlyph), sizeof(EpdGlyph)) != sizeof(EpdGlyph)) {
-    LOG_ERR("SDCF", "Overflow: failed to read glyph metadata for U+%04X style %u", codepoint, styleIdx);
-    file.close();
+  if (alternate &&
+      (tempGlyph.dataOffset > s.caps.bitmapBytes || tempGlyph.dataLength > s.caps.bitmapBytes - tempGlyph.dataOffset))
     return nullptr;
-  }
-
-  // Read bitmap data into temporary (if any)
   uint8_t* tempBitmap = nullptr;
-  if (tempGlyph.dataLength > 0) {
-    tempBitmap = new (std::nothrow) uint8_t[tempGlyph.dataLength];  // heap even in arena mode (OverflowEntry)
-    if (!tempBitmap) {
-      LOG_ERR("SDCF", "Overflow: failed to allocate %u bytes for U+%04X bitmap", tempGlyph.dataLength, codepoint);
-      file.close();
-      return nullptr;
-    }
-    if (!file.seekSet(s.bitmapFileOffset + tempGlyph.dataOffset)) {
-      LOG_ERR("SDCF", "Overflow: seek failed for bitmap U+%04X style %u", codepoint, styleIdx);
+  if (tempGlyph.dataLength) {
+    tempBitmap = new (std::nothrow) uint8_t[tempGlyph.dataLength];
+    if (!tempBitmap) return nullptr;
+    if (uint64_t(bitmapBase) + tempGlyph.dataOffset > UINT32_MAX ||
+        !self->readAt(file, bitmapBase + tempGlyph.dataOffset, tempBitmap, tempGlyph.dataLength)) {
       delete[] tempBitmap;
-      file.close();
-      return nullptr;
-    }
-    if (file.read(tempBitmap, tempGlyph.dataLength) != static_cast<int>(tempGlyph.dataLength)) {
-      LOG_ERR("SDCF", "Overflow: failed to read bitmap for U+%04X", codepoint);
-      delete[] tempBitmap;
-      file.close();
       return nullptr;
     }
   }
-
-  file.close();
 
   // All reads succeeded — commit to slot (evict old entry when overwriting an occupied slot).
   if (overwriteOccupied) {

@@ -18,10 +18,15 @@ pio run
 Parsing, layout, cache and most non-UI code is covered by GoogleTest suites in `test/`, built with CMake and run on the development machine. CI runs them on every push and pull request (`.github/workflows/ci.yml`, the host test job):
 
 ```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install fonttools
 cmake -S test -B build/test -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/test
 ctest --test-dir build/test --output-on-failure -j
 ```
+
+CMake generates the original typography EPUB from its Python source before configuring the tests. This generated file is ignored by Git; the separately maintained feature EPUB is the only new EPUB fixture approved for version control. Pass `-DPython3_EXECUTABLE=/path/to/python` if CMake selects a different Python environment.
 
 Any build directory works; `test/build` is a common local choice, and every `build*/` directory is git-ignored. To iterate from inside one:
 

@@ -166,7 +166,21 @@ void LineReaderActivity::loop() {
   }
 }
 
+size_t LineReaderActivity::sourceBeforeStatusBarReflow() const {
+  if (currentPage == statusBarSourcePage) return statusBarSourceOffset;
+  return currentPage >= 0 && static_cast<size_t>(currentPage) < pageOffsets.size() ? pageOffsets[currentPage] : 0;
+}
+
+void LineReaderActivity::restoreStatusBarSource(const size_t offset) {
+  const auto next = std::upper_bound(pageOffsets.begin(), pageOffsets.end(), offset);
+  currentPage = next == pageOffsets.begin() ? 0 : static_cast<int>(next - pageOffsets.begin() - 1);
+  statusBarSourceOffset = offset;
+  statusBarSourcePage = currentPage;
+  onPageChanged();
+}
+
 void LineReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION action) {
+  if (action != CrossPointSettings::BTN_TOGGLE_STATUS_BAR) statusBarSourcePage = -1;
   using BA = CrossPointSettings::BUTTON_ACTION;
   switch (action) {
     // Routed through the same helpers the buttons use, so the end-of-book handoff to the
@@ -228,6 +242,7 @@ bool LineReaderActivity::handleForcedRefresh(const HalDisplay::RefreshMode mode)
 
 void LineReaderActivity::goToPreviousPage() {
   if (currentPage > 0) {
+    statusBarSourcePage = -1;
     currentPage--;
     onPageChanged();
     globalReadingSessionTracker().onPageTurn();
@@ -237,6 +252,7 @@ void LineReaderActivity::goToPreviousPage() {
 
 void LineReaderActivity::goToNextPage() {
   if (currentPage < totalPages - 1) {
+    statusBarSourcePage = -1;
     currentPage++;
     onPageChanged();
     globalReadingSessionTracker().onPageTurn();
@@ -295,6 +311,7 @@ void LineReaderActivity::noteStatusBarRendered() const {
 }
 
 bool LineReaderActivity::shouldSkipPeriodicUpdate() const {
+  if (!SETTINGS.statusBarVisible) return true;  // page/reflow updates are requested explicitly
   if (lastStatusBarPage < 0) return false;
   if (currentPage + 1 != lastStatusBarPage) return false;
   if (SETTINGS.statusBarBattery) {

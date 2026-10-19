@@ -29,7 +29,7 @@ enum class HomeMenuAction : uint8_t;  // activities/home/HomeMenu.h
 // Library carries the tab in ReturnHint::selectIndex, and an open author's hash in selectionContext.
 // AllFiles is the file browser opened from Settings on every file of the card: it comes back as
 // itself, so the images and other files it lists do not vanish on the way back from the viewer.
-enum class ReturnTo : uint8_t { Home, Library, AllFiles, GlobalBookmarks };
+enum class ReturnTo : uint8_t { Home, Library, AllFiles, GlobalBookmarks, Reader };
 
 // Minimal state the returning parent needs to restore its previous view (directory,
 // focused item, list index, or bookmark selection). Kept as a plain struct stored by
@@ -151,6 +151,7 @@ class ActivityManager {
   void goToSerialTransfer();  // direct entry (also used by the boot-into-transfer path)
   void goToUsbDrive();        // no-op logging an error on boards without FREEINK_CAP_USB_MSC
   void goToSettings();
+  void toggleSettings();  // full device settings; reopen the book when returning from a reader
   void goToClockSettings();
   void goToKOReaderSettings();
   // The Library on `tab`: Books in `path` (the root when empty); `focusName` selected; on Authors,

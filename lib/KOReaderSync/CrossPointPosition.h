@@ -22,6 +22,8 @@ struct CrossPointPosition {
   // pull did not resolve a /text()[N].M point to the codepoint (an element or inexact match).
   uint32_t visibleTextOffset = 0;
   bool hasVisibleTextOffset = false;
+  // Only an element-only paragraph XPath proves its start.
+  bool isExactParagraphStart = false;
   // True when spineIndex came from the record's own DocFragment (or from local state), not from
   // the percentage. A percentage-derived spine is an estimate that must not outrank one.
   bool hasResolvedSpineIndex = false;

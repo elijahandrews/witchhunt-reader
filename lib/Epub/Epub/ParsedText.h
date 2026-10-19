@@ -1,5 +1,4 @@
 #pragma once
-
 #include <EpdFontFamily.h>
 
 #include <functional>
@@ -8,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "SourceAnchor.h"
 #include "TokenBoundary.h"
 #include "blocks/BlockStyle.h"
 #include "blocks/TextBlock.h"
@@ -54,6 +54,7 @@ class ParsedText {
   std::vector<bool> suffixSplitInsertedHyphen_;
   std::vector<int> interWordGaps_;
   std::vector<int> lineIndexForWord_;  // computeLineBreaks' DP tables
+  int maxFloatLineHeight_ = 0;         // upper advance bound for mixed-font float exclusion
   std::vector<int> dp_;
   std::vector<size_t> ans_;
   std::string allText_;
@@ -63,12 +64,12 @@ class ParsedText {
   // (without the hook: the row is placed as a whole inside a block of its own). A cell laid out
   // as a fallback paragraph keeps the heap.
   BuildArena* lineArena_ = nullptr;
-  // Called with the line's largest word-size percent just before the line is materialised.
+  // Called with the line's actual font height just before the line is materialised.
   // The parser uses it to run its page-fit test BEFORE the allocation: a line that does not
   // fit is then allocated from the page it lands on, not from the block of the page it
   // overflowed -- with page-scoped arena blocks, allocating first would leave page N+1 holding
   // bytes that die with page N.
-  std::function<void(uint8_t maxSizePct)> beforeLine_;
+  std::function<void(float lineHeight)> beforeLine_;
   std::vector<EpdFontFamily::Style> wordStyles;
   // How each word joins the one before it (TokenBoundary.h): a space, glued, or a breakable CJK gap.
   // In lockstep with `words` through every insert/erase, like the per-word vectors below.
@@ -85,6 +86,19 @@ class ParsedText {
   // The first word's offset of the line most recently handed to processLine. Read by the parser's
   // line callbacks, which only get the TextBlock.
   uint32_t lastLineVisibleOffset_ = 0;
+  // Only exceptional tokens have a map; references pack its pool slot and cooked-byte start.
+  // Maps are transient and immutable through split/retry/bionic, never page-cache data.
+  struct VisibleMap {
+    std::vector<uint32_t> origins;
+  };
+  std::vector<VisibleMap> visibleMaps_;
+  std::vector<uint32_t> wordVisibleMapRefs_;
+  uint32_t visibleOffsetAt(size_t word, size_t byte) const;
+  uint32_t visibleMapRef(size_t word) const;
+  bool appendVisibleMap(const std::vector<uint32_t>* origins);
+  void releaseUnusedVisibleMaps();
+  std::vector<uint32_t> wordTypography_;
+  std::vector<SourceWordSpan> wordSources_;
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
   bool hyphenationEnabled;
@@ -95,16 +109,26 @@ class ParsedText {
   // layout gate. std::vector growth cannot fail gracefully under -fno-exceptions, so the
   // check has to happen before the reserve.
   bool wordGrowthRefused_ = false;
+  // Only the first physical line uses ::first-line. SIZE_MAX while its break is being
+  // measured, then the actual end index. Original word styles/provenance stay untouched.
+  size_t firstLineEnd_ = 0;
+  uint8_t consecutiveHyphenLines_ = 0;
+  EpdFontFamily::Style layoutStyle(size_t index) const;
+  uint32_t layoutTypography(size_t index) const;
+  bool authoredHyphenationAllowed() const;
   size_t bionicTransformedUpTo_ = 0;  ///< words[0..bionicTransformedUpTo_) have already been bionic-transformed
 
+  float wordHeight(const GfxRenderer& renderer, int fontId, size_t index) const;
+  float wordGap(const GfxRenderer& renderer, int fontId, size_t left, size_t right, bool continued) const;
   void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
   void applyBionicReadingTransform();
   // Effective measurement scale of words[i]: the block-level multiplier combined
   // with the word's own inline size percentage.
   float wordScale(const size_t i) const { return blockStyle.fontSizeMultiplier * (wordSizes[i] / 100.0f); }
   // Returns the available line width at a given 0-based line index, accounting
-  // for any active float zones in blockStyle.  lineHeight==0 is a fast path
-  // (no float zones active) that returns pageWidth unchanged.
+  // for any active float zones in blockStyle. lineHeight is the minimum run
+  // advance; maxFloatLineHeight_ bounds the other end of the possible vertical
+  // interval. Equal bounds give exact uniform-font geometry. A zero upper bound skips floats.
   int widthForLine(int lineIndex, int lineHeight, int16_t blockStartY, int pageWidth) const;
   // The natural gap before words[j] (j > 0), unscaled: kerning across a glued boundary, nothing at a
   // CJK gap, else the space advance. Every breaker measures gaps through this.
@@ -136,7 +160,8 @@ class ParsedText {
   size_t computeSingleLineBreakNoHyphen(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         const std::vector<uint16_t>& wordWidths,
                                         const std::vector<TokenBoundary::Boundary>& boundaries, size_t lineStartIndex,
-                                        int firstLineIndent, int16_t blockStartY = 0, int lineHeight = 0) const;
+                                        int lineIndex, int firstLineIndent, int16_t blockStartY = 0,
+                                        int lineHeight = 0) const;
   bool hyphenateWordAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                             std::vector<uint16_t>& wordWidths, bool allowFallbackBreaks,
                             bool* outInsertedHyphen = nullptr);
@@ -174,11 +199,14 @@ class ParsedText {
   void releaseLayoutScratch();
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
-               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t visibleOffset = 0);
+               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0, SourceWordSpan source = {},
+               uint32_t visibleOffset = 0, const std::vector<uint32_t>* visibleOrigins = nullptr);
   // True once addWord had to drop a word because the word vectors could not grow (see
   // wordGrowthRefused_). ChapterHtmlSlimParser::ensureHeapForTextLayout turns it into a
   // partial-cache abort.
   bool wordGrowthRefused() const { return wordGrowthRefused_; }
+  // Exceptional synchronization maps are bounded to 16 KiB; stream prose before half fills.
+  size_t visibleMappingBytes() const;
   // If every word shares one non-100% size (a span wrapping the whole paragraph, e.g.
   // Alice's mouse-tale lines), fold that percent into the block-level fontSizeMultiplier
   // and reset the per-word sizes to 100. This routes whole-paragraph spans through the
@@ -189,7 +217,7 @@ class ParsedText {
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   // See lineArena_ / beforeLine_. Both survive reset().
   void setLineArena(BuildArena* arena) { lineArena_ = arena; }
-  void setBeforeLineHook(std::function<void(uint8_t maxSizePct)> hook) { beforeLine_ = std::move(hook); }
+  void setBeforeLineHook(std::function<void(float lineHeight)> hook) { beforeLine_ = std::move(hook); }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }
   uint32_t lastLineVisibleOffset() const { return lastLineVisibleOffset_; }
@@ -219,7 +247,7 @@ class ParsedText {
       const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
       const std::function<LineProcessResult(std::unique_ptr<TextBlock>, bool, bool)>& processLine,
       bool includeLastLine = true,
-      int16_t blockStartY = 0,  // currentPageNextY at call site — needed for float zone geometry
-      int lineHeight = 0,       // 0 = no float zones (fast path, existing callers unchanged)
+      int16_t blockStartY = 0,         // currentPageNextY at call site — needed for float zone geometry
+      float floatLineCompression = 0,  // reader spacing; 0 skips float geometry
       bool preserveSource = false);
 };

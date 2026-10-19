@@ -618,3 +618,60 @@ TEST_F(ElementPullFixture, AnElementPullOfALongParagraphLandsWhereItStarts) {
 }
 
 }  // namespace
+
+TEST_F(ProgressMapperFixture, RawXPathRetainsParagraphStartPrecisionInBothMappingPaths) {
+  struct Case {
+    const char* suffix;
+    bool exactStart;
+  };
+  const Case cases[] = {{"", true},
+                        {".0", true},
+                        {"/text().6000", false},
+                        {"/text()[2].0", false},
+                        {"/span[2]/text().0", false},
+                        {"/div[1]/p[1]", false},
+                        {"/text()[1].0", false},
+                        {"/text().0", false}};
+  for (const auto& test : cases) {
+    SCOPED_TRACE(test.suffix);
+    const std::string xpath = "/body/DocFragment[1]/body/p[9]" + std::string(test.suffix);
+    const auto peeked = ProgressMapper::peekRemote({xpath, .8f}, 3);
+    const auto mapped = map(xpath, .8f);
+    for (const auto& position : {peeked, mapped}) {
+      EXPECT_TRUE(position.hasResolvedSpineIndex);
+      EXPECT_TRUE(position.hasParagraphIndex);
+      EXPECT_EQ(position.spineIndex, 0);
+      EXPECT_EQ(position.paragraphIndex, 9);
+      EXPECT_EQ(position.isExactParagraphStart, test.exactStart);
+    }
+  }
+}
+
+TEST_F(ProgressMapperFixture, FirstDirectTextAfterLongInlineChildIsNotAParagraphStart) {
+  test_zip::StoredZipWriter zip;
+  zip.add("mimetype", "application/epub+zip");
+  zip.add("META-INF/container.xml",
+          "<container xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\"><rootfiles>"
+          "<rootfile full-path=\"content.opf\" media-type=\"application/oebps-package+xml\"/>"
+          "</rootfiles></container>");
+  zip.add("content.opf",
+          "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\">"
+          "<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Synthetic</dc:title></metadata>"
+          "<manifest><item id=\"c\" href=\"chapter.xhtml\" media-type=\"application/xhtml+xml\"/></manifest>"
+          "<spine><itemref idref=\"c\"/></spine></package>");
+  std::string nested;
+  for (int i = 0; i < 2000; ++i) nested += "nested words ";
+  zip.add("chapter.xhtml", xhtml("<p><em>" + nested + "</em>First direct text after the long child.</p>"));
+  const auto path = (work / "long-inline.epub").string();
+  zip.write(path);
+  auto book = std::make_shared<Epub>(path, (work / "long-inline-cache").string());
+  ASSERT_TRUE(book->load(true));
+  const std::string xpath = "/body/DocFragment[1]/body/p[1]/text()[1].0";
+  const auto peeked = ProgressMapper::peekRemote({xpath, .8f}, 1);
+  const auto mapped = ProgressMapper::toCrossPoint(book, {xpath, .8f}, 0, kPagesInSpine);
+  for (const auto& position : {peeked, mapped}) {
+    EXPECT_TRUE(position.hasParagraphIndex);
+    EXPECT_EQ(position.paragraphIndex, 1);
+    EXPECT_FALSE(position.isExactParagraphStart) << "first direct text can follow many rendered pages of nested text";
+  }
+}

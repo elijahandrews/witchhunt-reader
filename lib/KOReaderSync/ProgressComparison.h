@@ -19,7 +19,8 @@
 //      laid out or not on the other side;
 //   2. within the same spine, the paragraph LUT: a remote p[K] opens on the local page p exactly
 //      when K(p-1) < K <= K(p), where K(i) is the LUT index at the end of page i -- exact for books
-//      whose paragraphs are children of <body>;
+//      whose paragraphs are children of <body> and the XPath names the paragraph start. Interior
+//      anchors overlapping the page's paragraph interval are Unknown;
 //   3. the percentages, with a tolerance for rounding -- an estimate, bounded to one chapter by 1;
 //   4. Unknown, when neither side's percentage is usable: the caller asks rather than guesses.
 enum class ProgressComparison : uint8_t { LocalAhead, Synchronized, RemoteAhead, Unknown };
@@ -51,3 +52,7 @@ enum class RemoteRecordChoice : uint8_t { Primary, Alternate };
 
 RemoteRecordChoice selectRemoteRecord(const CrossPointPosition& primary, float primaryPercentage,
                                       const CrossPointPosition& alternate, float alternatePercentage);
+
+// Creating a missing record is safe; overwriting an existing record requires evidence that
+// local progress is ahead. An ambiguous interior paragraph anchor must never trigger auto-push.
+bool canAutoPushProgress(bool hasRemoteRecord, ProgressComparison comparison);

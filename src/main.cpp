@@ -745,6 +745,15 @@ void setupDisplayAndFonts(bool seamless = false, bool skipSdFontDiscovery = fals
   renderer.insertFont(FIT_SMALL_FONT_ID, smallFontFamily);
   renderer.insertFont(FIT_BODY_FONT_ID, ui10FontFamily);
   renderer.insertFont(FIT_TITLE_FONT_ID, ui12FontFamily);
+  renderer.registerReaderFontPair(BOOKERLY_10_FONT_ID, NOTOSANS_10_FONT_ID, 10);
+  renderer.registerReaderFontPair(BOOKERLY_12_FONT_ID, NOTOSANS_12_FONT_ID, 12);
+  renderer.registerReaderFontPair(BOOKERLY_14_FONT_ID, NOTOSANS_14_FONT_ID, 14);
+  renderer.registerReaderFontPair(BOOKERLY_16_FONT_ID, NOTOSANS_16_FONT_ID, 16);
+  renderer.registerReaderFontPair(BOOKERLY_18_FONT_ID, NOTOSANS_18_FONT_ID, 18);
+  renderer.registerReaderFontPair(BOOKERLY_20_FONT_ID, NOTOSANS_20_FONT_ID, 20);
+  renderer.registerReaderFontPair(BOOKERLY_22_FONT_ID, NOTOSANS_22_FONT_ID, 22);
+  renderer.registerReaderFontPair(BOOKERLY_24_FONT_ID, NOTOSANS_24_FONT_ID, 24);
+  renderer.registerReaderFontPair(BOOKERLY_26_FONT_ID, NOTOSANS_26_FONT_ID, 26);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
@@ -1330,7 +1339,10 @@ void setup() {
   // perform — the case that makes it necessary is an SD card moved from a board
   // with a frontlight to one without, where the stored action would otherwise be
   // both inert and uneditable (the settings screen does not offer it here).
-  CrossPointSettings::dropUnsupportedActions(SETTINGS, Frontlight.present(), Frontlight.hasColorTemperature());
+  CrossPointSettings::dropUnsupportedActions(SETTINGS, Frontlight.present(), Frontlight.hasColorTemperature(),
+                                             FREEINK_CAP_USB_MSC != 0);
+  LOG_DBG("BTN", "Double-press actions: power=%u previous=%u forward=%u", SETTINGS.btnDoublePower,
+          SETTINGS.btnDoublePageBack, SETTINGS.btnDoublePageForward);
   // Navigation follows the screen, not the panel: rotating the device rotates which physical
   // button means "up". The input layer sits below the renderer and so cannot ask it directly —
   // this bridges the two, and is queried live so it can never go stale.
@@ -2015,6 +2027,14 @@ void loop() {
         case BA::BTN_PAGE_BACK_10:
           activityManager.dispatchButtonAction(BA::BTN_PAGE_BACK_10);
           break;
+        case BA::BTN_TOGGLE_SETTINGS:
+          buttonEventManager.drain();
+          activityManager.toggleSettings();
+          break;
+        case BA::BTN_USB_DRIVE:
+          buttonEventManager.drain();
+          activityManager.goToUsbDrive();
+          break;
         case BA::BTN_GO_HOME:
           activityManager.goHome();
           break;
@@ -2067,6 +2087,9 @@ void loop() {
           break;
         case BA::BTN_KOREADER_SYNC:
           activityManager.dispatchButtonAction(BA::BTN_KOREADER_SYNC);
+          break;
+        case BA::BTN_TOGGLE_STATUS_BAR:
+          activityManager.dispatchButtonAction(BA::BTN_TOGGLE_STATUS_BAR);
           break;
         case BA::BTN_TOGGLE_BIONIC_READING:
           activityManager.dispatchButtonAction(BA::BTN_TOGGLE_BIONIC_READING);

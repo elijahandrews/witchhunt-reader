@@ -203,7 +203,7 @@ pages                   page after page, each serialized by Page::serialize (lib
 page LUT                u32 file offset per page
 anchor map              u16 count, then (String id, u16 pageNumber) per entry
 page break label map    u16 count, then (u16 pageIndex, String label) per entry
-paragraph LUT           u16 count, then one 8-byte entry per page
+paragraph LUT           u16 count, then one 22-byte entry per page
 ```
 
 `String` is a `u32` byte length followed by the UTF-8 bytes. All integers are little-endian.
@@ -234,11 +234,14 @@ These fields are the `header::*` constants in `Section.cpp`, in file order. The 
 
 ### Paragraph LUT entry
 
-One entry per page: `u32 visibleTextOffset + u16 paragraphIndex + u16 listItemIndex`.
+One 22-byte entry per page (section version 90): `u32 visibleTextOffset + u16 paragraphIndex + u16 listItemIndex + u32 sourceOffset + u16 characterOffset + u32 sourceMin + u32 sourceEnd`.
 
-- `visibleTextOffset` is the number of visible bytes (`lib/Epub/Epub/VisibleText.h`) of the chapter's source text before the page's first element. KOReader sync pushes it and resolves pulled positions to a page with it. Two consecutive pages may share one offset (an image or rule page followed by the text at that offset); a lookup answers the first of them.
+- `visibleTextOffset` is the number of visible bytes (`lib/Epub/Epub/VisibleText.h`) of the chapter's source text before the page's first element. KOReader sync pushes it and resolves pulled positions to a page with it. Two consecutive pages may share one offset (an image or rule page followed by the text at that offset); a lookup answers the last of them, where the text begins.
 - `paragraphIndex` is the 1-based `<p>` sibling index, matching KOReader's XPath `p[N]`.
 - `listItemIndex` is the running `<li>` count, likewise for `li[N]`.
+- `sourceOffset` and `characterOffset` form the local reading-position anchor: an original XHTML byte origin plus a character position in its normalized/transformed word, excluding invisible soft hyphens. `sourceMin` and `sourceEnd` bound the original source represented on the page; ambiguous overlaps require a fresh parser lookup.
+
+The two coordinates are independent. KOReader offsets count decoded authored non-whitespace bytes, including text layout hides; raw anchors preserve a local passage through reflow. Case conversion, normalization, inserted hyphens and synthetic content cannot be handled by converting one coordinate into the other. Exceptional words carry bounded transient byte-origin maps during layout; only the page-level coordinates above are serialized.
 
 ### Page break label map
 
@@ -278,7 +281,7 @@ Two small files beside `book.bin` (`lib/Epub/Epub.cpp`).
 
 ## `css_rules.cache` and `css_bg.bin`
 
-The book's compiled stylesheets, written by `CssParser` (`lib/Epub/Epub/css/`). `css_rules.cache` starts with a 12-byte header (`u8` version, `u16` rule count, `u32` selector candidates, `u32` unsupported-selector skips, `u8` flags), then the sorted `{hash, offset}` index, then the rule payloads. The version byte is `CssParser::CSS_CACHE_VERSION` (21); the comment above it lists what each version changed. A file with another version is deleted and the CSS compiled again, and the book's section caches go with it. It is compiled into `css_rules.compile.tmp` first.
+The book's compiled stylesheets, written by `CssParser` (`lib/Epub/Epub/css/`). `css_rules.cache` starts with a 12-byte header (`u8` version, `u16` rule count, `u32` selector candidates, `u32` unsupported-selector skips, `u8` flags), then the sorted `{hash, offset}` index, then the rule payloads. The version byte is `CssParser::CSS_CACHE_VERSION` (27); the comment above it lists what each version changed. A file with another version is deleted and the CSS compiled again, and the book's section caches go with it. It is compiled into `css_rules.compile.tmp` first.
 
 `css_bg.bin` sits beside it and holds the CSS background pictures (`CssParser::backgroundImageFor`): the `no-repeat` `background-image` of each rule that sets one. Absent when the book has none.
 
@@ -457,3 +460,33 @@ files out of order, a total that does not add up). The file is left in place aft
 stash overwrites it. The manifest the list is built from is
 downloaded to `/fonts_manifest.tmp` (`/fonts_manifest_web.tmp` from the web UI) and removed once
 parsed.
+
+## Hanging-indent line wrapping
+
+Only a line beginning at the first word receives CSS `text-indent`. Continuation
+lines use the full content width after paragraph margins and padding are removed.
+The layout cache is invalidated so already-cached clipped lines are rebuilt. This integrated branch uses section version 90; main
+uses section version 89 and the preserved highlighting branch uses 88; the separate versions
+prevent reading highlight-provenance records as main-branch word records.
+
+The corrected continuation width changes 24 synthetic layout goldens. Ordered text
+and word styles are preserved. On main, one previously flattened oversized table
+row now fits the grid, retaining its cells instead of using paragraph fallback.
+
+## Publisher decoration records
+
+Section version 90 retains element tag 5 (`PageBox`): signed 16-bit x/y/width/height,
+a 16-bit background luminance (0–255, or 256 for transparent), and byte top/bottom
+border widths. Fragments precede their content, so background fills cannot cover
+text. First-line styling and disabled ligatures are stored in the final word
+annotations; typography bit 25 disables ordinary ligatures, and bit 26 permits a
+break before an attached token without adding a space. Bits 27–31 remain reserved.
+Older section caches are rebuilt, while source progress records remain compatible.
+
+
+### Fractional glyph layout cache versions
+
+Fractional glyph positioning invalidates previously rounded ink bounds (main v91;
+integration v92). Advances retain their precision, but an antialiased edge can
+extend the measured word box by one pixel. The section payload is unchanged.
+Separate versions preserve the branches' existing layout compatibility boundary.

@@ -23,9 +23,9 @@
 // only that face has to carry it. Noto Sans also reads well for reference text
 // and looks distinct from the book, which is the right signal for an overlay.
 //
-// The cost is that a reader using Extra Large text still gets a 14pt
+// The cost is that a reader using Extra Large text still gets a 12pt
 // definition.
-#define DICTIONARY_FONT_ID NOTOSANS_14_FONT_ID
+#define DICTIONARY_FONT_ID NOTOSANS_12_FONT_ID
 
 // Paged viewer for one dictionary definition. HTML definitions are laid out
 // through the EPUB chapter parser into styled Pages; anything else (plain text,

@@ -29,7 +29,7 @@ class GlyphProvider {
   }
 
   /// Pair kerning in 4.4 fixed-point pixels. Asked only when the font carries no kern tables.
-  virtual int8_t kerning(uint32_t leftCp, uint32_t rightCp) {
+  virtual int16_t kerning(uint32_t leftCp, uint32_t rightCp) {
     (void)leftCp;
     (void)rightCp;
     return 0;

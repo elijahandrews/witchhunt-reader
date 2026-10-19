@@ -9,6 +9,8 @@ set(PIPELINE_SOURCES
   LoggingImpl.cpp
   # lib/Epub — the code under test
   ${REPO_ROOT}/lib/Epub/Epub.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/BookTextSearch.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/BookSearchSession.cpp
   ${REPO_ROOT}/lib/Epub/Epub/Section.cpp
   ${REPO_ROOT}/lib/Epub/Epub/SpinePageIndex.cpp
   ${REPO_ROOT}/lib/Epub/Epub/Page.cpp
@@ -20,6 +22,7 @@ set(PIPELINE_SOURCES
   ${REPO_ROOT}/lib/Epub/Epub/EpubImageManifest.cpp
   ${REPO_ROOT}/lib/Epub/Epub/htmlEntities.cpp
   ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/css/CssFontCatalog.cpp
   ${REPO_ROOT}/lib/Epub/Epub/parsers/ChapterHtmlSlimParser.cpp
   ${REPO_ROOT}/lib/Epub/Epub/parsers/ContainerParser.cpp
   ${REPO_ROOT}/lib/Epub/Epub/parsers/ContentOpfParser.cpp
@@ -35,6 +38,8 @@ set(PIPELINE_SOURCES
   ${REPO_ROOT}/lib/Epub/Epub/hyphenation/LiangHyphenation.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/GifToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageDecoderFactory.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/converters/SvgRasterizer.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/converters/SvgToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageToFramebufferDecoder.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/JpegToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/PngToFramebufferConverter.cpp
@@ -90,6 +95,13 @@ set(PIPELINE_INCLUDES
 
 add_executable(EpubPipelineTest
   EpubPipelineTest.cpp
+  CssTypographyTest.cpp
+  ComputedTextCssTest.cpp
+  EpubFeatureTest.cpp
+  PublisherBoxLayoutTest.cpp
+  StylesheetMediaLayoutTest.cpp
+  BookTextSearchTest.cpp
+  BookSearchNavigationTest.cpp
   FingerprintTest.cpp
   LostTocRetryTest.cpp
   TocSourceTest.cpp
@@ -101,6 +113,7 @@ add_executable(EpubPipelineTest
   StreamedParseTest.cpp
   FootnotePreviewStoreTest.cpp
   FootnoteResolveSliceTest.cpp
+  SourceAnchorTest.cpp
   ParagraphAnchorTest.cpp
   ParsedTextOffsetTest.cpp
   LowHeapLoadTest.cpp
@@ -115,6 +128,10 @@ add_executable(EpubPipelineTest
   ImageWrapperWidthTest.cpp
   HeadingBlockLayoutTest.cpp
   NativeSizeLayoutTest.cpp
+  ParagraphIndentTest.cpp
+  DictionaryHtmlPagesTest.cpp
+  ${REPO_ROOT}/src/util/DictHtmlPages.cpp
+  ${REPO_ROOT}/src/util/DictHtmlNormalize.cpp
   SpineCacheLayoutTest.cpp
   SaxStateInArenaTest.cpp
   JpegDownscaleTest.cpp
@@ -162,60 +179,71 @@ target_link_libraries(EpubPipelineTest PRIVATE
 )
 gtest_discover_tests(EpubPipelineTest PROPERTIES TIMEOUT 300)
 
-# HeapTrack overrides malloc/free process-wide — CLI tool only, never the gtest.
-add_executable(epub_pipeline_dump
-  DumpMain.cpp
-  HeapTrack.cpp
-  ${PIPELINE_SOURCES}
-)
-target_include_directories(epub_pipeline_dump PRIVATE ${PIPELINE_INCLUDES})
-target_compile_definitions(epub_pipeline_dump PRIVATE
-  ENABLE_SERIAL_LOG=1
-  LOG_LEVEL=2
-)
-target_link_libraries(epub_pipeline_dump PRIVATE
-  crosspoint_test_common
-  SaxParser
-)
-
-# Heap-peak regression gate (memory audit 2026-09, R5): the dump tool's --bench peak, per
-# fixture and build mode, against test/epub_pipeline/heap_peak_baseline.txt. See heap_peak_check.py.
-# Not registered under ASan: HeapTrack's malloc interposer segfaults against ASan's own before
-# main(), and a sanitizer build's peaks are not comparable to the baseline anyway.
-if(NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*address")
-  add_test(NAME HeapPeakRegression
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/heap_peak_check.py
-            $<TARGET_FILE:epub_pipeline_dump> ${REPO_ROOT}/test
-            ${CMAKE_CURRENT_SOURCE_DIR}/heap_peak_baseline.txt
+# HeapTrack's non-Windows allocator hooks depend on glibc private symbols.
+# Keep every functional test and the no-heap dump available on macOS without
+# reporting fabricated heap measurements or comparing them to a glibc baseline.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  message(STATUS "Skipping epub_pipeline_dump, epub_build_inventory and HeapPeakRegression on macOS: unsupported heap interposer; use epub_pipeline_dump_noheap for layout diagnostics")
+else()
+  # HeapTrack overrides malloc/free process-wide — CLI tool only, never the gtest.
+  add_executable(epub_pipeline_dump
+    DumpMain.cpp
+    HeapTrack.cpp
+    ${PIPELINE_SOURCES}
   )
-  set_tests_properties(HeapPeakRegression PROPERTIES TIMEOUT 600)
-endif()
+  target_include_directories(epub_pipeline_dump PRIVATE ${PIPELINE_INCLUDES})
+  target_compile_definitions(epub_pipeline_dump PRIVATE
+    ENABLE_SERIAL_LOG=1
+    LOG_LEVEL=2
+  )
+  target_link_libraries(epub_pipeline_dump PRIVATE
+    crosspoint_test_common
+    SaxParser
+  )
 
-# Exact allocation inventory of section builds (memory audit 2026-09): the heap profiler's
-# per-build window plus BuildArena's host-only trace hooks, with debug info and frame pointers so
-# every site symbolizes to file:line (inline chains included). See InventoryMain.cpp and
-# inventory_report.py. Not a test; run it by hand.
-add_executable(epub_build_inventory
-  InventoryMain.cpp
-  HeapTrack.cpp
-  ${PIPELINE_SOURCES}
-)
-target_include_directories(epub_build_inventory PRIVATE ${PIPELINE_INCLUDES})
-target_compile_definitions(epub_build_inventory PRIVATE
-  ENABLE_SERIAL_LOG=1
-  LOG_LEVEL=1
-  BUILD_ARENA_TRACE=1
-)
-target_compile_options(epub_build_inventory PRIVATE -O2 -g -fno-omit-frame-pointer -fno-ipa-icf)
-target_link_libraries(epub_build_inventory PRIVATE
-  crosspoint_test_common
-  SaxParser
-  ${CMAKE_DL_LIBS}
-)
+  # Heap-peak regression gate (memory audit 2026-09, R5): the dump tool's --bench peak, per
+  # fixture and build mode, against test/epub_pipeline/heap_peak_baseline.txt. See heap_peak_check.py.
+  # Not registered under ASan: HeapTrack's malloc interposer segfaults against ASan's own before
+  # main(), and a sanitizer build's peaks are not comparable to the baseline anyway.
+  if(NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*address")
+    add_test(NAME HeapPeakRegression
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/heap_peak_check.py
+              $<TARGET_FILE:epub_pipeline_dump> ${REPO_ROOT}/test
+              ${CMAKE_CURRENT_SOURCE_DIR}/heap_peak_baseline.txt
+    )
+    set_tests_properties(HeapPeakRegression PROPERTIES TIMEOUT 600)
+  endif()
+
+  # Exact allocation inventory of section builds (memory audit 2026-09): the heap profiler's
+  # per-build window plus BuildArena's host-only trace hooks, with debug info and frame pointers so
+  # every site symbolizes to file:line (inline chains included). See InventoryMain.cpp and
+  # inventory_report.py. Not a test; run it by hand.
+  add_executable(epub_build_inventory
+    InventoryMain.cpp
+    HeapTrack.cpp
+    ${PIPELINE_SOURCES}
+  )
+  target_include_directories(epub_build_inventory PRIVATE ${PIPELINE_INCLUDES})
+  target_compile_definitions(epub_build_inventory PRIVATE
+    ENABLE_SERIAL_LOG=1
+    LOG_LEVEL=1
+    BUILD_ARENA_TRACE=1
+  )
+  target_compile_options(epub_build_inventory PRIVATE -O2 -g -fno-omit-frame-pointer
+    $<$<CXX_COMPILER_ID:GNU>:-fno-ipa-icf>
+  )
+  target_link_libraries(epub_build_inventory PRIVATE
+    crosspoint_test_common
+    SaxParser
+    ${CMAKE_DL_LIBS}
+  )
+
+endif()
 
 # Same dump tool without the process-wide malloc/free override, which deadlocks
 # under the MinGW runtime. --bench heap numbers read 0 here; everything else is
-# identical, so this is the variant to use when diagnosing layout on Windows.
+# identical, so this is the variant to use when diagnosing layout on Windows
+# or macOS, where the glibc-based heap interposer is unavailable.
 add_executable(epub_pipeline_dump_noheap
   DumpMain.cpp
   HeapTrackStub.cpp

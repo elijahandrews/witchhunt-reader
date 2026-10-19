@@ -294,7 +294,8 @@ bool KOReaderSyncActivity::handleAutoPushPreflight() {
     return false;
   }
   // Auto-push must not overwrite progress that is already further along on the server, and has
-  // nothing to add when the server already holds this page. Judged by spine and paragraph from
+  // nothing to add when the server already holds this page. Ambiguous existing records also stay
+  // untouched. Judged by spine and paragraph from
   // the record's XPath before its percentage: a KOReader chapter-start push reads as a higher
   // percentage than our byte count gives the next ten pages of that chapter.
   // Our own last push is known to the byte (spine, page, content offset), so it compares at the
@@ -312,10 +313,13 @@ bool KOReaderSyncActivity::handleAutoPushPreflight() {
         warmupProgress.percentage);
   }
   if (syncIntent == KOReaderSyncIntentState::AUTO_PUSH &&
-      (againstServer == ProgressComparison::RemoteAhead || againstServer == ProgressComparison::Synchronized)) {
-    LOG_DBG("KOSync", "AUTO_PUSH skipped: server is %s (remote %.4f at %s, local %.4f spine=%d page=%d)",
-            againstServer == ProgressComparison::RemoteAhead ? "ahead" : "at this page", warmupProgress.percentage,
-            warmupProgress.progress.c_str(), localProgress.percentage, currentSpineIndex, currentPage);
+      !canAutoPushProgress(warmupResult == KOReaderSyncClient::OK, againstServer)) {
+    const char* reason = againstServer == ProgressComparison::RemoteAhead    ? "ahead"
+                         : againstServer == ProgressComparison::Synchronized ? "at this page"
+                                                                             : "not safely comparable";
+    LOG_DBG("KOSync", "AUTO_PUSH skipped: server is %s (remote %.4f at %s, local %.4f spine=%d page=%d)", reason,
+            warmupProgress.percentage, warmupProgress.progress.c_str(), localProgress.percentage, currentSpineIndex,
+            currentPage);
     KOReaderSyncClient::endPersistentSession();
     // Drop the radio while user reads the result; full teardown happens at silent reboot.
     esp_wifi_stop();

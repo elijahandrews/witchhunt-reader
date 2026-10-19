@@ -246,3 +246,43 @@ TEST_F(HeadingBlockLayoutFixture, InlineSpanStaysInline) {
   ASSERT_EQ(lines.size(), 1u);
   EXPECT_EQ(lines[0].text, "One two three four");
 }
+
+TEST_F(HeadingBlockLayoutFixture, BlockSpanResumesPreservedWhitespaceAfterPopulatedAndEmptyChildren) {
+  const std::string longLine =
+      "AFTER ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  // The fixture joins words with a separator; pre words already retain their authored spaces.
+  std::string joinedLongLine;
+  for (const char c : longLine) {
+    joinedLongLine += c;
+    if (c == ' ') joinedLongLine += ' ';
+  }
+  for (const char* child : {"CHILD", ""}) {
+    SCOPED_TRACE(child);
+    const auto lines = layout("span { display:block; white-space:normal; line-height:1 }",
+                              "<pre>BEFORE\n<span>" + std::string(child) + "</span>" + longLine + "</pre>");
+    const size_t expectedCount = *child ? 3u : 2u;
+    ASSERT_EQ(lines.size(), expectedCount);
+    EXPECT_EQ(lines.back().text, joinedLongLine) << "resumed pre text must remain one unwrapped physical line";
+    EXPECT_EQ(lines.back().align, CssTextAlign::Left);
+  }
+}
+
+TEST_F(HeadingBlockLayoutFixture, BlockSpanRestoresEnclosingLineHeightAfterPopulatedAndEmptyChildren) {
+  // Compare against the enclosing block's independently laid-out line advance.
+  const auto baseline = layout("", "<div style=\"line-height:3\">ONE<br/>TWO</div>");
+  ASSERT_EQ(baseline.size(), 2u);
+  const int parentAdvance = baseline[1].y - baseline[0].y;
+  ASSERT_GT(parentAdvance, 24);
+  for (const char* child : {"CHILD", ""}) {
+    SCOPED_TRACE(child);
+    const auto lines =
+        layout("span { display:block; line-height:1 }",
+               "<div style=\"line-height:3\">BEFORE<span>" + std::string(child) + "</span>AFTER<br/>LAST</div>");
+    ASSERT_GE(lines.size(), 3u);
+    EXPECT_EQ(lines[lines.size() - 2].text, "AFTER");
+    EXPECT_EQ(lines.back().text, "LAST");
+    EXPECT_EQ(lines.back().y - lines[lines.size() - 2].y, parentAdvance)
+        << "child line-height must not leak into resumed enclosing text";
+  }
+}

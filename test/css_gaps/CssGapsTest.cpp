@@ -111,10 +111,10 @@ TEST(CssGapsLineHeight, ClampMax) {
   ASSERT_LE(style.lineHeightMultiplier, 2.0f);
 }
 
-TEST(CssGapsLineHeight, NormalIsNotSet) {
-  // 'normal' keyword should not set a line-height override
+TEST(CssGapsLineHeight, NormalExplicitlyResetsLineHeight) {
   const CssStyle style = CssParser::parseInlineStyle("line-height: normal");
-  ASSERT_FALSE(style.hasLineHeight());
+  ASSERT_TRUE(style.hasLineHeight());
+  EXPECT_FLOAT_EQ(style.lineHeightMultiplier, 1.0f);
 }
 
 // ============================================================================

@@ -9,6 +9,7 @@
 
 #include "Epub.h"
 #include "FontSizeLadder.h"
+#include "SourceAnchor.h"
 #include "SpinePageIndex.h"
 
 class Page;
@@ -39,10 +40,13 @@ class Section {
   // Where the LUT sits in the cache file when `lut` could not be held (no heap block for it on a
   // long single-file book): page loads then read their offset from the file. 0 otherwise.
   uint32_t lutFileOffset_ = 0;
+  SourceAnchor sourceLookupTarget_;
+  std::optional<uint16_t> sourceLookupPage_;
+  uint32_t sourceLookupHash_ = 0;
   bool truncatedCache = false;
   bool embeddedStyleFallback = false;
-  // Set by the last build when CssParser hit its own low-heap mode mid-parse
-  // (lowHeapSkips > 0): some elements were cached without their styles. The cache is
+  // Set by the last build when CSS lookup or publisher-font loading ran out of memory:
+  // some elements were cached with fallback styles or font metrics. The cache is
   // usable but visually degraded; background callers discard it so the foreground
   // blocking path (more headroom) rebuilds it clean. Persisted in the status byte
   // (kStatusCssDegraded) and reloaded by loadSectionFile(), so a blocking build that came
@@ -195,6 +199,8 @@ class Section {
     bool hyphenationEnabled = false;
     bool fontSizeNormalization = true;
     bool embeddedStyle = false;
+    bool ignorePublisherPageMargins = false;
+    uint32_t publisherFontHash = 0;
     bool bionicReadingEnabled = false;
     bool inlineFootnotePreviews = false;
     uint8_t imageRendering = 0;
@@ -402,6 +408,15 @@ class Section {
   // text) answers page 0. How a pulled KOReader position becomes a page. nullopt if the LUT is
   // unavailable or empty.
   std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset) const;
+  // Cached ranges are accepted only when exactly one page can contain the target.
+  // Overlap (split words, floats) requests a normal rebuild with an exact probe.
+  std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t page) const;
+  std::optional<uint16_t> getPageForSourceOffset(SourceAnchor target) const;
+  void setSourceLookupTarget(SourceAnchor target) {
+    sourceLookupTarget_ = target;
+    sourceLookupPage_.reset();
+  }
+  std::optional<uint16_t> sourceLookupPage() const;
 
  private:
   // Allocates buildState_ and runs Setup. Applies the low-heap embedded-CSS downgrade.

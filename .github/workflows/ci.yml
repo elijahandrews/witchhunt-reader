@@ -260,7 +260,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build
+          sudo apt-get install -y cmake ninja-build python3-fonttools
 
       - name: Cache googletest source
         uses: actions/cache@v4
@@ -276,6 +276,9 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build/test --output-on-failure -j
+
+      - name: Check compact error diagnostics
+        run: python3 test/compact_logging/run.py --out "$RUNNER_TEMP/compact-logging" --sanitize
 
   # The web pages' scripts that can run outside a browser: test/web/*_test.mjs, each given a folder
   # with jsdom and jszip (pinned here, not added to the repository).

@@ -386,7 +386,8 @@ class CrossPointSettings {
   // Quick Resume on Timeout: keep current page on display with a moon icon when sleeping by timeout,
   // and on wake restore the page directly (skipping the boot screen).
   uint8_t quickResumeSleepScreen = QUICK_RESUME_NEVER;
-  // Status bar settings
+  // Status bar settings. Visibility does not overwrite the individual item preferences.
+  uint8_t statusBarVisible = 1;
   uint8_t statusBarChapterPageCount = 1;
   // Printed ("physical") page number from the book's page-list. Drawn in parentheses to the left of
   // the device page counter when both share a location; otherwise on its own. Default on.
@@ -400,7 +401,7 @@ class CrossPointSettings {
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
   // Text rendering settings
-  uint8_t extraParagraphSpacing = 1;
+  uint8_t extraParagraphSpacing = 0;
   uint8_t textAntiAliasing = 1;
   // X3-only: when on, the AA refresh uses the 7-frame community grayscale LUT
   // (~130 ms panel time) instead of the OEM 53-frame LUT (~2.4 s). Mid-tones
@@ -456,6 +457,8 @@ class CrossPointSettings {
 
   // Reader screen margin settings
   uint8_t screenMargin = 5;
+  // Override only EPUB html/body margin and padding; keep descendant block spacing.
+  uint8_t ignorePublisherPageMargins = 0;
 
   // Extra clearance from the panel edge, on TOP of the board profile's own viewableInsets --
   // see GfxRenderer::setViewablePaddingProvider. The profile says where the case covers the
@@ -796,21 +799,8 @@ class CrossPointSettings {
     // rotation gestures are a PAIR — turning two fingers one way and then back
     // must undo, not advance three more steps.
     BTN_CYCLE_ORIENTATION_BACK,
-    // --- Board-gated actions MUST stay at the end of this enum ---------------
-    // SettingsList builds each button's option list positionally: index i in the
-    // list is action value i. Actions it drops on boards that cannot perform them
-    // therefore have to be the LAST entries, or dropping them renumbers every
-    // action after them and a settings file written on one board is misread on
-    // another. Add unconditional actions above this line.
-    //
-    // Frontlight/backlight control. Global rather than reader-scoped: the light
-    // is as wanted on the home screen as it is mid-page.
-    //
-    // TWO gated blocks, in NARROWING order — the warm pair needs a second LED
-    // channel that most lit boards do not have, so it is a strict subset of the
-    // block above and must come after it. Dropping the narrower block on a
-    // single-channel board then leaves the wider one's values untouched, which
-    // is the whole reason the gated actions sit at the end.
+    // Board-specific actions retain their original IDs. The settings picker maps
+    // its filtered option indices to these IDs through ButtonActionOptions.
     BTN_LIGHT_TOGGLE,
     BTN_LIGHT_BRIGHTER,
     BTN_LIGHT_DIMMER,
@@ -819,6 +809,10 @@ class CrossPointSettings {
     // the mix without changing how bright the page looks.
     BTN_LIGHT_WARMER,
     BTN_LIGHT_COOLER,
+    // Append new IDs: persisted shortcuts must keep their original numeric values.
+    BTN_TOGGLE_SETTINGS,
+    BTN_USB_DRIVE,
+    BTN_TOGGLE_STATUS_BAR,
     BUTTON_ACTION_COUNT
   };
 
@@ -909,7 +903,8 @@ class CrossPointSettings {
   // passed in rather than queried so this stays free of the HAL and testable on
   // the host. hasWarmLight is the narrower of the two: a board can have a light
   // and no second warm channel, and then only the warmth pair goes.
-  static void dropUnsupportedActions(CrossPointSettings& settings, bool hasFrontlight, bool hasWarmLight);
+  static void dropUnsupportedActions(CrossPointSettings& settings, bool hasFrontlight, bool hasWarmLight,
+                                     bool hasUsbDrive);
 
   // True for an action only the reader can carry out. Such an action must NOT be
   // consumed on another screen: doing so would swallow the input and shadow that

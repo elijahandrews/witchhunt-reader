@@ -1,6 +1,7 @@
 #pragma once
 #include <EpdFontFamily.h>
 #include <HalStorage.h>
+#include <WordTypography.h>
 
 #include <cstdint>
 #include <memory>
@@ -12,6 +13,7 @@ class BuildArena;  // lib/Memory -- optional page-scoped storage for the arena b
 #include "../TokenBoundary.h"
 #include "Block.h"
 #include "BlockStyle.h"
+#include "Epub/SourceAnchor.h"
 
 // Represents a line of text on a page.
 //
@@ -33,8 +35,11 @@ class BuildArena;  // lib/Memory -- optional page-scoped storage for the arena b
 //   int16_t  xpos[wordCount]
 //   uint8_t  styles[wordCount]    low 7 bits EpdFontFamily::Style, bit 7 = continues
 //   uint8_t  sizes[wordCount]     present only when sizesPresent
+//   uint32_t typography[wordCount] optional, 4-byte aligned; omitted for uniform runs
 //   char     text[textBytes]      all words back to back, each NUL-terminated
 //
+// A uniform family/tracking run is kept in one scalar; a mixed run adds one compact
+// annotation per word. Tracking is fixed-point display spacing, family is generic.
 // Each word is stored NUL-terminated so render() can hand `text + textOff[i]`
 // straight to C APIs (drawText) with no std::string materialization.
 //
@@ -86,9 +91,15 @@ inline constexpr size_t SOFT_HYPHEN_BYTES = 2;
 class TextBlock final : public Block {
  private:
   RenderStyle renderStyle;
+  SourceAnchor sourceAnchor_;
+  uint32_t sourceMin_ = UINT32_MAX;
+  uint32_t sourceEnd_ = 0;
+  bool sourceProbeMatched_ = false;
   uint16_t numWords = 0;
   uint16_t textBytes = 0;  // total size of the text region, including one NUL per word
   bool sizesPresent = false;
+  bool typographyPresent = false;
+  uint32_t uniformTypography = 0;
   bool isValid = true;
   // The ONLY allocation. Heap by default (nothrow, so OOM yields an invalid block instead of
   // abort() -- bare new is not nothrow with -fno-exceptions). A section build that lends a
@@ -107,14 +118,15 @@ class TextBlock final : public Block {
   const uint8_t* stylesArr = nullptr;
   const uint8_t* sizesArr = nullptr;  // null when !sizesPresent
   const char* textArr = nullptr;
+  const uint32_t* typographyArr = nullptr;
 
   // Byte offsets of each arena region from the arena base. Single source of
   // truth for the layout, shared by the fill path, bindArenaPointers() and
   // arenaSize() so the in-RAM and on-disk layouts can never drift apart.
   struct ArenaOffsets {
-    size_t xpos, styles, sizes, text;
+    size_t xpos, styles, sizes, typography, text;
   };
-  static ArenaOffsets arenaOffsets(uint16_t wordCount, bool hasSizes);
+  static ArenaOffsets arenaOffsets(uint16_t wordCount, bool hasSizes, bool hasTypography);
 
   // Process-wide render option (see setGuideDots): set by the reader activity
   // from settings before pages render. Not per-block state -- blocks are cached
@@ -122,7 +134,7 @@ class TextBlock final : public Block {
   static bool guideDotsEnabled;
 
   TextBlock() = default;  // deserialize() fills the fields directly
-  static size_t arenaSize(uint16_t wordCount, bool hasSizes, uint16_t textBytes);
+  static size_t arenaSize(uint16_t wordCount, bool hasSizes, uint16_t textBytes, bool hasTypography);
   void bindArenaPointers();
 
   // Effective render scale of word i: block multiplier x the word's size percent.
@@ -131,7 +143,11 @@ class TextBlock final : public Block {
   }
 
  public:
-  // Spare high bit of the packed style byte: EpdFontFamily::Style only uses bits 0-6.
+  SourceAnchor sourceAnchor() const { return sourceAnchor_; }
+  uint32_t sourceMin() const { return sourceMin_; }
+  uint32_t sourceEnd() const { return sourceEnd_; }
+  bool sourceProbeMatched() const { return sourceProbeMatched_; }
+  // Continuation retains bit7; ALL_SMALL_CAPS is stored in typography bit24.
   static constexpr uint8_t WORD_CONTINUES_BIT = 0x80;
 
   // Flatten-on-construct: copies the layout-time vectors into the arena; the
@@ -140,7 +156,8 @@ class TextBlock final : public Block {
   // check and drop the line instead of using it.
   explicit TextBlock(std::vector<std::string> words, std::vector<int16_t> word_xpos,
                      std::vector<EpdFontFamily::Style> word_styles, const BlockStyle& blockStyle = BlockStyle(),
-                     std::vector<uint8_t> word_sizes = {}, const std::vector<bool>& word_continues = {});
+                     std::vector<uint8_t> word_sizes = {}, const std::vector<bool>& word_continues = {},
+                     const std::vector<uint32_t>& word_typography = {});
 
   // Slice of a laid-out block, addressed directly in the caller's storage.
   // Layout produces lines as [first, first + count) windows over the block's word arrays;
@@ -152,10 +169,13 @@ class TextBlock final : public Block {
   struct WordRange {
     const std::vector<std::string>* words = nullptr;
     const std::vector<EpdFontFamily::Style>* styles = nullptr;
+    const std::vector<uint32_t>* typography = nullptr;
+    const std::vector<SourceWordSpan>* sources = nullptr;
     const std::vector<uint8_t>* sizes = nullptr;  // may be null/empty => uniform 100%
     // Layout's per-word boundaries, indexed like `words`; only `continues` is kept (style bit 7).
     // May be null, meaning every word is space-separated.
     const std::vector<TokenBoundary::Boundary>* boundaries = nullptr;
+    const BlockStyle* firstLineOverride = nullptr;  // applied while copying, no extra word arrays
     size_t first = 0;
     size_t count = 0;
   };
@@ -189,7 +209,9 @@ class TextBlock final : public Block {
   }
   int16_t wordXpos(const uint16_t i) const { return xposArr[i]; }
   EpdFontFamily::Style wordStyle(const uint16_t i) const {
-    return static_cast<EpdFontFamily::Style>(stylesArr[i] & ~WORD_CONTINUES_BIT);
+    return static_cast<EpdFontFamily::Style>(
+        (stylesArr[i] & ~WORD_CONTINUES_BIT) |
+        ((wordTypography(i) & wordTypography::ALL_SMALL_CAPS) ? EpdFontFamily::ALL_SMALL_CAPS : 0));
   }
   // True when word i is glued to word i-1 with no space between them: the two halves of a
   // bionic-reading word, an attached punctuation token, a styled run that changes mid-word.
@@ -197,6 +219,9 @@ class TextBlock final : public Block {
   // i > 0. Rides in the spare high bit of the style byte, so it costs no RAM and no cache
   // bytes; a cache written before the bit existed simply reports false everywhere.
   bool wordContinues(const uint16_t i) const { return (stylesArr[i] & WORD_CONTINUES_BIT) != 0; }
+  bool hasMixedTypography() const { return typographyPresent; }
+  uint32_t wordTypography(const uint16_t i) const { return typographyPresent ? typographyArr[i] : uniformTypography; }
+  float lineHeight(const GfxRenderer& renderer, int fontId) const;
   bool hasWordSizes() const { return sizesPresent; }
   uint8_t wordSizePct(const uint16_t i) const { return sizesPresent ? sizesArr[i] : 100; }
   // Diagnostic/test helper: materializes the per-word size vector (empty when uniform).

@@ -40,6 +40,7 @@ add_library(crosspoint_test_common INTERFACE)
 target_include_directories(crosspoint_test_common INTERFACE
   ${REPO_ROOT}
   ${REPO_ROOT}/lib
+  ${REPO_ROOT}/lib/EpdFont
 )
 target_compile_options(crosspoint_test_common INTERFACE
   -Wall
@@ -80,6 +81,31 @@ include(GoogleTest)
 # asked, and platformio.ini asks). Keeping the two outputs apart means the host
 # tests cannot influence what the firmware ships.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# Only the feature EPUB is checked in by this fork. Generate the additional
+# original typography/font fixture into its ignored corpus path at configure
+# time, before corpus discovery and publisher-font extraction are configured.
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c "import fontTools"
+  RESULT_VARIABLE FONTTOOLS_STATUS
+  ERROR_QUIET
+)
+if(NOT FONTTOOLS_STATUS EQUAL 0)
+  message(FATAL_ERROR "Host tests need FontTools to generate their original font fixtures. Install it with '${Python3_EXECUTABLE} -m pip install fonttools', or select a Python3_EXECUTABLE that has it.")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${REPO_ROOT}/test/epubs/make_test_css_typography.py
+  ${REPO_ROOT}/test/epubs/typography_font_fixture.py
+)
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/epubs/make_test_css_typography.py
+          --output ${REPO_ROOT}/test/epubs/test_css_typography.epub
+  RESULT_VARIABLE TYPOGRAPHY_FIXTURE_STATUS
+  ERROR_VARIABLE TYPOGRAPHY_FIXTURE_ERROR
+)
+if(NOT TYPOGRAPHY_FIXTURE_STATUS EQUAL 0)
+  message(FATAL_ERROR "Cannot generate the typography fixture: ${TYPOGRAPHY_FIXTURE_ERROR}")
+endif()
 
 set(I18N_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/I18n")
 set(I18N_GENERATED_KEYS "${I18N_GENERATED_DIR}/I18nKeys.h")
@@ -162,6 +188,7 @@ add_subdirectory(sdfat_alloc)
 add_subdirectory(font_group_stream)
 add_subdirectory(font_cache_manager)  # after font_group_stream: links its uzlib_font_ring
 add_subdirectory(gif_decoder)
+add_subdirectory(svg_decoder)
 add_subdirectory(jpeg_decoder)
 add_subdirectory(serial_transfer)
 add_subdirectory(serial_line_buffer)
@@ -172,6 +199,7 @@ add_subdirectory(chunked_vector)
 add_subdirectory(sd_font_intervals)
 add_subdirectory(sd_font_arena)
 add_subdirectory(sd_font_kern)
+add_subdirectory(sd_font_manager)
 add_subdirectory(touch_transform)
 add_subdirectory(button_hint_strip)
 add_subdirectory(hint_layout)
@@ -209,6 +237,8 @@ add_subdirectory(folder_count_memo)
 add_subdirectory(folder_search)
 add_subdirectory(file_browser_model)
 add_subdirectory(bitmap_rows)
+
+add_subdirectory(publisher_fonts)
 add_subdirectory(progress_comparison)
 add_subdirectory(kosync_progress_reply)
 add_subdirectory(library_index)

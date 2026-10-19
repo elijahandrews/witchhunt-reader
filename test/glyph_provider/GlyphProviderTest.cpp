@@ -8,6 +8,7 @@
 
 #include "EpdFont.h"
 #include "EpdFontFamily.h"
+#include "FontIdNamespace.h"
 #include "GlyphProvider.h"
 
 namespace {
@@ -17,14 +18,14 @@ class FakeProvider final : public GlyphProvider {
   std::map<uint32_t, EpdGlyph> glyphs;
   std::vector<uint32_t> asked;
   std::vector<std::pair<uint32_t, uint32_t>> kernAsked;
-  int8_t kernValue = 0;
+  int16_t kernValue = 0;
 
   const EpdGlyph* missGlyph(const uint32_t codepoint) override {
     asked.push_back(codepoint);
     const auto it = glyphs.find(codepoint);
     return it == glyphs.end() ? nullptr : &it->second;
   }
-  int8_t kerning(const uint32_t leftCp, const uint32_t rightCp) override {
+  int16_t kerning(const uint32_t leftCp, const uint32_t rightCp) override {
     kernAsked.emplace_back(leftCp, rightCp);
     return kernValue;
   }
@@ -182,4 +183,30 @@ TEST(GlyphProvider, PrefetchSkipsFontsWithoutAProvider) {
   family.prefetch("Wolf", 0x0F);
 
   EXPECT_EQ(std::vector<std::string>{"Wolf"}, boldProvider.prefetched);
+}
+
+TEST(GlyphProvider, WideMetricsAndKerningKeepTheirFullRuntimeRange) {
+  FakeProvider provider;
+  provider.glyphs['A'] = EpdGlyph(300, 280, 1600, -200, 260, 1, 0);
+  provider.kernValue = -400;
+  auto data = providerOnly(&provider);
+  data.wideGlyphs = true;
+  EpdFont font(&data);
+  const auto glyph = font.getGlyph('A');
+  ASSERT_TRUE(glyph);
+  EXPECT_EQ(glyph.width, 300);
+  EXPECT_EQ(glyph.height, 280);
+  EXPECT_EQ(glyph.left, -200);
+  EXPECT_EQ(glyph.top, 260);
+  EXPECT_EQ(font.getKerning('A', 'V'), -400);
+}
+
+TEST(GlyphProvider, SdFontIdsAndNativeWindowsAvoidPublisherFaces) {
+  for (uint32_t n = 0; n < 256; ++n) {
+    const auto id = fontIdNamespace::forSdFont(0x61234500u | n);
+    EXPECT_FALSE(fontIdNamespace::isPublisher(id));
+    EXPECT_EQ(id & 0xffu, n);
+    EXPECT_EQ(id & 0x80000000u, 0u);
+  }
+  EXPECT_EQ(fontIdNamespace::forSdFont(0x81234567u), 0x81234567u);
 }

@@ -116,7 +116,7 @@ class TtfFont {
       return owner->ownsBitmap(glyph, bitmap);
     }
     void prefetch(const char* utf8Text) override { owner->prefetch(*size, style, utf8Text); }
-    int8_t kerning(const uint32_t leftCp, const uint32_t rightCp) override {
+    int16_t kerning(const uint32_t leftCp, const uint32_t rightCp) override {
       return owner->kerning(*size, style, leftCp, rightCp);
     }
   };

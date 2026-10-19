@@ -97,6 +97,7 @@ class DictionaryWordSelectActivity final : public Activity {
   enum class Popup : uint8_t { None, Busy, NotFound, Error };
 
   void extractWords();
+  void drawSelectionRange(int first, int last);
   // Exact-ish capacity for the two arrays, counted before anything is allocated. Growing them
   // mid-scan would hold the old and the new block at once, which is what actually destroys the
   // contiguous run a definition needs. Returns tokens; sets `wordEstimate` to the group count.
@@ -156,7 +157,7 @@ class DictionaryWordSelectActivity final : public Activity {
   };
   WordTouch consumeWordTouch();
   void performLookup();
-  bool drawHighlightWithSnapshot();
+  bool drawHighlightWithSnapshot(int index = -1);
   void drawHints() const;
 
   std::unique_ptr<Page> page;

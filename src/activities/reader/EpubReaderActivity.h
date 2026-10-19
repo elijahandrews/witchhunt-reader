@@ -12,6 +12,7 @@
 #include <Epub.h>
 #include <Epub/FootnoteEntry.h>
 #include <Epub/Section.h>
+#include <EpubFontManager.h>
 
 #include <array>
 #include <atomic>
@@ -88,6 +89,7 @@ class EpubReaderActivity final : public Activity {
       Paragraph,      // KOReader paragraph LUT index
       ListItem,       // KOReader li-anchored LUT index
       VisibleOffset,  // KOReader content offset (Section::getPageForVisibleTextOffset)
+      Source,         // exact chapter source word/character anchor across reflow
     };
     Kind kind = Kind::Page;
     union {
@@ -96,6 +98,7 @@ class EpubReaderActivity final : public Activity {
       float spineProgress;     // Kind::Percent
       uint16_t lutIndex;       // Kind::Paragraph / Kind::ListItem
       uint32_t visibleOffset;  // Kind::VisibleOffset
+      uint32_t sourceOffset;   // Kind::Source
     };
     std::string anchorStr;  // Kind::Anchor; empty for all others
     // Cross-font rescaling: page count of this spine at save time.
@@ -108,6 +111,7 @@ class EpubReaderActivity final : public Activity {
     // when the lookup misses. Only meaningful for Kind::Paragraph / Kind::ListItem /
     // Kind::VisibleOffset / Kind::Anchor — for Kind::Page the `page` field is the baseline.
     int fallbackPage = 0;
+    uint16_t sourceCharacterOffset = 0;
     // Kind::Page restored from progress.bin: the paragraph LUT index of the saved page (0 = none).
     // Used only once the chapter turns out to have been laid out anew (its page count differs from
     // cachedPageCount), in place of rescaling the page number. Otherwise the saved page stands: it
@@ -125,6 +129,14 @@ class EpubReaderActivity final : public Activity {
       NavigationTarget t;
       t.kind = Kind::Page;
       t.page = n;
+      return t;
+    }
+    static NavigationTarget makeSourceOffset(uint32_t offset, int fallback = 0, uint16_t characterOffset = 0) {
+      NavigationTarget t;
+      t.kind = Kind::Source;
+      t.sourceOffset = offset;
+      t.sourceCharacterOffset = characterOffset;
+      t.fallbackPage = fallback;
       return t;
     }
     static NavigationTarget makeLastPage() {
@@ -177,6 +189,7 @@ class EpubReaderActivity final : public Activity {
 
     // Resolves the target into section.currentPage. Must be called on the render task
     // after the section has been loaded (pageCount is known).
+    std::optional<uint16_t> sourceTargetPage(const Section& sec) const;
     void resolveInto(Section& section, int spineIndex) const;
     // The page restoreParagraph lands on when `section` has been laid out anew since the position
     // was saved; nullopt when there is no paragraph, the layout is unchanged or the LUT misses.
@@ -217,6 +230,7 @@ class EpubReaderActivity final : public Activity {
   };
 
   std::shared_ptr<Epub> epub;
+  std::unique_ptr<EpubFontManager> embeddedFonts_;
   // Build scratch backed by the borrowed secondary framebuffer (see the Background-C
   // release site). Handed to section->setExternalBuildScratch() so build allocations
   // land inside the lent block instead of the heap — nothing can allocate in the region,
@@ -240,6 +254,11 @@ class EpubReaderActivity final : public Activity {
   // names the page currently on screen, not the page the section was entered at — see
   // anchorNavTargetToCurrentPage().
   NavigationTarget navTarget;
+  // Keep the selected passage through consecutive reflows. Taking a fresh page-start
+  // anchor after every resize would walk backwards through the text on each cycle.
+  SourceAnchor reflowSource_;
+  int reflowSourceSpine_ = -1;
+  int reflowSourcePage_ = -1;
   int pagesUntilFullRefresh =
       1;  // initialized to freq in onEnter(); 1 triggers HALF on first render if somehow not reset
   unsigned long lastPageTurnTime = 0UL;
@@ -700,6 +719,7 @@ class EpubReaderActivity final : public Activity {
   int8_t bookFontSizeNormalizationOverride = -1;
   int8_t bookGuideDotsOverride = -1;
   int8_t bookInlineFootnotePreviewsOverride = -1;
+  int8_t bookIgnorePublisherPageMarginsOverride = -1;
 
   // Bookmarks (starred pages)
   BookmarkStore bookmarkStore;
@@ -965,7 +985,8 @@ class EpubReaderActivity final : public Activity {
   bool maybeRestartForFragmentedHeap(uint32_t freeHeap, uint32_t contigHeap);
   void saveProgress(int spineIndex, int currentPage, int pageCount,
                     std::optional<uint16_t> paragraphIndex = std::nullopt,
-                    const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
+                    const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt,
+                    std::optional<EpubProgressRecord::Source> source = std::nullopt);
   // Writes the canonical EPUB progress.bin record (EpubProgressRecord): spine(2) + page(2) +
   // pageCount(2) + percent(1), plus paragraph(2) when one is given, plus what the status bar
   // showed when that is given. Used by the per-page saveProgress() and by transient writers (sync
@@ -974,7 +995,8 @@ class EpubReaderActivity final : public Activity {
   // needs no instance state.
   static bool writeReaderProgressCache(const std::string& cachePath, int spineIndex, int currentPage, int pageCount,
                                        uint8_t percent, std::optional<uint16_t> paragraphIndex = std::nullopt,
-                                       const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
+                                       const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt,
+                                       std::optional<EpubProgressRecord::Source> source = std::nullopt);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
@@ -1037,7 +1059,7 @@ class EpubReaderActivity final : public Activity {
   void stopAutomaticPageTurn();
   void applyBookReaderOverrides(int8_t embeddedStyleOverride, int8_t imageRenderingOverride, int8_t fontFamilyOverride,
                                 const std::string& sdFontFamilyOverride, int8_t fontSizeOverride,
-                                bool bionicReadingOverride, int8_t paragraphAlignmentOverride);
+                                int8_t bionicReadingOverride, int8_t paragraphAlignmentOverride);
   // Wider variant that also covers AA, hyphenation and guide dots. Used by
   // QuickOverridesActivity; the narrower overload above funnels through here,
   // preserving the AA/hyphenation/guide-dots values currently held on this activity.
@@ -1046,10 +1068,11 @@ class EpubReaderActivity final : public Activity {
                                 int8_t bionicReadingOverride, int8_t paragraphAlignmentOverride,
                                 int8_t textAntiAliasingOverride, int8_t hyphenationOverride,
                                 int8_t fontSizeNormalizationOverride, int8_t guideDotsOverride,
-                                int8_t inlineFootnotePreviewsOverride);
+                                int8_t inlineFootnotePreviewsOverride, int8_t ignorePublisherPageMarginsOverride);
   void openReaderMenu();
   void openQuickOverrides();
   bool getEffectiveEmbeddedStyle() const;
+  bool getEffectiveIgnorePublisherPageMargins() const;
   bool getEffectiveBionicReading() const;
   uint8_t getEffectiveImageRendering() const;
   uint8_t getEffectiveParagraphAlignment() const;
@@ -1062,7 +1085,9 @@ class EpubReaderActivity final : public Activity {
   float getEffectiveReaderLineCompression() const;
   // Re-point navTarget at the page currently displayed. Must be called after every move of
   // section->currentPage that stays inside the loaded section — see the definition for why.
-  void anchorNavTargetToCurrentPage();
+  void captureSourceBeforeReflow();
+  std::optional<EpubProgressRecord::Source> sourceForProgress(int spine, int page) const;
+  void anchorNavTargetToCurrentPage(bool preserveSourceAnchor = false);
   bool stepPageState(bool isForwardTurn);
   bool stepPageStateLocked(bool isForwardTurn);
   void pageTurn(bool isForwardTurn);

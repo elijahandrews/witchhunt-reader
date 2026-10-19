@@ -15,6 +15,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "Epub/FootnotePreviews.h"
 #include "Epub/Section.h"
 #include "GfxRenderer.h"
+#include "PipelineRunner.h"
 #include "StoredZipWriter.h"
 
 namespace fs = std::filesystem;
@@ -469,4 +471,55 @@ TEST(FootnotePreviewStore, UnicodeSpacesAloneAreNoNote) {
   EXPECT_FALSE(lookup.find("contents.xhtml#c_ch8", text)) << "stored as a note: '" << text << "'";
   ASSERT_TRUE(lookup.find("notes.xhtml#n1", text));
   EXPECT_EQ(text, "A real note.");
+}
+
+TEST(FootnotePreviewStore, WarmGlobalTargetsDoNotExpandOrdinaryReferences) {
+  const std::string dir = freshDir("reference_gate");
+  const auto doc = [](const std::string& body) {
+    return "<html xmlns='http://www.w3.org/1999/xhtml' xmlns:epub='http://www.idpf.org/2007/ops'><head>"
+           "<title>Original fixture</title><style>.badge::before{content:'note '}"
+           ".badge::after{content:' link'}</style></head><body>" +
+           body + "</body></html>";
+  };
+  test_zip::StoredZipWriter zip;
+  zip.add("mimetype", "application/epub+zip");
+  zip.add("META-INF/container.xml",
+          "<container><rootfiles><rootfile full-path='content.opf' "
+          "media-type='application/oebps-package+xml'/></rootfiles></container>");
+  zip.add("content.opf",
+          "<package xmlns='http://www.idpf.org/2007/opf' version='3.0'><metadata "
+          "xmlns:dc='http://purl.org/dc/elements/1.1/'><dc:title>Original fixture</dc:title></metadata><manifest>"
+          "<item id='a' href='first.xhtml' media-type='application/xhtml+xml'/>"
+          "<item id='b' href='later.xhtml' media-type='application/xhtml+xml'/>"
+          "<item id='n' href='notes.xhtml' media-type='application/xhtml+xml'/></manifest><spine>"
+          "<itemref idref='a'/><itemref idref='b'/><itemref idref='n'/></spine></package>");
+  zip.add("first.xhtml",
+          doc("<p>Opening <a href='notes.xhtml#cross'>12–13</a> "
+              "<a href='notes.xhtml#cross'>see another page</a> "
+              "<a href='notes.xhtml#cross'><span>1 </span><span>2</span></a> "
+              "<a href='notes.xhtml#cross'><span style='display:none'>page </span>1</a> "
+              "actual<a href='notes.xhtml#real'><span class='badge'>[1]</span></a> "
+              "tagged<a href='notes.xhtml#tagged' epub:type='noteref'>descriptive reference label</a> end.</p>"));
+  zip.add("later.xhtml", doc("<p>Later numeric caller<a href='notes.xhtml#cross'>2</a>.</p>"));
+  zip.add("notes.xhtml", doc("<p id='cross'>Decoy cached target content.</p>"
+                             "<p id='real'>Valid genuine note content.</p>"
+                             "<p id='tagged'>Tagged genuine note content.</p>"));
+  const std::string path = dir + "/original.epub";
+  zip.write(path);
+  for (const size_t arena : {size_t(0), size_t(48000)}) {
+    pipeline_harness::Profile profile;
+    profile.lentArenaBytes = arena;
+    const std::string cache = dir + "/cache" + std::to_string(arena);
+    std::ostringstream cold, warm;
+    ASSERT_TRUE(pipeline_harness::runAndDump(path, cache, profile, cold));
+    ASSERT_TRUE(pipeline_harness::runAndDump(path, cache, profile, warm));
+    EXPECT_EQ(cold.str(), warm.str());
+    const std::string first = cold.str().substr(0, cold.str().find("SPINE 1 "));
+    EXPECT_EQ(first.find("t=(Decoy"), std::string::npos);
+    EXPECT_NE(first.find("t=(Valid"), std::string::npos);
+    EXPECT_NE(first.find("t=note"), std::string::npos);
+    EXPECT_NE(first.find("t=link"), std::string::npos);
+    EXPECT_NE(first.find("t=(Tagged"), std::string::npos);
+    EXPECT_NE(cold.str().find("t=(Decoy"), std::string::npos);
+  }
 }

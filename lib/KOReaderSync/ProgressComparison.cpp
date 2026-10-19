@@ -31,13 +31,20 @@ ProgressComparison compareProgress(const LocalReadingPosition& local, const floa
       if (remote.visibleTextOffset < local.visibleOffsetAtNextPage) return ProgressComparison::Synchronized;
       return ProgressComparison::RemoteAhead;
     }
-    // The paragraph LUT answers exactly where a remote p[K] would open: on the local
-    // page when K(p-1) < K <= K(p), before it when K <= K(p-1), after it otherwise.
+    // Same chapter. The paragraph LUT locates p[K]'s start, not a descendant text offset:
+    // exact starts open on this page when K(p-1) < K <= K(p). Interior anchors need stricter bounds.
     if (remote.hasParagraphIndex && local.paragraphAtPageEnd > 0) {
       const uint16_t k = remote.paragraphIndex;
-      if (k <= local.paragraphAtPreviousPageEnd) return ProgressComparison::LocalAhead;
-      if (k <= local.paragraphAtPageEnd) return ProgressComparison::Synchronized;
-      return ProgressComparison::RemoteAhead;
+      if (remote.isExactParagraphStart) {
+        if (k <= local.paragraphAtPreviousPageEnd) return ProgressComparison::LocalAhead;
+        if (k <= local.paragraphAtPageEnd) return ProgressComparison::Synchronized;
+        return ProgressComparison::RemoteAhead;
+      }
+      // An interior point in a paragraph spanning the page boundary can be before or after
+      // the reader. Cross-device percentages cannot resolve that ambiguity safely.
+      if (k < local.paragraphAtPreviousPageEnd) return ProgressComparison::LocalAhead;
+      if (k > local.paragraphAtPageEnd) return ProgressComparison::RemoteAhead;
+      return ProgressComparison::Unknown;
     }
   }
   return byPercentage(localPercentage, remotePercentage);
@@ -57,4 +64,8 @@ RemoteRecordChoice selectRemoteRecord(const CrossPointPosition& primary, const f
   return byPercentage(primaryPercentage, alternatePercentage) == ProgressComparison::RemoteAhead
              ? RemoteRecordChoice::Alternate
              : RemoteRecordChoice::Primary;
+}
+
+bool canAutoPushProgress(const bool hasRemoteRecord, const ProgressComparison comparison) {
+  return !hasRemoteRecord || comparison == ProgressComparison::LocalAhead;
 }

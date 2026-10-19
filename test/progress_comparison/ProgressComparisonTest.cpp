@@ -35,6 +35,7 @@ CrossPointPosition record(const int spine, const uint16_t paragraph) {
   remote.hasResolvedSpineIndex = true;
   remote.paragraphIndex = paragraph;
   remote.hasParagraphIndex = paragraph > 0;
+  remote.isExactParagraphStart = paragraph > 0;
   return remote;
 }
 
@@ -210,3 +211,31 @@ TEST(SelectRemoteRecord, UnknownKeepsThePrimary) {
 }
 
 }  // namespace
+
+TEST(CompareProgress, InteriorParagraphAtEitherPageBoundaryIsAmbiguous) {
+  for (const uint16_t paragraph : {9, 10, 11}) {
+    auto remote = record(2, paragraph);
+    remote.isExactParagraphStart = false;
+    EXPECT_EQ(compareProgress(reader(2, 7, 9, 11), .4f, remote, .8f), ProgressComparison::Unknown);
+  }
+  auto remote = record(2, 9);
+  remote.isExactParagraphStart = false;
+  EXPECT_EQ(compareProgress(reader(2, 7, 9, 9), .4f, remote, .8f), ProgressComparison::Unknown);
+}
+
+TEST(CompareProgress, InteriorParagraphStrictlyOutsidePageStillOrdersProgress) {
+  auto earlier = record(2, 8);
+  earlier.isExactParagraphStart = false;
+  auto later = record(2, 12);
+  later.isExactParagraphStart = false;
+  EXPECT_EQ(compareProgress(reader(2, 7, 9, 11), .4f, earlier, .8f), ProgressComparison::LocalAhead);
+  EXPECT_EQ(compareProgress(reader(2, 7, 9, 11), .8f, later, .4f), ProgressComparison::RemoteAhead);
+}
+
+TEST(AutoPushProgress, ExistingServerRecordRequiresLocalAheadEvidence) {
+  EXPECT_TRUE(canAutoPushProgress(true, ProgressComparison::LocalAhead));
+  for (const auto comparison :
+       {ProgressComparison::Synchronized, ProgressComparison::RemoteAhead, ProgressComparison::Unknown})
+    EXPECT_FALSE(canAutoPushProgress(true, comparison));
+  EXPECT_TRUE(canAutoPushProgress(false, ProgressComparison::Unknown));
+}

@@ -1,0 +1,6 @@
+# Golden dumps include significant trailing spaces in preformatted EPUB text.
+test/epub_pipeline/goldens/*.golden.txt whitespace=-blank-at-eol
+
+# Preserve pinned upstream source/license bytes, including their whitespace.
+lib/FreeType/third_party/** whitespace=-space-before-tab,-blank-at-eol
+lib/ReaderMono/OFL.txt whitespace=-blank-at-eol

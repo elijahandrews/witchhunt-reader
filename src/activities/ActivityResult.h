@@ -29,7 +29,7 @@ struct MenuResult {
   std::string sdFontFamilyOverride;
   int8_t fontSizeOverride = -1;
   uint8_t textDarkness = 1;
-  uint8_t bionicReadingOverride = 0;
+  int8_t bionicReadingOverride = -1;
   int8_t paragraphAlignmentOverride = -1;
   int8_t textAntiAliasingOverride = -1;
   int8_t hyphenationOverride = -1;
@@ -47,11 +47,17 @@ struct MenuResult {
   int8_t inlineFootnotePreviewsOverride = -1;
   // Browse Files view (CrossPointSettings::FILE_BROWSER_VIEW), appended like the above.
   uint8_t browserView = 0;
+  int8_t ignorePublisherPageMarginsOverride = -1;
 };
 
 struct ChapterResult {
   int spineIndex = 0;
   std::optional<int> tocIndex;
+};
+
+struct BookSearchResult {
+  int spineIndex = 0;
+  uint32_t sourceOffset = 0;
 };
 
 struct PercentResult {
@@ -109,9 +115,10 @@ struct ConfirmResult {
   bool alternate = false;
 };
 
-using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
-                                   PageResult, SyncResult, NetworkModeResult, FootnoteResult, FilePathResult,
-                                   StarredPageResult, PrintedPageResult, DictionarySwitchResult, ConfirmResult>;
+using ResultVariant =
+    std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, PageResult,
+                 SyncResult, NetworkModeResult, FootnoteResult, FilePathResult, StarredPageResult, PrintedPageResult,
+                 DictionarySwitchResult, ConfirmResult, BookSearchResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

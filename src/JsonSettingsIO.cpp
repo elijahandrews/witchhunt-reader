@@ -717,6 +717,7 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
     obj["fontSizeNormalizationOverride"] = book.fontSizeNormalizationOverride;
     obj["guideDotsOverride"] = book.guideDotsOverride;
     obj["inlineFootnotePreviewsOverride"] = book.inlineFootnotePreviewsOverride;
+    obj["ignorePublisherPageMarginsOverride"] = book.ignorePublisherPageMarginsOverride;
   }
 
   String json;
@@ -777,6 +778,7 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     book.fontSizeNormalizationOverride = clampInt8(obj["fontSizeNormalizationOverride"] | -1, -1, 1, -1);
     book.guideDotsOverride = clampInt8(obj["guideDotsOverride"] | -1, -1, 1, -1);
     book.inlineFootnotePreviewsOverride = clampInt8(obj["inlineFootnotePreviewsOverride"] | -1, -1, 1, -1);
+    book.ignorePublisherPageMarginsOverride = clampInt8(obj["ignorePublisherPageMarginsOverride"] | -1, -1, 1, -1);
     store.recentBooks.push_back(book);
   }
 

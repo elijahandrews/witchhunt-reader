@@ -23,6 +23,7 @@
 #include "activities/reader/KOReaderAutoSync.h"
 #include "activities/settings/SettingInfo.h"
 #include "activities/settings/TimezoneOptions.h"
+#include "util/ButtonActionOptions.h"
 
 // Shared settings list used by both the device settings UI and the web settings API.
 //
@@ -95,82 +96,77 @@ struct RowSink {
   void operator()(SettingInfo&& row) const { take(visitor, row); }
 };
 
+inline ButtonActionCapabilities buttonActionCapabilities() {
+  return {Frontlight.present(), Frontlight.hasColorTemperature(), FREEINK_CAP_USB_MSC != 0};
+}
+
+// Context points to an existing singleton field, so no closure/heap allocation is needed.
+// UI and web APIs use filtered indices; JSON persistence keeps the stable raw action ID.
+inline SettingInfo buttonActionSetting(StrId name, uint8_t CrossPointSettings::* field, std::vector<StrId> labels,
+                                       const char* key, StrId category) {
+  auto row = SettingInfo::DynamicEnumCtx(
+      name, std::move(labels), &(SETTINGS.*field),
+      [](const void* ctx) -> uint8_t {
+        return buttonActionOption(*static_cast<const uint8_t*>(ctx), buttonActionCapabilities());
+      },
+      [](void* ctx, uint8_t index) {
+        *static_cast<uint8_t*>(ctx) = buttonActionAtOption(index, buttonActionCapabilities());
+      },
+      key, category);
+  row.persisting(field, key, CrossPointSettings::BUTTON_ACTION_COUNT - 1);
+  return row;
+}
+
 // Every settings row in order, built one at a time and handed to `emit`. Nothing here holds the
 // list: see forEachSetting().
 inline void buildSettings(const RowSink& emit) {
-  // Shared button action options used by all button enum entries.
-  const std::vector<StrId> btnActionOptions = {StrId::STR_BTN_ACT_PAGE_FORWARD,
-                                               StrId::STR_BTN_ACT_PAGE_BACK,
-                                               StrId::STR_BTN_ACT_PAGE_FORWARD_10,
-                                               StrId::STR_BTN_ACT_PAGE_BACK_10,
-                                               StrId::STR_BTN_ACT_GO_HOME,
-                                               StrId::STR_BTN_ACT_SLEEP,
-                                               StrId::STR_BTN_ACT_FORCE_REFRESH,
-                                               StrId::STR_BTN_ACT_FORCE_FAST_REFRESH,
-                                               StrId::STR_BTN_ACT_OPEN_TOC,
-                                               StrId::STR_BTN_ACT_OPEN_BOOKMARKS,
-                                               StrId::STR_BTN_ACT_STAR_PAGE,
-                                               StrId::STR_BTN_ACT_FOOTNOTES,
-                                               StrId::STR_BTN_ACT_NEXT_SECTION,
-                                               StrId::STR_BTN_ACT_PREV_SECTION,
-                                               StrId::STR_BTN_ACT_EXIT_READER,
-                                               StrId::STR_BTN_ACT_READER_MENU,
-                                               StrId::STR_BTN_ACT_TOGGLE_BIONIC_READING,
-                                               StrId::STR_BTN_ACT_KOREADER_SYNC,
-                                               StrId::STR_BTN_ACT_CYCLE_FONT_SIZE,
-                                               StrId::STR_BTN_ACT_CYCLE_ORIENTATION,
-                                               StrId::STR_BTN_ACT_QUICK_OVERRIDES,
-                                               StrId::STR_BTN_ACT_IGNORE,
-                                               StrId::STR_DICTIONARY};
-
-  // Offered everywhere, so a plain continuation of btnActionOptions above. Kept
-  // separate only for legibility.
-  const std::vector<StrId> extraActionOptions = {
-      StrId::STR_BTN_ACT_FONT_SIZE_SMALLER, StrId::STR_BTN_ACT_FONT_SIZE_LARGER, StrId::STR_BTN_ACT_TOGGLE_TOUCH_UI,
-      StrId::STR_BTN_ACT_CYCLE_ORIENTATION_BACK};
-  // The ONLY conditional block, and correspondingly the LAST entries of
-  // BUTTON_ACTION. Dropping them on a board with no light therefore leaves every
-  // other action's numeric value untouched, so a settings file written on a lit
-  // board still reads correctly here. Anything added after these would break
-  // that — see the comment on BUTTON_ACTION.
-  const std::vector<StrId> lightActionOptions = {StrId::STR_BTN_ACT_LIGHT_TOGGLE, StrId::STR_BTN_ACT_LIGHT_BRIGHTER,
-                                                 StrId::STR_BTN_ACT_LIGHT_DIMMER};
-  // Narrower still, and correspondingly last: a warm/cool pair is a subset of
-  // the lit boards. Dropping these on a single-channel light leaves every value
-  // above untouched.
-  const std::vector<StrId> warmActionOptions = {StrId::STR_BTN_ACT_LIGHT_WARMER, StrId::STR_BTN_ACT_LIGHT_COOLER};
-
-  // Prepend the per-button default action to the shared options list.
-  // The option list is positional — index i is BUTTON_ACTION value i — so it must
-  // name every action exactly once. Asserted because the failure mode is not a
-  // crash but a silent misreading of every stored button and gesture mapping,
-  // which would look like the settings screen forgetting things at random.
-  assert(1 + btnActionOptions.size() + extraActionOptions.size() + lightActionOptions.size() +
-                 warmActionOptions.size() ==
-             static_cast<size_t>(CrossPointSettings::BUTTON_ACTION_COUNT) &&
-         "btnActionOptions must name every BUTTON_ACTION except BTN_DEFAULT, in enum order");
-
-  const bool hasLight = Frontlight.present();
-  const bool hasWarmLight = hasLight && Frontlight.hasColorTemperature();
+  // Flash-resident labels; the existing picker vector is the only allocation.
+  // Filter UI indices without changing the action IDs stored on the SD card.
+  static constexpr StrId buttonActionLabels[] = {
+      StrId::STR_BTN_ACT_PAGE_FORWARD,
+      StrId::STR_BTN_ACT_PAGE_BACK,
+      StrId::STR_BTN_ACT_PAGE_FORWARD_10,
+      StrId::STR_BTN_ACT_PAGE_BACK_10,
+      StrId::STR_BTN_ACT_GO_HOME,
+      StrId::STR_BTN_ACT_SLEEP,
+      StrId::STR_BTN_ACT_FORCE_REFRESH,
+      StrId::STR_BTN_ACT_FORCE_FAST_REFRESH,
+      StrId::STR_BTN_ACT_OPEN_TOC,
+      StrId::STR_BTN_ACT_OPEN_BOOKMARKS,
+      StrId::STR_BTN_ACT_STAR_PAGE,
+      StrId::STR_BTN_ACT_FOOTNOTES,
+      StrId::STR_BTN_ACT_NEXT_SECTION,
+      StrId::STR_BTN_ACT_PREV_SECTION,
+      StrId::STR_BTN_ACT_EXIT_READER,
+      StrId::STR_BTN_ACT_READER_MENU,
+      StrId::STR_BTN_ACT_TOGGLE_BIONIC_READING,
+      StrId::STR_BTN_ACT_KOREADER_SYNC,
+      StrId::STR_BTN_ACT_CYCLE_FONT_SIZE,
+      StrId::STR_BTN_ACT_CYCLE_ORIENTATION,
+      StrId::STR_BTN_ACT_QUICK_OVERRIDES,
+      StrId::STR_BTN_ACT_IGNORE,
+      StrId::STR_DICTIONARY,
+      StrId::STR_BTN_ACT_FONT_SIZE_SMALLER,
+      StrId::STR_BTN_ACT_FONT_SIZE_LARGER,
+      StrId::STR_BTN_ACT_TOGGLE_TOUCH_UI,
+      StrId::STR_BTN_ACT_CYCLE_ORIENTATION_BACK,
+      StrId::STR_BTN_ACT_LIGHT_TOGGLE,
+      StrId::STR_BTN_ACT_LIGHT_BRIGHTER,
+      StrId::STR_BTN_ACT_LIGHT_DIMMER,
+      StrId::STR_BTN_ACT_LIGHT_WARMER,
+      StrId::STR_BTN_ACT_LIGHT_COOLER,
+      StrId::STR_BTN_ACT_TOGGLE_SETTINGS,
+      StrId::STR_USB_DRIVE,
+      StrId::STR_BTN_ACT_TOGGLE_STATUS_BAR,
+  };
+  static_assert(1 + std::size(buttonActionLabels) == CrossPointSettings::BUTTON_ACTION_COUNT);
+  const auto caps = buttonActionCapabilities();
   auto makeBtnActionOptions = [&](StrId defaultAction) {
     std::vector<StrId> result;
-    // Reserves for the light options whether or not this board has them: a hint
-    // does not need to be exact, and three spare pointers cost less than a
-    // condition that reads as dead code on every build without a frontlight.
-    result.reserve(1 + btnActionOptions.size() + extraActionOptions.size() + lightActionOptions.size() +
-                   warmActionOptions.size());
+    result.reserve(CrossPointSettings::BUTTON_ACTION_COUNT);
     result.push_back(defaultAction);
-    result.insert(result.end(), btnActionOptions.begin(), btnActionOptions.end());
-    result.insert(result.end(), extraActionOptions.begin(), extraActionOptions.end());
-    // cppcheck-suppress knownConditionTrueFalse ; hasLight is a compile-time false
-    // on a build with FREEINK_CAP_FRONTLIGHT off, where present() returns a literal.
-    // It is a genuine runtime question on every board that has a light.
-    if (hasLight) {
-      result.insert(result.end(), lightActionOptions.begin(), lightActionOptions.end());
-    }
-    // cppcheck-suppress knownConditionTrueFalse ; see the hasLight check above.
-    if (hasWarmLight) {
-      result.insert(result.end(), warmActionOptions.begin(), warmActionOptions.end());
+    for (uint8_t action = 1; action < CrossPointSettings::BUTTON_ACTION_COUNT; ++action) {
+      if (buttonActionAvailable(action, caps)) result.push_back(buttonActionLabels[action - 1]);
     }
     return result;
   };
@@ -379,6 +375,9 @@ inline void buildSettings(const RowSink& emit) {
   emit(SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",
                           StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_SPACING));
+  emit(SettingInfo::Toggle(StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, &CrossPointSettings::ignorePublisherPageMargins,
+                           "ignorePublisherPageMargins", StrId::STR_CAT_READER)
+           .withSubmenu(StrId::STR_MENU_READER_SPACING));
   emit(SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                          {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}, "lineSpacing", StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_SPACING));
@@ -408,92 +407,94 @@ inline void buildSettings(const RowSink& emit) {
                          {StrId::STR_BTN_DEF_EXIT_READER}, "btnShortBack", StrId::STR_CAT_CONTROLS)
            .withSubcategory(StrId::STR_MENU_BTN_ACTIONS)
            .withSubmenu(StrId::STR_BTN_BACK));
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleBack,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleBack", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleBack,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleBack", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_BACK)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongBack,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_GO_HOME), "btnLongBack", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongBack,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_GO_HOME), "btnLongBack", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_BACK)
            .withSelectorActivity());
   // Confirm button: short=reader menu, double=ignore, long=KOReader sync
   emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortConfirm,
                          {StrId::STR_BTN_DEF_READER_MENU}, "btnShortConfirm", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_CONFIRM));
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleConfirm,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleConfirm", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleConfirm,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleConfirm", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_CONFIRM)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongConfirm,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_KOREADER_SYNC), "btnLongConfirm",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongConfirm,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_KOREADER_SYNC), "btnLongConfirm",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_CONFIRM)
            .withSelectorActivity());
   // Left button: short=previous page, double=ignore, long=chapter back
-  emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortLeft,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_PREV_PAGE), "btnShortLeft", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortLeft,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_PREV_PAGE), "btnShortLeft", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_LEFT)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleLeft,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleLeft", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleLeft,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleLeft", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_LEFT)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongLeft,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_BACK), "btnLongLeft", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongLeft,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_BACK), "btnLongLeft",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_LEFT)
            .withSelectorActivity());
   // Right button: short=next page, double=ignore, long=chapter forward
-  emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortRight,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_NEXT_PAGE), "btnShortRight", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortRight,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_NEXT_PAGE), "btnShortRight", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_RIGHT)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleRight,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleRight", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoubleRight,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoubleRight", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_RIGHT)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongRight,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_FORWARD), "btnLongRight",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongRight,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_FORWARD), "btnLongRight",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_RIGHT)
            .withSelectorActivity());
   // Page Back button: short=previous page, double=ignore, long=chapter back
-  emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPageBack,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_PREV_PAGE), "btnShortPageBack",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPageBack,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_PREV_PAGE), "btnShortPageBack",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_UP)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePageBack,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePageBack", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePageBack,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePageBack",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_UP)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongPageBack,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_BACK), "btnLongPageBack",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongPageBack,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_BACK), "btnLongPageBack",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_UP)
            .withSelectorActivity());
   // Page Forward button: short=next page, double=ignore, long=chapter forward
-  emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPageForward,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_NEXT_PAGE), "btnShortPageForward",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPageForward,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_NEXT_PAGE), "btnShortPageForward",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_DOWN)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePageForward,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePageForward",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePageForward,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePageForward",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_DOWN)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongPageForward,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_FORWARD), "btnLongPageForward",
-                         StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongPageForward,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_CHAPTER_FORWARD), "btnLongPageForward",
+                           StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_DOWN)
            .withSelectorActivity());
   // Power button: short=ignore, double=ignore, long=sleep (via hold timer, not event system)
-  emit(SettingInfo::Enum(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPower,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnShortPower", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_SHORT_PRESS, &CrossPointSettings::btnShortPower,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnShortPower", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_POWER)
            .withSelectorActivity());
-  emit(SettingInfo::Enum(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePower,
-                         makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePower", StrId::STR_CAT_CONTROLS)
+  emit(buttonActionSetting(StrId::STR_BTN_DOUBLE_PRESS, &CrossPointSettings::btnDoublePower,
+                           makeBtnActionOptions(StrId::STR_BTN_DEF_IGNORE), "btnDoublePower", StrId::STR_CAT_CONTROLS)
            .withSubmenu(StrId::STR_BTN_POWER)
            .withSelectorActivity());
   emit(SettingInfo::Enum(StrId::STR_BTN_LONG_PRESS, &CrossPointSettings::btnLongPower, {StrId::STR_BTN_DEF_SLEEP},
@@ -533,9 +534,9 @@ inline void buildSettings(const RowSink& emit) {
     // cppcheck-suppress useStlAlgorithm ; std::transform would have to carry this
     // whole chained builder in a lambda and append through a back_inserter, which
     // is longer and reads worse than the loop.
-    emit(SettingInfo::Enum(binding.label, binding.field,
-                           makeBtnActionOptions(TouchGestures::builtinLabelFor(binding.gesture)), binding.key,
-                           StrId::STR_CAT_CONTROLS)
+    emit(buttonActionSetting(binding.label, binding.field,
+                             makeBtnActionOptions(TouchGestures::builtinLabelFor(binding.gesture)), binding.key,
+                             StrId::STR_CAT_CONTROLS)
              .withSubmenu(StrId::STR_MENU_GESTURE_ACTIONS)
              .withSubcategory(binding.group)
              .withSelectorActivity()
@@ -694,6 +695,8 @@ inline void buildSettings(const RowSink& emit) {
 #endif  // CROSSPOINT_KOREADER_AUTOSYNC
 
   // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
+  emit(SettingInfo::Toggle(StrId::STR_SHOW_STATUS_BAR, &CrossPointSettings::statusBarVisible, "statusBarVisible",
+                           StrId::STR_CUSTOMISE_STATUS_BAR));
   emit(SettingInfo::Enum(StrId::STR_UPPER_PROGRESS_BAR, &CrossPointSettings::statusBarUpperProgressBar,
                          {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE}, "statusBarUpperProgressBar",
                          StrId::STR_CUSTOMISE_STATUS_BAR));

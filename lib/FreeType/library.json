@@ -1,0 +1,13 @@
+{
+  "name": "WitchFreeType",
+  "version": "2.14.3",
+  "description": "Pinned outline-only FreeType backend for EPUB TTF and OTF/CFF/CFF2",
+  "license": "FTL",
+  "build": {
+    "flags": [
+      "-I config",
+      "-I third_party/freetype/include",
+      "-DWITCH_FONT_AUTOHINT=1"
+    ]
+  }
+}

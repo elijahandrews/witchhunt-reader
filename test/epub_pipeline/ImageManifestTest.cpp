@@ -22,14 +22,17 @@
 #include <filesystem>
 #include <initializer_list>
 #include <memory>
+#include <sstream>
 #include <string>
 
 #include "BuildArena.h"
 #include "Epub.h"
 #include "Epub/EpubImageManifest.h"
 #include "Epub/Section.h"
+#include "Epub/converters/ImageDecoderFactory.h"
 #include "Epub/converters/ImageToFramebufferDecoder.h"
 #include "GfxRenderer.h"
+#include "PipelineRunner.h"
 #include "StoredZipWriter.h"
 
 namespace fs = std::filesystem;
@@ -436,6 +439,111 @@ TEST_F(DeferredImageBuildFixture, ResolvingPendingAtBuildEndMakesTheNextBuildCle
 
   ESP.setMaxAllocHeap(16 * 1024);  // the rebuild needs no ring at all: the manifest answers
   EXPECT_FALSE(buildAndReportDegraded());
+}
+
+// Exercise the real manifest dispatcher as well as the direct factory: Section
+// layout uses the former, so a standalone SVG decoder test cannot cover it.
+std::string makeSvgBook(const fs::path& work, bool deflated) {
+  test_zip::StoredZipWriter zip;
+  zip.add("mimetype", "application/epub+zip");
+  zip.add("META-INF/container.xml",
+          "<container><rootfiles><rootfile full-path='content.opf' "
+          "media-type='application/oebps-package+xml'/></rootfiles></container>");
+  zip.add(
+      "content.opf",
+      "<package xmlns='http://www.idpf.org/2007/opf' version='3.0'><metadata "
+      "xmlns:dc='http://purl.org/dc/elements/1.1/'><dc:title>Synthetic vectors</dc:title></metadata><manifest><item "
+      "id='c' href='chapter.xhtml' media-type='application/xhtml+xml'/><item id='a' href='images/ornament.svg' "
+      "media-type='image/svg+xml'/><item id='b' href='images/icon.SVG' "
+      "media-type='image/svg+xml'/></manifest><spine><itemref idref='c'/></spine></package>");
+  zip.add(
+      "chapter.xhtml",
+      "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>Vectors</title></head><body><p>Before</p><img "
+      "src='images/ornament.svg' alt='MissingOrnament'/><p>Between</p><img src='images/icon.SVG' "
+      "alt='MissingIcon'/><img src='images/ornament.svg' alt='MissingRepeatedOrnament'/><p>After</p></body></html>");
+  const std::string ornament =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='72' height='24'><path fill='#606060' d='M4 12Q36 0 68 12Q36 24 4 "
+      "12Z'/></svg>";
+  const std::string icon =
+      "<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill-rule='evenodd'><path "
+      "d='M36 20A16 16 0 1 1 4 20A16 16 0 1 1 36 20Z M28 20A8 8 0 1 1 12 20A8 8 0 1 1 28 20Z'/></g></svg>";
+  if (deflated) {
+    zip.addDeflated("images/ornament.svg", ornament);
+    zip.addDeflated("images/icon.SVG", icon);
+  } else {
+    zip.add("images/ornament.svg", ornament);
+    zip.add("images/icon.SVG", icon);
+  }
+  const std::string path = (work / (deflated ? "deflated.epub" : "stored.epub")).string();
+  zip.write(path);
+  return path;
+}
+
+TEST_F(ImageManifestFixture, SvgZipHeadersResolveThroughFactoryAndPersistedManifest) {
+  for (bool deflated : {false, true}) {
+    SCOPED_TRACE(deflated);
+    const auto book = makeSvgBook(work, deflated);
+    const auto cache = (work / (deflated ? "deflated-cache" : "stored-cache")).string();
+    fs::create_directories(cache);
+    EpubImageManifest manifest;
+    ASSERT_TRUE(manifest.load(cache));
+    BuildArena arena(16 * 1024);
+    for (const auto& entry : {"images/ornament.svg", "images/icon.SVG"}) {
+      const bool ornament = std::string(entry).find("ornament") != std::string::npos;
+      ImageDimensions dimensions{};
+      ASSERT_TRUE(ImageDecoderFactory::getDimensionsFromZipEntry(book, entry, dimensions));
+      EXPECT_EQ(dimensions.width, ornament ? 72 : 40);
+      EXPECT_EQ(dimensions.height, ornament ? 24 : 40);
+      ASSERT_EQ(manifest.resolve(book, entry, dimensions, &arena), EpubImageManifest::Resolve::Resolved);
+      EXPECT_EQ(dimensions.width, ornament ? 72 : 40);
+      EXPECT_EQ(dimensions.height, ornament ? 24 : 40);
+      EXPECT_EQ(arena.used(), 0u);
+      EXPECT_EQ(arena.releaseFailures(), 0u);
+    }
+    EXPECT_EQ(manifest.entryCount(), 2u);
+    EXPECT_FALSE(manifest.hasPending());
+    manifest.persistIfDirty();
+    EpubImageManifest warm;
+    ASSERT_TRUE(warm.load(cache));
+    EXPECT_EQ(warm.entryCount(), 2u);
+    ImageDimensions dimensions{};
+    // No source file needed on a warm hit, proving the dimensions persisted.
+    EXPECT_EQ(warm.resolve("absent.epub", "images/ornament.svg", dimensions), EpubImageManifest::Resolve::Resolved);
+    EXPECT_EQ(dimensions.width, 72);
+    EXPECT_EQ(dimensions.height, 24);
+  }
+}
+
+TEST_F(ImageManifestFixture, SvgFullSectionsContainEveryInstanceColdAndWarm) {
+  for (bool deflated : {false, true}) {
+    SCOPED_TRACE(deflated);
+    const auto book = makeSvgBook(work, deflated);
+    const auto cache = (work / (deflated ? "deflated-sections" : "stored-sections")).string();
+    pipeline_harness::Profile profile;
+    profile.lentArenaBytes = 48 * 1024;
+    profile.fontSizeNormalization = false;
+    std::string cold;
+    for (int pass = 0; pass < 2; ++pass) {
+      std::ostringstream out;
+      ASSERT_TRUE(pipeline_harness::runAndDump(book, cache, profile, out));
+      const auto dump = out.str();
+      size_t images = 0, offset = 0;
+      while ((offset = dump.find("  IMG ", offset)) != std::string::npos) {
+        ++images;
+        offset += 6;
+      }
+      EXPECT_EQ(images, 3u);
+      EXPECT_NE(dump.find("w=72 h=24"), std::string::npos);
+      EXPECT_NE(dump.find("w=40 h=40"), std::string::npos);
+      EXPECT_EQ(dump.find("t=[Image:"), std::string::npos);
+      EXPECT_EQ(dump.find("truncated=1"), std::string::npos);
+      EXPECT_EQ(dump.find("cssFallback=1"), std::string::npos);
+      if (!pass)
+        cold = dump;
+      else
+        EXPECT_EQ(dump, cold);
+    }
+  }
 }
 
 }  // namespace

@@ -10,7 +10,7 @@ What each chapter pins:
   1. the FB2 shape                  -- a PNG and a JPEG with no extension both lay out as images
                                        (cached as .img), not as their alt text
   2. a wrong extension              -- a PNG named .jpg lays out at the size its bytes say
-  3. not an image                   -- a bare name holding text, and an .svg, both end as alt text
+  3. content validation             -- a bare name holding text stays alt text; valid SVG renders
   4. size attributes                -- a bare name with width/height still takes its size from
                                        its bytes, which are what prove it is an image
   5. a table cell and a dotted dir  -- the cell path (buildCellImage) and a bare name under

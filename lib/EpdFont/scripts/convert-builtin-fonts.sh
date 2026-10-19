@@ -20,18 +20,18 @@ done
 # length marks from Spacing Modifier Letters, and the three Greek letters IPA
 # borrows.
 #
-# Only ONE face gets them, notosans_14, because the dictionary viewer pins
+# Only ONE face gets them, notosans_12, because the dictionary viewer pins
 # itself to that font (see DICTIONARY_FONT_ID in
 # src/activities/reader/DictionaryDefinitionActivity.h) and a definition is the
 # only text that needs the range. Giving it to all twenty Noto faces cost 124 KB
-# of flash; one size costs 26 KB. Noto Sans is also the only built-in reader
+# of flash; a single size limits that cost. Noto Sans is also the only built-in reader
 # family whose source actually HAS the glyphs -- Bookerly is missing 9 of the 20
 # codepoints a real dictionary uses, which is why every other font relies on the
 # lookalike substitution in lib/EpdFont/GlyphFallback.h instead.
 # The whole IPA Extensions block, but only the handful of Spacing Modifier
 # Letters a transcription actually uses: taking that block whole cost 31 KB more
 # across the family for ~60 codepoints no dictionary writes.
-NOTOSANS_IPA_SIZE=14
+NOTOSANS_IPA_SIZE=12
 NOTOSANS_IPA_INTERVALS=(
   "0x0250,0x02AF"  # IPA Extensions
   "0x02B0,0x02B7"  # superscript modifiers, aspiration and friends

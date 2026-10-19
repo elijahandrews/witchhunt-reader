@@ -19,9 +19,14 @@ uint8_t packStyle(const EpdFontFamily::Style style, const bool continues) {
   return static_cast<uint8_t>((static_cast<uint8_t>(style) & ~TextBlock::WORD_CONTINUES_BIT) |
                               (continues ? TextBlock::WORD_CONTINUES_BIT : 0));
 }
+uint32_t packedTypography(uint32_t typography, EpdFontFamily::Style style) {
+  return (typography & ~wordTypography::ALL_SMALL_CAPS) |
+         ((style & EpdFontFamily::ALL_SMALL_CAPS) ? wordTypography::ALL_SMALL_CAPS : 0);
+}
 }  // namespace
 
-TextBlock::ArenaOffsets TextBlock::arenaOffsets(const uint16_t wordCount, const bool hasSizes) {
+TextBlock::ArenaOffsets TextBlock::arenaOffsets(const uint16_t wordCount, const bool hasSizes,
+                                                const bool hasTypography) {
   // Layout documented in TextBlock.h: 16-bit arrays first (textOff, xpos), then
   // 8-bit arrays (styles, optional sizes), then the text blob. textOff sits at 0.
   const size_t wc = wordCount;
@@ -30,11 +35,14 @@ TextBlock::ArenaOffsets TextBlock::arenaOffsets(const uint16_t wordCount, const 
   o.styles = o.xpos + wc * sizeof(int16_t);
   o.sizes = o.styles + wc * sizeof(uint8_t);  // only meaningful when hasSizes
   o.text = o.sizes + (hasSizes ? wc * sizeof(uint8_t) : 0);
+  o.typography = (o.text + 3) & ~size_t(3);
+  if (hasTypography) o.text = o.typography + wc * sizeof(uint32_t);
   return o;
 }
 
-size_t TextBlock::arenaSize(const uint16_t wordCount, const bool hasSizes, const uint16_t textBytes) {
-  return arenaOffsets(wordCount, hasSizes).text + textBytes;
+size_t TextBlock::arenaSize(const uint16_t wordCount, const bool hasSizes, const uint16_t textBytes,
+                            const bool hasTypography) {
+  return arenaOffsets(wordCount, hasSizes, hasTypography).text + textBytes;
 }
 
 bool TextBlock::allocArena(const size_t size, BuildArena* scratch) {
@@ -56,17 +64,19 @@ bool TextBlock::allocArena(const size_t size, BuildArena* scratch) {
 
 void TextBlock::bindArenaPointers() {
   const uint8_t* base = arena;
-  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent);
+  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent, typographyPresent);
   textOffArr = reinterpret_cast<const uint16_t*>(base);
   xposArr = reinterpret_cast<const int16_t*>(base + o.xpos);
   stylesArr = base + o.styles;
   sizesArr = sizesPresent ? base + o.sizes : nullptr;
   textArr = reinterpret_cast<const char*>(base + o.text);
+  typographyArr = typographyPresent ? reinterpret_cast<const uint32_t*>(base + o.typography) : nullptr;
 }
 
 TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_xpos,
                      std::vector<EpdFontFamily::Style> word_styles, const BlockStyle& blockStyle,
-                     std::vector<uint8_t> word_sizes, const std::vector<bool>& word_continues)
+                     std::vector<uint8_t> word_sizes, const std::vector<bool>& word_continues,
+                     const std::vector<uint32_t>& word_typography)
     // Narrow the parser's full BlockStyle to the render-only slice: the spacing
     // fields have already been consumed into word_xpos / the line's y by layout.
     : renderStyle{blockStyle.fontSizeMultiplier, blockStyle.headingFontId, blockStyle.alignment} {
@@ -86,6 +96,20 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
     return;
   }
 
+  if (!word_typography.empty()) {
+    if (word_typography.size() != words.size()) {
+      isValid = false;
+      return;
+    }
+  }
+  const auto typographyFor = [&](size_t i) {
+    return packedTypography(word_typography.empty() ? 0 : word_typography[i], word_styles[i]);
+  };
+  if (!words.empty()) {
+    uniformTypography = typographyFor(0);
+    for (size_t i = 1; i < words.size(); ++i)
+      if (typographyFor(i) != uniformTypography) typographyPresent = true;
+  }
   numWords = static_cast<uint16_t>(words.size());
   sizesPresent = hasSizes;
   if (numWords == 0) {
@@ -105,7 +129,7 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
   }
   textBytes = static_cast<uint16_t>(totalText);
 
-  const size_t size = arenaSize(numWords, sizesPresent, textBytes);
+  const size_t size = arenaSize(numWords, sizesPresent, textBytes, typographyPresent);
   if (!allocArena(size, nullptr)) {
     LOG_ERR("TXB", "OOM: arena %u bytes", static_cast<uint32_t>(size));
     numWords = 0;
@@ -118,7 +142,7 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
   // Pass 2: fill through mutable pointers derived from the same layout offsets
   // that bindArenaPointers() uses for the const views (bound below for reads).
   uint8_t* base = arena;
-  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent);
+  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent, typographyPresent);
   auto* textOff = reinterpret_cast<uint16_t*>(base);
   auto* xpos = reinterpret_cast<int16_t*>(base + o.xpos);
   uint8_t* styles = base + o.styles;
@@ -136,6 +160,10 @@ TextBlock::TextBlock(std::vector<std::string> words, std::vector<int16_t> word_x
     uint8_t* sizes = base + o.sizes;
     for (uint16_t i = 0; i < numWords; i++) sizes[i] = word_sizes[i];
   }
+  if (typographyPresent) {
+    auto* typography = reinterpret_cast<uint32_t*>(base + o.typography);
+    for (uint16_t i = 0; i < numWords; ++i) typography[i] = typographyFor(i);
+  }
   bindArenaPointers();
 }
 
@@ -151,6 +179,23 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
   const std::vector<EpdFontFamily::Style>& styleSrc = *range.styles;
   const size_t first = range.first;
   const size_t count = range.count;
+  if (range.sources && first <= range.sources->size() && count <= range.sources->size() - first) {
+    for (size_t i = first; i < first + count; ++i) {
+      const auto& source = (*range.sources)[i];
+      if (!source.valid()) continue;
+      if (!sourceAnchor_.valid()) sourceAnchor_ = {source.start, source.characterOffset};
+      sourceMin_ = std::min(sourceMin_, source.start);
+      sourceEnd_ = std::max(sourceEnd_, source.end);
+      sourceProbeMatched_ |= source.probeByte != UINT16_MAX;
+    }
+  }
+  const bool hasTypographySrc = range.typography && !range.typography->empty();
+  if (hasTypographySrc) {
+    if (first > range.typography->size() || count > range.typography->size() - first) {
+      isValid = false;
+      return;
+    }
+  }
 
   // Every source array must actually span [first, first + count); xpos is per line so it is
   // indexed from 0 and only needs `count` entries.
@@ -166,6 +211,22 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
             static_cast<uint32_t>(word_xpos.size()));
     isValid = false;
     return;
+  }
+
+  const auto styleFor = [&](size_t i) {
+    return static_cast<EpdFontFamily::Style>(range.firstLineOverride
+                                                 ? range.firstLineOverride->firstLineFontStyle(styleSrc[first + i])
+                                                 : styleSrc[first + i]);
+  };
+  const auto typographyFor = [&](size_t i) {
+    const uint32_t original = hasTypographySrc ? (*range.typography)[first + i] : 0;
+    return packedTypography(
+        range.firstLineOverride ? range.firstLineOverride->firstLineWordTypography(original) : original, styleFor(i));
+  };
+  if (count) {
+    uniformTypography = typographyFor(0);
+    for (size_t i = 1; i < count; ++i)
+      if (typographyFor(i) != uniformTypography) typographyPresent = true;
   }
 
   // Normalize the all-100% case to no sizes, matching the vector constructor so both paths
@@ -203,7 +264,7 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
   }
   textBytes = static_cast<uint16_t>(totalText);
 
-  const size_t size = arenaSize(numWords, sizesPresent, textBytes);
+  const size_t size = arenaSize(numWords, sizesPresent, textBytes, typographyPresent);
   if (!allocArena(size, scratch)) {
     LOG_ERR("TXB", "OOM: arena %u bytes", static_cast<uint32_t>(size));
     numWords = 0;
@@ -215,7 +276,7 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
 
   // Pass 2: fill straight from the caller's arrays — no intermediate per-line vectors.
   uint8_t* base = arena;
-  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent);
+  const ArenaOffsets o = arenaOffsets(numWords, sizesPresent, typographyPresent);
   auto* textOff = reinterpret_cast<uint16_t*>(base);
   auto* xpos = reinterpret_cast<int16_t*>(base + o.xpos);
   uint8_t* styles = base + o.styles;
@@ -224,7 +285,7 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
   for (uint16_t i = 0; i < numWords; i++) {
     textOff[i] = off;
     xpos[i] = word_xpos[i];
-    styles[i] = packStyle(styleSrc[first + i], boundariesSrc != nullptr && (*boundariesSrc)[first + i].continues);
+    styles[i] = packStyle(styleFor(i), boundariesSrc != nullptr && (*boundariesSrc)[first + i].continues);
     // Copy the word one soft-hyphen-free run at a time.
     const std::string& w = words[first + i];
     size_t start = 0;
@@ -244,6 +305,10 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
     const std::vector<uint8_t>& sizeSrc = *range.sizes;
     for (uint16_t i = 0; i < numWords; i++) sizes[i] = sizeSrc[first + i];
   }
+  if (typographyPresent) {
+    auto* typography = reinterpret_cast<uint32_t*>(base + o.typography);
+    for (uint16_t i = 0; i < numWords; ++i) typography[i] = typographyFor(i);
+  }
   bindArenaPointers();
 }
 
@@ -258,147 +323,99 @@ uint8_t TextBlock::maxSizePct() const {
 
 // Mirrors the per-word geometry in render() below. Kept adjacent to it on
 // purpose: the two must move together.
+
+float TextBlock::lineHeight(const GfxRenderer& renderer, const int fontId) const {
+  const int baseFont = renderStyle.headingFontId ? renderStyle.headingFontId : fontId;
+  float height = numWords ? 0.0f : renderer.getLineHeight(baseFont) * renderStyle.fontSizeMultiplier;
+  for (uint16_t i = 0; i < numWords; ++i) {
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
+    height = std::max(height, renderer.getLineHeight(f.fontId) * wordScale(i) * f.scale);
+  }
+  return height;
+}
+
 TextBlock::WordBox TextBlock::wordBox(const GfxRenderer& renderer, const uint16_t i, const int fontId, const int x,
                                       const int y) const {
   WordBox box;
   if (!isValid || i >= numWords) return box;
-
-  const int effFontId = renderStyle.headingFontId != 0 ? renderStyle.headingFontId : fontId;
-  const float blockScale = renderStyle.fontSizeMultiplier;
-  const int blockAscender = (blockScale == 1.0f) ? renderer.getFontAscenderSize(effFontId)
-                                                 : renderer.getFontAscenderSizeScaled(effFontId, blockScale);
-  int lineAscender = blockAscender;
-  if (sizesPresent) {
-    lineAscender = renderer.getFontAscenderSizeScaled(effFontId, blockScale * (maxSizePct() / 100.0f));
+  const int baseFont = renderStyle.headingFontId ? renderStyle.headingFontId : fontId;
+  const int blockAscender = renderer.getFontAscenderSizeScaled(baseFont, renderStyle.fontSizeMultiplier);
+  int lineAscender = numWords ? 0 : blockAscender;
+  for (uint16_t j = 0; j < numWords; ++j) {
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(j)), wordScale(j));
+    lineAscender = std::max(lineAscender, renderer.getFontAscenderSizeScaled(f.fontId, wordScale(j) * f.scale));
   }
-
-  const char* word = wordText(i);
-  const EpdFontFamily::Style style = wordStyle(i);
-  const float scale = wordScale(i);
-  const int ascender = (scale == blockScale) ? blockAscender : renderer.getFontAscenderSizeScaled(effFontId, scale);
-
-  int wordY = y + (lineAscender - ascender);
-  if ((style & EpdFontFamily::SUP) != 0) {
-    wordY -= blockAscender * 2 / 5;
-  } else if ((style & EpdFontFamily::SUB) != 0) {
-    wordY += blockAscender / 4;
-  }
-
-  box.fontId = effFontId;
+  const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
+  const float scale = wordScale(i) * f.scale;
+  const auto style = wordStyle(i);
+  const int ascender = renderer.getFontAscenderSizeScaled(f.fontId, scale);
+  box.fontId = f.fontId;
   box.style = style;
   box.scale = scale;
-  box.x = static_cast<int16_t>(xposArr[i] + x);
-  box.y = static_cast<int16_t>(wordY);
-  // Scaled measurement, not getTextAdvanceX: a book with publisher font sizes
-  // gives words a per-word scale, and an unscaled width drifts wider or
-  // narrower than the glyphs actually drawn.
-  box.width = static_cast<int16_t>((scale == 1.0f) ? renderer.getTextWidth(effFontId, word, style)
-                                                   : renderer.getTextWidthScaled(effFontId, word, style, scale));
-  box.height = static_cast<int16_t>((scale == 1.0f) ? renderer.getLineHeight(effFontId)
-                                                    : renderer.getLineHeightScaled(effFontId, scale));
+  box.x = xposArr[i] + x;
+  box.y = y + lineAscender - ascender;
+  if (style & EpdFontFamily::SUP)
+    box.y -= blockAscender * 2 / 5;
+  else if (style & EpdFontFamily::SUB)
+    box.y += blockAscender / 4;
+  box.width =
+      renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)),
+                                  wordTypography::ligatures(wordTypography(i)));
+  box.height = renderer.getLineHeightScaled(f.fontId, scale);
   return box;
 }
 
 void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y) const {
-  if (!isValid) {
-    LOG_ERR("TXB", "Render skipped: invalid block");
+  if (!isValid) return;
+  const int baseFont = renderStyle.headingFontId ? renderStyle.headingFontId : fontId;
+  if (renderer.isFontCacheScanning()) {
+    // Record text/family/style only. Measuring glyphs here would load SD metadata
+    // before the prewarm pass and inflate its low-memory working set.
+    for (uint16_t i = 0; i < numWords; ++i) {
+      const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
+      renderer.drawTextSpaced(f.fontId, x + xposArr[i], y, wordText(i), true, wordStyle(i), wordScale(i) * f.scale,
+                              wordTypography::tracking(wordTypography(i)),
+                              wordTypography::ligatures(wordTypography(i)));
+    }
     return;
   }
-
-  const bool scanning = renderer.isFontCacheScanning();
-  // Heading blocks may render with a taller real font (headingFontId) instead of scaling the
-  // body font. In that case fontSizeMultiplier is a small residual (usually 1.0). Resolve the
-  // effective (fontId, scale) pair once and use it for every measure/draw below.
-  const int effFontId = renderStyle.headingFontId != 0 ? renderStyle.headingFontId : fontId;
-  const float blockScale = renderStyle.fontSizeMultiplier;
-  const int blockAscender = (blockScale == 1.0f) ? renderer.getFontAscenderSize(effFontId)
-                                                 : renderer.getFontAscenderSizeScaled(effFontId, blockScale);
-  // Mixed-size lines are baseline-aligned: every word's baseline sits at y + lineAscender,
-  // where lineAscender is the tallest word's ascender. Uniform lines (no sizes) keep
-  // lineAscender == blockAscender, i.e. the historical single-scale layout.
-  int lineAscender = blockAscender;
-  if (sizesPresent) {
-    lineAscender = renderer.getFontAscenderSizeScaled(effFontId, blockScale * (maxSizePct() / 100.0f));
+  const int blockAscender = renderer.getFontAscenderSizeScaled(baseFont, renderStyle.fontSizeMultiplier);
+  int lineAscender = numWords ? 0 : blockAscender;
+  for (uint16_t i = 0; i < numWords; ++i) {
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
+    lineAscender = std::max(lineAscender, renderer.getFontAscenderSizeScaled(f.fontId, wordScale(i) * f.scale));
   }
-  // Guide dots (see setGuideDots): one dot centered in each inter-word gap.
-  // Sized and vertically anchored off the block's base metrics, not per-word
-  // scales, so the dot row stays level across inline size changes.
-  const bool guideDots = guideDotsEnabled && !scanning;
   const int dotSize = std::max(2, blockAscender / 8);
-  int prevWordEndX = 0;  // right edge of the previous word; valid once i > 0
-  // Cache per-word ascender calculations (typically 2-3 unique scales per block).
-  // Avoids the per-word function call overhead on ESP32-C3 for typical books where
-  // per-word font sizing is rare or uniform.
-  std::vector<std::pair<float, int>> ascenderCache;
-  auto getOrCacheAscender = [&](float s) -> int {
-    if (s == blockScale) return blockAscender;
-    for (const auto& [cachedScale, cachedAscender] : ascenderCache) {
-      if (cachedScale == s) return cachedAscender;
-    }
-    const int ascender = renderer.getFontAscenderSizeScaled(effFontId, s);
-    ascenderCache.emplace_back(s, ascender);
-    return ascender;
-  };
-  for (uint16_t i = 0; i < numWords; i++) {
-    const char* word = wordText(i);
-    const int wordX = xposArr[i] + x;
-    const EpdFontFamily::Style currentStyle = wordStyle(i);
-    const float scale = wordScale(i);
-    const int ascender = getOrCacheAscender(scale);
-    // Baseline alignment: shift smaller words down so all baselines meet at y + lineAscender.
-    int wordY = y + (lineAscender - ascender);
-    // SUP/SUB shift the baseline only — the glyph shrink comes from the word's own size
-    // percentage (parser default 50%, or the publisher's CSS). Offsets are anchored to the
-    // BLOCK's full-size ascender, not the shrunken word's, so the raised/lowered positions
-    // match the surrounding full-size text:
-    //   SUP: raise by 40% of the block ascender — sits clearly above the cap-height
-    //   SUB: lower by 25% of the block ascender — descends below baseline without clashing
-    if ((currentStyle & EpdFontFamily::SUP) != 0) {
+  int prevWordEndX = 0;
+  for (uint16_t i = 0; i < numWords; ++i) {
+    const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
+    const float scale = wordScale(i) * f.scale;
+    const auto style = wordStyle(i);
+    const int ascender = renderer.getFontAscenderSizeScaled(f.fontId, scale);
+    const int wordX = x + xposArr[i];
+    int wordY = y + lineAscender - ascender;
+    if (style & EpdFontFamily::SUP)
       wordY -= blockAscender * 2 / 5;
-    } else if ((currentStyle & EpdFontFamily::SUB) != 0) {
+    else if (style & EpdFontFamily::SUB)
       wordY += blockAscender / 4;
+    renderer.drawTextSpaced(f.fontId, wordX, wordY, wordText(i), true, style, scale,
+                            wordTypography::tracking(wordTypography(i)), wordTypography::ligatures(wordTypography(i)));
+    const bool decorated = style & (EpdFontFamily::UNDERLINE | EpdFontFamily::STRIKETHROUGH);
+    if (!guideDotsEnabled && !decorated) continue;
+    const int width =
+        renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)),
+                                    wordTypography::ligatures(wordTypography(i)));
+    const int baseline = wordY + ascender;
+    if (guideDotsEnabled && i > 0) {
+      const int gap = wordX - prevWordEndX;
+      if (gap >= dotSize + 2)
+        renderer.fillRect(prevWordEndX + (gap - dotSize) / 2, baseline - blockAscender / 3 - dotSize / 2, dotSize,
+                          dotSize, true);
     }
-    if (scale == 1.0f) {
-      renderer.drawText(effFontId, wordX, wordY, word, true, currentStyle);
-    } else {
-      renderer.drawTextScaled(effFontId, wordX, wordY, word, true, currentStyle, scale);
-    }
-
-    const bool hasDecoration =
-        !scanning && (currentStyle & (EpdFontFamily::UNDERLINE | EpdFontFamily::STRIKETHROUGH)) != 0;
-    int lineWidth = 0;
-    if (guideDots || hasDecoration) {
-      lineWidth = (scale == 1.0f) ? renderer.getTextWidth(effFontId, word, currentStyle)
-                                  : renderer.getTextWidthScaled(effFontId, word, currentStyle, scale);
-    }
-
-    if (guideDots) {
-      if (i > 0) {
-        const int gap = wordX - prevWordEndX;
-        // Skip cramped gaps (zero-width joins of adjacent styled runs): the dot
-        // needs at least a pixel of clearance on each side to read as a dot.
-        if (gap >= dotSize + 2) {
-          const int dotX = prevWordEndX + (gap - dotSize) / 2;
-          // A third of the ascender above the shared baseline -- roughly mid
-          // x-height, like a typographic middle dot.
-          const int dotY = y + lineAscender - blockAscender / 3 - dotSize / 2;
-          renderer.fillRect(dotX, dotY, dotSize, dotSize, true);
-        }
-      }
-      prevWordEndX = wordX + lineWidth;
-    }
-
-    if (hasDecoration) {
-      if ((currentStyle & EpdFontFamily::UNDERLINE) != 0) {
-        const int underlineY = y + lineAscender + 3;
-        renderer.drawLine(wordX, underlineY, wordX + lineWidth, underlineY, 2, true);
-      }
-
-      if ((currentStyle & EpdFontFamily::STRIKETHROUGH) != 0) {
-        const int strikeY = wordY + ascender / 2 + 4;
-        renderer.drawLine(wordX, strikeY, wordX + lineWidth, strikeY, 2, true);
-      }
-    }
+    prevWordEndX = wordX + width;
+    if (style & EpdFontFamily::UNDERLINE) renderer.drawLine(wordX, baseline + 3, wordX + width, baseline + 3, 2, true);
+    if (style & EpdFontFamily::STRIKETHROUGH)
+      renderer.drawLine(wordX, wordY + ascender / 2 + 4, wordX + width, wordY + ascender / 2 + 4, 2, true);
   }
 }
 
@@ -412,15 +429,17 @@ bool TextBlock::serialize(FsFile& file) const {
   // exactly the on-disk layout (see TextBlock.h), so one write covers all
   // per-word arrays and the text blob.
   serialization::writePod(file, numWords);
-  serialization::writePod(file, static_cast<uint8_t>(sizesPresent ? 1 : 0));
+  serialization::writePod(file, static_cast<uint8_t>((sizesPresent ? 1 : 0) | (typographyPresent ? 2 : 0)));
   serialization::writePod(file, textBytes);
   if (numWords > 0) {
-    const size_t size = arenaSize(numWords, sizesPresent, textBytes);
+    const size_t size = arenaSize(numWords, sizesPresent, textBytes, typographyPresent);
     if (file.write(arena, size) != size) {
       LOG_ERR("TXB", "Serialization failed: arena write (%u bytes)", static_cast<uint32_t>(size));
       return false;
     }
   }
+
+  serialization::writePod(file, uniformTypography);
 
   // Style: only the render slice. The spacing fields (margins, padding, indent
   // and their "defined" flags) used to be written here, but layout consumes them
@@ -464,10 +483,12 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file, BuildArena* scra
   }
   block->numWords = wc;
   block->textBytes = textBytes;
-  block->sizesPresent = hasSizes != 0;
+  if (hasSizes & ~3u) return nullptr;
+  block->sizesPresent = (hasSizes & 1) != 0;
+  block->typographyPresent = (hasSizes & 2) != 0;
 
   if (wc > 0) {
-    const size_t size = arenaSize(wc, block->sizesPresent, textBytes);
+    const size_t size = arenaSize(wc, block->sizesPresent, textBytes, block->typographyPresent);
     if (!block->allocArena(size, scratch)) {
       LOG_ERR("TXB", "OOM: arena %u bytes", static_cast<uint32_t>(size));
       return nullptr;
@@ -494,6 +515,8 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file, BuildArena* scra
       }
     }
   }
+
+  serialization::readPod(file, block->uniformTypography);
 
   // Style: the render slice only (see serialize).
   RenderStyle& renderStyle = block->renderStyle;

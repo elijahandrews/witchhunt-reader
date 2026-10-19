@@ -35,6 +35,10 @@ class LineReaderActivity : public Activity {
   int linesPerPage = 0;
   int viewportWidth = 0;
   bool initialized = false;
+  size_t statusBarSourceOffset = 0;
+  int statusBarSourcePage = -1;
+  size_t sourceBeforeStatusBarReflow() const;
+  void restoreStatusBarSource(size_t offset);
 
   // Cached settings for index-cache validation (font/margin/alignment changes
   // require re-indexing) and oriented layout for rendering.

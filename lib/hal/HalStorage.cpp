@@ -11,6 +11,9 @@
 #if FREEINK_CAP_USB_MSC
 #include <BatteryMonitor.h>
 #include <UsbMassStorage.h>
+#if CONFIG_IDF_TARGET_ESP32S3 && ARDUINO_USB_MODE
+#include <hal/usb_serial_jtag_ll.h>
+#endif
 #endif
 
 #include <cassert>
@@ -147,6 +150,7 @@ class HalStorage::StorageLock {
 bool HalStorage::beginUsbDrive() {
 #if FREEINK_CAP_USB_MSC
   StorageLock lock;
+  if (usbMassStorage.active()) return false;
   // Recorded while the card is still the firmware's to write: the host may change anything, and the
   // power may go before the session ends.
   noteContentChange(nullptr);
@@ -156,7 +160,18 @@ bool HalStorage::beginUsbDrive() {
     return false;
   }
 
+#if CONFIG_IDF_TARGET_ESP32S3 && ARDUINO_USB_MODE
+  // Serial/JTAG and OTG share the S3's internal PHY. Give the host a real
+  // disconnect before USB.begin() selects OTG and announces different descriptors;
+  // switching directly can leave macOS waiting until the cable is replugged.
+  const bool serialPadsEnabled = usb_serial_jtag_ll_phy_is_pad_enabled();
+  usb_serial_jtag_ll_phy_enable_pad(false);
+  delay(250);
+#endif
   if (!usbMassStorage.begin(blockDevice)) {
+#if CONFIG_IDF_TARGET_ESP32S3 && ARDUINO_USB_MODE
+    usb_serial_jtag_ll_phy_enable_pad(serialPadsEnabled);
+#endif
     LOG_ERR("USB", "USB Drive MSC initialization failed");
     // The volume is already unmounted at this point, so put it back rather than
     // leaving the caller on a filesystem-less device.

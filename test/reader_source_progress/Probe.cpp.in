@@ -1,0 +1,153 @@
+#include <cassert>
+#include <iostream>
+#include <optional>
+#include "activities/reader/EpubProgressRecord.h"
+#include "SourceAnchor.h"
+#define LOG_DBG(...) ((void)0)
+#define LOG_INF(...) ((void)0)
+#define LOG_ERR(...) ((void)0)
+
+struct SectionProbe {
+  bool active = false, anchorReady = true;
+  int pageCount = 50, currentPage = 0;
+  mutable int reads = 0;
+  SourceAnchor anchor{9876, 0};
+  mutable int visibleLookups = 0, rawLookups = 0;
+  std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset) const {
+    ++visibleLookups; return offset == 50 ? std::optional<uint16_t>(3) : std::nullopt;
+  }
+  std::optional<uint16_t> getPageForSourceOffset(SourceAnchor at) const {
+    ++rawLookups; return at.sourceOffset == 50 && at.characterOffset == 2 ? std::optional<uint16_t>(7) : std::nullopt;
+  }
+  std::optional<uint16_t> sourceLookupPage() const { return std::nullopt; }
+  std::optional<uint16_t> getPageForTocIndex(int) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForAnchor(const std::string&) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForListItemIndex(uint16_t) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForParagraphIndex(uint16_t) const { return 5; }
+  bool isTruncatedCache() const { return false; }
+  bool hasActiveBuild() const { return active; }
+  std::optional<uint16_t> getParagraphIndexForPage(uint16_t) const { return 91; }
+  std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t) const { ++reads; return anchorReady ? std::optional<SourceAnchor>(anchor) : std::nullopt; }
+};
+using Section = SectionProbe;
+struct EpubProbe { int getSpineItemsCount() const { return 10; } };
+class EpubReaderActivity {
+ public:
+// NAVIGATION_DECLARATION
+  int currentSpineIndex = 3;
+  NavigationTarget navTarget;
+  SourceAnchor reflowSource_;
+  int reflowSourceSpine_ = -1, reflowSourcePage_ = -1;
+  SectionProbe* section = nullptr;
+  EpubProbe* epub = nullptr;
+  enum class ReaderPhase { READING, PRECOMPILING };
+  ReaderPhase readerPhase_ = ReaderPhase::READING;
+  std::optional<EpubProgressRecord> saved;
+  EpubProgressRecord::Shown shownProgress() const { return EpubProgressRecord::Shown{}; }
+  void saveProgress(int spine, int page, int count, std::optional<uint16_t> paragraph,
+                    std::optional<EpubProgressRecord::Shown> shown, std::optional<EpubProgressRecord::Source> source) {
+    EpubProgressRecord record;
+    record.spineIndex = spine; record.page = page; record.pageCount = count;
+    record.paragraph = paragraph; record.shown = shown; record.source = source; saved = record;
+  }
+  void closeProgress() { // CLOSE_STATEMENTS
+  }
+  std::optional<EpubProgressRecord::Source> sourceForProgress(int spine, int page) const;
+  void restore(const EpubProgressRecord* record) { // RESTORE_STATEMENTS
+  }
+};
+// CAPTURE_IMPLEMENTATION
+// NAVIGATION_IMPLEMENTATION
+
+int main() {
+  EpubReaderActivity reader;
+  SectionProbe section;
+  reader.section = &section;
+  // The same numeric offset means different things in raw XHTML and KOReader's
+  // visible-text coordinate space. Compile both branches from production source.
+  using Target = EpubReaderActivity::NavigationTarget;
+  auto rawTarget = Target::makeSourceOffset(50, 0, 2);
+  auto visibleTarget = Target::makeVisibleOffset(50);
+  rawTarget.resolveInto(section, 3);
+  assert(section.currentPage == 7 && section.rawLookups == 1 && section.visibleLookups == 0);
+  visibleTarget.resolveInto(section, 3);
+  assert(section.currentPage == 3 && section.rawLookups == 1 && section.visibleLookups == 1);
+  section.active = true;
+  assert(!rawTarget.sourceTargetPage(section) && section.rawLookups == 1);
+  assert(!visibleTarget.sourceTargetPage(section));
+  section.active = false;
+  for (auto target : {Target::makeSourceOffset(999, 20), Target::makeVisibleOffset(999, 20)}) {
+    target.cachedSpineIdx = 3; target.cachedPageCount = 100;
+    target.resolveInto(section, 3);
+    assert(section.currentPage == 10); // Both preserve upstream bounded rescaling on a miss.
+  }
+
+  assert(!reader.sourceForProgress(2, 12));
+  assert(section.reads == 0);
+  auto source = reader.sourceForProgress(3, 12);
+  assert(source && source->offset == 9876 && section.reads == 1);
+  reader.reflowSource_ = {1234, 87};
+  reader.reflowSourceSpine_ = 3; reader.reflowSourcePage_ = 12;
+  for (int cycle = 0; cycle < 5; ++cycle) {
+    section.anchor = {static_cast<uint32_t>(9000 + cycle), 0};
+    source = reader.sourceForProgress(3, 12);
+    assert(source && source->offset == 1234 && source->characterOffset == 87);
+  }
+  assert(section.reads == 1); // Sticky target never regresses to earlier new-page text.
+  source = reader.sourceForProgress(3, 13);
+  assert(source && source->offset == 9004); // Deliberate navigation updates provenance.
+  reader.navTarget = EpubReaderActivity::NavigationTarget::makeSourceOffset(4567, 12, 99);
+  section.active = true;
+  source = reader.sourceForProgress(3, 0);
+  assert(source && source->offset == 4567 && source->characterOffset == 99);
+  assert(section.reads == 2); // Indexing page-zero never replaces pending source.
+  EpubProgressRecord record;
+  record.spineIndex = 3; record.page = 12; record.pageCount = 50;
+  record.paragraph = 1; record.source = source;
+  uint8_t data[EpubProgressRecord::kMaxSize] = {};
+  const auto restored = EpubProgressRecord::decode(data, record.encode(data));
+  assert(restored);
+  reader.restore(&*restored);
+  assert(reader.navTarget.kind == EpubReaderActivity::NavigationTarget::Kind::Source);
+  assert(reader.navTarget.sourceOffset == 4567 && reader.navTarget.sourceCharacterOffset == 99);
+  assert(reader.navTarget.fallbackPage == 12 && reader.navTarget.cachedPageCount == 50);
+  assert(reader.navTarget.cachedSpineIdx == 3 && reader.navTarget.restoreParagraph == 0);
+  record.source.reset(); reader.restore(&record);
+  assert(reader.navTarget.kind == EpubReaderActivity::NavigationTarget::Kind::Page);
+  assert(reader.navTarget.page == 12 && reader.navTarget.restoreParagraph == 1);
+  reader.navTarget = {};
+  reader.reflowSource_ = {};
+  section.anchorReady = false;
+  assert(!reader.sourceForProgress(3, 0)); // Unbuilt live page has no anchor.
+  section.anchorReady = true;
+  assert(reader.sourceForProgress(3, 0)->offset == 9004); // Built live page is safe to persist.
+  section.active = false;
+  assert(!reader.sourceForProgress(3, -1));
+  assert(!reader.sourceForProgress(3, 50));
+  EpubProbe epub;
+  reader.epub = &epub;
+  reader.navTarget = EpubReaderActivity::NavigationTarget::makeSourceOffset(4567, 12, 99);
+  reader.navTarget.cachedPageCount = 50;
+  section.active = true; section.currentPage = 0;
+  reader.closeProgress();
+  assert(reader.saved && reader.saved->source);
+  assert(reader.saved->page == 12 && reader.saved->pageCount == 50);
+  assert(reader.saved->source->offset == 4567 && reader.saved->source->characterOffset == 99);
+  reader.navTarget = EpubReaderActivity::NavigationTarget::makePage(13);
+  section.currentPage = 13;
+  reader.closeProgress();
+  assert(reader.saved->page == 13 && reader.saved->pageCount == 0);
+  assert(reader.saved->source && reader.saved->source->offset == 9004);
+  assert(!reader.saved->shown && !reader.saved->paragraph);
+  reader.reflowSource_ = {1234, 87}; section.active = false; section.currentPage = 12;
+  reader.closeProgress();
+  assert(reader.saved->page == 12 && reader.saved->pageCount == 50);
+  assert(reader.saved->source && reader.saved->source->offset == 1234);
+  assert(reader.saved->source->characterOffset == 87);
+  assert(reader.saved->shown && reader.saved->paragraph == 91);
+  reader.saved.reset(); reader.epub = nullptr;
+  reader.closeProgress(); assert(!reader.saved);
+  reader.epub = &epub; reader.currentSpineIndex = 10;
+  reader.closeProgress(); assert(!reader.saved);
+  std::cout << "PASS: production pending/sticky/live-page capture, close branches, source/legacy restore\n";
+}

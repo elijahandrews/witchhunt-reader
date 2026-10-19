@@ -17,6 +17,7 @@
 #include "CrossPointSettings.h"
 #include "DictionaryDefinitionActivity.h"
 #include "components/UITheme.h"
+#include "util/SelectionPixels.h"
 
 namespace {
 
@@ -232,37 +233,32 @@ void DictionaryWordSelectActivity::extractWords() {
       }
 
       // The common case: one whole token, measured once by wordBox and used in place.
-      // Cutting needs a NUL-terminated copy to measure, so a token too long for the scratch
-      // buffer is left whole -- those are never the dash-joined pairs this is for.
+      // Keep oversized tokens whole so their repaint can use the original NUL-terminated
+      // arena string instead of truncating a cut piece to the bounded repaint scratch buffer.
       if (textLength >= WORD_TEXT_CAPACITY || nextDashSplit(text, textLength, 0) == 0) {
         addFragment(text, textLength, geometry.x, geometry.width, geometry, /*mayGlue=*/true);
         continue;
       }
 
       size_t partStart = 0;
-      int partX = geometry.x;
+      uint16_t characterStart = 0;
       bool firstPart = true;
       while (partStart < textLength) {
         size_t partEnd = nextDashSplit(text, textLength, partStart);
         if (partEnd == 0) partEnd = textLength;
         const size_t partLength = partEnd - partStart;
 
-        char part[WORD_TEXT_CAPACITY];
-        memcpy(part, text + partStart, partLength);
-        part[partLength] = '\0';
-        const int partWidth = (geometry.scale == 1.0f)
-                                  ? renderer.getTextWidth(geometry.fontId, part, geometry.style)
-                                  : renderer.getTextWidthScaled(geometry.fontId, part, geometry.style, geometry.scale);
-        if (partWidth > 0) {
-          addFragment(text + partStart, partLength, partX, partWidth, geometry, firstPart);
+        uint16_t characterEnd = characterStart;
+        for (size_t c = partStart; c < partEnd; ++c)
+          if ((static_cast<uint8_t>(text[c]) & 0xc0) != 0x80) ++characterEnd;
+        const auto range = renderer.getTextRangeSpaced(
+            geometry.fontId, text, geometry.style, geometry.scale, wordTypography::tracking(block->wordTypography(i)),
+            characterStart, characterEnd - 1, wordTypography::ligatures(block->wordTypography(i)));
+        if (range.right > range.x) {
+          addFragment(text + partStart, partLength, geometry.x + range.x, range.right - range.x, geometry, firstPart);
           firstPart = false;
         }
-
-        if (partEnd < textLength) {
-          // Advance, not ink width: the next piece starts where this one's pen ends.
-          const int advance = renderer.getTextAdvanceX(geometry.fontId, part, geometry.style);
-          partX += (geometry.scale == 1.0f) ? advance : static_cast<int>(advance * geometry.scale + 0.5f);
-        }
+        characterStart = characterEnd;
         partStart = partEnd;
       }
     }
@@ -679,12 +675,25 @@ void DictionaryWordSelectActivity::loop() {
   speculateForSelection();
 }
 
+void DictionaryWordSelectActivity::drawSelectionRange(const int first, const int last) {
+  selectionPixels::invert(renderer, [&](auto emit) {
+    for (int w = first; w <= last; ++w) {
+      const Word& word = words[w];
+      for (uint8_t f = 0; f < word.fragmentCount; ++f) {
+        const Fragment& piece = fragments[word.firstFragment + f];
+        emit(selectionPixels::Rect{piece.x - 2, piece.y - 2, piece.width + 4, drawStyleOf(piece).height + 4});
+      }
+    }
+  });
+}
+
 // Saves the pixels under words[selected]'s highlight box, then draws the
 // highlight over them. Returns false when the pixels could not be saved (no
 // buffer / oversize box) -- the highlight is drawn regardless, but the next
 // cursor move must do a full repaint.
-bool DictionaryWordSelectActivity::drawHighlightWithSnapshot() {
-  const Word& word = words[selected];
+bool DictionaryWordSelectActivity::drawHighlightWithSnapshot(int index) {
+  if (index < 0) index = selected;
+  const Word& word = words[index];
   // Fragments up to and including the hyphenated one sit on the word's own row, the rest on
   // the row below; each run gets its own box, so nothing between the two lines is disturbed.
   const uint8_t runBounds[MAX_SNAPSHOT_RUNS + 1] = {
@@ -695,7 +704,7 @@ bool DictionaryWordSelectActivity::drawHighlightWithSnapshot() {
   // inverse fill: the cursor is still obviously here, but the reader can see there is nothing
   // to look up without pressing Confirm and waiting for a "Not found" popup. Anything not yet
   // resolved keeps the plain highlight -- absence is only ever claimed on a verdict.
-  const bool knownMissing = speculationIdx == selected && speculation == Speculation::Missing;
+  const bool knownMissing = speculationIdx == index && speculation == Speculation::Missing;
 
   snapshotRunCount = 0;
   size_t used = 0;
@@ -752,24 +761,12 @@ bool DictionaryWordSelectActivity::drawHighlightWithSnapshot() {
 
     if (knownMissing) {
       renderer.drawRect(hx, hy, hw, hh, true);
-    } else {
-      renderer.fillRect(hx, hy, hw, hh, true);
-    }
-    for (uint8_t f = runBounds[run]; f < runBounds[run + 1]; f++) {
-      const Fragment& piece = fragments[word.firstFragment + f];
-      const DrawStyle& drawStyle = drawStyleOf(piece);
-      char scratch[WORD_TEXT_CAPACITY];
-      const char* text = fragmentText(piece, scratch, sizeof(scratch));
-      if (drawStyle.scale == 1.0f) {
-        renderer.drawText(drawStyle.fontId, piece.x, piece.y, text, knownMissing, piece.style);
-      } else {
-        renderer.drawTextScaled(drawStyle.fontId, piece.x, piece.y, text, knownMissing, piece.style, drawStyle.scale);
-      }
     }
   }
+  if (!knownMissing) drawSelectionRange(index, index);
 
   if (!saved) snapshotRunCount = 0;
-  snapshotIdx = saved ? selected : -1;
+  snapshotIdx = saved ? index : -1;
   return saved;
 }
 
@@ -819,25 +816,7 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
       // mis-deduces the concept-constrained makeUniqueNoThrow<uint8_t[]> return type
       renderer.writeFramebufferRegion(saved.x, saved.y, saved.width, saved.height, snapshot.get() + saved.offset);
     }
-    // Batch-load just the highlighted word's glyphs before drawing them
-    // white-on-black. clearCache() FIRST: prewarmCache() appends into the page
-    // slots and deliberately never clears them -- that clear normally happens
-    // once per page inside endScanAndPrewarm(), which this path skips. Without
-    // it every cursor move took another ~4-5 KB slot and never gave it back,
-    // walking the heap down from ~60 KB to ~14 KB in a dozen moves and making
-    // the first lookup fail with "Low heap for N byte definition".
-    //
-    // Dropping the page's warmed glyphs costs this path nothing: it does not
-    // re-render the page, only the two word boxes and the hints.
-    auto* fcm = renderer.getFontCacheManager();
-    fcm->clearCache();
-    const Word& word = words[selected];
-    for (uint8_t f = 0; f < word.fragmentCount; f++) {
-      const Fragment& piece = fragments[word.firstFragment + f];
-      char scratch[WORD_TEXT_CAPACITY];
-      fcm->prewarmCache(drawStyleOf(piece).fontId, fragmentText(piece, scratch, sizeof(scratch)),
-                        static_cast<uint8_t>(1u << (static_cast<uint8_t>(piece.style) & 0x03)));
-    }
+    // Cursor inversion preserves the original raster; no glyph reload or rescaling.
     speculationRepaintPending = false;
     if (drawHighlightWithSnapshot()) {
       drawHints();

@@ -105,6 +105,11 @@ void FontCacheManager::resetStats() {
 bool FontCacheManager::isScanning() const { return scanMode_ == ScanMode::Scanning; }
 
 void FontCacheManager::recordText(const char* text, int fontId, EpdFontFamily::Style style) {
+  // Runtime outlines own their metric/raster caches and have no compressed
+  // groups to prewarm. Do not spend internal scan RAM or built-in page slots
+  // on them; real built-in and SD fallback registrations still scan normally.
+  const auto found = fontMap_.find(fontId);
+  if (found != fontMap_.end() && found->second.getData(style)->outline) return;
   // Bounded: this is every drawn string of a page, concatenated per (font, style), and it used
   // to grow by doubling for as long as the page had text (audit §4.4). A page's distinct glyphs
   // fit in far less than this; text past the cap is simply not prewarmed and loads on demand.
@@ -171,7 +176,13 @@ void FontCacheManager::PrewarmScope::endScanAndPrewarm() {
   std::sort(order.begin(), order.end(),
             [](const PrewarmItem& a, const PrewarmItem& b) { return a.text->size() > b.text->size(); });
 
+  uint8_t builtinSlots = 0;
   for (const auto& item : order) {
+    // Prewarming a fifth built-in face evicts the first (dominant) face. Stop at
+    // the slot budget; less-used faces retain the bounded per-glyph fallback.
+    if (manager_->sdCardFonts_.count(item.fontId) == 0 && manager_->sdCardFontAliases_.count(item.fontId) == 0 &&
+        builtinSlots++ >= FontDecompressor::MAX_PAGE_SLOTS)
+      continue;
     manager_->prewarmCache(item.fontId, item.text->c_str(), static_cast<uint8_t>(1u << item.style));
   }
 

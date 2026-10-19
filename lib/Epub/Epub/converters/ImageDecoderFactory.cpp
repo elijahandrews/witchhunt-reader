@@ -10,10 +10,12 @@
 #include "GifToFramebufferConverter.h"
 #include "JpegToFramebufferConverter.h"
 #include "PngToFramebufferConverter.h"
+#include "SvgToFramebufferConverter.h"
 
 std::unique_ptr<JpegToFramebufferConverter> ImageDecoderFactory::jpegDecoder = nullptr;
 std::unique_ptr<PngToFramebufferConverter> ImageDecoderFactory::pngDecoder = nullptr;
 std::unique_ptr<GifToFramebufferConverter> ImageDecoderFactory::gifDecoder = nullptr;
+std::unique_ptr<SvgToFramebufferConverter> ImageDecoderFactory::svgDecoder = nullptr;
 
 ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& imagePath) {
   std::string ext = imagePath;
@@ -34,6 +36,9 @@ ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& im
     format = ImageFormatDetector::Format::Png;
   } else if (GifToFramebufferConverter::supportsFormat(ext)) {
     format = ImageFormatDetector::Format::Gif;
+  } else if (SvgToFramebufferConverter::supportsFormat(ext)) {
+    if (!svgDecoder) svgDecoder.reset(new SvgToFramebufferConverter());
+    return svgDecoder.get();
   }
 
   ImageToFramebufferDecoder* decoder = getDecoder(format);
@@ -88,6 +93,9 @@ bool ImageDecoderFactory::getDimensionsFromZipEntry(const std::string& epubFileP
     return false;
   }
 
+  std::string extension =
+      normalised.substr(normalised.rfind('.') == std::string::npos ? normalised.size() : normalised.rfind('.'));
+  for (char& c : extension) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
   bool ok = false;
   if (bytesRead >= 2 && buf[0] == 0xFF && buf[1] == 0xD8) {
     ok = JpegToFramebufferConverter::getDimensionsFromBuffer(buf, bytesRead, out);
@@ -100,6 +108,8 @@ bool ImageDecoderFactory::getDimensionsFromZipEntry(const std::string& epubFileP
     ok = PngToFramebufferConverter::getDimensionsFromBuffer(buf, bytesRead, out);
   } else if (bytesRead >= 10 && buf[0] == 'G' && buf[1] == 'I' && buf[2] == 'F') {
     ok = GifToFramebufferConverter::getDimensionsFromBuffer(buf, bytesRead, out);
+  } else if (SvgToFramebufferConverter::supportsFormat(extension)) {
+    ok = SvgToFramebufferConverter::getDimensionsFromBuffer(buf, bytesRead, out);
   } else {
     uint32_t sig = 0;
     if (bytesRead >= 4) {

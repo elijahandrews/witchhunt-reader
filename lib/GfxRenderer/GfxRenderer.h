@@ -22,6 +22,13 @@ class SdCardFont;
 enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 0x0A, Black = 0x10 };
 
 class GfxRenderer {
+  struct ReaderFontPair {
+    int serif, sans;
+  };
+  ReaderFontPair readerFontPairs_[9]{};
+  uint8_t readerFontPairCount_ = 0;
+  std::map<int, float> fontPointSizes_;
+
  public:
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
 
@@ -124,7 +131,7 @@ class GfxRenderer {
   // serialises behind RenderLock — the same lock that protects the framebuffer
   // these masks are blitted into.
   //
-  // Keyed by (font, codepoint, scale, sel), NOT by EpdGlyph address: SD-card
+  // Keyed by (font, codepoint, scale, phase, sel), NOT by EpdGlyph address: SD-card
   // fonts rebuild their glyph array every page and serve overflow codepoints
   // from an 8-entry ring, so the same address means different glyphs over time.
   // The resampled pixels are a pure function of this key, which makes it both
@@ -136,9 +143,10 @@ class GfxRenderer {
     uint32_t scaleBits;    // exact float bits of the scale factor (no quantisation)
     uint16_t cp;           // codepoint; above the BMP renders uncached (see alloc)
     uint16_t offset;       // byte offset into scaledGlyphArena_
-    uint8_t sel;           // minRaw2Bit (scale < 1) or drawMask (scale >= 1)
+    uint8_t sel;           // drawMask for this coverage/AA plane
     uint8_t w;
     uint8_t h;
+    int8_t phase; // signed output-pixel sixteenths; fits existing padding
   };
   // Keeps the documented budget honest if a field is ever added.
   static_assert(sizeof(ScaledGlyphEntry) <= 16, "scaled-glyph entry grew; update the cache budget comment");
@@ -253,6 +261,7 @@ class GfxRenderer {
   void removeFont(int fontId) {
     fontMap.erase(fontId);
     fontBaseScales.erase(fontId);
+    fontPointSizes_.erase(fontId);
     invalidateScaledGlyphCache();
   }
 
@@ -614,7 +623,7 @@ class GfxRenderer {
   int rawLineHeight(int fontId) const;
   int rawFontAscenderSize(int fontId) const;
   void drawTextAtScale(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
-                       float totalScale) const;
+                       float totalScale, int16_t tracking = 0, bool ligatures = true) const;
   int getTextWidthScaled(int fontId, const char* text, EpdFontFamily::Style style, float scale) const;
   // Ink extents of `text` relative to its baseline, from glyph bitmap metrics:
   // aboveBaseline = tallest glyph ink top, belowBaseline = deepest ink below the
@@ -629,6 +638,62 @@ class GfxRenderer {
                       float scale) const;
   void drawCenteredText(int fontId, int y, const char* text, bool black = true,
                         EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+  struct TextFont {
+    int fontId;
+    float scale;
+  };
+  // At most the nine shipped reader sizes. No font data or second SD font is loaded.
+  void registerReaderFontPair(int serif, int sans, float points = 0) {
+    if (readerFontPairCount_ < 9) readerFontPairs_[readerFontPairCount_++] = {serif, sans};
+    if (points > 0) {
+      registerFontPointSize(serif, points);
+      registerFontPointSize(sans, points);
+    }
+  }
+  void registerFontPointSize(int fontId, float points) { fontPointSizes_[fontId] = points; }
+  float fontPointSize(int fontId) const {
+    // Lazy native-size IDs register their logical size in the resolver. Resolve
+    // before asking the publisher-font dispatcher to choose an outline size.
+    if (fontPointSizes_.find(fontId) == fontPointSizes_.end()) (void)findFontFamily(fontId);
+    const auto it = fontPointSizes_.find(fontId);
+    return it == fontPointSizes_.end() ? 14.0f : it->second;
+  }
+  using BookFontResolver = TextFont (*)(void*, int, uint8_t, float);
+  void setBookFontResolver(void* ctx, BookFontResolver resolver, uint32_t (*failureEpoch)(void*) = nullptr) {
+    bookFontContext_ = ctx;
+    bookFontResolver_ = resolver;
+    bookFontFailureEpoch_ = failureEpoch;
+  }
+  uint32_t bookFontFailureEpoch() const { return bookFontFailureEpoch_ ? bookFontFailureEpoch_(bookFontContext_) : 0; }
+  void clearBookFontResolver(void* ctx) {
+    if (bookFontContext_ == ctx) {
+      bookFontContext_ = nullptr;
+      bookFontResolver_ = nullptr;
+      bookFontFailureEpoch_ = nullptr;
+    }
+  }
+  TextFont resolveGenericTextFont(int fontId, uint8_t genericFamily) const;
+  TextFont resolveTextFont(int fontId, uint8_t family, float textScale = 1.0f) const;
+
+ private:
+  void* bookFontContext_ = nullptr;
+  BookFontResolver bookFontResolver_ = nullptr;
+  uint32_t (*bookFontFailureEpoch_)(void*) = nullptr;
+
+ public:
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                            bool ligatures = true) const;
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                         bool ligatures = true) const;
+  // Horizontal extent of an inclusive UTF-8 character interval, using the same glyph
+  // walk as drawing (including kerning, ligatures, small caps, scale and tracking).
+  struct TextRange {
+    int x = 0, left = 0, right = 0;
+  };
+  TextRange getTextRangeSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                               uint16_t first, uint16_t last, bool ligatures = true) const;
+  void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
+                      int16_t tracking, bool ligatures = true) const;
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
@@ -701,6 +766,19 @@ class GfxRenderer {
   // Armed by beginGrayCapture(); mutable because the whole render path is const.
   mutable uint8_t* grayCapLsb_ = nullptr;
   mutable uint8_t* grayCapMsb_ = nullptr;
+  bool grayOpaqueErase_ = false;
+  bool isErasingOpaqueGlyphs() const { return grayOpaqueErase_; }
+  // Complete a staged plane with opaque black ink: glyphs, underlines, rules,
+  // and borders remove gray fringes regardless of draw order or run boundaries.
+  // White backgrounds and images do not repaint this finalization pass.
+  // Uses the current plane as scratch: no full-page allocation on C3.
+  template <typename RenderFn>
+  void eraseOpaqueGlyphs(RenderFn renderFn) {
+    const bool previous = grayOpaqueErase_;
+    grayOpaqueErase_ = true;
+    renderFn();
+    grayOpaqueErase_ = previous;
+  }
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
   // Same, from a caller-owned panel-native plane rather than the framebuffer —
@@ -783,6 +861,9 @@ class GfxRenderer {
   // Deferred form: see HalDisplay::triggerGrayscaleFrame. Caller owes completeDisplay().
   void triggerGrayscaleFrame(HalDisplay::RefreshMode mode) const;
 
+  // Staged glyph AA composes black ink on the B/W page; callbacks must draw
+  // text with black=true and omit white background fills. White text uses
+  // ordinary BW or an absolute-plane pass.
   // Render both grayscale planes sequentially into the BW framebuffer, streaming
   // each plane to the controller immediately after rendering it. No extra allocation
   // needed — the BW framebuffer is the scratch pad for both passes.
@@ -794,7 +875,7 @@ class GfxRenderer {
   // the driver is told there is no baseline and takes a clean sync on its next push; the
   // write buffer then keeps the last plane.
   //
-  // renderFn is called twice (LSB, MSB). The RenderMode argument tells it which
+  // renderFn runs a normal and opaque-ink finalization pass per plane. The argument tells it which
   // pass is running. The caller sets setFastGrayscaleLut() before calling.
   //
   // Returns wall-clock timings for each of the three phases.
@@ -808,6 +889,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_LSB);
     renderFn(GRAYSCALE_LSB);
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_LSB); });
     if (shouldAbort()) {
       return abandonGrayscalePass(millis() - t0);
     }
@@ -816,6 +899,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_MSB);
     renderFn(GRAYSCALE_MSB);
+    if (shouldAbort()) return abandonGrayscalePass(millis() - t0);
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_MSB); });
     // The MSB render is as long as the LSB one and can bail just as late, so it needs its own
     // gate: without it a plane abandoned part-way was still copied and flushed, putting a
     // half-drawn overlay on screen (seen on X3 as a COMPLETED pass with planes=545ms against a
@@ -864,6 +949,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_LSB);
     renderFn(GRAYSCALE_LSB);
+    const bool lsbAborted = shouldAbort();
+    if (!lsbAborted) eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_LSB); });
     const unsigned long tLsbDone = millis();
 
     // Waveform still running: sleep out the remainder (power hooks active).
@@ -874,7 +961,7 @@ class GfxRenderer {
     // fully on screen, and the LSB render just spent was paid for out of the waveform wait
     // rather than out of the page-turn budget — so dropping the pass here reclaims the entire
     // net cost of the AA and forfeits nothing that was actually charged to the user.
-    if (shouldAbort()) {
+    if (lsbAborted || shouldAbort()) {
       return abandonGrayscalePass(tLsbDone - t0);
     }
 
@@ -882,6 +969,8 @@ class GfxRenderer {
     clearScreen(0x00);
     setRenderMode(GRAYSCALE_MSB);
     renderFn(GRAYSCALE_MSB);
+    if (shouldAbort()) return abandonGrayscalePass((tLsbDone - t0) + (millis() - tWaveDone));
+    eraseOpaqueGlyphs([&] { renderFn(GRAYSCALE_MSB); });
     // Second gate, same reason as in the sequential pass: an MSB render that bailed part-way
     // must never be copied or flushed. Checked before the copy.
     if (shouldAbort()) {
@@ -987,8 +1076,8 @@ class GfxRenderer {
   // find returns the cached mask for an exact key match, alloc reserves a zeroed
   // mask of w*h bits for the caller to fill, or nullptr when the glyph is too
   // large to cache or the arena could not be allocated.
-  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h) const;
-  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h) const;
+  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
+  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
 
   // Drop every cached mask, keeping the arena. MUST run whenever a font is added
   // or removed: entries are keyed by EpdFontData address, which a later font

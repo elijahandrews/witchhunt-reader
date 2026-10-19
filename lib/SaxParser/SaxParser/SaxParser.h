@@ -40,11 +40,11 @@ class SaxParser {
   // close (a hard parse error, book fails to open). Strict-XML parsers
   // (OPF/NCX/container/page-map/OPDS) must leave this off.
   bool init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxCharCb charCb = nullptr,
-            SaxDefaultCb defaultCb = nullptr, bool htmlVoidTagRepair = false, Profile profile = Profile::Full);
+            SaxDefaultCb defaultCb = nullptr, bool htmlVoidTagRepair = false, Profile profile = Profile::Full,
+            bool trackSourceOffsets = false);
 
-  // Bytes of parser state init() allocates for `profile` (Full ~10 KB: attribute table, name
-  // stack, buffers; Lean the same without the attribute table).
-  static size_t stateBytes(Profile profile = Profile::Full);
+  // Full retains attributes, Lean omits them. Raw decoded-byte origins are optional in either profile.
+  static size_t stateBytes(Profile profile = Profile::Full, bool trackSourceOffsets = false);
   // Storage for the NEXT init() to place its state in instead of the heap -- a bump allocation
   // from a build arena, for a section build that must keep the heap free. Ignored when smaller
   // than stateBytes() of the profile init() is given. Not owned: reset() forgets it and frees
@@ -66,6 +66,15 @@ class SaxParser {
   // Running byte offset of the parse cursor — replacement for XML_GetCurrentByteIndex.
   // Valid inside any callback fired from feed().
   uint32_t byteOffset() const;
+
+  // Optional decoded-text provenance: zero-based byte origin in the unmodified input stream.
+  // Each byte of an expanded entity points at its '&'. Valid only inside char/default callbacks;
+  // returns UINT32_MAX when disabled or out of range. Named-entity callback expansions may query
+  // any non-negative byte index: their entire expansion has the same source origin.
+  uint32_t characterSourceOffset(size_t index) const;
+  // Raw input position of the current token, unaffected by HTML repairs/entity routing.
+  // Unlike byteOffset(), this counts only bytes actually supplied to feed().
+  uint32_t sourceByteOffset() const;
 
   // Diagnostic: bitmask of fixed-capacity limits that were hit (and therefore
   // silently truncated) during parsing, plus other silent repairs the parser

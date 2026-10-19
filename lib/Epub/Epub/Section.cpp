@@ -1,6 +1,7 @@
 #include "Section.h"
 
 #include <FsHelpers.h>
+#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <HeapFit.h>
 #include <Logging.h>
@@ -31,51 +32,29 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 86;  // v86: a <span id> is in the anchor map
-                                              // v85: an <img> whose href has no extension is
-                                              // laid out as the image its bytes are; v84 pages
-                                              // hold its alt text
-                                              // v84: text declared at font-size 2px or less (a
-                                              // watermark span) is dropped; v83 pages show it
-                                              // v83: a TTF family kerns and draws fi/fl ligatures
-                                              // v82: a TTF family draws every size with a face of its own
-                                              // v81: a paragraph over 96 words gets its top margin and padding
-                                              // v79: a <span> styled display:block is a block,
-                                              // and every block in a heading keeps its centring
-                                              // and size (#388); v78 pages run them together
-                                              // v78: a span indent (poem line shape) gives way
-                                              // before its line wraps; v77 pages of such poems
-                                              // carry the wrapped lines
-                                              // v77: the status byte records a heap-degraded
-                                              // image build (kStatusImageHeaderDegraded); a v76
-                                              // cache may be image-less without saying so
-                                              // v76: a percentage wrapper (<div
-                                              // style="width:60%">) no longer shrinks a block
-                                              // image below min(native, column), so image
-                                              // sizes baked into v75 pages are stale
-                                              // v75: the reader ladder gained rungs above
-                                              // 18 pt (20/22/24/26), so a heading snaps to a
-                                              // different face and residual than it did under
-                                              // v74 and breaks across lines differently. The
-                                              // ladder is derived from the body fontId and so is
-                                              // deliberately absent from the property hash; the
-                                              // hash therefore still MATCHES, and this version
-                                              // is the only thing that rejects a v74 cache
-                                              // v74: the HTML `hidden` attribute now
-                                              // suppresses an element, so a v73 cache still
-                                              // holds the laid-out text it should have hidden
-                                              // v73: an internal link honours CSS
-                                              // vertical-align, so footnote references marked
-                                              // `a { vertical-align: super }` are raised and
-                                              // shrunk. Word size/position are baked into layout
-                                              // v72: `!important` is now stripped from every
-                                              // CSS declaration value, so margins, text-align and
-                                              // text-indent that carry the marker take effect. Those
-                                              // feed layout, so a v71 cache holds the old geometry
-                                              // v71: the packed word style byte now carries a
-                                              // per-word "continues the previous word" bit, so the
-                                              // dictionary overlay can select a bionic-split or
-                                              // hyphenated word as one word. A v70 cache reads the
+constexpr uint8_t SECTION_FILE_VERSION = 92;  // v92: fractional glyph ink bounds; v90: combined visible/raw source LUT,
+                                              // upstream token boundaries and publisher layout v78: a span indent (poem
+                                              // line shape) gives way before its line wraps; v77 pages of such poems
+                                              // carry the wrapped lines v77: the status byte records a heap-degraded
+                                              // image build (kStatusImageHeaderDegraded); a v76 cache may be image-less
+                                              // without saying so v76: a percentage wrapper (<div style="width:60%">)
+                                              // no longer shrinks a block image below min(native, column), so image
+                                              // sizes baked into v75 pages are stale v75: the reader ladder gained
+                                              // rungs above 18 pt (20/22/24/26), so a heading snaps to a different face
+                                              // and residual than it did under v74 and breaks across lines differently.
+                                              // The ladder is derived from the body fontId and so is deliberately
+                                              // absent from the property hash; the hash therefore still MATCHES, and
+                                              // this version is the only thing that rejects a v74 cache v74: the HTML
+                                              // `hidden` attribute now suppresses an element, so a v73 cache still
+                                              // holds the laid-out text it should have hidden v73: an internal link
+                                              // honours CSS vertical-align, so footnote references marked `a {
+                                              // vertical-align: super }` are raised and shrunk. Word size/position are
+                                              // baked into layout v72: `!important` is now stripped from every CSS
+                                              // declaration value, so margins, text-align and text-indent that carry
+                                              // the marker take effect. Those feed layout, so a v71 cache holds the old
+                                              // geometry v71: the packed word style byte now carries a per-word
+                                              // "continues the previous word" bit, so the dictionary overlay can select
+                                              // a bionic-split or hyphenated word as one word. A v70 cache reads the
                                               // bit as clear everywhere, i.e. keeps the old split
                                               // selection, so it has to be rebuilt
                                               // v70: a wrapper's horizontal inset reaches every
@@ -141,15 +120,30 @@ constexpr uint8_t kStatusCssDegraded = 1 << 3;
 //   heap condition: deterministic, so nothing rebuilds on it (audit R4).
 constexpr uint8_t kStatusSimplified = 1 << 4;
 
-// On-disk paragraph LUT entry: u32 visibleTextOffset + u16 paragraphIndex + u16 listItemIndex.
+// On-disk 22B entry: u32 visibleTextOffset + u16 paragraphIndex + u16 listItemIndex,
+// followed by raw SourceAnchor (u32+u16) and sourceMin/sourceEnd (two u32).
 // visibleTextOffset is the number of visible bytes (VisibleText.h) of the chapter's source text
 // before the page's first element: KOReader sync pushes it and resolves pulled positions to a
 // page with it. paragraphIndex and listItemIndex let <p>- and <li>-anchored XPaths snap to a
 // page when a resolver had no offset.
-constexpr uint32_t PARAGRAPH_LUT_ENTRY_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint16_t);
+constexpr uint32_t SOURCE_LUT_OFFSET = sizeof(uint32_t) + 2 * sizeof(uint16_t);
+constexpr uint32_t PARAGRAPH_LUT_ENTRY_SIZE = SOURCE_LUT_OFFSET + 3 * sizeof(uint32_t) + sizeof(uint16_t);
 inline uint32_t paragraphLutEntryOffset(uint32_t lutStart, uint16_t page) {
   return lutStart + page * PARAGRAPH_LUT_ENTRY_SIZE;
 }
+
+template <typename T>
+bool readChecked(FsFile& f, T& value) {
+  return f.read(&value, sizeof(value)) == static_cast<int>(sizeof(value));
+}
+
+bool readSourceEntry(FsFile& f, uint32_t offset, SourceAnchor& anchor, uint32_t& first, uint32_t& end) {
+  return f.seek(offset + SOURCE_LUT_OFFSET) && readChecked(f, anchor.sourceOffset) &&
+         readChecked(f, anchor.characterOffset) && readChecked(f, first) && readChecked(f, end) &&
+         ((first == UINT32_MAX && !anchor.valid() && end == 0) ||
+          (first < end && anchor.sourceOffset >= first && anchor.sourceOffset < end));
+}
+
 }  // namespace
 
 #include <HalSystem.h>  // feedWatchdog()
@@ -330,12 +324,18 @@ uint32_t Section::calculatePropertyHash(const BuildParams& p) {
   append(&p.hyphenationEnabled, sizeof(p.hyphenationEnabled));
   append(&p.fontSizeNormalization, sizeof(p.fontSizeNormalization));
   append(&p.embeddedStyle, sizeof(p.embeddedStyle));
+  append(&p.publisherFontHash, sizeof(p.publisherFontHash));
   append(&p.bionicReadingEnabled, sizeof(p.bionicReadingEnabled));
   append(&p.inlineFootnotePreviews, sizeof(p.inlineFootnotePreviews));
   if (p.inlineFootnotePreviews) {
     append(&INLINE_FOOTNOTE_PREVIEW_LAYOUT_VERSION, sizeof(INLINE_FOOTNOTE_PREVIEW_LAYOUT_VERSION));
   }
   append(&p.imageRendering, sizeof(p.imageRendering));
+  // Keep the existing cache key when off (or CSS is disabled). Only the override
+  // needs a new pagination variant; old/default layouts remain reusable.
+  if (p.embeddedStyle && p.ignorePublisherPageMargins) {
+    append(&p.ignorePublisherPageMargins, sizeof(p.ignorePublisherPageMargins));
+  }
 
   return fnv1a(buffer, offset);
 }
@@ -593,6 +593,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
 }
 
 bool Section::loadSectionFile(const BuildParams& p) {
+  if (sourceLookupHash_ != calculatePropertyHash(p)) sourceLookupPage_.reset();
   truncatedCache = false;
   imageHeaderDegraded_ = false;
   tableRowDegraded_ = false;
@@ -773,6 +774,7 @@ struct Section::BuildState {
   BuildParams params;
   std::function<void(int)> progressFn;
   uint32_t propertyHash = 0;
+  uint32_t fontFailureEpoch = 0;
   std::string localPath;
   std::string contentBase;
   std::string imageBasePath;
@@ -1035,6 +1037,7 @@ bool Section::htmlCacheReusable(const BuildState& st) const {
 
 Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
   const BuildParams& p = st.params;
+  st.fontFailureEpoch = renderer.bookFontFailureEpoch();
   st.propertyHash = calculatePropertyHash(p);
   filePath = getSectionFilePath(st.propertyHash);
 
@@ -1157,6 +1160,8 @@ Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
       },
       p.embeddedStyle, st.contentBase, st.imageBasePath, p.imageRendering, std::move(tocAnchors), st.progressFn,
       st.cssParser, epub->getImageManifest());
+  st.visitor->setIgnorePublisherPageMargins(p.ignorePublisherPageMargins);
+  st.visitor->loadDocumentStyles(spineIndex);
   // Load printed-page list entries (NCX <pageList> or EPUB 3 nav page-list) for this
   // chapter's href, if any, straight into the parser's packed store (no intermediate vector of
   // string pairs: memory audit 2026-09, build inventory). Format: u16 count, then per entry:
@@ -1438,6 +1443,7 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
     }
     st.visitorReady = true;
     finishInlineFootnotePreviewResolve(st);
+    st.visitor->setSourceLookupTarget(sourceLookupTarget_);
     if (!st.visitor->setup(st.inflatedSize)) {
       LOG_ERR("SCT", "Failed to set up chapter parser");
       file.close();
@@ -1577,6 +1583,10 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
   if (st.visitor->capOverflowFlags() != 0) {
     simplified_ = true;
   }
+  // A transient publisher-font allocation failure changes line metrics just as a
+  // skipped CSS rule does. Keep such pagination out of the durable page-count index
+  // and use the existing bounded foreground rebuild policy.
+  cssLowHeapDegraded_ = renderer.bookFontFailureEpoch() != st.fontFailureEpoch || st.visitor->documentStylesDegraded();
   if (st.cssParser) {
     st.cssParser->logResolveStats(st.localPath.c_str());
     // Latch before Finalize clears the parser (which resets its stats): lowHeapSkips
@@ -1589,7 +1599,7 @@ Section::BuildPhaseResult Section::runBuildParse(BuildState& st, const uint32_t 
     // 14-page background build discarded after a single 960-byte dip below the lean floor,
     // forcing the released-path foreground rebuild whose 52 KB framebuffer realloc is the
     // failure that ends the session.
-    cssLowHeapDegraded_ = !st.cssParser->isArenaResident() && st.cssParser->getResolveStats().lowHeapSkips > 0;
+    cssLowHeapDegraded_ |= !st.cssParser->isArenaResident() && st.cssParser->getResolveStats().lowHeapSkips > 0;
   }
   st.parseMs += millis() - sliceStart;
   if (st.arena) st.laneParse = static_cast<uint32_t>(st.arena->laneHighWater());
@@ -1718,7 +1728,7 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     file.write(reinterpret_cast<const uint8_t*>(label), len);
   });
 
-  // Write per-page paragraph LUT: count + array of {visibleTextOffset(u32), paragraphIndex(u16), listItemIndex(u16)}.
+  // Visible source bytes and paragraph/list coordinates, then raw XHTML anchor/range (22 bytes).
   const uint32_t paragraphLutOffset = file.position();
   const auto& paragraphLut = visitor.getParagraphLutPerPage();
   if (paragraphLut.size() != static_cast<size_t>(pageCount)) {
@@ -1729,10 +1739,16 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     return BuildPhaseResult::Failed;
   }
   serialization::writePod(file, static_cast<uint16_t>(paragraphLut.size()));
-  for (const auto& entry : paragraphLut) {
+  for (size_t page = 0; page < paragraphLut.size(); ++page) {
+    const auto& entry = paragraphLut[page];
     serialization::writePod(file, entry.visibleTextOffset);
     serialization::writePod(file, entry.paragraphIndex);
     serialization::writePod(file, entry.listItemIndex);
+    serialization::writePod(file, entry.sourceOffset);
+    serialization::writePod(file, entry.sourceCharacterOffset);
+    serialization::writePod(file, entry.sourceMin);
+    serialization::writePod(file, entry.sourceEnd);
+    if (entry.sourceProbeMatched && !sourceLookupPage_) sourceLookupPage_ = static_cast<uint16_t>(page);
   }
 
   // Patch header with final parseComplete/pageCount and offsets.
@@ -1895,6 +1911,8 @@ bool Section::heapAllowsEmbeddedStyle(const size_t cssRuleCount, const bool aren
 
 bool Section::startBuild(const BuildParams& params, const std::function<void(int)>& progressFn,
                          const uint32_t requestedHash) {
+  sourceLookupPage_.reset();
+  sourceLookupHash_ = calculatePropertyHash(params);
   BuildParams p = params;
   const CssParser* css = epub->getCssParser();
   // Same predicate runBuildSetup() uses to decide setIndexArena(): an external scratch region
@@ -2163,7 +2181,10 @@ bool Section::activeBuildCssDegraded() const {
   // cssLowHeapDegraded_ latch in runBuildParse), so its skips must not abort the build. This
   // is the mid-parse half of the same rule: Background-B polls this every slice and discards
   // the whole build the first time it returns true.
-  if (!buildState_ || !buildState_->cssParser) return false;
+  if (!buildState_) return false;
+  if (renderer.bookFontFailureEpoch() != buildState_->fontFailureEpoch) return true;
+  if (buildState_->visitor && buildState_->visitor->documentStylesDegraded()) return true;
+  if (!buildState_->cssParser) return false;
   if (buildState_->cssParser->isArenaResident()) return false;
   return buildState_->cssParser->getResolveStats().lowHeapSkips > 0;
 }
@@ -2585,17 +2606,18 @@ bool Section::readParagraphLutHeader(FsFile& outFile, uint16_t& outCount, uint32
 
   const uint32_t fileSize = outFile.size();
 
-  outFile.seek(header::kParagraphLut);
-  uint32_t paragraphLutOffset;
-  serialization::readPod(outFile, paragraphLutOffset);
+  uint32_t paragraphLutOffset = 0;
+  if (!outFile.seek(header::kParagraphLut) || !readChecked(outFile, paragraphLutOffset)) {
+    outFile.close();
+    return false;
+  }
   if (fileSize < sizeof(uint16_t) || paragraphLutOffset == 0 || paragraphLutOffset > fileSize - sizeof(uint16_t)) {
     outFile.close();
     return false;
   }
 
-  outFile.seek(paragraphLutOffset);
-  serialization::readPod(outFile, outCount);
-  if (outCount == 0) {
+  if (!outFile.seek(paragraphLutOffset) || !readChecked(outFile, outCount) || outCount == 0 ||
+      outCount > Page::MAX_PAGES_PER_SECTION || outCount != pageCount) {
     outFile.close();
     return false;
   }
@@ -2610,6 +2632,66 @@ bool Section::readParagraphLutHeader(FsFile& outFile, uint16_t& outCount, uint32
   outLutStart = paragraphLutOffset + sizeof(uint16_t);
 
   return true;
+}
+
+std::optional<uint16_t> Section::sourceLookupPage() const {
+  if (sourceLookupPage_) return sourceLookupPage_;
+  if (buildState_ && buildState_->visitor) {
+    const auto& pages = buildState_->visitor->getParagraphLutPerPage();
+    for (size_t i = 0; i < pages.size(); ++i)
+      if (pages[i].sourceProbeMatched) return static_cast<uint16_t>(i);
+  }
+  return std::nullopt;
+}
+
+std::optional<SourceAnchor> Section::getSourceAnchorForPage(uint16_t page) const {
+  if (buildState_ && buildState_->visitor) {
+    const auto& pages = buildState_->visitor->getParagraphLutPerPage();
+    if (page < pages.size() && pages[page].sourceOffset != UINT32_MAX)
+      return SourceAnchor{pages[page].sourceOffset, pages[page].sourceCharacterOffset};
+    return std::nullopt;
+  }
+  FsFile f;
+  uint16_t count;
+  uint32_t start;
+  if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
+  if (page >= count) {
+    f.close();
+    return std::nullopt;
+  }
+  SourceAnchor anchor;
+  uint32_t first = UINT32_MAX, end = 0;
+  const bool ok = readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end);
+  f.close();
+  return ok && anchor.valid() ? std::optional<SourceAnchor>(anchor) : std::nullopt;
+}
+
+std::optional<uint16_t> Section::getPageForSourceOffset(SourceAnchor target) const {
+  if (!target.valid()) return std::nullopt;
+  std::optional<uint16_t> match;
+  const auto accept = [&](uint16_t page, uint32_t first, uint32_t end) {
+    if (first == UINT32_MAX || target.sourceOffset < first || target.sourceOffset >= end) return true;
+    if (match) return false;  // never guess between overlapping source intervals
+    match = page;
+    return true;
+  };
+  // Future pages can overlap an interval already emitted. Only the exact live
+  // probe is safe before the full chapter has been laid out.
+  if (buildState_) return std::nullopt;
+  FsFile f;
+  uint16_t count;
+  uint32_t start;
+  if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
+  for (uint16_t page = 0; page < count; ++page) {
+    SourceAnchor anchor;
+    uint32_t first = UINT32_MAX, end = 0;
+    if (!readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end) || !accept(page, first, end)) {
+      f.close();
+      return std::nullopt;
+    }
+  }
+  f.close();
+  return match;
 }
 
 std::optional<uint16_t> Section::getPageForParagraphIndex(const uint16_t pIndex) const {

@@ -198,14 +198,18 @@ end of the previous chapter (#268's family).
 3. **Paragraph LUT**, within the same spine. Let `K(i)` be the section cache's paragraph index at
    the end of page `i`. A remote `p[K]` opens on the local page `p` exactly when
    `K(p-1) < K <= K(p)`: Synchronized. `K <= K(p-1)`: the remote is behind. Otherwise it is ahead.
-   Exact for books whose paragraphs are children of `<body>`; the handoff into the sync screen
-   carries `K(p)` and `K(p-1)` (`paragraphIndex`, `paragraphIndexBefore`) and the page's offset
-   window (`visibleOffsetAtPage`, `visibleOffsetAtNextPage`), so no section cache is needed there.
-4. **Percentages**, with a 0.001 tolerance for rounding. An estimate, bounded to one chapter by
-   step 1 when the record names a spine.
-5. **Unknown**: neither percentage is usable. The sync screen asks, in smart mode too, and the
-   wake pull hands off to it. The auto-push on close uploads: it skips only when the server is
-   ahead or already at this page.
+   This exact rule requires a body-child paragraph element anchor (`p[K]` or `p[K].0`).
+   A descendant text or element anchor may lie many pages into that paragraph, even at its own
+   offset zero. For those anchors only `K < K(p-1)` proves the remote is behind and
+   `K > K(p)` proves it is ahead; overlapping paragraph intervals are Unknown. The handoff
+   carries `K(p)` and `K(p-1)` (`paragraphIndex`, `paragraphIndexBefore`) so no section cache is
+   needed there.
+4. **Percentages**, with a 0.001 tolerance for rounding. An estimate, now bounded to one chapter
+   by step 1.
+5. **Unknown**: neither percentage is usable, or an interior paragraph anchor overlaps the
+   local page. The sync screen asks and wake sync hands off to that screen. Automatic push
+   preserves an existing server record unless local progress is demonstrably ahead; it can
+   still create a missing record.
 
 The remote side of a comparison is `ProgressMapper::peekRemote()` (string-only) wherever the
 chapter has not been inflated yet: the wake pull and the auto-push preflight decide without an
@@ -261,3 +265,9 @@ a reopened book still pushes on sleep.
 - Parse only one spine item on demand.
 - Keep memory usage bounded and transient.
 - Do not attempt pixel-perfect page parity with KOReader.
+
+### Local reflow anchors and transformed text
+
+The page cache also records a raw XHTML `SourceAnchor` for local reflow and reading-position restoration. Its character offset counts normalized/transformed glyph text and excludes soft hyphens. This is separate from the authored visible-byte coordinate used by sync; neither is a byte-distance approximation of the other.
+
+Case changes and NFC composition may change byte lengths. Layout carries a sparse transient origin map only for exceptional tokens, preserving its slices through bionic segmentation, line splitting and retry. Synthetic generated text retains its insertion position. An invisible soft-hyphen token can start a sync page before the first rendered character named by its local anchor; both positions intentionally describe their own coordinate system. The maps are bounded, included in table row budgeting and discarded after layout. Allocation refusal aborts the incomplete build rather than persisting guessed offsets.

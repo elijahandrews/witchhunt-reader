@@ -18,8 +18,10 @@
 #include <Arduino.h>
 #include <EpdFontFamily.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -27,6 +29,36 @@ enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 
 
 class GfxRenderer {
  public:
+  struct TextFont {
+    int fontId;
+    float scale;
+  };
+  uint32_t bookFontFailureEpoch() const { return 0; }
+  std::function<uint8_t(uint8_t)> familyFallback;
+  TextFont resolveTextFont(int fontId, uint8_t family, float = 1.0f) const {
+    if (family >= 5 && familyFallback) family = familyFallback(family);
+    return {family == 2 ? -2000000 : (family == 1 ? -1000000 : (family == 4 ? -3000000 : fontId)), 1.0f};
+  }
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                            bool = true) const {
+    int count = 0;
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
+      if ((*p & 0xc0) != 0x80) ++count;
+    const float familyScale = fontId == -2000000 ? 1.2f : 1.0f;
+    const int width =
+        text[0] == ' ' && text[1] == 0 ? getSpaceWidth(fontId, style) : getTextAdvanceX(fontId, text, style);
+    return std::max(
+        0, static_cast<int>(std::lround(width * scale * familyScale + std::max(0, count - 1) * tracking / 16.0f)));
+  }
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                         bool = true) const {
+    return getTextAdvanceXSpaced(fontId, text, style, scale, tracking);
+  }
+  void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
+                      int16_t, bool = true) const {
+    drawTextScaled(fontId, x, y, text, black, style, scale);
+  }
+
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
   enum Orientation { Portrait, LandscapeClockwise, PortraitInverted, LandscapeCounterClockwise };
 
@@ -42,14 +74,21 @@ class GfxRenderer {
   int getDisplayHeight() const { return 800; }
   uint16_t getDisplayWidthBytes() const { return 60; }
   Orientation getOrientation() const { return Portrait; }
-  RenderMode getRenderMode() const { return BW; }
+  RenderMode testRenderMode = BW;
+  bool opaqueReplay = false;
+  std::function<void(int, int, bool)> pixelSink;
+  RenderMode getRenderMode() const { return testRenderMode; }
+  void setRenderMode(RenderMode mode) { testRenderMode = mode; }
+  bool isErasingOpaqueGlyphs() const { return opaqueReplay; }
   uint8_t* getWriteTarget() const { return frameBuffer_; }
   int getWriteOriginY() const { return 0; }
   int getWriteRows() const { return 800; }
   void clearScreen(uint8_t = 0xFF) const {}
 
   // --- Drawing (no-ops: the harness never inspects pixels) ---
-  void drawPixel(int, int, bool = true) const {}
+  void drawPixel(int x, int y, bool state = true) const {
+    if (pixelSink) pixelSink(x, y, state);
+  }
   void drawLine(int, int, int, int, bool = true) const {}
   void drawLine(int, int, int, int, int, bool) const {}
   void drawRect(int, int, int, int, bool = true) const {}
@@ -71,20 +110,22 @@ class GfxRenderer {
   int getTextWidthScaled(int fontId, const char* text, EpdFontFamily::Style style, float scale) const {
     return static_cast<int>(getTextWidth(fontId, text, style) * scale);
   }
-  int getTextAdvanceX(int /*fontId*/, const char* text, EpdFontFamily::Style style) const {
+  int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style style) const {
     int w = 0;
     for (const uint8_t* p = reinterpret_cast<const uint8_t*>(text); *p;) {
       uint32_t cp;
       p = decodeUtf8(p, cp);
-      w += advance(cp, style);
+      w += fontId == -3000000 ? 9 : advance(cp, style);
     }
     return w;
   }
-  int getSpaceWidth(int, EpdFontFamily::Style = EpdFontFamily::REGULAR) const { return 6; }
-  int getSpaceAdvance(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 6; }
+  int getSpaceWidth(int fontId, EpdFontFamily::Style = EpdFontFamily::REGULAR) const {
+    return fontId == -3000000 ? 9 : 6;
+  }
+  int getSpaceAdvance(int fontId, uint32_t, uint32_t, EpdFontFamily::Style) const { return fontId == -3000000 ? 9 : 6; }
   int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return 0; }
-  int getLineHeight(int) const { return 24; }
-  int getLineHeightScaled(int, float scale) const { return static_cast<int>(24 * scale); }
+  int getLineHeight(int fontId) const { return fontId == -2000000 ? 30 : 24; }
+  int getLineHeightScaled(int fontId, float scale) const { return static_cast<int>(getLineHeight(fontId) * scale); }
   // Test seam for the image-header heap recovery. 0 (the default) models a host build with
   // no cache manager at all, so callers are told nothing was released. When set, this models
   // the real thing — dropping the SD-font glyph caches frees heap — by reporting success and

@@ -38,8 +38,10 @@
 
 // ASan interposes malloc itself and calls it while initialising, before thread_local storage
 // exists, so a second interposer here segfaults the binary before main() — and ctest's test
-// discovery with it. Under ASan the hooks are compiled out and only the footprint bounds skip.
-#if defined(__SANITIZE_ADDRESS__)
+// discovery with it. On macOS libc++ allocations bypass these ELF-style interposers,
+// producing a misleading zero. Disable only footprint instrumentation on those hosts;
+// all cache correctness tests still run.
+#if defined(__SANITIZE_ADDRESS__) || defined(__APPLE__)
 #define CSS_TEST_HEAP_HOOKS 0
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
@@ -79,8 +81,10 @@ static void* rawAlloc(size_t bytes) {
   if (!realMalloc) {
     realMalloc = reinterpret_cast<malloc_fn_t>(dlsym(RTLD_NEXT, "malloc"));
     if (!realMalloc) {
+#if !defined(__APPLE__)
       extern void* __libc_malloc(size_t) __attribute__((weak));
       realMalloc = __libc_malloc;
+#endif
     }
   }
   return realMalloc ? realMalloc(bytes) : nullptr;
@@ -92,8 +96,10 @@ static void rawFree(void* p) {
   if (!realFree) {
     realFree = reinterpret_cast<free_fn_t>(dlsym(RTLD_NEXT, "free"));
     if (!realFree) {
+#if !defined(__APPLE__)
       extern void __libc_free(void*) __attribute__((weak));
       realFree = __libc_free;
+#endif
     }
   }
   if (realFree) realFree(p);
@@ -483,7 +489,8 @@ bool stylesEqual(const CssStyle& a, const CssStyle& b) {
   return a.textAlign == b.textAlign && a.fontStyle == b.fontStyle && a.fontWeight == b.fontWeight &&
          a.textDecoration == b.textDecoration && a.display == b.display && a.verticalAlign == b.verticalAlign &&
          a.listStyleNone == b.listStyleNone && a.pageBreakBefore == b.pageBreakBefore &&
-         a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.smallCaps == b.smallCaps &&
+         a.pageBreakAfter == b.pageBreakAfter && a.cssFloat == b.cssFloat && a.whiteSpace == b.whiteSpace &&
+         a.smallCaps == b.smallCaps && a.textTransform == b.textTransform &&
          a.lineHeightMultiplier == b.lineHeightMultiplier && a.fontSizeMultiplier == b.fontSizeMultiplier &&
          len(a.textIndent) == len(b.textIndent) && len(a.marginTop) == len(b.marginTop) &&
          len(a.marginBottom) == len(b.marginBottom) && len(a.marginLeft) == len(b.marginLeft) &&
@@ -744,7 +751,7 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   const std::string css =
       ".a { text-align: center; font-weight: bold; font-style: italic; text-decoration: underline; "
       "margin: 2em; padding-left: 5px; padding-right: 3px; text-indent: 1.5em; line-height: 1.6; "
-      "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; "
+      "font-size: 120%; vertical-align: super; float: left; font-variant: small-caps; text-transform: uppercase; "
       "list-style: none; page-break-before: always; page-break-after: always; }\n"
       ".b { margin-top: 3px; text-align: right; }\n"
       ".c { display: none; }\n"
@@ -768,6 +775,10 @@ TEST(CssParserArena, ResidentPreservesAllStyleFields) {
   parser.clear();
   ASSERT_TRUE(parser.loadFromCache());
   const std::vector<CssStyle> heapStyles = resolveAll(parser);
+  ASSERT_TRUE(heapStyles[0].hasTextTransform());
+  EXPECT_EQ(heapStyles[0].textTransform, CssTextTransform::Uppercase);
+  ASSERT_TRUE(heapStyles[0].hasLineHeight());
+  EXPECT_NEAR(heapStyles[0].lineHeightMultiplier, 1.6f / 1.5f, 0.00001f);
   // Both paths agreeing proves nothing if the disk cache already lost the value.
   EXPECT_EQ(static_cast<int>(heapStyles[5].display), static_cast<int>(CssDisplay::Inline))
       << "display:inline did not survive the disk cache";
@@ -1013,4 +1024,349 @@ TEST(CssParserBackground, ABookWithoutPicturesLeavesNoSideFile) {
   removePath(cacheDir);
   std::error_code rmEc;
   std::filesystem::remove(cssPath, rmEc);
+}
+
+TEST(CssParserTypography, FamilyAndTrackingSurviveColdDiskAndResidentArena) {
+  const std::string css =
+      ".sans { font-family: 'Unknown', sans-serif; letter-spacing: .1em }\n.reset { font-family: inherit; "
+      "letter-spacing: unset }";
+  std::string cssPath;
+  ASSERT_TRUE(writeTempCssFile(std::vector<uint8_t>(css.begin(), css.end()), cssPath));
+  const std::string cacheDir = makeTempDir();
+  {
+    CssParser parser(cacheDir);
+    ASSERT_TRUE(compileCache(parser, cssPath));
+  }
+  for (int pass = 0; pass < 2; ++pass) {
+    BuildArena arena(8192);
+    CssParser parser(cacheDir);
+    if (pass) {
+      parser.setIndexArena(&arena);
+      parser.setLeanResolve(true);
+    }
+    ASSERT_TRUE(parser.loadFromCache());
+    const auto s = parser.resolveStyle("span", "sans");
+    EXPECT_TRUE(s.hasFontFamily());
+    EXPECT_EQ(parser.fontCatalog().fallbackFamily(s.fontFamily), wordTypography::SansSerif);
+    EXPECT_TRUE(s.hasLetterSpacing());
+    EXPECT_FLOAT_EQ(s.letterSpacing.value, .1f);
+    EXPECT_EQ(s.letterSpacing.unit, CssUnit::Em);
+    const auto reset = parser.resolveStyle("span", "reset");
+    EXPECT_EQ(reset.fontFamily, wordTypography::Inherit);
+    EXPECT_EQ(reset.letterSpacing.unit, CssUnit::Auto);
+  }
+  removePath(cacheDir);
+  std::filesystem::remove(cssPath);
+}
+
+// The resident mask stores text-transform and the high display bit independently.
+// Pin authored values, rather than only comparing two potentially wrong paths.
+TEST(CssParserTypography, DisplayAndTransformKeepTypographyTailIndependent) {
+  const std::string css =
+      ".inline { display: inline; font-family: sans-serif; letter-spacing: .125em; white-space: pre-wrap }"
+      ".inlinecaps { display: inline; text-transform: uppercase; font-family: monospace; "
+      "letter-spacing: -2px; white-space: pre }"
+      ".blockcaps { display: block; text-transform: lowercase; font-family: serif; "
+      "letter-spacing: 3px; white-space: pre-line }"
+      ".block { display: block; font-family: monospace; letter-spacing: .25em; white-space: normal }";
+  std::string cssPath;
+  ASSERT_TRUE(writeTempCssFile(std::vector<uint8_t>(css.begin(), css.end()), cssPath));
+  const std::string cacheDir = makeTempDir();
+  {
+    CssParser parser(cacheDir);
+    ASSERT_TRUE(compileCache(parser, cssPath));
+  }
+  struct Expected {
+    const char* name;
+    CssDisplay display;
+    bool transformDefined;
+    CssTextTransform transform;
+    uint16_t family;
+    float spacing;
+    CssUnit unit;
+    CssWhiteSpace whiteSpace;
+  };
+  const Expected cases[] = {{"inline", CssDisplay::Inline, false, CssTextTransform::None, wordTypography::SansSerif,
+                             .125f, CssUnit::Em, CssWhiteSpace::PreWrap},
+                            {"inlinecaps", CssDisplay::Inline, true, CssTextTransform::Uppercase,
+                             wordTypography::Monospace, -2, CssUnit::Pixels, CssWhiteSpace::Pre},
+                            {"blockcaps", CssDisplay::Block, true, CssTextTransform::Lowercase, wordTypography::Serif,
+                             3, CssUnit::Pixels, CssWhiteSpace::PreLine},
+                            {"block", CssDisplay::Block, false, CssTextTransform::None, wordTypography::Monospace, .25f,
+                             CssUnit::Em, CssWhiteSpace::Normal}};
+  for (int resident = 0; resident < 2; ++resident) {
+    BuildArena arena(8192);
+    CssParser parser(cacheDir);
+    if (resident) {
+      parser.setIndexArena(&arena);
+      parser.setLeanResolve(true);
+    }
+    ASSERT_TRUE(parser.loadFromCache());
+    if (resident) ASSERT_TRUE(parser.isArenaResident());
+    for (const auto& expected : cases) {
+      SCOPED_TRACE(std::string(expected.name) + (resident ? " resident" : " disk"));
+      const auto actual = parser.resolveStyle("span", expected.name);
+      EXPECT_TRUE(actual.hasDisplay());
+      EXPECT_EQ(actual.display, expected.display);
+      EXPECT_EQ(actual.hasTextTransform(), expected.transformDefined);
+      if (expected.transformDefined) EXPECT_EQ(actual.textTransform, expected.transform);
+      EXPECT_TRUE(actual.hasFontFamily());
+      EXPECT_EQ(parser.fontCatalog().fallbackFamily(actual.fontFamily), expected.family);
+      EXPECT_TRUE(actual.hasLetterSpacing());
+      EXPECT_FLOAT_EQ(actual.letterSpacing.value, expected.spacing);
+      EXPECT_EQ(actual.letterSpacing.unit, expected.unit);
+      EXPECT_TRUE(actual.hasWhiteSpace());
+      EXPECT_EQ(actual.whiteSpace, expected.whiteSpace);
+    }
+  }
+  removePath(cacheDir);
+  std::filesystem::remove(cssPath);
+}
+
+TEST(CssAuditCache, AddedPropertiesSurviveEveryCodec) {
+  const std::string css =
+      R"CSS(.panel{min-height:1.5em;max-height:90%;max-width:32rem;border-top:0.8px solid #000;border-bottom:1pt solid;background-color:#e7e7e9;clear:both;break-inside:avoid;display:inline-block;hyphens:none;hyphenate-limit-before:4;hyphenate-limit-after:4;hyphenate-limit-lines:2;font-variant-ligatures:none}
+  .reset{min-height:inherit;max-height:none;max-width:inherit;border-top-width:inherit;border-top-style:inherit;border-bottom:none;background-color:inherit;clear:inherit;break-inside:inherit;hyphens:inherit;hyphenate-limit-before:inherit;hyphenate-limit-after:inherit;hyphenate-limit-lines:inherit;font-variant-ligatures:inherit})CSS";
+  const std::string dir = makeTempDir();
+  std::string file;
+  ASSERT_TRUE(writeTempCssFile({css.begin(), css.end()}, file));
+  const auto check = [](const CssParser& parser) {
+    const auto s = parser.resolveStyle("p", "panel");
+    EXPECT_TRUE(s.hasMinHeight());
+    EXPECT_EQ(s.minHeight.unit, CssUnit::Em);
+    EXPECT_FLOAT_EQ(s.minHeight.value, 1.5);
+    EXPECT_EQ(s.maxHeight.unit, CssUnit::Percent);
+    EXPECT_FLOAT_EQ(s.maxHeight.value, 90);
+    EXPECT_EQ(s.maxWidth.unit, CssUnit::Rem);
+    EXPECT_FLOAT_EQ(s.borderTopWidth.value, .8f);
+    EXPECT_EQ(s.borderTopStyle, CssBorderStyle::Solid);
+    EXPECT_EQ(s.borderBottomWidth.unit, CssUnit::Points);
+    EXPECT_EQ(s.borderBottomStyle, CssBorderStyle::Solid);
+    EXPECT_EQ(s.backgroundGray, 231);
+    EXPECT_TRUE(s.breakInsideAvoid);
+    EXPECT_EQ(s.cssClear, CssClear::Both);
+    EXPECT_EQ(s.hyphens, CssHyphens::None);
+    EXPECT_EQ(s.ligatures, CssLigatures::None);
+    EXPECT_EQ(s.hyphenateLimitBefore, 4);
+    EXPECT_EQ(s.hyphenateLimitAfter, 4);
+    EXPECT_EQ(s.hyphenateLimitLines, 2);
+    EXPECT_EQ(s.display, CssDisplay::InlineBlock);
+    const auto r = parser.resolveStyle("p", "reset");
+    EXPECT_EQ(r.minHeight.unit, CssUnit::Inherit);
+    EXPECT_EQ(r.maxHeight.unit, CssUnit::Auto);
+    EXPECT_EQ(r.maxWidth.unit, CssUnit::Inherit);
+    EXPECT_EQ(r.borderTopWidth.unit, CssUnit::Inherit);
+    EXPECT_EQ(r.borderTopStyle, CssBorderStyle::Inherit);
+    EXPECT_EQ(r.borderBottomStyle, CssBorderStyle::None);
+    EXPECT_EQ(r.backgroundGray, 257);
+    EXPECT_TRUE(r.breakInsideInherit);
+    EXPECT_EQ(r.cssClear, CssClear::Inherit);
+    EXPECT_EQ(r.hyphens, CssHyphens::Inherit);
+    EXPECT_EQ(r.ligatures, CssLigatures::Inherit);
+    EXPECT_EQ(r.hyphenateLimitBefore, 255);
+    EXPECT_EQ(r.hyphenateLimitAfter, 255);
+    EXPECT_EQ(r.hyphenateLimitLines, 255);
+  };
+  {
+    CssParser parsed(dir);
+    FsFile input;
+    ASSERT_TRUE(Storage.openFileForRead("CSS", file, input));
+    ASSERT_TRUE(parsed.loadFromStream(input));
+    check(parsed);
+    ASSERT_TRUE(parsed.saveToCache());
+  }
+  {
+    CssParser disk(dir);
+    ASSERT_TRUE(disk.loadFromCache());
+    check(disk);
+    check(disk);
+    disk.clearCaches(true);
+    ASSERT_TRUE(disk.loadFromCache());
+    check(disk);
+  }
+  {
+    CssParser compiled(dir);
+    ASSERT_TRUE(compileCache(compiled, file));
+    check(compiled);
+  }
+  {
+    BuildArena arena(32768);
+    CssParser resident(dir);
+    resident.setIndexArena(&arena);
+    resident.setLeanResolve(true);
+    ASSERT_TRUE(resident.loadFromCache());
+    ASSERT_TRUE(resident.isArenaResident());
+    check(resident);
+  }
+  {
+    BuildArena arena(16);
+    CssParser index(dir);
+    index.setIndexArena(&arena);
+    index.setLeanResolve(true);
+    ASSERT_TRUE(index.loadFromCache());
+    ASSERT_FALSE(index.isArenaResident());
+    check(index);
+  }
+  removePath(file);
+  removePath(dir);
+}
+TEST(CssAuditPseudo, StylesAndLiteralContentAreSeparateAndSurviveColdAndResidentLoads) {
+  const std::string css =
+      R"CSS(p{font-style:italic}.cue{font-weight:normal}p:before{content:"MiXeD\a0 " ' \03a9';font-weight:bold}p::after{content:"End; { }"}p:first-line{font-variant:small-caps}.cue::before{content:"class"}#special::before{content:"ID"}.off::after{content:none}p:hover{font-size:4em})CSS";
+  const auto dir = makeTempDir();
+  std::string file;
+  ASSERT_TRUE(writeTempCssFile({css.begin(), css.end()}, file));
+  const auto check = [](const CssParser& parser) {
+    const auto base = parser.resolveStyle("p", "");
+    EXPECT_EQ(base.fontStyle, CssFontStyle::Italic);
+    EXPECT_FALSE(base.hasFontWeight());
+    EXPECT_FALSE(base.hasSmallCaps());
+    EXPECT_FALSE(base.hasFontSizeMultiplier());
+    const auto before = parser.resolvePseudoStyle("p", "", "", "before");
+    EXPECT_EQ(before.fontWeight, CssFontWeight::Bold);
+    EXPECT_FALSE(before.hasFontStyle());
+    EXPECT_EQ(parser.resolvePseudoStyle("p", "", "", ":first-line").smallCaps, 1);
+    EXPECT_EQ(parser.generatedContentFor("p", "", "", "before"), std::optional<std::string>("MiXeD\xc2\xa0 \xce\xa9"));
+    EXPECT_EQ(parser.generatedContentFor("p", "cue", "", "before"), std::optional<std::string>("class"));
+    EXPECT_EQ(parser.generatedContentFor("p", "cue", "special", "before"), std::optional<std::string>("ID"));
+    EXPECT_EQ(parser.generatedContentFor("p", "", "", "after"), std::optional<std::string>("End; { }"));
+    EXPECT_EQ(parser.generatedContentFor("p", "off", "", "after"), std::optional<std::string>(""));
+    EXPECT_FALSE(parser.generatedContentFor("div", "", "", "before"));
+  };
+  {
+    CssParser parsed(dir);
+    FsFile in;
+    ASSERT_TRUE(Storage.openFileForRead("CSS", file, in));
+    ASSERT_TRUE(parsed.loadFromStream(in));
+    check(parsed);
+    ASSERT_TRUE(parsed.saveToCache());
+  }
+  {
+    CssParser cold(dir);
+    ASSERT_TRUE(cold.loadFromCache());
+    check(cold);
+    cold.clearCaches(true);
+    check(cold);
+  }
+  {
+    CssParser compiled(dir);
+    ASSERT_TRUE(compileCache(compiled, file));
+    check(compiled);
+  }
+  {
+    BuildArena arena(32768);
+    CssParser resident(dir);
+    resident.setIndexArena(&arena);
+    resident.setLeanResolve(true);
+    ASSERT_TRUE(resident.loadFromCache());
+    ASSERT_TRUE(resident.isArenaResident());
+    check(resident);
+  }
+  removePath(file);
+  removePath(dir);
+}
+TEST(CssAuditPseudo, LocalRulesMergeAtEqualSpecificityAndDoNotBeatHigherBookSelectors) {
+  const auto dir = makeTempDir();
+  std::string file;
+  const std::string css =
+      R"CSS(p::before{content:"base";font-weight:bold}.cue::before{content:"class"}#name::before{content:"id"})CSS";
+  ASSERT_TRUE(writeTempCssFile({css.begin(), css.end()}, file));
+  CssParser book(dir);
+  ASSERT_TRUE(compileCache(book, file));
+  const auto localDir = makeTempDir();
+  const std::string local = R"CSS(p:before{content:"local";font-style:italic}p::after{content:"tail"})CSS";
+  std::string localFile;
+  ASSERT_TRUE(writeTempCssFile({local.begin(), local.end()}, localFile));
+  CssParser overlay(localDir, &book);
+  ASSERT_TRUE(compileCache(overlay, localFile));
+  EXPECT_EQ(book.generatedContentFor("p", "", "", "before", &overlay), std::optional<std::string>("local"));
+  EXPECT_EQ(book.generatedContentFor("p", "cue", "", "before", &overlay), std::optional<std::string>("class"));
+  EXPECT_EQ(book.generatedContentFor("p", "cue", "name", "before", &overlay), std::optional<std::string>("id"));
+  const auto style = book.resolvePseudoStyle("p", "", "", "before", &overlay);
+  EXPECT_TRUE(style.hasFontWeight());
+  EXPECT_TRUE(style.hasFontStyle());
+  EXPECT_FALSE(book.resolveStyle("p", "", "", &overlay).defined.anySet());
+  removePath(file);
+  removePath(localFile);
+  removePath(localDir);
+  removePath(dir);
+}
+TEST(CssAuditPseudo, MalformedDynamicAndOversizedContentIsIgnoredAndNonePersists) {
+  const auto dir = makeTempDir();
+  std::string file;
+  const std::string css = "p::before{content:'ok'}p::before{content:attr(title)}p::after{content:'" +
+                          std::string(129, 'X') + "'}div::before{content:'a';content:none}";
+  ASSERT_TRUE(writeTempCssFile({css.begin(), css.end()}, file));
+  CssParser compiler(dir);
+  ASSERT_TRUE(compileCache(compiler, file));
+  CssParser fresh(dir);
+  ASSERT_TRUE(fresh.loadFromCache());
+  EXPECT_EQ(fresh.generatedContentFor("p", "", "", "before"), std::optional<std::string>("ok"));
+  EXPECT_FALSE(fresh.generatedContentFor("p", "", "", "after"));
+  EXPECT_EQ(fresh.generatedContentFor("div", "", "", "before"), std::optional<std::string>(""));
+  // Content-only stylesheets remain visible to the caller even with no normal declarations.
+  EXPECT_FALSE(fresh.empty());
+  {
+    std::ofstream broken(dir + "/css_content.bin", std::ios::binary | std::ios::trunc);
+    broken.put(CssParser::CSS_CACHE_VERSION);
+    broken.put(33);
+  }
+  CssParser damaged(dir);
+  ASSERT_FALSE(damaged.loadFromCache());
+  EXPECT_FALSE(damaged.generatedContentFor("p", "", "", "before"));
+  removePath(file);
+  removePath(dir);
+}
+
+TEST(CssAuditPseudo, SidecarFailureRejectsPublicationAndMissingOrTornDataRejectsLoad) {
+  const auto dir = makeTempDir();
+  std::string cssFile;
+  const std::string css = "p::before{content:'[Value]'}";
+  ASSERT_TRUE(writeTempCssFile({css.begin(), css.end()}, cssFile));
+  const std::string sidecar = dir + "/css_content.bin";
+  // Opening a directory for writing fails without relying on global fault hooks.
+  std::filesystem::create_directory(sidecar);
+  CssParser writer(dir);
+  {
+    FsFile source;
+    ASSERT_TRUE(Storage.openFileForRead("TEST", cssFile, source));
+    ASSERT_TRUE(writer.loadFromStream(source));
+  }
+  EXPECT_FALSE(writer.saveToCache());
+  EXPECT_FALSE(writer.hasCache());
+  std::filesystem::remove_all(sidecar);
+  ASSERT_TRUE(writer.saveToCache());
+  std::ifstream goodFile(sidecar, std::ios::binary);
+  const std::string good((std::istreambuf_iterator<char>(goodFile)), std::istreambuf_iterator<char>());
+  ASSERT_GT(good.size(), 4u);
+  for (const size_t length : {size_t(0), size_t(1), size_t(4), good.size() - 1}) {
+    {
+      std::ofstream bad(sidecar, std::ios::binary | std::ios::trunc);
+      bad.write(good.data(), length);
+    }
+    CssParser reader(dir);
+    EXPECT_FALSE(reader.loadFromCache()) << length;
+    // A repaired card must be retried; a failed load cannot latch an empty sidecar.
+    {
+      std::ofstream repaired(sidecar, std::ios::binary | std::ios::trunc);
+      repaired << good;
+    }
+    ASSERT_TRUE(reader.loadFromCache());
+    EXPECT_EQ(reader.generatedContentFor("p", "", "", "before"), std::optional<std::string>("[Value]"));
+  }
+  std::filesystem::remove(sidecar);
+  CssParser missing(dir);
+  EXPECT_FALSE(missing.loadFromCache());
+  CssParser compiled(dir);
+  ASSERT_TRUE(compiled.beginCacheCompile());
+  {
+    FsFile source;
+    ASSERT_TRUE(Storage.openFileForRead("TEST", cssFile, source));
+    ASSERT_TRUE(compiled.appendCompiledFromStream(source));
+  }
+  std::filesystem::create_directory(sidecar);
+  EXPECT_FALSE(compiled.endCacheCompile());
+  EXPECT_FALSE(compiled.hasCache());
+  removePath(cssFile);
+  removePath(dir);
 }
