@@ -174,6 +174,7 @@ class TextBlock final : public Block {
     // Layout's per-word "attaches to the previous word with no space" flags, indexed like
     // `words`. May be null, meaning every word is space-separated.
     const std::vector<bool>* continues = nullptr;
+    const BlockStyle* firstLineOverride = nullptr;  // applied while copying, no extra word arrays
     size_t first = 0;
     size_t count = 0;
   };

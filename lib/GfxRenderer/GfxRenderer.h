@@ -120,7 +120,7 @@ class GfxRenderer {
   // serialises behind RenderLock — the same lock that protects the framebuffer
   // these masks are blitted into.
   //
-  // Keyed by (font, codepoint, scale, sel), NOT by EpdGlyph address: SD-card
+  // Keyed by (font, codepoint, scale, phase, sel), NOT by EpdGlyph address: SD-card
   // fonts rebuild their glyph array every page and serve overflow codepoints
   // from an 8-entry ring, so the same address means different glyphs over time.
   // The resampled pixels are a pure function of this key, which makes it both
@@ -135,6 +135,7 @@ class GfxRenderer {
     uint8_t sel;           // drawMask for this coverage/AA plane
     uint8_t w;
     uint8_t h;
+    int8_t phase;  // signed output-pixel sixteenths; fits existing padding
   };
   // Keeps the documented budget honest if a field is ever added.
   static_assert(sizeof(ScaledGlyphEntry) <= 16, "scaled-glyph entry grew; update the cache budget comment");
@@ -602,7 +603,7 @@ class GfxRenderer {
   int rawLineHeight(int fontId) const;
   int rawFontAscenderSize(int fontId) const;
   void drawTextAtScale(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
-                       float totalScale, int16_t tracking = 0) const;
+                       float totalScale, int16_t tracking = 0, bool ligatures = true) const;
   int getTextWidthScaled(int fontId, const char* text, EpdFontFamily::Style style, float scale) const;
   // Ink extents of `text` relative to its baseline, from glyph bitmap metrics:
   // aboveBaseline = tallest glyph ink top, belowBaseline = deepest ink below the
@@ -657,11 +658,19 @@ class GfxRenderer {
   uint32_t (*bookFontFailureEpoch_)(void*) = nullptr;
 
  public:
-  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                            int16_t tracking) const;
-  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking) const;
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                            bool ligatures = true) const;
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                         bool ligatures = true) const;
+  // Horizontal extent of an inclusive UTF-8 character interval, using the same glyph
+  // walk as drawing (including kerning, ligatures, small caps, scale and tracking).
+  struct TextRange {
+    int x = 0, left = 0, right = 0;
+  };
+  TextRange getTextRangeSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                               uint16_t first, uint16_t last, bool ligatures = true) const;
   void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
-                      int16_t tracking) const;
+                      int16_t tracking, bool ligatures = true) const;
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
@@ -1045,8 +1054,10 @@ class GfxRenderer {
   // find returns the cached mask for an exact key match, alloc reserves a zeroed
   // mask of w*h bits for the caller to fill, or nullptr when the glyph is too
   // large to cache or the arena could not be allocated.
-  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h) const;
-  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h) const;
+  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
+                                     int8_t phase = 0) const;
+  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
+                                int8_t phase = 0) const;
 
   // Drop every cached mask, keeping the arena. MUST run whenever a font is added
   // or removed: entries are keyed by EpdFontData address, which a later font

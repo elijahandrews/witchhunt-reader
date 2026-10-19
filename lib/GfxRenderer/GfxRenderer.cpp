@@ -194,12 +194,13 @@ bool GfxRenderer::ensureScaledGlyphCache(const int bodyFontId) const {
 }
 
 const uint8_t* GfxRenderer::findScaledGlyphMask(const void* fontData, const uint32_t cp, const float scale,
-                                                const uint8_t sel, const int w, const int h) const {
+                                                const uint8_t sel, const int w, const int h, const int8_t phase) const {
   if (!scaledGlyphArena_) return nullptr;
   const uint32_t bits = floatBits(scale);
   for (uint8_t i = 0; i < scaledGlyphCount_; i++) {
     const ScaledGlyphEntry& e = scaledGlyphEntries_[i];
-    if (e.fontData == fontData && e.cp == cp && e.scaleBits == bits && e.sel == sel && e.w == w && e.h == h) {
+    if (e.fontData == fontData && e.cp == cp && e.scaleBits == bits && e.sel == sel && e.w == w && e.h == h &&
+        e.phase == phase) {
       return scaledGlyphArena_.get() + e.offset;
     }
   }
@@ -207,7 +208,7 @@ const uint8_t* GfxRenderer::findScaledGlyphMask(const void* fontData, const uint
 }
 
 uint8_t* GfxRenderer::allocScaledGlyphMask(const void* fontData, const uint32_t cp, const float scale,
-                                           const uint8_t sel, const int w, const int h) const {
+                                           const uint8_t sel, const int w, const int h, const int8_t phase) const {
   // Dimensions are stored as uint8 and the mask must stay well under the arena;
   // oversized glyphs render uncached rather than evicting the body-text set.
   // Codepoints above the BMP are stored in a uint16 key, so they render uncached
@@ -244,6 +245,7 @@ uint8_t* GfxRenderer::allocScaledGlyphMask(const void* fontData, const uint32_t 
   e.scaleBits = floatBits(scale);
   e.offset = scaledGlyphUsed_;
   e.sel = sel;
+  e.phase = phase;
   e.w = static_cast<uint8_t>(w);
   e.h = static_cast<uint8_t>(h);
   scaledGlyphUsed_ = static_cast<uint16_t>(scaledGlyphUsed_ + bytes);
@@ -1150,7 +1152,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
 // Every scale uses the same coverage and per-plane mask, including reduced text.
 template <typename Emit>
 static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool is2Bit, const int srcW, const int srcH,
-                                         const int dstW, const int dstH, const float scale, const int32_t srcXOriginFP,
+                                         const int dstW, const int dstH, const float scale, const int64_t srcXOriginFP,
                                          const int32_t srcYOriginFP, const uint8_t drawMask, Emit&& emit) {
   // The ESP32-C3 has no FPU — every float op in a per-pixel loop is a soft-float call
   // costing hundreds of cycles. The resampler therefore runs in 16.16 fixed point:
@@ -1173,26 +1175,51 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
     return ((byte >> (7 - (pos & 7))) & 1) ? 3 : 0;
   };
 
+  // At native bitmap size a horizontal phase only mixes two neighboring
+  // columns. Preserve the same coverage/tie rule without the general 64-bit
+  // area loop for every character of ordinary body text.
+  if (scale == 1.0f && srcYOriginFP == 0) {
+    const int first = static_cast<int>(srcXOriginFP >> 20);
+    const int fraction = static_cast<int>((srcXOriginFP - static_cast<int64_t>(first) * (1 << 20)) >> 16);
+    for (int y = 0; y < dstH; ++y) {
+      for (int x = 0; x < dstW; ++x) {
+        const int sx = first + x;
+        const int a = sx >= 0 && sx < srcW && y < srcH ? srcRaw(sx, y) : 0;
+        const int b = sx + 1 >= 0 && sx + 1 < srcW && y < srcH ? srcRaw(sx + 1, y) : 0;
+        const int value = a * (16 - fraction) + b * fraction;
+        const int lower = value >> 4, remainder = value & 15;
+        const uint8_t raw = lower + (remainder > 8 || (remainder == 8 && (lower & 1)));
+        if ((drawMask >> raw) & 1) emit(x, y, raw);
+      }
+    }
+    return;
+  }
+
   // Integrate ALL source pixels covered by each destination pixel. Point sampling
   // while shrinking skipped entire thin stems/serifs (notably 75% uppercase and
   // small caps). Preserve their fractional ink as 2-bit coverage instead of
   // thresholding it away. This also gives reduced text the same grayscale capture,
   // staged AA, and darkness behavior as unscaled and enlarged text.
   //
-  // Overlaps are 16.16. Products and area use 64 bits because a destination pixel
+  // Products and area use 64 bits because a destination pixel
   // covers more than one source pixel when shrinking. Out-of-bitmap area stays
   // transparent, just as in the enlarged-glyph path.
-  const int64_t dstPixelAreaFP = static_cast<int64_t>(invScaleFP) * invScaleFP;
+  // Keep four extra horizontal fractional bits: rounding phase*step/16
+  // before integration can move an exact half-coverage tie to the wrong shade.
+  // Vertical coordinates remain 16.16; horizontal coordinates are 12.20.
+  constexpr int X_SHIFT = FP_SHIFT + 4;
+  const int64_t xStep = static_cast<int64_t>(invScaleFP) * 16;
+  const int64_t dstPixelAreaFP = xStep * invScaleFP;
   int32_t srcY0FP = srcYOriginFP;
   for (int dstY = 0; dstY < dstH; dstY++, srcY0FP += invScaleFP) {
     const int32_t srcY1FP = srcY0FP + invScaleFP;
     const int sy0 = std::max(0, static_cast<int>(srcY0FP >> FP_SHIFT));
     const int sy1 = std::min(static_cast<int>((srcY1FP - 1) >> FP_SHIFT), srcH - 1);
-    int32_t srcX0FP = srcXOriginFP;
-    for (int dstX = 0; dstX < dstW; dstX++, srcX0FP += invScaleFP) {
-      const int32_t srcX1FP = srcX0FP + invScaleFP;
-      const int sx0 = std::max(0, static_cast<int>(srcX0FP >> FP_SHIFT));
-      const int sx1 = std::min(static_cast<int>((srcX1FP - 1) >> FP_SHIFT), srcW - 1);
+    int64_t srcX0FP = srcXOriginFP;
+    for (int dstX = 0; dstX < dstW; dstX++, srcX0FP += xStep) {
+      const int64_t srcX1FP = srcX0FP + xStep;
+      const int sx0 = std::max(0, static_cast<int>(srcX0FP >> X_SHIFT));
+      const int sx1 = std::min(static_cast<int>((srcX1FP - 1) >> X_SHIFT), srcW - 1);
 
       int64_t covered = 0;
       for (int sy = sy0; sy <= sy1; sy++) {
@@ -1202,8 +1229,8 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
         for (int sx = sx0; sx <= sx1; sx++) {
           const uint8_t raw = srcRaw(sx, sy);
           if (raw == 0) continue;
-          const int32_t wOverlapFP = std::min(srcX1FP, static_cast<int32_t>(sx + 1) << FP_SHIFT) -
-                                     std::max(srcX0FP, static_cast<int32_t>(sx) << FP_SHIFT);
+          const int64_t wOverlapFP = std::min(srcX1FP, static_cast<int64_t>(sx + 1) << X_SHIFT) -
+                                     std::max(srcX0FP, static_cast<int64_t>(sx) << X_SHIFT);
           if (wOverlapFP <= 0) continue;
           covered += static_cast<int64_t>(raw) * hOverlapFP * wOverlapFP;
         }
@@ -1236,12 +1263,12 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
 // Captured scaled glyphs cache their 2-bit coverage in the existing mask arena.
 // A doubled bit-width accounts for the payload without enlarging any allocation.
 static void captureScaledGlyph(const GfxRenderer& renderer, const uint8_t* bitmap, bool is2Bit, int srcW, int srcH,
-                               int dstW, int dstH, float scale, int32_t srcXOriginFP, int32_t srcYOriginFP, int baseX,
-                               int baseY, const EpdFontData* fontData, uint32_t cp, bool black) {
+                               int dstW, int dstH, float scale, int64_t srcXOriginFP, int32_t srcYOriginFP, int baseX,
+                               int baseY, const EpdFontData* fontData, uint32_t cp, bool black, int8_t phase) {
   constexpr uint8_t coverageKey = 0x10;  // separate from every 1-bit draw mask
-  const uint8_t* coverage = renderer.findScaledGlyphMask(fontData, cp, scale, coverageKey, dstW * 2, dstH);
+  const uint8_t* coverage = renderer.findScaledGlyphMask(fontData, cp, scale, coverageKey, dstW * 2, dstH, phase);
   if (!coverage) {
-    if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, coverageKey, dstW * 2, dstH)) {
+    if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, coverageKey, dstW * 2, dstH, phase)) {
       emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, srcXOriginFP, srcYOriginFP, 0x0E,
                             [slot, dstW](int x, int y, uint8_t raw) {
                               const int i = y * dstW + x;
@@ -1265,7 +1292,8 @@ static void captureScaledGlyph(const GfxRenderer& renderer, const uint8_t* bitma
 
 static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                               const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                              const bool pixelState, const EpdFontFamily::Style style, const float scale) {
+                              const bool pixelState, const EpdFontFamily::Style style, const float scale,
+                              const int8_t phase = 0) {
   const EpdGlyphRef glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) return;
 
@@ -1277,7 +1305,7 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
   const int srcH = glyph.height;
   if (srcW <= 0 || srcH <= 0) return;
 
-  const auto bounds = glyphScale::bounds(glyph.left, glyph.top, srcW, srcH, scale);
+  const auto bounds = glyphScale::bounds(glyph.left, glyph.top, srcW, srcH, scale, phase);
   const int dstW = bounds.width, dstH = bounds.height;
   if (dstW <= 0 || dstH <= 0) return;
   const int baseX = cursorX + bounds.left;
@@ -1286,7 +1314,8 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
   // each bearing. Transparent padding must not alter the rendered outline.
   constexpr int32_t one = 1 << 16;
   const int32_t step = static_cast<int32_t>(one / scale + 0.5f);
-  const int32_t srcXOriginFP = bounds.left * step - glyph.left * one;
+  const int64_t srcXOriginFP =
+      (static_cast<int64_t>(bounds.left) * 16 - phase) * step - static_cast<int64_t>(glyph.left) * one * 16;
   const int32_t srcYOriginFP = bounds.top * step + glyph.top * one;
   const bool is2Bit = fontData->is2Bit;
 
@@ -1302,20 +1331,20 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
 
   if (renderMode == GfxRenderer::BW && renderer.grayCaptureActive()) {
     captureScaledGlyph(renderer, bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, srcXOriginFP, srcYOriginFP, baseX,
-                       baseY, fontData, cp, pixelState);
+                       baseY, fontData, cp, pixelState, phase);
     return;
   }
 
-  // Cached path: resample once per distinct (glyph, scale, sel), then draw every
+  // Cached path: resample once per distinct (glyph, scale, phase, sel), then draw every
   // occurrence with the same 8-pixel-chunk blitter unscaled text uses. renderGlyphFastBW
   // is not strip-aware, so a strip target falls through to the per-pixel path below
   // (drawPixel is strip-aware) — same reason the unscaled 1-bit path guards on it.
   if (!renderer.isStripActive()) {
     // fontData already identifies the style variant (getData and getGlyph share
     // getFont(style)), so the style bits are not part of the key.
-    const uint8_t* mask = renderer.findScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH);
+    const uint8_t* mask = renderer.findScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH, phase);
     if (!mask) {
-      if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH)) {
+      if (uint8_t* slot = renderer.allocScaledGlyphMask(fontData, cp, scale, sel, dstW, dstH, phase)) {
         emitScaledGlyphPixels(bitmap, is2Bit, srcW, srcH, dstW, dstH, scale, srcXOriginFP, srcYOriginFP, drawMask,
                               [slot, dstW](const int dstX, const int dstY, uint8_t) {
                                 const int bit = dstY * dstW + dstX;
@@ -1493,7 +1522,7 @@ bool GfxRenderer::getTextInkMetrics(const int fontId, const char* text, const Ep
 
   bool any = false;
   const auto& font = fontIt->second;
-  textRun::walk(font, text, style, fontBaseScale(fontId), 0, [&](uint32_t cp, int, int y, float scale, bool) {
+  textRun::walk(font, text, style, fontBaseScale(fontId), 0, [&](uint32_t cp, int, int y, float scale, bool, int8_t) {
     const auto glyph = font.getGlyph(cp, style);
     if (!glyph || glyph.width == 0 || glyph.height == 0) return;
     const auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, scale);
@@ -1652,7 +1681,8 @@ void GfxRenderer::drawTextScaled(const int fontId, const int x, const int y, con
 }
 
 void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, const char* text, const bool black,
-                                  const EpdFontFamily::Style style, const float scale, const int16_t tracking) const {
+                                  const EpdFontFamily::Style style, const float scale, const int16_t tracking,
+                                  const bool ligatures) const {
   if (!text || !*text) return;
   if (fontCacheManager_ && fontCacheManager_->isScanning()) {
     fontCacheManager_->recordText(text, fontId, style);
@@ -1665,13 +1695,15 @@ void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, co
   const int baseline = y + static_cast<int>(std::lround(rawFontAscenderSize(fontId) * scale));
   const auto mode = getRenderMode();
   textRun::walk(
-      it->second, text, style, scale, tracking, [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/) {
-        if (glyphScale == 1.0f) {
+      it->second, text, style, scale, tracking,
+      [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/, int8_t phase) {
+        if (glyphScale == 1.0f && phase == 0) {
           renderCharImpl<TextRotation::None>(*this, mode, it->second, cp, x + dx, baseline + dy, black, style);
         } else {
-          renderCharAtScale(*this, mode, it->second, cp, x + dx, baseline + dy, black, style, glyphScale);
+          renderCharAtScale(*this, mode, it->second, cp, x + dx, baseline + dy, black, style, glyphScale, phase);
         }
-      });
+      },
+      nullptr, ligatures);
 }
 
 // Scaled accessors compound the CSS/heading residual with the font base once.
@@ -3319,7 +3351,7 @@ int GfxRenderer::getKerning(const int fontId, const uint32_t leftCp, const uint3
 int GfxRenderer::scaledTextAdvanceX(const EpdFontFamily& font, const char* text, const EpdFontFamily::Style style,
                                     const float scale) const {
   if (!text) return 0;
-  return textRun::walk(font, text, style, scale, 0, [](uint32_t, int, int, float, bool) {}).advance;
+  return textRun::walk(font, text, style, scale, 0, [](uint32_t, int, int, float, bool, int8_t) {}).advance;
 }
 
 int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFamily::Style style) const {
@@ -3917,30 +3949,47 @@ GfxRenderer::TextFont GfxRenderer::resolveGenericTextFont(const int fontId, cons
 }
 
 int GfxRenderer::getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                                       int16_t tracking) const {
+                                       int16_t tracking, bool ligatures) const {
   const auto it = fontMap.find(fontId);
   if (it == fontMap.end() || !text) return 0;
   if (fontCacheManager_ && fontCacheManager_->isScanning()) {
     fontCacheManager_->recordText(text, fontId, style);
     return 0;
   }
-  return textRun::walk(it->second, text, style, scale * fontBaseScale(fontId), tracking,
-                       [](uint32_t, int, int, float, bool) {})
+  return textRun::walk(
+             it->second, text, style, scale * fontBaseScale(fontId), tracking,
+             [](uint32_t, int, int, float, bool, int8_t) {}, nullptr, ligatures)
       .advance;
 }
 int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                                    int16_t tracking) const {
+                                    int16_t tracking, bool ligatures) const {
   const auto it = fontMap.find(fontId);
   if (it == fontMap.end() || !text) return 0;
   if (fontCacheManager_ && fontCacheManager_->isScanning()) {
     fontCacheManager_->recordText(text, fontId, style);
     return 0;
   }
-  const auto m = textRun::walk(it->second, text, style, scale * fontBaseScale(fontId), tracking,
-                               [](uint32_t, int, int, float, bool) {});
+  const auto m = textRun::walk(
+      it->second, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
+      nullptr, ligatures);
   return std::max(m.advance, m.right) - std::min(0, m.left);
 }
+GfxRenderer::TextRange GfxRenderer::getTextRangeSpaced(int fontId, const char* text, EpdFontFamily::Style style,
+                                                       float scale, int16_t tracking, uint16_t first, uint16_t last,
+                                                       bool ligatures) const {
+  const auto it = fontMap.find(fontId);
+  if (it == fontMap.end() || !text || first > last) return {};
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) {
+    fontCacheManager_->recordText(text, fontId, style);
+    return {};
+  }
+  textRun::CharacterRange range{first, last};
+  textRun::walk<true>(
+      it->second, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
+      &range, ligatures);
+  return {range.x, range.left, range.right};
+}
 void GfxRenderer::drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,
-                                 float scale, int16_t tracking) const {
-  drawTextAtScale(fontId, x, y, text, black, style, scale * fontBaseScale(fontId), tracking);
+                                 float scale, int16_t tracking, bool ligatures) const {
+  drawTextAtScale(fontId, x, y, text, black, style, scale * fontBaseScale(fontId), tracking, ligatures);
 }

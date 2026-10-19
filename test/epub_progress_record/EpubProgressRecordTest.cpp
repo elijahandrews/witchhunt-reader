@@ -177,3 +177,67 @@ TEST(EpubProgressRecord, RejectsWhatWasAlwaysRejected) {
 }
 
 }  // namespace
+
+TEST(EpubProgressRecord, TaggedSourceHasLiteralLittleEndianBytesAndPreservesShownPrefix) {
+  auto record = sample();
+  record.paragraph = 91;
+  record.shown = sampleShown();
+  uint8_t original[EpubProgressRecord::kMaxSize] = {};
+  const size_t prefix = record.encode(original);
+  record.source = EpubProgressRecord::Source{0x78563412, 0x9abc};
+  uint8_t bytes[EpubProgressRecord::kMaxSize] = {};
+  const size_t size = record.encode(bytes);
+  ASSERT_EQ(size, prefix + 10);
+  EXPECT_EQ(memcmp(original, bytes, prefix), 0);
+  const uint8_t literal[] = {'S', 'R', 'C', '1', 0x12, 0x34, 0x56, 0x78, 0xbc, 0x9a};
+  EXPECT_EQ(memcmp(bytes + prefix, literal, sizeof(literal)), 0);
+  const auto decoded = EpubProgressRecord::decode(bytes, size);
+  ASSERT_TRUE(decoded && decoded->source);
+  EXPECT_EQ(decoded->source->offset, 0x78563412u);
+  EXPECT_EQ(decoded->source->characterOffset, 0x9abc);
+  EXPECT_EQ(decoded->shown->printedPage, record.shown->printedPage);
+}
+
+TEST(EpubProgressRecord, TornOrUnrecognizedSourceKeepsTheCompleteOlderRecord) {
+  for (const std::string& label : {std::string{}, std::string(EpubProgressRecord::kMaxPrintedPage, 'x')}) {
+    auto record = sample();
+    record.paragraph = 91;
+    record.shown = sampleShown();
+    record.shown->printedPage = label;
+    record.source = EpubProgressRecord::Source{12345, 128};
+    uint8_t bytes[EpubProgressRecord::kMaxSize] = {};
+    const size_t size = record.encode(bytes);
+    const size_t tail = size - EpubProgressRecord::kSourceTailSize;
+    for (size_t truncated = tail; truncated < size; ++truncated) {
+      const auto decoded = EpubProgressRecord::decode(bytes, truncated);
+      ASSERT_TRUE(decoded);
+      EXPECT_FALSE(decoded->source);
+      EXPECT_EQ(decoded->paragraph, record.paragraph);
+      ASSERT_TRUE(decoded->shown);
+      EXPECT_EQ(decoded->shown->printedPage, label);
+    }
+    bytes[tail] = 'X';
+    EXPECT_FALSE(EpubProgressRecord::decode(bytes, size)->source);
+    bytes[tail] = 'S';
+    memset(bytes + tail + 4, 0xff, 4);
+    EXPECT_FALSE(EpubProgressRecord::decode(bytes, size)->source);
+  }
+}
+
+TEST(EpubProgressRecord, PendingSourceNeedsNoParagraphOrShownAndOldRecordsRemainUnchanged) {
+  auto record = sample();
+  record.source = EpubProgressRecord::Source{0, 17};
+  uint8_t bytes[EpubProgressRecord::kMaxSize] = {};
+  const size_t size = record.encode(bytes);
+  ASSERT_EQ(size, 24u);
+  const auto decoded = EpubProgressRecord::decode(bytes, size);
+  ASSERT_TRUE(decoded && decoded->source);
+  EXPECT_EQ(decoded->source->offset, 0u);
+  EXPECT_EQ(decoded->source->characterOffset, 17);
+  EXPECT_FALSE(decoded->paragraph);
+  record.source.reset();
+  EXPECT_EQ(record.encode(bytes), 7u);
+  EXPECT_FALSE(EpubProgressRecord::decode(bytes, 7)->source);
+  record.source = EpubProgressRecord::Source{UINT32_MAX, 0};
+  EXPECT_EQ(record.encode(bytes), 7u);
+}

@@ -20,8 +20,13 @@ constexpr int MAX_COST = std::numeric_limits<int>::max();
 
 namespace {
 SourceWordSpan sliceSource(SourceWordSpan source, const std::string& word, size_t first, size_t end) {
-  for (size_t c = 0; c < first; ++c)
-    if ((static_cast<unsigned char>(word[c]) & 0xc0) != 0x80) ++source.characterOffset;
+  for (size_t c = 0; c < first; ++c) {
+    if (word.compare(c, SOFT_HYPHEN_BYTES, SOFT_HYPHEN_UTF8) == 0) {
+      ++c;  // Invisible discretionary break: it does not advance the stable character offset.
+    } else if ((static_cast<unsigned char>(word[c]) & 0xc0) != 0x80 && source.characterOffset < UINT16_MAX) {
+      ++source.characterOffset;
+    }
+  }
   if (source.probeByte != UINT16_MAX) {
     source.probeByte = source.probeByte >= first && source.probeByte < end
                            ? static_cast<uint16_t>(source.probeByte - first)
@@ -104,18 +109,18 @@ uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const s
   int raw = 0;
   if (word.size() == 1 && word[0] == ' ' && !appendHyphen) {
     raw = renderer.getTextAdvanceXSpaced(resolved.fontId, " ", style, effectiveScale,
-                                         wordTypography::tracking(typography));
+                                         wordTypography::tracking(typography), wordTypography::ligatures(typography));
   } else {
     const bool hasSoftHyphen = containsSoftHyphen(word);
     if (!hasSoftHyphen && !appendHyphen) {
       raw = renderer.getTextAdvanceXSpaced(resolved.fontId, word.c_str(), style, effectiveScale,
-                                           wordTypography::tracking(typography));
+                                           wordTypography::tracking(typography), wordTypography::ligatures(typography));
     } else {
       std::string sanitized = word;
       if (hasSoftHyphen) stripSoftHyphensInPlace(sanitized);
       if (appendHyphen) sanitized.push_back('-');
       raw = renderer.getTextAdvanceXSpaced(resolved.fontId, sanitized.c_str(), style, effectiveScale,
-                                           wordTypography::tracking(typography));
+                                           wordTypography::tracking(typography), wordTypography::ligatures(typography));
     }
   }
   return static_cast<uint16_t>(std::max(0, std::min(65535, raw)));
@@ -313,6 +318,16 @@ void ParsedText::layoutAndExtractLines(
     return;
   }
 
+  firstLineEnd_ = !isContinuation_ && (blockStyle.firstLineSmallCapsDefined || blockStyle.firstLineTrackingDefined ||
+                                       blockStyle.firstLineLigaturesDefined)
+                      ? SIZE_MAX
+                      : 0;
+  // Line breaking looks ahead through an un-emitted tail. Keep that scratch
+  // count separate from the carry belonging to the lines the caller accepts.
+  const uint8_t savedHyphenLines = consecutiveHyphenLines_;
+  uint8_t acceptedHyphenLines = isContinuation_ ? savedHyphenLines : 0;
+  consecutiveHyphenLines_ = acceptedHyphenLines;
+
   // preserveSource: take a snapshot now and put it back on the way out, so the caller sees the
   // text exactly as it handed it over. Suppressing the trailing erase alone is not enough --
   // computeLineBreaks force-splits any word too wide for the line (inserting a hyphen), and
@@ -461,11 +476,11 @@ void ParsedText::layoutAndExtractLines(
     while (i < words.size()) {
       size_t end = i + 1;
       int groupWidth = wordWidths[i];
-      while (end < words.size() && wordContinues[end]) {
+      while (end < words.size() && wordContinues[end] && !(wordTypography_[end] & wordTypography::BREAK_BEFORE)) {
         groupWidth += wordGap(renderer, fontId, end - 1, end, true) + wordWidths[end];
         ++end;
       }
-      int gap = i == start ? 0 : wordGap(renderer, fontId, i - 1, i, false);
+      int gap = i == start ? 0 : wordGap(renderer, fontId, i - 1, i, wordContinues[i]);
       const int available = widthForLine(lineBreakIndices.size(), lineHeight, blockStartY, pageWidth) -
                             (lineBreakIndices.empty() ? firstLineIndent : 0);
       if (i > start && width + gap + groupWidth > available) {
@@ -473,6 +488,11 @@ void ParsedText::layoutAndExtractLines(
         start = i;
         width = 0;
         gap = 0;
+        if (lineBreakIndices.size() == 1 && firstLineEnd_) {
+          firstLineEnd_ = i;
+          calculateWordWidths(renderer, fontId, wordWidths);
+          continue;
+        }
       }
       width += gap + groupWidth;
       i = end;
@@ -481,7 +501,7 @@ void ParsedText::layoutAndExtractLines(
     lineEndsWithHyphenatedWord.assign(lineBreakIndices.size(), false);
     splitPrefixWordIndexes.assign(lineBreakIndices.size(), -1);
     splitInsertedHyphen.assign(lineBreakIndices.size(), false);
-  } else if (hyphenationEnabled || maxFloatLineHeight_ > 0) {
+  } else if (authoredHyphenationAllowed() || maxFloatLineHeight_ > 0 || firstLineEnd_ != 0) {
     // Active floats use greedy layout so the line index used for exclusion is
     // the actual index, not the ordinary DP breaker's estimated line number.
     // Without hyphenation, only a word too wide for an empty line may split.
@@ -501,6 +521,8 @@ void ParsedText::layoutAndExtractLines(
     const bool lineEndedWithHyphenation = i < lineEndsWithHyphenatedWord.size() ? lineEndsWithHyphenatedWord[i] : false;
     const auto result = extractLine(i, pageWidth, wordWidths, wordContinues, lineBreakIndices, processLine, renderer,
                                     fontId, lineEndedWithHyphenation, false, firstLineIndent, blockStartY, lineHeight);
+    if (result == LineProcessResult::Accepted)
+      acceptedHyphenLines = lineEndedWithHyphenation ? std::min<int>(255, acceptedHyphenLines + 1) : 0;
 
     if (result == LineProcessResult::RetryWithoutHyphenation && lineEndedWithHyphenation) {
       const size_t lineStart = i > 0 ? lineBreakIndices[i - 1] : 0;
@@ -550,6 +572,7 @@ void ParsedText::layoutAndExtractLines(
       }
 
       // Recompute widths after restoring unsplit words.
+      if (i == 0 && firstLineEnd_) firstLineEnd_ = SIZE_MAX;
       calculateWordWidths(renderer, fontId, wordWidths);
 
       // Keep previous lines fixed; recompute only this specific line without hyphenation.
@@ -563,6 +586,10 @@ void ParsedText::layoutAndExtractLines(
       splitPrefixWordIndexes.resize(i + 1);
       splitInsertedHyphen.resize(i + 1);
 
+      if (i == 0 && firstLineEnd_) {
+        firstLineEnd_ = retryBreak;
+        calculateWordWidths(renderer, fontId, wordWidths);
+      }
       lineBreakIndices[i] = retryBreak;
       lineEndsWithHyphenatedWord[i] = false;
       splitPrefixWordIndexes[i] = -1;
@@ -577,6 +604,7 @@ void ParsedText::layoutAndExtractLines(
                 retryPreview.c_str());
         extractLine(i, pageWidth, wordWidths, wordContinues, lineBreakIndices, processLine, renderer, fontId, false,
                     true, firstLineIndent, blockStartY, lineHeight);
+        acceptedHyphenLines = 0;
 
         // Resume regular hyphenation from the first word after the retried line.
         const size_t resumeIndex = lineBreakIndices[i];
@@ -587,6 +615,9 @@ void ParsedText::layoutAndExtractLines(
         suffixSplitPrefixWordIndexes.clear();
         suffixSplitInsertedHyphen.clear();
         const std::vector<size_t>& hyphenatedSuffixBreaks = suffixBreaks_;
+        // The accepted retry has no discretionary hyphen, so its suffix starts
+        // a new run regardless of the discarded precomputed suffix.
+        consecutiveHyphenLines_ = 0;
         computeHyphenatedLineBreaksFromIndex(renderer, fontId, pageWidth, wordWidths, wordContinues, resumeIndex,
                                              suffixLineEndsWithHyphenatedWord, suffixSplitPrefixWordIndexes,
                                              suffixSplitInsertedHyphen, blockStartY, lineHeight,
@@ -628,6 +659,7 @@ void ParsedText::layoutAndExtractLines(
     bionicTransformedUpTo_ = words.size();
   }
   isContinuation_ = !includeLastLine;
+  consecutiveHyphenLines_ = acceptedHyphenLines;
 
   if (preserveSource) {
     words = std::move(savedWords);
@@ -638,6 +670,7 @@ void ParsedText::layoutAndExtractLines(
     wordContinues = std::move(savedContinues);
     isContinuation_ = savedIsContinuation;
     bionicTransformedUpTo_ = savedBionicWatermark;
+    consecutiveHyphenLines_ = savedHyphenLines;
   }
 }
 
@@ -685,6 +718,7 @@ void ParsedText::reset(const BlockStyle& newBlockStyle) {
   wordSources_.clear();
   blockStyle = newBlockStyle;
   isContinuation_ = false;
+  consecutiveHyphenLines_ = 0;
   bionicTransformedUpTo_ = 0;
 }
 
@@ -693,7 +727,8 @@ void ParsedText::calculateWordWidths(const GfxRenderer& renderer, const int font
   out.reserve(words.size());
 
   for (size_t i = 0; i < words.size(); ++i) {
-    out.push_back(measureWordWidth(renderer, fontId, words[i], wordStyles[i], false, wordScale(i), wordTypography_[i]));
+    out.push_back(
+        measureWordWidth(renderer, fontId, words[i], layoutStyle(i), false, wordScale(i), layoutTypography(i)));
   }
 }
 
@@ -778,8 +813,11 @@ void ParsedText::computeLineBreaks(const GfxRenderer& renderer, const int fontId
     dp[i] = MAX_COST;
 
     const int lineIdx = lineIndexForWord[i];
+    // Only a candidate starting at word zero can be the paragraph's first line.
+    // Without floats the estimated line indices are all zero; using that index
+    // here grants every continuation line the hanging indent's extra width.
     const int effectivePageWidth =
-        widthForLine(lineIdx, lineHeight, blockStartY, pageWidth) - (lineIdx == 0 ? firstLineIndent : 0);
+        widthForLine(lineIdx, lineHeight, blockStartY, pageWidth) - (i == 0 ? firstLineIndent : 0);
 
     for (size_t j = i; j < totalWordCount; ++j) {
       const int gap = (j > static_cast<size_t>(i)) ? interWordGaps[j] : 0;
@@ -790,7 +828,7 @@ void ParsedText::computeLineBreaks(const GfxRenderer& renderer, const int fontId
       }
 
       // Cannot break after word j if the next word attaches to it (continuation group)
-      if (j + 1 < totalWordCount && continuesVec[j + 1]) {
+      if (j + 1 < totalWordCount && continuesVec[j + 1] && !(wordTypography_[j + 1] & wordTypography::BREAK_BEFORE)) {
         continue;
       }
 
@@ -896,7 +934,8 @@ size_t ParsedText::computeSingleLineBreakNoHyphen(const GfxRenderer& renderer, c
     break;
   }
 
-  while (currentIndex > lineStartIndex + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex]) {
+  while (currentIndex > lineStartIndex + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex] &&
+         !(wordTypography_[currentIndex] & wordTypography::BREAK_BEFORE)) {
     --currentIndex;
   }
 
@@ -956,6 +995,7 @@ void ParsedText::applyBionicReadingTransform() {
     const auto originalStyle = wordStyles[i];
     const bool originalAttachToPrevious = wordContinues[i];
     const uint8_t originalSize = wordSizes[i];
+    uint32_t fragmentTypography = wordTypography_[i];
 
     const auto spans = tokenizeBionicWord(source);
     if (spans.empty()) {
@@ -992,7 +1032,8 @@ void ParsedText::applyBionicReadingTransform() {
             transformedSuffixStyles.push_back(boldStyle);
             transformedSuffixContinues.push_back(attachToPrevious);
             transformedSuffixSizes.push_back(originalSize);
-            transformedSuffixTypography.push_back(wordTypography_[i]);
+            transformedSuffixTypography.push_back(fragmentTypography);
+            fragmentTypography &= ~wordTypography::BREAK_BEFORE;
             transformedSuffixSources.push_back(
                 sliceSource(wordSources_[i], source, span.start, span.start + prefixByteCount));
 
@@ -1000,7 +1041,8 @@ void ParsedText::applyBionicReadingTransform() {
             transformedSuffixStyles.push_back(originalStyle);
             transformedSuffixContinues.push_back(true);
             transformedSuffixSizes.push_back(originalSize);
-            transformedSuffixTypography.push_back(wordTypography_[i]);
+            transformedSuffixTypography.push_back(fragmentTypography);
+            fragmentTypography &= ~wordTypography::BREAK_BEFORE;
             transformedSuffixSources.push_back(
                 sliceSource(wordSources_[i], source, span.start + prefixByteCount, span.end));
             attachToPrevious = true;
@@ -1013,7 +1055,8 @@ void ParsedText::applyBionicReadingTransform() {
       transformedSuffixStyles.push_back(originalStyle);
       transformedSuffixContinues.push_back(attachToPrevious);
       transformedSuffixSizes.push_back(originalSize);
-      transformedSuffixTypography.push_back(wordTypography_[i]);
+      transformedSuffixTypography.push_back(fragmentTypography);
+      fragmentTypography &= ~wordTypography::BREAK_BEFORE;
       transformedSuffixSources.push_back(sliceSource(wordSources_[i], source, span.start, span.end));
       attachToPrevious = true;
     }
@@ -1093,13 +1136,13 @@ void ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const 
       const bool allowFallbackBreaks = isFirstWord;  // Only for first word on line
 
       bool insertedHyphen = false;
-      if ((hyphenationEnabled || isFirstWord) && availableWidth > 0 &&
+      if ((authoredHyphenationAllowed() || isFirstWord) && availableWidth > 0 &&
           hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks,
                                &insertedHyphen)) {
         // Keep interWordGaps in sync: insert placeholder for the new remainder word.
         // The remainder is always the first word on the next line so this slot is never read.
         interWordGaps.insert(interWordGaps.begin() + currentIndex + 1, 0);
-        lineEndedWithHyphenation = hyphenationEnabled;
+        lineEndedWithHyphenation = authoredHyphenationAllowed();
         splitPrefixIndex = static_cast<int>(currentIndex);
         splitNeedsInsertedHyphen = insertedHyphen;
         // Prefix now fits; append it to this line and move to next line
@@ -1118,7 +1161,8 @@ void ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const 
 
     // Don't break before a continuation word (e.g., orphaned "?" after "question").
     // Backtrack to the start of the continuation group so the whole group moves to the next line.
-    while (currentIndex > lineStart + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex]) {
+    while (currentIndex > lineStart + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex] &&
+           !(wordTypography_[currentIndex] & wordTypography::BREAK_BEFORE)) {
       --currentIndex;
     }
 
@@ -1129,6 +1173,16 @@ void ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const 
       splitNeedsInsertedHyphen = false;
     }
 
+    if (lineIdx == 0 && firstLineEnd_ != 0) {
+      firstLineEnd_ = currentIndex;
+      // Restore normal metrics beyond the actual first line, including a newly split suffix.
+      for (size_t j = currentIndex; j < words.size(); ++j) {
+        wordWidths[j] =
+            measureWordWidth(renderer, fontId, words[j], layoutStyle(j), false, wordScale(j), layoutTypography(j));
+        if (j) interWordGaps[j] = wordGap(renderer, fontId, j - 1, j, continuesVec[j]);
+      }
+    }
+    consecutiveHyphenLines_ = lineEndedWithHyphenation ? std::min<int>(255, consecutiveHyphenLines_ + 1) : 0;
     lineBreakIndices.push_back(currentIndex);
     lineEndsWithHyphenatedWord.push_back(lineEndedWithHyphenation);
     splitPrefixWordIndexes.push_back(splitPrefixIndex);
@@ -1192,11 +1246,11 @@ void ParsedText::computeHyphenatedLineBreaksFromIndex(
       const bool allowFallbackBreaks = isFirstWord;
 
       bool insertedHyphen = false;
-      if ((hyphenationEnabled || isFirstWord) && availableWidth > 0 &&
+      if ((authoredHyphenationAllowed() || isFirstWord) && availableWidth > 0 &&
           hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks,
                                &insertedHyphen)) {
         interWordGaps.insert(interWordGaps.begin() + currentIndex + 1, 0);
-        lineEndedWithHyphenation = hyphenationEnabled;
+        lineEndedWithHyphenation = authoredHyphenationAllowed();
         splitPrefixIndex = static_cast<int>(currentIndex);
         splitNeedsInsertedHyphen = insertedHyphen;
         lineWidth += spacing + wordWidths[currentIndex];
@@ -1211,7 +1265,8 @@ void ParsedText::computeHyphenatedLineBreaksFromIndex(
       break;
     }
 
-    while (currentIndex > lineStart + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex]) {
+    while (currentIndex > lineStart + 1 && currentIndex < wordWidths.size() && continuesVec[currentIndex] &&
+           !(wordTypography_[currentIndex] & wordTypography::BREAK_BEFORE)) {
       --currentIndex;
     }
 
@@ -1222,6 +1277,16 @@ void ParsedText::computeHyphenatedLineBreaksFromIndex(
       splitNeedsInsertedHyphen = false;
     }
 
+    if (lineIdx == 0 && firstLineEnd_ != 0) {
+      firstLineEnd_ = currentIndex;
+      // Restore normal metrics beyond the actual first line, including a newly split suffix.
+      for (size_t j = currentIndex; j < words.size(); ++j) {
+        wordWidths[j] =
+            measureWordWidth(renderer, fontId, words[j], layoutStyle(j), false, wordScale(j), layoutTypography(j));
+        if (j) interWordGaps[j] = wordGap(renderer, fontId, j - 1, j, continuesVec[j]);
+      }
+    }
+    consecutiveHyphenLines_ = lineEndedWithHyphenation ? std::min<int>(255, consecutiveHyphenLines_ + 1) : 0;
     lineBreakIndices.push_back(currentIndex);
     lineEndsWithHyphenatedWord.push_back(lineEndedWithHyphenation);
     splitPrefixWordIndexes.push_back(splitPrefixIndex);
@@ -1243,11 +1308,25 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   }
 
   const std::string& word = words[wordIndex];
-  const auto style = wordStyles[wordIndex];
+  const auto style = layoutStyle(wordIndex);
   const float scale = wordScale(wordIndex);
 
   // Collect candidate breakpoints (byte offsets and hyphen requirements).
   auto breakInfos = Hyphenator::breakOffsets(word, allowFallbackBreaks);
+  if (allowFallbackBreaks && blockStyle.hyphens == CssHyphens::None) {
+    // CSS disables discretionary hyphens, including U+00AD. Emergency wrapping
+    // still prevents a single oversized token from being clipped, without ink
+    // for an inserted hyphen and without splitting before a combining mark.
+    const auto* start = reinterpret_cast<const unsigned char*>(word.c_str());
+    const auto* cursor = start;
+    bool hasVisiblePrefix = false;
+    while (*cursor) {
+      const size_t offset = cursor - start;
+      const uint32_t cp = utf8NextCodepoint(&cursor);
+      if (hasVisiblePrefix && cp != 0x00ad && !utf8IsCombiningMark(cp)) breakInfos.push_back({offset, false});
+      if (cp != 0x00ad) hasVisiblePrefix = true;
+    }
+  }
   if (breakInfos.empty()) {
     return false;
   }
@@ -1264,15 +1343,45 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
     }
 
     const bool needsHyphen = info.requiresInsertedHyphen;
-    const int prefixWidth = measureWordWidth(renderer, fontId, word.substr(0, offset), style, needsHyphen, scale,
-                                             wordTypography_[wordIndex]);
+    const bool softBreak = offset >= SOFT_HYPHEN_BYTES &&
+                           word.compare(offset - SOFT_HYPHEN_BYTES, SOFT_HYPHEN_BYTES, SOFT_HYPHEN_UTF8) == 0;
+    const bool explicitBreak = softBreak || !needsHyphen;
+    if (blockStyle.hyphens == CssHyphens::None && softBreak) continue;
+    if (!allowFallbackBreaks && !explicitBreak &&
+        (!hyphenationEnabled || blockStyle.hyphens == CssHyphens::None || blockStyle.hyphens == CssHyphens::Manual))
+      continue;
+    if (!allowFallbackBreaks && needsHyphen && blockStyle.hyphenateLimitLines &&
+        consecutiveHyphenLines_ >= blockStyle.hyphenateLimitLines)
+      continue;
+    if (needsHyphen && (blockStyle.hyphenateLimitBefore || blockStyle.hyphenateLimitAfter)) {
+      size_t prefix = 0, suffix = 0;
+      const auto* start = reinterpret_cast<const unsigned char*>(word.c_str());
+      const auto* cursor = start;
+      while (*cursor) {
+        const size_t byte = cursor - start;
+        const uint32_t cp = utf8NextCodepoint(&cursor);
+        // Combining accents and punctuation do not make a hyphenated piece
+        // longer. Count letters/digits supported by the language hyphenator.
+        if (utf8IsCombiningMark(cp) || (!isAlphabetic(cp) && !isAsciiDigit(cp))) continue;
+        if (byte < offset)
+          ++prefix;
+        else
+          ++suffix;
+      }
+      // A necessary emergency split keeps a very long token readable on narrow screens.
+      if (!allowFallbackBreaks && (prefix < blockStyle.hyphenateLimitBefore || suffix < blockStyle.hyphenateLimitAfter))
+        continue;
+    }
+    const bool insertVisibleHyphen = needsHyphen && blockStyle.hyphens != CssHyphens::None;
+    const int prefixWidth = measureWordWidth(renderer, fontId, word.substr(0, offset), style, insertVisibleHyphen,
+                                             scale, layoutTypography(wordIndex));
     if (prefixWidth > availableWidth || prefixWidth <= chosenWidth) {
       continue;  // Skip if too wide or not an improvement
     }
 
     chosenWidth = prefixWidth;
     chosenOffset = offset;
-    chosenNeedsHyphen = needsHyphen;
+    chosenNeedsHyphen = insertVisibleHyphen;
   }
 
   if (chosenWidth < 0) {
@@ -1291,9 +1400,10 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
 
   // Insert the remainder word (with matching style, size and continuation flag) directly after the prefix.
   words.insert(words.begin() + wordIndex + 1, remainder);
-  wordStyles.insert(wordStyles.begin() + wordIndex + 1, style);
+  wordStyles.insert(wordStyles.begin() + wordIndex + 1, wordStyles[wordIndex]);
   wordSizes.insert(wordSizes.begin() + wordIndex + 1, wordSizes[wordIndex]);
-  wordTypography_.insert(wordTypography_.begin() + wordIndex + 1, wordTypography_[wordIndex]);
+  wordTypography_.insert(wordTypography_.begin() + wordIndex + 1,
+                         wordTypography_[wordIndex] & ~wordTypography::BREAK_BEFORE);
   wordSources_.insert(wordSources_.begin() + wordIndex + 1, suffixSource);
 
   // Continuation flag handling after splitting a word into prefix + remainder.
@@ -1321,7 +1431,7 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   // Update cached widths to reflect the new prefix/remainder pairing.
   wordWidths[wordIndex] = static_cast<uint16_t>(chosenWidth);
   const uint16_t remainderWidth =
-      measureWordWidth(renderer, fontId, remainder, style, false, scale, wordTypography_[wordIndex]);
+      measureWordWidth(renderer, fontId, remainder, style, false, scale, layoutTypography(wordIndex));
   wordWidths.insert(wordWidths.begin() + wordIndex + 1, remainderWidth);
   if (outInsertedHyphen) {
     *outInsertedHyphen = chosenNeedsHyphen;
@@ -1446,6 +1556,7 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   // fragments layout split it into (bionic-reading halves, attached punctuation). Nothing on
   // the render path reads it; the xpos above already encodes the spacing.
   range.continues = &continuesVec;
+  range.firstLineOverride = lastBreakAt < firstLineEnd_ ? &blockStyle : nullptr;
   range.first = lastBreakAt;
   range.count = lineWordCount;
 
@@ -1479,23 +1590,35 @@ float ParsedText::wordGap(const GfxRenderer& renderer, int fontId, size_t left, 
   // Preserved spaces are already part of the preceding token's measured advance. This
   // boundary can wrap, but must not add the normal synthetic collapsed space as well.
   if (!continued && !words[left].empty() && words[left].back() == ' ') continued = true;
-  const auto a = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[left]), wordScale(left));
-  const auto b = renderer.resolveTextFont(fontId, wordTypography::family(wordTypography_[right]), wordScale(right));
+  const auto a = renderer.resolveTextFont(fontId, wordTypography::family(layoutTypography(left)), wordScale(left));
+  const auto b = renderer.resolveTextFont(fontId, wordTypography::family(layoutTypography(right)), wordScale(right));
   const float scale = wordScale(left) * a.scale;
   float gap;
   if (continued) {
-    gap = (a.fontId == b.fontId && wordStyles[left] == wordStyles[right] && wordScale(left) == wordScale(right))
+    gap = (a.fontId == b.fontId && layoutStyle(left) == layoutStyle(right) && wordScale(left) == wordScale(right))
               ? renderer.getKerning(a.fontId, lastCodepoint(words[left]), firstCodepoint(words[right]),
-                                    wordStyles[left]) *
+                                    layoutStyle(left)) *
                     scale
               : 0.0f;
-    gap += wordTypography::tracking(wordTypography_[left]) / 16.0f;
+    gap += wordTypography::tracking(layoutTypography(left)) / 16.0f;
   } else {
-    gap =
-        renderer.getSpaceAdvance(a.fontId, lastCodepoint(words[left]), firstCodepoint(words[right]), wordStyles[left]) *
-        scale;
+    gap = renderer.getSpaceAdvance(a.fontId, lastCodepoint(words[left]), firstCodepoint(words[right]),
+                                   layoutStyle(left)) *
+          scale;
     // A collapsed space has a character boundary on each side.
-    gap += (wordTypography::tracking(wordTypography_[left]) + wordTypography::tracking(wordTypography_[right])) / 16.0f;
+    gap +=
+        (wordTypography::tracking(layoutTypography(left)) + wordTypography::tracking(layoutTypography(right))) / 16.0f;
   }
   return std::round(gap);
+}
+
+EpdFontFamily::Style ParsedText::layoutStyle(const size_t index) const {
+  return index < firstLineEnd_ ? static_cast<EpdFontFamily::Style>(blockStyle.firstLineFontStyle(wordStyles[index]))
+                               : wordStyles[index];
+}
+uint32_t ParsedText::layoutTypography(const size_t index) const {
+  return index < firstLineEnd_ ? blockStyle.firstLineWordTypography(wordTypography_[index]) : wordTypography_[index];
+}
+bool ParsedText::authoredHyphenationAllowed() const {
+  return blockStyle.hyphens == CssHyphens::Manual || (hyphenationEnabled && blockStyle.hyphens != CssHyphens::None);
 }

@@ -15,6 +15,9 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+
+#include "../../src/util/SelectionPixels.h"
+int runFractionalChecks(GfxRenderer&, HalDisplay&);
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
@@ -79,7 +82,7 @@ int main(int argc, char** argv) {
             d.fb.fill(255);
             const auto& family = id == 1 ? bookFamily : sansFamily;
             const auto m =
-                textRun::walk(family, sample, style, scale, tracking, [](uint32_t, int, int, float, bool) {});
+                textRun::walk(family, sample, style, scale, tracking, [](uint32_t, int, int, float, bool, int8_t) {});
             g.drawTextSpaced(id, 30, 100, sample, true, style, scale, tracking);
             int minx = 480, maxx = -1;
             for (int yy = 0; yy < 800; ++yy)
@@ -123,6 +126,72 @@ int main(int argc, char** argv) {
   std::cout << "independent HHHH advance and empty-ink checks=24 passed\n";
   std::cout << "real glyph metric/ink checks=" << checks << " failures=" << failures << "\n";
   assert(failures == 0);
+  // Selection must invert the original raster, preserving every fractional glyph
+  // position. Overlapping padding, off-screen rectangles and the 512px tile seam
+  // are checked independently in every orientation against the original bits.
+  int selectionChecks = 0;
+  for (auto orientation : {GfxRenderer::Portrait, GfxRenderer::LandscapeClockwise, GfxRenderer::PortraitInverted,
+                           GfxRenderer::LandscapeCounterClockwise}) {
+    g.setOrientation(orientation);
+    for (int id : {1, 2})
+      for (float scale : {.525f, .75f})
+        for (int tracking : {-8, 32}) {
+          d.fb.fill(255);
+          const char* phrase = "north\xE2\x80\x94south";
+          const auto range = g.getTextRangeSpaced(id, phrase, EpdFontFamily::ITALIC, scale, tracking, 6, 10);
+          g.drawTextSpaced(id, 30, 100, phrase, true, EpdFontFamily::ITALIC, scale, tracking);
+          const auto original = d.fb;
+          const std::array<selectionPixels::Rect, 4> rectangles{
+              {{30 + range.x - 2, 98, range.right - range.x + 4, 40},
+               {30 + range.x, 100, 8, 12},  // overlap must invert once
+               {-5, -3, 12, 9},
+               {508, 160, 12, 5}}};
+          const auto forEach = [&](auto emit) {
+            for (auto r : rectangles) emit(r);
+          };
+          selectionPixels::invert(g, forEach);
+          for (int y = 0; y < g.getScreenHeight(); ++y)
+            for (int x = 0; x < g.getScreenWidth(); ++x) {
+              int px = 0, py = 0;
+              switch (orientation) {
+                case GfxRenderer::Portrait:
+                  px = y;
+                  py = 479 - x;
+                  break;
+                case GfxRenderer::LandscapeClockwise:
+                  px = 799 - x;
+                  py = 479 - y;
+                  break;
+                case GfxRenderer::PortraitInverted:
+                  px = 799 - y;
+                  py = x;
+                  break;
+                case GfxRenderer::LandscapeCounterClockwise:
+                  px = x;
+                  py = y;
+                  break;
+              }
+              const bool before = !(original[py * 100 + px / 8] & (0x80 >> (px % 8)));
+              bool selected = false;
+              for (auto r : rectangles) selected |= x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
+              assert(g.getPixel(x, y) == (before != selected));
+            }
+          if (selectionChecks == 0) {
+            std::ofstream image("selection.pgm", std::ios::binary);
+            image << "P5\n480 800\n255\n";
+            for (int y = 0; y < 800; ++y)
+              for (int x = 0; x < 480; ++x) {
+                const char pixel = g.getPixel(x, y) ? 0 : static_cast<char>(255);
+                image.write(&pixel, 1);
+              }
+          }
+          selectionPixels::invert(g, forEach);
+          assert(d.fb == original);
+          ++selectionChecks;
+        }
+  }
+  g.setOrientation(GfxRenderer::Portrait);
+  std::cout << "selection original-raster union/orientation cases=" << selectionChecks << " passed\n";
   d.fb = sampleFrame;
   std::ofstream out("frame.pgm", std::ios::binary);
   out << "P5\n480 800\n255\n";
@@ -133,6 +202,7 @@ int main(int argc, char** argv) {
     }
   int result =
       runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 && std::string(argv[1]) != "-" ? argv[1] : nullptr);
+  result |= runFractionalChecks(g, d);
 #ifdef WITCH_TEST_OUTLINE
   if (argc > 2) result |= runOutlineChecks(g, d, argv[2]);
 #endif

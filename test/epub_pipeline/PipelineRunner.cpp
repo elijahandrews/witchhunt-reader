@@ -95,6 +95,13 @@ void dumpPage(std::ostream& out, const Page& page, const uint16_t pageIndex, con
       case TAG_PageTable:
         dumpTableFragment(out, static_cast<const PageTableFragment&>(*el), cacheDir);
         break;
+      case TAG_PageBox: {
+        const auto& box = static_cast<const PageBox&>(*el);
+        out << "  BOX y=" << box.yPos << " x=" << box.xPos << " w=" << box.width << " h=" << box.height
+            << " gray=" << box.gray << " top=" << static_cast<int>(box.top)
+            << " bottom=" << static_cast<int>(box.bottom) << "\n";
+        break;
+      }
       case TAG_PageHR:
         out << "  HR y=" << el->yPos << " x=" << el->xPos << "\n";
         break;

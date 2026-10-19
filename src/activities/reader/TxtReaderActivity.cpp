@@ -103,6 +103,7 @@ void TxtReaderActivity::onReaderExit() {
 }
 
 bool TxtReaderActivity::onConfirmShortPress() {
+  statusBarSourcePage = -1;
   if (bookmarkStore.isEmpty()) {
     return false;
   }
@@ -637,6 +638,7 @@ bool TxtReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gfx
 }
 
 void TxtReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION action) {
+  if (action != CrossPointSettings::BTN_TOGGLE_STATUS_BAR) statusBarSourcePage = -1;
   using BA = CrossPointSettings::BUTTON_ACTION;
   auto clampPage = [this]() {
     if (currentPage < 0) currentPage = 0;
@@ -704,6 +706,21 @@ void TxtReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION a
       ReaderUtils::enforceExitFullRefresh(renderer);
       finish();
       break;
+    case BA::BTN_TOGGLE_STATUS_BAR: {
+      if (!txt) break;
+      RenderLock lock{RenderLock::ExclusiveActivityAccess{}};
+      initializeReader();
+      const size_t source = sourceBeforeStatusBarReflow();
+      SETTINGS.statusBarVisible = !SETTINGS.statusBarVisible;
+      SETTINGS.saveToFile();
+      initialized = false;
+      initializeReader();
+      restoreStatusBarSource(source);
+      saveProgress();
+      ReaderUtils::enforceExitFullRefresh(renderer);
+      requestUpdate();
+      break;
+    }
     case BA::BTN_CYCLE_ORIENTATION: {
       const uint8_t nextOrientation =
           static_cast<uint8_t>((SETTINGS.orientation + 1) % CrossPointSettings::ORIENTATION_COUNT);

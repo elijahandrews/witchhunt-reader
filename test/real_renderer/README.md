@@ -150,3 +150,36 @@ raster bounds and advances against known design units.
 Use `--sanitize` for AddressSanitizer and UndefinedBehaviorSanitizer throughout
 the renderer, SD loader, optional outline backend and display-driver audit.
 The same host-versus-panel limitations still apply.
+
+Dictionary cursor regressions also invert the production framebuffer at fractional scales
+(0.525 and 0.75) with signed tracking in both built-in families. The 32 cases cover
+all four orientations, overlapping padding, off-screen boxes and a row-tile seam.
+Every output pixel must equal the original bit XOR the rectangle union, and a
+second inversion must recover the original framebuffer byte-for-byte. This
+preserves the exact original raster instead of repainting a suffix at a rounded
+pen position. `selection.png` shows a synthetic dash-separated dictionary word selection.
+
+
+## Fractional glyph positioning
+
+Two-bit text in the EPUB/scaled glyph walk retains horizontal positions to 1/16
+of a display pixel. The area filter combines the origin with the scaled bearing
+before quantization. Native-size glyphs use an equivalent two-column filter.
+This shifts stored coverage; it does not invent higher-resolution outlines for
+legacy bitmap fonts or change their hinting. HD and runtime LIGHT-hinted fonts
+retain their existing denser rasters. Native one-bit UI fonts keep grid fitting.
+
+The bounded scaled-glyph cache includes the horizontal phase in an existing
+padding byte; its allocation budget is unchanged. Measuring, selection bounds,
+BW, captured AA and staged AA all use the same position. Font advances and
+kerning data are unchanged. Fractional word-edge coverage can add one pixel to
+an ink box, so section caches are versioned to rebuild their layout.
+
+`fractional.cpp` independently projects source-pixel rectangles onto the output
+grid. It tests all 16 horizontal phases, four scales and orientations, all five
+darkness settings, negative tracking/bearings, clipped output, cached/repeated
+and uncached non-BMP glyphs, and both AA workflows. It also checks the original
+Bookerly 10pt advances for “still” and emits `fractional-spacing.png` with original
+sample text at four sizes. It detects cache aliases between phases and premature
+rounding of a fractional source origin at coverage ties. These are host raster
+checks; physical panel quality and page-turn timing still require device testing.

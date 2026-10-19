@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <HeapFit.h>
 #include <Logging.h>
+#include <PublisherBox.h>
 #include <Serialization.h>
 
 void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
@@ -34,11 +35,15 @@ std::unique_ptr<PageLine> PageLine::deserialize(FsFile& file, BuildArena* scratc
 
 void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
   (void)fontId;
+  clearPublisherImageBackdrop(renderer, xPos + xOffset, yPos + yOffset, imageBlock->getWidth(),
+                              imageBlock->getRenderedHeight());
   imageBlock->render(renderer, xPos + xOffset, yPos + yOffset);
 }
 
 void PageImage::renderWithForceLoad(GfxRenderer& renderer, const int xOffset, const int yOffset, const bool forceLoad,
                                     const bool monochromeOutput, const bool alsoCacheOtherVariant) {
+  clearPublisherImageBackdrop(renderer, xPos + xOffset, yPos + yOffset, imageBlock->getWidth(),
+                              imageBlock->getRenderedHeight());
   imageBlock->render(renderer, xPos + xOffset, yPos + yOffset, forceLoad, monochromeOutput, alsoCacheOtherVariant);
 }
 
@@ -84,6 +89,33 @@ std::unique_ptr<PageHR> PageHR::deserialize(FsFile& file) {
   return std::unique_ptr<PageHR>(new PageHR(xPos, yPos, width));
 }
 
+void PageBox::render(GfxRenderer& renderer, const int, const int xOffset, const int yOffset) {
+  drawPublisherBox(renderer, xPos + xOffset, yPos + yOffset, width, height, gray, top, bottom);
+}
+
+bool PageBox::serialize(FsFile& file) {
+  const auto write = [&](const auto& value) {
+    return file.write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)) == sizeof(value);
+  };
+  return write(xPos) && write(yPos) && write(width) && write(height) && write(gray) && write(top) && write(bottom);
+}
+
+std::unique_ptr<PageBox> PageBox::deserialize(FsFile& file) {
+  int16_t x, y, w, h;
+  uint16_t gray;
+  uint8_t top, bottom;
+  const auto read = [&](auto& value) {
+    return file.read(reinterpret_cast<uint8_t*>(&value), sizeof(value)) == sizeof(value);
+  };
+  if (!read(x) || !read(y) || !read(w) || !read(h) || !read(gray) || !read(top) || !read(bottom) || w < 0 || h < 0 ||
+      w > 4096 || h > 4096 || gray > 256)
+    return nullptr;
+  auto box = std::unique_ptr<PageBox>(new PageBox(x, y, w, gray, top));
+  box->height = h;
+  box->bottom = bottom;
+  return box;
+}
+
 void PageTableFragment::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
   const int drawX = xPos + xOffset;
   const int drawY = yPos + yOffset;
@@ -121,6 +153,8 @@ void PageTableFragment::render(GfxRenderer& renderer, const int fontId, const in
       // the decode/cache machinery lives in ImageBlock; the BW cache is built during
       // the warm pass and simply blitted here (and again in grayscale strip passes).
       if (cell.image) {
+        clearPublisherImageBackdrop(renderer, colX[col] + TABLE_CELL_PADDING, lineY, cell.image->getWidth(),
+                                    cell.image->getRenderedHeight());
         cell.image->render(renderer, colX[col] + TABLE_CELL_PADDING, lineY, /*forceLoad=*/true,
                            /*monochromeOutput=*/true);
       }
@@ -295,8 +329,54 @@ std::unique_ptr<PageTableFragment> PageTableFragment::deserialize(FsFile& file, 
       new PageTableFragment(columnCount, totalWidth, totalHeight, std::move(rows), xPos, yPos, hasBorder));
 }
 
+namespace {
+bool finalizePageBoxes(const Page& page, GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool abortable) {
+  if (!renderer.isErasingOpaqueGlyphs() ||
+      std::none_of(page.elements.begin(), page.elements.end(),
+                   [](const auto& element) { return element->getTag() == TAG_PageBox; }))
+    return true;
+  return finalizePublisherBoxes(
+      renderer,
+      [&](auto emit) {
+        for (const auto& element : page.elements) {
+          if (element->getTag() == TAG_PageBox) {
+            const auto& box = static_cast<const PageBox&>(*element);
+            emit(box.xPos + xOffset, box.yPos + yOffset, box.width, box.height, box.gray, box.top, box.bottom);
+          } else if (element->getTag() == TAG_PageImage) {
+            const auto& image = static_cast<const PageImage&>(*element);
+            emit(image.xPos + xOffset, image.yPos + yOffset, image.getImageBlock().getWidth(),
+                 image.getImageBlock().getRenderedHeight(), uint16_t(255), uint8_t(0), uint8_t(0));
+          } else if (element->getTag() == TAG_PageTable) {
+            const auto& table = static_cast<const PageTableFragment&>(*element);
+            if (!table.getColumnCount()) continue;
+            int rowY = table.yPos + yOffset;
+            for (const auto& row : table.getRows()) {
+              uint8_t column = 0;
+              for (const auto& cell : row.cells) {
+                if (column >= table.getColumnCount()) break;
+                if (cell.image) {
+                  const int x = table.xPos + xOffset + TABLE_CELL_PADDING +
+                                static_cast<uint32_t>(table.getTotalWidth()) * column / table.getColumnCount();
+                  const int y =
+                      rowY + TABLE_CELL_PADDING +
+                      cell.lines.size() * (cell.lineAdvance ? cell.lineAdvance : renderer.getLineHeight(fontId));
+                  emit(x, y, cell.image->getWidth(), cell.image->getRenderedHeight(), uint16_t(255), uint8_t(0),
+                       uint8_t(0));
+                }
+                column += std::min<uint8_t>(cell.colSpan ? cell.colSpan : 1, table.getColumnCount() - column);
+              }
+              rowY += row.height;
+            }
+          }
+        }
+      },
+      [&] { return abortable && CooperativeAbort::shouldAbortLongTask(); });
+}
+}  // namespace
+
 void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                   const bool forceLoadLargeImages, const bool monochromeOutput) const {
+  finalizePageBoxes(*this, renderer, fontId, xOffset, yOffset, false);
   for (auto& element : elements) {
     if (element->getTag() == TAG_PageImage) {
       static_cast<PageImage&>(*element).renderWithForceLoad(renderer, xOffset, yOffset, forceLoadLargeImages,
@@ -312,6 +392,7 @@ void Page::renderImagesFromGrayscaleCache(GfxRenderer& renderer, const int xOffs
     if (element->getTag() != TAG_PageImage) continue;
     const auto& pi = static_cast<const PageImage&>(*element);
     const auto& ib = pi.getImageBlock();
+    clearPublisherImageBackdrop(renderer, pi.xPos + xOffset, pi.yPos + yOffset, ib.getWidth(), ib.getRenderedHeight());
     ib.renderGrayscaleFromCache(renderer, pi.xPos + xOffset, pi.yPos + yOffset);
   }
 }
@@ -396,6 +477,7 @@ bool Page::allImagesArePlaceholders(const bool forceLoadLargeImages, const bool 
 
 bool Page::renderTextOnly(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                           const bool abortable) const {
+  if (!finalizePageBoxes(*this, renderer, fontId, xOffset, yOffset, abortable)) return false;
   for (auto& element : elements) {
     // Scan every non-image element so prewarm covers text from table fragments
     // and other composite text containers, not only plain PageLine entries.
@@ -483,6 +565,10 @@ std::unique_ptr<Page> Page::deserialize(FsFile& file, BuildArena* scratch) {
       auto hr = PageHR::deserialize(file);
       if (!hr) return nullptr;
       page->elements.push_back(std::move(hr));
+    } else if (tag == TAG_PageBox) {
+      auto box = PageBox::deserialize(file);
+      if (!box) return nullptr;
+      page->elements.push_back(std::move(box));
     } else {
       LOG_ERR("PGE", "Deserialization failed: Unknown tag %u", tag);
       return nullptr;

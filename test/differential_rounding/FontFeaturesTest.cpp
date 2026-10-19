@@ -64,7 +64,7 @@ TEST(FontFeatures, AuthoredCapsUseFullScaleAndAlternateKerning) {
   Font f;
   std::vector<uint32_t> keys;
   const auto m = textRun::walk(f.family, "Aa", EpdFontFamily::SMALL_CAPS, 1, 0,
-                               [&](uint32_t cp, int, int, float scale, bool synthetic) {
+                               [&](uint32_t cp, int, int, float scale, bool synthetic, int8_t) {
                                  keys.push_back(cp);
                                  EXPECT_FLOAT_EQ(scale, 1);
                                  EXPECT_FALSE(synthetic);
@@ -153,7 +153,73 @@ TEST(FontFeatures, SyntheticCapsPreserveNegativeFractionalKerning) {
   int width = 0, height = 0;
   f.font.getTextDimensions("nn", &width, &height, 1);
   // Each capital is20px wide, reduced to15px. Pair kerning is -12/16
-  // sourcepx, reduced to -9/16; the second glyph starts at14px.
+  // sourcepx, reduced to -9/16. The legacy native path snaps to14px;
+  // the fractional text walk places it at14+7/16 and includes its edge coverage.
   EXPECT_EQ(width, 29);
-  EXPECT_EQ(textRun::walk(f.family, "nn", EpdFontFamily::SMALL_CAPS, 1, 0, [](auto...) {}).right, 29);
+  EXPECT_EQ(textRun::walk(f.family, "nn", EpdFontFamily::SMALL_CAPS, 1, 0, [](auto...) {}).right, 30);
+}
+
+TEST(FontFeatures, SelectedSuffixUsesExactTrackedScaledGlyphPositions) {
+  Font f;
+  textRun::CharacterRange suffix{2, 2};
+  textRun::walk<true>(f.family, "AAA", EpdFontFamily::REGULAR, .5f, 16, [](auto...) {}, &suffix);
+  ASSERT_TRUE(suffix.found);
+  EXPECT_EQ(suffix.left, 22);  // two 10px glyphs and two 1px tracking intervals
+  EXPECT_EQ(suffix.right, 32);
+  textRun::CharacterRange prefix{0, 0};
+  textRun::walk<true>(f.family, "AAA", EpdFontFamily::REGULAR, .5f, 16, [](auto...) {}, &prefix);
+  EXPECT_EQ(prefix.left, 0);
+  EXPECT_EQ(prefix.right, 10);
+}
+TEST(FontFeatures, SelectedLigatureConstituentRetainsItsGlyphWithoutSelectingNextLetter) {
+  Font f;
+  for (uint32_t character : {0u, 1u, 2u}) {
+    textRun::CharacterRange range{character, character};
+    textRun::walk<true>(f.family, "ffiA", EpdFontFamily::REGULAR, 1, 0, [](auto...) {}, &range);
+    ASSERT_TRUE(range.found);
+    EXPECT_EQ(range.left, 0);
+    EXPECT_EQ(range.right, 20);
+  }
+  textRun::CharacterRange next{3, 3};
+  textRun::walk<true>(f.family, "ffiA", EpdFontFamily::REGULAR, 1, 0, [](auto...) {}, &next);
+  EXPECT_EQ(next.left, 20);
+  EXPECT_EQ(next.right, 40);
+}
+TEST(FontFeatures, SelectedRangeUsesUnicodeCharactersAndSmallCapsKerning) {
+  Font f;
+  textRun::CharacterRange range{1, 1};
+  textRun::walk<true>(f.family, "Aa", EpdFontFamily::SMALL_CAPS, 1, 0, [](auto...) {}, &range);
+  ASSERT_TRUE(range.found);
+  EXPECT_EQ(range.left, 19);
+  EXPECT_EQ(range.right, 29);
+  // A missing multibyte character still occupies exactly one source-character position.
+  range = {1, 1};
+  textRun::walk<true>(
+      f.family,
+      "\xC3\xA9"
+      "A",
+      EpdFontFamily::REGULAR, 1, 0, [](auto...) {}, &range);
+  ASSERT_TRUE(range.found);
+  EXPECT_EQ(range.left, 0);
+  EXPECT_EQ(range.right, 20);
+  range = {2, 4};
+  textRun::walk<true>(f.family, "A", EpdFontFamily::REGULAR, 1, 0, [](auto...) {}, &range);
+  EXPECT_FALSE(range.found);
+}
+
+TEST(FontFeatures, DisabledLigaturesKeepIndividualGlyphsAndCharacterRanges) {
+  Font font;
+  std::vector<uint32_t> keys;
+  auto collect = [&](uint32_t cp, int, int, float, bool, int8_t) { keys.push_back(cp); };
+  const auto joined = textRun::walk(font.family, "ffi", EpdFontFamily::REGULAR, 1, 0, collect);
+  EXPECT_EQ(keys, (std::vector<uint32_t>{EPD_ALTERNATE_GLYPH_BASE + 5}));
+  EXPECT_EQ(joined.advance, 20);
+  keys.clear();
+  textRun::CharacterRange range{1, 1};
+  const auto separate = textRun::walk<true>(font.family, "ffi", EpdFontFamily::REGULAR, 1, 0, collect, &range, false);
+  EXPECT_EQ(keys, (std::vector<uint32_t>{'f', 'f', 'i'}));
+  EXPECT_EQ(separate.advance, 60);
+  ASSERT_TRUE(range.found);
+  EXPECT_EQ(range.left, 20);
+  EXPECT_EQ(range.right, 40);
 }

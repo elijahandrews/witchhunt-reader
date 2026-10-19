@@ -28,6 +28,7 @@ enum PageElementTag : uint8_t {
   TAG_PageImage = 2,
   TAG_PageTable = 3,
   TAG_PageHR = 4,
+  TAG_PageBox = 5,
 };
 
 // represents something that has been added to a page
@@ -81,6 +82,21 @@ class PageHR final : public PageElement {
   bool serialize(FsFile& file) override;
   PageElementTag getTag() const override { return TAG_PageHR; }
   static std::unique_ptr<PageHR> deserialize(FsFile& file);
+};
+
+// A bounded fragment of a publisher box. Stored before its contents so the
+// background never covers text; fragments on later pages omit the top border.
+class PageBox final : public PageElement {
+ public:
+  int16_t width, height = 0;
+  uint16_t gray;
+  uint8_t top, bottom = 0;
+  PageBox(int16_t x, int16_t y, int16_t w, uint16_t gray, uint8_t top)
+      : PageElement(x, y), width(w), gray(gray), top(top) {}
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset) override;
+  bool serialize(FsFile& file) override;
+  PageElementTag getTag() const override { return TAG_PageBox; }
+  static std::unique_ptr<PageBox> deserialize(FsFile& file);
 };
 
 struct TableCell {

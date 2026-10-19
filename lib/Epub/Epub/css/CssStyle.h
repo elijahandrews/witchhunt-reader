@@ -11,7 +11,7 @@ enum class CssTextAlign : uint8_t { Justify = 0, Left = 1, Center = 2, Right = 3
 // must beat a length set earlier in the cascade rather than be ignored as unparseable.
 // imageWidth/imageHeight report it as unset; letterSpacing uses it as the explicit
 // inherit/unset marker. The element resolver handles it before toPixels().
-enum class CssUnit : uint8_t { Pixels = 0, Em = 1, Rem = 2, Points = 3, Percent = 4, Auto = 5 };
+enum class CssUnit : uint8_t { Pixels = 0, Em = 1, Rem = 2, Points = 3, Percent = 4, Auto = 5, Inherit = 6 };
 
 // Represents a CSS length value with its unit, allowing deferred resolution to pixels
 struct CssLength {
@@ -65,13 +65,18 @@ enum class CssTextDecoration : uint8_t { None = 0, Underline = 1, LineThrough = 
 
 // Display options. Block and Inline only matter where the tag does not already decide it: a
 // <span> styled display:block is laid out as a block, one styled display:inline is not.
-enum class CssDisplay : uint8_t { Block = 0, None = 1, Inline = 2 };
+enum class CssDisplay : uint8_t { Block = 0, None = 1, Inline = 2, InlineBlock = 3 };
 
 // Vertical align options relevant for inline text positioning
 enum class CssVerticalAlign : uint8_t { Baseline = 0, Super = 1, Sub = 2 };
 
 // Float options — used to detect inline images beside paragraph text
 enum class CssFloat : uint8_t { None = 0, Left = 1, Right = 2 };
+
+enum class CssClear : uint8_t { None = 0, Left = 1, Right = 2, Both = 3, Inherit = 4 };
+enum class CssHyphens : uint8_t { Inherit = 0, None = 1, Manual = 2, Auto = 3 };
+enum class CssLigatures : uint8_t { Inherit = 0, Normal = 1, None = 2 };
+enum class CssBorderStyle : uint8_t { None = 0, Solid = 1, Inherit = 2 };
 
 // Inherit is kept explicitly so it can cancel an earlier declaration in the cascade.
 enum class CssTextTransform : uint8_t { None = 0, Uppercase = 1, Lowercase = 2, Inherit = 3 };
@@ -114,6 +119,22 @@ struct CssPropertyFlags {
   uint32_t opacityZero : 1;
   uint32_t visibilityHidden : 1;
 
+  uint32_t minHeight : 1;
+  uint32_t maxHeight : 1;
+  uint32_t maxWidth : 1;
+  uint32_t borderTopWidth : 1;
+  uint32_t borderBottomWidth : 1;
+  uint32_t borderTopStyle : 1;
+  uint32_t borderBottomStyle : 1;
+  uint32_t backgroundGray : 1;
+  uint32_t breakInsideAvoid : 1;
+  uint32_t cssClear : 1;
+  uint32_t hyphens : 1;
+  uint32_t ligatures : 1;
+  uint32_t hyphenateLimitBefore : 1;
+  uint32_t hyphenateLimitAfter : 1;
+  uint32_t hyphenateLimitLines : 1;
+
   CssPropertyFlags()
       : textAlign(0),
         fontStyle(0),
@@ -145,17 +166,38 @@ struct CssPropertyFlags {
         whiteSpace(0),
         colorTransparent(0),
         opacityZero(0),
-        visibilityHidden(0) {}
+        visibilityHidden(0),
+        minHeight(0),
+        maxHeight(0),
+        maxWidth(0),
+        borderTopWidth(0),
+        borderBottomWidth(0),
+        borderTopStyle(0),
+        borderBottomStyle(0),
+        backgroundGray(0),
+        breakInsideAvoid(0),
+        cssClear(0),
+        hyphens(0),
+        ligatures(0),
+        hyphenateLimitBefore(0),
+        hyphenateLimitAfter(0),
+        hyphenateLimitLines(0) {}
 
   [[nodiscard]] bool anySet() const {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
            imageWidth || display || verticalAlign || listStyleNone || pageBreakBefore || pageBreakAfter || lineHeight ||
            fontSizeMultiplier || cssFloat || smallCaps || textTransform || fontFamily || letterSpacing || whiteSpace ||
-           colorTransparent || opacityZero || visibilityHidden;
+           colorTransparent || opacityZero || visibilityHidden || minHeight || maxHeight || maxWidth ||
+           borderTopWidth || borderBottomWidth || borderTopStyle || borderBottomStyle || backgroundGray ||
+           breakInsideAvoid || cssClear || hyphens || ligatures || hyphenateLimitBefore || hyphenateLimitAfter ||
+           hyphenateLimitLines;
   }
 
   void clearAll() {
+    minHeight = maxHeight = maxWidth = borderTopWidth = borderBottomWidth = borderTopStyle = borderBottomStyle =
+        backgroundGray = breakInsideAvoid = cssClear = hyphens = ligatures = hyphenateLimitBefore =
+            hyphenateLimitAfter = hyphenateLimitLines = 0;
     textAlign = fontStyle = fontWeight = textDecoration = textIndent = 0;
     marginTop = marginBottom = marginLeft = marginRight = 0;
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
@@ -214,11 +256,91 @@ struct CssStyle {
   bool opacityZero = false;
   bool visibilityHidden = false;  // visibility: hidden | collapse
 
+  // Luminance 0..255; 256 transparent; 257 explicit inherit. Limits use 255 for inherit.
+  CssLength minHeight = CssLength{};
+  CssLength maxHeight = CssLength{0, CssUnit::Auto};
+  CssLength maxWidth = CssLength{0, CssUnit::Auto};
+  CssLength borderTopWidth = CssLength{3};
+  CssLength borderBottomWidth = CssLength{3};
+  CssBorderStyle borderTopStyle = CssBorderStyle::None;
+  CssBorderStyle borderBottomStyle = CssBorderStyle::None;
+  uint16_t backgroundGray = 256;
+  bool breakInsideAvoid = false;
+  CssClear cssClear = CssClear::None;
+  CssHyphens hyphens = CssHyphens::Manual;
+  CssLigatures ligatures = CssLigatures::Normal;
+  uint8_t hyphenateLimitBefore = 2;
+  uint8_t hyphenateLimitAfter = 2;
+  uint8_t hyphenateLimitLines = 0;
+  bool breakInsideInherit = false;
+
   CssPropertyFlags defined;  // Tracks which properties were explicitly set
 
   // Apply properties from another style, only overwriting if the other style
   // has that property explicitly defined
   void applyOver(const CssStyle& base) {
+    if (base.defined.minHeight) {
+      minHeight = base.minHeight;
+      defined.minHeight = 1;
+    }
+    if (base.defined.maxHeight) {
+      maxHeight = base.maxHeight;
+      defined.maxHeight = 1;
+    }
+    if (base.defined.maxWidth) {
+      maxWidth = base.maxWidth;
+      defined.maxWidth = 1;
+    }
+    if (base.defined.borderTopWidth) {
+      borderTopWidth = base.borderTopWidth;
+      defined.borderTopWidth = 1;
+    }
+    if (base.defined.borderBottomWidth) {
+      borderBottomWidth = base.borderBottomWidth;
+      defined.borderBottomWidth = 1;
+    }
+    if (base.defined.borderTopStyle) {
+      borderTopStyle = base.borderTopStyle;
+      defined.borderTopStyle = 1;
+    }
+    if (base.defined.borderBottomStyle) {
+      borderBottomStyle = base.borderBottomStyle;
+      defined.borderBottomStyle = 1;
+    }
+    if (base.defined.backgroundGray) {
+      backgroundGray = base.backgroundGray;
+      defined.backgroundGray = 1;
+    }
+    if (base.defined.breakInsideAvoid) {
+      breakInsideAvoid = base.breakInsideAvoid;
+      defined.breakInsideAvoid = 1;
+    }
+    if (base.defined.cssClear) {
+      cssClear = base.cssClear;
+      defined.cssClear = 1;
+    }
+    if (base.defined.hyphens) {
+      hyphens = base.hyphens;
+      defined.hyphens = 1;
+    }
+    if (base.defined.ligatures) {
+      ligatures = base.ligatures;
+      defined.ligatures = 1;
+    }
+    if (base.defined.hyphenateLimitBefore) {
+      hyphenateLimitBefore = base.hyphenateLimitBefore;
+      defined.hyphenateLimitBefore = 1;
+    }
+    if (base.defined.hyphenateLimitAfter) {
+      hyphenateLimitAfter = base.hyphenateLimitAfter;
+      defined.hyphenateLimitAfter = 1;
+    }
+    if (base.defined.hyphenateLimitLines) {
+      hyphenateLimitLines = base.hyphenateLimitLines;
+      defined.hyphenateLimitLines = 1;
+    }
+    if (base.defined.breakInsideAvoid) breakInsideInherit = base.breakInsideInherit;
+
     if (base.hasTextAlign()) {
       textAlign = base.textAlign;
       defined.textAlign = 1;
@@ -348,6 +470,22 @@ struct CssStyle {
     }
   }
 
+  [[nodiscard]] bool hasMinHeight() const { return defined.minHeight; }
+  [[nodiscard]] bool hasMaxHeight() const { return defined.maxHeight; }
+  [[nodiscard]] bool hasMaxWidth() const { return defined.maxWidth; }
+  [[nodiscard]] bool hasBorderTopWidth() const { return defined.borderTopWidth; }
+  [[nodiscard]] bool hasBorderBottomWidth() const { return defined.borderBottomWidth; }
+  [[nodiscard]] bool hasBorderTopStyle() const { return defined.borderTopStyle; }
+  [[nodiscard]] bool hasBorderBottomStyle() const { return defined.borderBottomStyle; }
+  [[nodiscard]] bool hasBackgroundGray() const { return defined.backgroundGray; }
+  [[nodiscard]] bool hasBreakInsideAvoid() const { return defined.breakInsideAvoid; }
+  [[nodiscard]] bool hasCssClear() const { return defined.cssClear; }
+  [[nodiscard]] bool hasHyphens() const { return defined.hyphens; }
+  [[nodiscard]] bool hasLigatures() const { return defined.ligatures; }
+  [[nodiscard]] bool hasHyphenateLimitBefore() const { return defined.hyphenateLimitBefore; }
+  [[nodiscard]] bool hasHyphenateLimitAfter() const { return defined.hyphenateLimitAfter; }
+  [[nodiscard]] bool hasHyphenateLimitLines() const { return defined.hyphenateLimitLines; }
+
   [[nodiscard]] bool hasTextAlign() const { return defined.textAlign; }
   [[nodiscard]] bool hasFontStyle() const { return defined.fontStyle; }
   [[nodiscard]] bool hasFontWeight() const { return defined.fontWeight; }
@@ -390,6 +528,23 @@ struct CssStyle {
   [[nodiscard]] bool hasFontSizeMultiplier() const { return defined.fontSizeMultiplier; }
 
   void reset() {
+    minHeight = CssLength{};
+    maxHeight = CssLength{0, CssUnit::Auto};
+    maxWidth = CssLength{0, CssUnit::Auto};
+    borderTopWidth = CssLength{3};
+    borderBottomWidth = CssLength{3};
+    borderTopStyle = CssBorderStyle::None;
+    borderBottomStyle = CssBorderStyle::None;
+    backgroundGray = 256;
+    breakInsideAvoid = false;
+    cssClear = CssClear::None;
+    hyphens = CssHyphens::Manual;
+    ligatures = CssLigatures::Normal;
+    hyphenateLimitBefore = 2;
+    hyphenateLimitAfter = 2;
+    hyphenateLimitLines = 0;
+    breakInsideInherit = false;
+
     textAlign = CssTextAlign::Left;
     fontStyle = CssFontStyle::Normal;
     fontWeight = CssFontWeight::Normal;

@@ -30,8 +30,8 @@ class GfxRenderer {
   TextFont resolveTextFont(int fontId, uint8_t family, float = 1.0f) const {
     return {family == 2 ? -2000000 : (family == 1 ? -1000000 : fontId), 1.0f};
   }
-  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                            int16_t tracking) const {
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                            bool = true) const {
     ++spacedMeasurements;
     int count = 0;
     for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
@@ -42,12 +42,12 @@ class GfxRenderer {
     return std::max(
         0, static_cast<int>(std::lround(width * scale * familyScale + std::max(0, count - 1) * tracking / 16.0f)));
   }
-  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                         int16_t tracking) const {
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                         bool = true) const {
     return getTextAdvanceXSpaced(fontId, text, style, scale, tracking);
   }
   void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
-                      int16_t) const {
+                      int16_t, bool = true) const {
     drawTextScaled(fontId, x, y, text, black, style, scale);
   }
 

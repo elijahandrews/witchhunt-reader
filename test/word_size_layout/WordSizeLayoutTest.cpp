@@ -758,3 +758,298 @@ TEST(WordTypographyFloat, NoHyphenationOnlySplitsWordsTooWideForAnEmptyLine) {
     for (uint16_t i = 0; i < line->wordCount(); ++i)
       EXPECT_EQ(std::string(line->wordText(i)).find('-'), std::string::npos);
 }
+
+TEST(PublisherFirstLine, StylingAffectsBreakAndOnlyFirstPhysicalLine) {
+  GfxRenderer renderer;
+  for (auto whiteSpace : {CssWhiteSpace::Normal, CssWhiteSpace::PreWrap}) {
+    auto bs = noIndentStyle();
+    bs.alignment = CssTextAlign::Left;
+    bs.whiteSpace = whiteSpace;
+    bs.firstLineSmallCapsDefined = true;
+    bs.firstLineSmallCaps = 1;
+    bs.firstLineTrackingDefined = true;
+    bs.firstLineTracking = 32;
+    bs.firstLineLigaturesDefined = true;
+    bs.firstLineLigaturesNone = true;
+    ParsedText paragraph(false, false, bs);
+    for (int i = 0; i < 7; ++i) paragraph.addWord("aa", EpdFontFamily::ITALIC);
+    auto result = layout(paragraph, renderer, 50);
+    ASSERT_GE(result.lines.size(), 3u);
+    EXPECT_EQ(result.lines[0]->wordCount(), 1);
+    EXPECT_EQ(result.lines[1]->wordCount(), 2);
+    for (size_t line = 0; line < result.lines.size(); ++line) {
+      for (size_t i = 0; i < result.lines[line]->wordCount(); ++i) {
+        EXPECT_EQ(result.lines[line]->wordStyle(i), EpdFontFamily::ITALIC | (line ? 0 : EpdFontFamily::SMALL_CAPS));
+        EXPECT_EQ(wordTypography::tracking(result.lines[line]->wordTypography(i)), line ? 0 : 32);
+        EXPECT_EQ(wordTypography::ligatures(result.lines[line]->wordTypography(i)), line != 0);
+      }
+    }
+    FsFile file = HalFile::forReadWrite();
+    ASSERT_TRUE(result.lines[0]->serialize(file));
+    ASSERT_TRUE(file.seek(0));
+    auto cached = TextBlock::deserialize(file);
+    ASSERT_NE(cached, nullptr);
+    EXPECT_EQ(cached->wordTypography(0), result.lines[0]->wordTypography(0));
+    EXPECT_EQ(cached->wordStyle(0), result.lines[0]->wordStyle(0));
+  }
+}
+
+TEST(PublisherFirstLine, SplitRemainderReturnsToBaseTypography) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.firstLineTrackingDefined = true;
+  bs.firstLineTracking = 32;
+  bs.firstLineSmallCapsDefined = true;
+  bs.firstLineSmallCaps = 2;
+  ParsedText paragraph(false, true, bs);
+  const auto base = wordTypography::pack(wordTypography::Serif, -8) | wordTypography::NO_LIGATURES;
+  paragraph.addWord("ABCDEFGHIJKLMN", EpdFontFamily::REGULAR, false, false, 100, base);
+  auto result = layout(paragraph, renderer, 70);
+  ASSERT_GT(result.lines.size(), 1u);
+  for (size_t line = 1; line < result.lines.size(); ++line) {
+    EXPECT_EQ(result.lines[line]->wordTypography(0), base);
+    EXPECT_EQ(result.lines[line]->wordStyle(0), EpdFontFamily::REGULAR);
+  }
+}
+
+TEST(PublisherFirstLine, StreamingContinuationDoesNotRepeatFirstLineStyle) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.firstLineTrackingDefined = true;
+  bs.firstLineTracking = 16;
+  ParsedText paragraph(false, false, bs);
+  for (int i = 0; i < 12; ++i) paragraph.addWord("aa", EpdFontFamily::REGULAR);
+  size_t emitted = 0;
+  paragraph.layoutAndExtractLines(
+      renderer, kFontId, 50,
+      [&](std::unique_ptr<TextBlock> line, bool, bool) {
+        EXPECT_EQ(wordTypography::tracking(line->wordTypography(0)), emitted ? 0 : 16);
+        ++emitted;
+        return ParsedText::LineProcessResult::Accepted;
+      },
+      false);
+  ASSERT_GT(emitted, 0u);
+  for (int i = 0; i < 5; ++i) paragraph.addWord("aa", EpdFontFamily::REGULAR);
+  auto result = layout(paragraph, renderer, 50);
+  ASSERT_FALSE(result.lines.empty());
+  for (const auto& line : result.lines) EXPECT_EQ(wordTypography::tracking(line->wordTypography(0)), 0);
+}
+
+TEST(PublisherHyphenation, NoneSuppressesDiscretionaryHyphensAndEmergencyHyphenInk) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.hyphens = CssHyphens::None;
+  ParsedText paragraph(false, true, bs);
+  paragraph.addWord(
+      "ab\xc2\xad"
+      "cdefghijklmn",
+      EpdFontFamily::REGULAR);
+  auto result = layout(paragraph, renderer, 60);
+  ASSERT_GT(result.lines.size(), 1u);
+  std::string joined;
+  for (const auto& line : result.lines)
+    for (size_t i = 0; i < line->wordCount(); ++i) {
+      joined += line->wordText(i);
+      EXPECT_EQ(std::string(line->wordText(i)).find('-'), std::string::npos);
+      EXPECT_LE(line->wordBox(renderer, i, kFontId, 0, 0).width, 60);
+    }
+  EXPECT_EQ(joined, "abcdefghijklmn");
+}
+
+TEST(PublisherHyphenation, ManualAllowsSoftBreakWithReaderAutomaticSettingOff) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.hyphens = CssHyphens::Manual;
+  ParsedText paragraph(false, false, bs);
+  paragraph.addWord("xx", EpdFontFamily::REGULAR);
+  paragraph.addWord(
+      "abc\xc2\xad"
+      "def",
+      EpdFontFamily::REGULAR);
+  auto result = layout(paragraph, renderer, 65);
+  ASSERT_EQ(result.lines.size(), 2u);
+  ASSERT_EQ(result.lines[0]->wordCount(), 2u);
+  EXPECT_STREQ(result.lines[0]->wordText(1), "abc-");
+  EXPECT_STREQ(result.lines[1]->wordText(0), "def");
+}
+
+TEST(PublisherHyphenation, PrefixSuffixLimitsPreventTooShortDiscretionaryPieces) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.hyphens = CssHyphens::Manual;
+  bs.hyphenateLimitBefore = 4;
+  bs.hyphenateLimitAfter = 4;
+  ParsedText paragraph(false, true, bs);
+  paragraph.addWord("xx", EpdFontFamily::REGULAR);
+  paragraph.addWord(
+      "abc\xc2\xad"
+      "defgh",
+      EpdFontFamily::REGULAR);
+  auto result = layout(paragraph, renderer, 85);
+  ASSERT_EQ(result.lines.size(), 2u);
+  EXPECT_EQ(result.lines[0]->wordCount(), 1u);
+  EXPECT_STREQ(result.lines[1]->wordText(0), "abcdefgh");
+}
+
+TEST(PublisherHyphenation, RetryingPageBottomRestartsConsecutiveLineLimit) {
+  GfxRenderer renderer;
+  auto bs = noIndentStyle();
+  bs.hyphens = CssHyphens::Manual;
+  bs.hyphenateLimitLines = 1;
+  ParsedText paragraph(false, true, bs);
+  for (int i = 0; i < 6; ++i) {
+    paragraph.addWord("xx", EpdFontFamily::REGULAR);
+    paragraph.addWord(
+        "abc\xc2\xad"
+        "def",
+        EpdFontFamily::REGULAR);
+  }
+  bool requested = false;
+  bool sawRetry = false;
+  size_t hyphenRun = 0, hyphensAfterRetry = 0;
+  paragraph.layoutAndExtractLines(
+      renderer, kFontId, 65,
+      [&](std::unique_ptr<TextBlock> line, bool hyphenated, bool retry) {
+        if (hyphenated && !requested) {
+          requested = true;
+          return ParsedText::LineProcessResult::RetryWithoutHyphenation;
+        }
+        if (retry) {
+          sawRetry = true;
+          EXPECT_FALSE(hyphenated);
+        }
+        hyphenRun = hyphenated ? hyphenRun + 1 : 0;
+        EXPECT_LE(hyphenRun, 1u);
+        if (sawRetry && hyphenated) ++hyphensAfterRetry;
+        return ParsedText::LineProcessResult::Accepted;
+      },
+      true);
+  EXPECT_TRUE(requested);
+  EXPECT_TRUE(sawRetry);
+  EXPECT_GT(hyphensAfterRetry, 0u);
+}
+
+TEST(PublisherHyphenation, PrefixLimitDoesNotCountAccentsOrPunctuation) {
+  GfxRenderer renderer;
+  for (const auto& word : {std::string("(abc\xc2\xad"
+                                       "defgh)"),
+                           std::string("a\xcc\x81"
+                                       "bc\xc2\xad"
+                                       "defgh")}) {
+    auto bs = noIndentStyle();
+    bs.hyphens = CssHyphens::Manual;
+    bs.hyphenateLimitBefore = 4;
+    bs.hyphenateLimitAfter = 4;
+    ParsedText paragraph(false, true, bs);
+    paragraph.addWord("xxxx", EpdFontFamily::REGULAR);
+    paragraph.addWord(word, EpdFontFamily::REGULAR);
+    auto result = layout(paragraph, renderer, 100);
+    ASSERT_EQ(result.lines.size(), 2u);
+    EXPECT_EQ(result.lines[0]->wordCount(), 1u);
+    EXPECT_EQ(std::string(result.lines[1]->wordText(0)).find('-'), std::string::npos);
+  }
+}
+
+TEST(PublisherHyphenation, StreamingLimitCarriesOnlyAcceptedLinesAndSurvivesMeasurement) {
+  GfxRenderer renderer;
+  for (const bool measureFirst : {false, true}) {
+    SCOPED_TRACE(measureFirst);
+    auto style = noIndentStyle();
+    style.hyphens = CssHyphens::Manual;
+    style.hyphenateLimitLines = 1;
+    ParsedText paragraph(false, true, style);
+    paragraph.addWord("xx", EpdFontFamily::REGULAR);
+    paragraph.addWord(
+        "abc\xc2\xad"
+        "def",
+        EpdFontFamily::REGULAR);
+    std::vector<std::string> lines;
+    std::vector<bool> flags;
+    const auto accept = [&](std::unique_ptr<TextBlock> line, bool hyphenated, bool) {
+      std::string words;
+      for (uint16_t i = 0; i < line->wordCount(); ++i) {
+        if (i) words += ' ';
+        words += line->wordText(i);
+      }
+      lines.push_back(std::move(words));
+      flags.push_back(hyphenated);
+      return ParsedText::LineProcessResult::Accepted;
+    };
+    paragraph.layoutAndExtractLines(renderer, kFontId, 65, accept, false);
+    ASSERT_EQ(lines, (std::vector<std::string>{"xx abc-"}));
+    ASSERT_TRUE(flags.front());
+    // The withheld suffix was precomputed without a hyphen. It must not reset
+    // the carry for the last line that was actually emitted.
+    paragraph.addWord(
+        "ab\xc2\xad"
+        "cd",
+        EpdFontFamily::REGULAR);
+    if (measureFirst) {
+      paragraph.layoutAndExtractLines(
+          renderer, kFontId, 65,
+          [](std::unique_ptr<TextBlock>, bool, bool) { return ParsedText::LineProcessResult::Accepted; }, true, 0, 1.0f,
+          true);
+      EXPECT_TRUE(paragraph.isContinuation());
+      EXPECT_EQ(paragraph.size(), 2u);
+    }
+    paragraph.layoutAndExtractLines(renderer, kFontId, 65, accept, true);
+    EXPECT_EQ(lines, (std::vector<std::string>{"xx abc-", "def", "abcd"}));
+    EXPECT_EQ(flags, (std::vector<bool>{true, false, false}));
+    // A new paragraph starts its own allowance, including when the object is reused.
+    paragraph.reset(style);
+    paragraph.addWord("xx", EpdFontFamily::REGULAR);
+    paragraph.addWord(
+        "abc\xc2\xad"
+        "def",
+        EpdFontFamily::REGULAR);
+    lines.clear();
+    flags.clear();
+    paragraph.layoutAndExtractLines(renderer, kFontId, 65, accept, true);
+    ASSERT_FALSE(flags.empty());
+    EXPECT_TRUE(flags.front());
+  }
+}
+
+TEST(PublisherWordBreak, ZeroWidthOpportunityKeepsAdjacencyAndAllowsAllBreakers) {
+  GfxRenderer renderer;
+  for (const auto policy : {CssHyphens::Inherit, CssHyphens::None, CssHyphens::Auto}) {
+    for (const bool bionic : {false, true}) {
+      auto style = noIndentStyle();
+      style.hyphens = policy;
+      ParsedText text(false, policy == CssHyphens::Auto, style, bionic);
+      text.addWord("alpha/", EpdFontFamily::REGULAR);
+      text.addWord("bravo", EpdFontFamily::REGULAR, false, true, 100, wordTypography::BREAK_BEFORE);
+      const auto narrow = layout(text, renderer, 75);
+      ASSERT_EQ(narrow.lines.size(), 2u);
+      std::string combined;
+      for (const auto& line : narrow.lines)
+        for (uint16_t i = 0; i < line->wordCount(); ++i) combined += line->wordText(i);
+      EXPECT_EQ(combined, "alpha/bravo");
+      EXPECT_TRUE(narrow.lines.back()->wordTypography(0) & wordTypography::BREAK_BEFORE);
+      for (uint16_t i = 1; i < narrow.lines.back()->wordCount(); ++i)
+        EXPECT_FALSE(narrow.lines.back()->wordTypography(i) & wordTypography::BREAK_BEFORE);
+    }
+  }
+  for (const auto whiteSpace : {CssWhiteSpace::Normal, CssWhiteSpace::NoWrap, CssWhiteSpace::PreWrap}) {
+    auto style = noIndentStyle();
+    style.whiteSpace = whiteSpace;
+    ParsedText text(false, false, style);
+    text.addWord("aa", EpdFontFamily::REGULAR);
+    text.addWord("bb", EpdFontFamily::REGULAR, false, true, 100, wordTypography::BREAK_BEFORE);
+    auto wide = layout(text, renderer, 200);
+    ASSERT_EQ(wide.lines.size(), 1u);
+    EXPECT_EQ(wide.lines[0]->wordXpos(1), 20);
+    EXPECT_TRUE(wide.lines[0]->wordContinues(1));
+    FsFile file = HalFile::forReadWrite();
+    ASSERT_TRUE(wide.lines[0]->serialize(file));
+    ASSERT_TRUE(file.seek(0));
+    auto restored = TextBlock::deserialize(file);
+    ASSERT_NE(restored, nullptr);
+    EXPECT_TRUE(restored->wordContinues(1));
+    EXPECT_TRUE(restored->wordTypography(1) & wordTypography::BREAK_BEFORE);
+    ParsedText small(false, false, style);
+    small.addWord("aa", EpdFontFamily::REGULAR);
+    small.addWord("bb", EpdFontFamily::REGULAR, false, true, 100, wordTypography::BREAK_BEFORE);
+    EXPECT_EQ(layout(small, renderer, 30).lines.size(), whiteSpace == CssWhiteSpace::NoWrap ? 1u : 2u);
+  }
+}

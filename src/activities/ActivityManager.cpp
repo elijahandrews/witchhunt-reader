@@ -248,7 +248,9 @@ void ActivityManager::loop() {
     }
   }
 
-  if (!drainInput && currentActivity) {
+  // A shortcut may already have queued navigation in main.cpp. Do not let the
+  // outgoing screen replay buffered/default or raw input and replace that destination.
+  if (!drainInput && currentActivity && pendingAction == PendingAction::None) {
     if (mappedInput.wasAnyPressed() || mappedInput.wasAnyReleased()) {
       currentActivity->listTapActivation.reset();
     }
@@ -480,6 +482,29 @@ void ActivityManager::goToUsbDrive() {
 
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
 
+void ActivityManager::toggleSettings() {
+  if (!currentActivity || pendingAction != PendingAction::None || requiresExclusiveStorageLoop()) return;
+  const auto isSettings = [](const std::unique_ptr<Activity>& activity) {
+    return activity && activity->getName() == "Settings";
+  };
+  if (isSettings(currentActivity) || std::any_of(stackActivities.begin(), stackActivities.end(), isSettings)) {
+    SETTINGS.saveToFile();
+    returnFromChild();
+    return;
+  }
+
+  // Replace instead of burying the reader: onExit saves progress and releases its
+  // section/font/background workers. Reopening applies any global layout changes.
+  // The path lives in the existing return hint, not an extra saved activity stack.
+  ReturnHint hint;
+  if (isReaderActivity() && !APP_STATE.openEpubPath.empty()) {
+    hint.target = ReturnTo::Reader;
+    hint.path = APP_STATE.openEpubPath;
+  }
+  setReturnHint(std::move(hint));
+  goToSettings();
+}
+
 void ActivityManager::goToClockSettings() {
   replaceActivity(std::make_unique<ClockSettingsActivity>(renderer, mappedInput));
 }
@@ -584,6 +609,9 @@ void ActivityManager::returnFromChild() {
       break;
     case ReturnTo::GlobalBookmarks:
       goToGlobalBookmarks(std::move(hint));
+      break;
+    case ReturnTo::Reader:
+      goToReader(std::move(hint.path));
       break;
     case ReturnTo::Home:
     default:

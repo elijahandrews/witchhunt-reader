@@ -192,6 +192,7 @@ void MdReaderActivity::onReaderExit() {
 }
 
 bool MdReaderActivity::onConfirmShortPress() {
+  statusBarSourcePage = -1;
   if (headings.empty()) {
     return false;
   }
@@ -879,6 +880,7 @@ void MdReaderActivity::savePageIndexCache() const {
 }
 
 void MdReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION action) {
+  if (action != CrossPointSettings::BTN_TOGGLE_STATUS_BAR) statusBarSourcePage = -1;
   using BA = CrossPointSettings::BUTTON_ACTION;
   auto clampPage = [this]() {
     if (totalPages == 0) {
@@ -941,6 +943,21 @@ void MdReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION ac
       ReaderUtils::enforceExitFullRefresh(renderer);
       finish();
       break;
+    case BA::BTN_TOGGLE_STATUS_BAR: {
+      if (!txt) break;
+      RenderLock lock{RenderLock::ExclusiveActivityAccess{}};
+      initializeReader();
+      const size_t source = sourceBeforeStatusBarReflow();
+      SETTINGS.statusBarVisible = !SETTINGS.statusBarVisible;
+      SETTINGS.saveToFile();
+      initialized = false;
+      initializeReader();
+      restoreStatusBarSource(source);
+      saveProgress();
+      ReaderUtils::enforceExitFullRefresh(renderer);
+      requestUpdate();
+      break;
+    }
     case BA::BTN_CYCLE_ORIENTATION: {
       const uint8_t nextOrientation =
           static_cast<uint8_t>((SETTINGS.orientation + 1) % CrossPointSettings::ORIENTATION_COUNT);

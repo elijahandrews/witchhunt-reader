@@ -112,12 +112,60 @@ class ChapterHtmlSlimParser final : public Print {
   void noteSourcePoint(uint32_t offset);
   SourceWordSpan dropCapSource() const;
 
-  bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
+  bool nextWordBreakBefore_ = false;  // <wbr>: break permitted without a visible space
+  bool nextWordContinues = false;     // true when next flushed word attaches to previous (inline element boundary)
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
   int16_t pendingBrLineHeight_ = 0;   // captured in the separator's own family/size scope
   int16_t lastBlockMarginBottom = 0;  // tracks previous block's marginBottom for CSS margin collapsing
+
+  struct PageSourceState {
+    SourceAnchor anchor;
+    uint32_t minimum, end;
+    bool hasText, probe;
+  };
+  PageSourceState pageSourceState() const {
+    return {pageSourceAnchor_, pageSourceMin_, pageSourceEnd_, pageSourceHasText_, pageSourceProbe_};
+  }
+  void setPageSourceState(const PageSourceState& state) {
+    pageSourceAnchor_ = state.anchor;
+    pageSourceMin_ = state.minimum;
+    pageSourceEnd_ = state.end;
+    pageSourceHasText_ = state.hasText;
+    pageSourceProbe_ = state.probe;
+  }
+  struct AvoidGroup {
+    int depth = -1;
+    std::unique_ptr<Page> previous;
+    PageSourceState source;
+    int16_t y = 0, margin = 0;
+    uint16_t paragraph = 0, listItem = 0;
+    size_t labelStart = 0;
+    std::vector<std::string> anchors;
+  } avoidGroup_;
+  void beginAvoidGroup();
+  bool finishAvoidGroup(bool forceBreak);
+
+  struct PublisherBox {
+    int depth;
+    int32_t start;
+    int16_t minimum, contentMinimum, x, width, marginBottom;
+    uint16_t gray;
+    uint8_t top, bottom;
+    bool hiddenContent;
+    PageBox* fragment;
+  };
+  std::vector<PublisherBox> publisherBoxes_;
+  void openPublisherBox(const CssStyle& css, const BlockStyle& style, float em, float rootEm);
+  void closePublisherBoxes();
+  void startBoxFragments();
+  void finishBoxFragments(bool finalPage);
+  void advanceBlankSpace(int pixels);
+
+  std::unique_ptr<ParsedText> textFloatParent_;
+  int textFloatDepth_ = -1;
+  void finishTextFloat();
 
   // Inline image beside paragraph text (CSS float context)
   // Fixed-size arrays — no heap allocation. Float nesting > 4 is pathological in practice.
@@ -250,6 +298,9 @@ class ChapterHtmlSlimParser final : public Print {
     bool parentLineHeightDefined;
     CssWhiteSpace parentWhiteSpace;
     uint8_t parentSmallCaps;
+    CssHyphens parentHyphens;
+    uint8_t before, after, lines;
+    bool ligaturesNone;
   };
   std::vector<TextPropertyScope> textPropertyScopes_;
   struct TypographyScope {
@@ -265,6 +316,18 @@ class ChapterHtmlSlimParser final : public Print {
   CssTextTransform textTransform_ = CssTextTransform::None;
   CssWhiteSpace whiteSpace_ = CssWhiteSpace::Normal;
   uint8_t inheritedSmallCaps_ = 0;
+  CssHyphens inheritedHyphens_ = CssHyphens::Inherit;
+  uint8_t inheritedHyphenBefore_ = 2, inheritedHyphenAfter_ = 2, inheritedHyphenLines_ = 0;
+  bool inheritedLigaturesNone_ = false;
+  uint32_t currentWordTypography() const {
+    return wordTypography::pack(inheritedFamily_, inheritedTracking_) | (inheritedLigaturesNone_ ? 1u << 25 : 0u);
+  }
+  struct GeneratedAfter {
+    int depth;
+    std::string text;
+  };
+  std::vector<GeneratedAfter> generatedAfter_;
+  void emitGenerated(const std::string& text);
   uint8_t preColumnMod8_ = 0;
   bool preservedWhitespace_ = false;
   bool previousPreCr_ = false;
@@ -385,6 +448,7 @@ class ChapterHtmlSlimParser final : public Print {
     int depth;
     int16_t width;
     int16_t fixedWidth;
+    bool inlineBlock;
   };
   std::vector<ContainerWidthEntry> containerWidthStack_;
 
@@ -558,10 +622,15 @@ class ChapterHtmlSlimParser final : public Print {
   int footnoteLinkDepth = -1;
   FootnoteEntry currentFootnote = {};
   size_t currentFootnoteLinkTextLen = 0;
+  // Match the gatherer's bounded raw marker classifier, independently of the
+  // display label (which strips brackets and may truncate long link text).
+  char currentPreviewMarker_[16] = {};
+  uint8_t currentPreviewMarkerLength_ = 0;
+  bool currentPreviewMarkerOverflow_ = false;
+  bool currentPreviewNoteref_ = false;
   // Non-owning; the Section's BuildState keeps the lookup alive across build slices.
-  // Membership in the book's preview store is the sole expansion gate: it already encodes
-  // "this link points at a real note", so no epub:type/same-file checks here. The store is
-  // filled for this spine before the parse starts (Section::resolveInlineFootnotePreviews).
+  // Store membership and this link's own note semantics must both qualify:
+  // another spine may have stored the same target for an unrelated numeric link.
   FootnotePreviews::Lookup* inlineFootnotePreviews = nullptr;
   std::string pendingInlineFootnotePreview;
   std::vector<std::pair<int, FootnoteEntry>> pendingFootnotes;  // <wordIndex, entry>
@@ -646,6 +715,7 @@ class ChapterHtmlSlimParser final : public Print {
   // that element has closed. A <br> inside it splits the element into more blocks, which keep its
   // font size; after it has closed, what it leaves behind must not lend that size to a sibling.
   int currentBlockOwnerDepth_ = -1;
+  bool currentBlockIsTextParagraph_ = false;
   // The open heading and the alignment and size its block was given. A block opening inside it is
   // heading text and takes both (applyHeadingScope): otherwise only the first such block got them,
   // by merging into the heading's still-empty block. INT_MAX when no heading is open.
@@ -660,6 +730,7 @@ class ChapterHtmlSlimParser final : public Print {
   struct BlockSpan {
     int depth = INT_MAX;
     int interruptedOwnerDepth = -1;
+    bool interruptedTextParagraph = false;
     CssTextAlign alignment = CssTextAlign::Justify;
     bool textAlignDefined = false;
     bool fontResolved = false;
@@ -752,6 +823,7 @@ class ChapterHtmlSlimParser final : public Print {
   void emitCapturedDropCapRun();
   // XML callbacks
   static void startElement(void* userData, const char* name, const char** atts);
+  static void sourceCharacterData(void* userData, const char* s, int len);
   static void characterData(void* userData, const char* s, int len);
   static void defaultHandlerExpand(void* userData, const char* s, int len);
   static void endElement(void* userData, const char* name);

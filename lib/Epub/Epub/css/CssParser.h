@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 
 #include <list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -95,7 +96,11 @@ class CssParser {
   // v21: persist text-transform and line-height; older caches discarded both.
   // v23: named font stacks, monospace, distinct all-small-caps/inherit and white-space modes.
   // v24: keep display:inline apart from display:block (#388); prior caches conflated them.
-  static constexpr uint8_t CSS_CACHE_VERSION = 25;  // filter linked/head styles by screen media type
+  // v25: filter linked/head styles by screen media type.
+  // v26: 125-byte fixed styles and sparse extras retain box constraints/rules/shades,
+  //      clear/avoid, hyphen policies/limits and ligatures. Pseudo styles have isolated
+  //      keys; header flag 0x04 requires the bounded versioned literal-content sidecar.
+  static constexpr uint8_t CSS_CACHE_VERSION = 26;
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;
@@ -144,6 +149,15 @@ class CssParser {
 
   [[nodiscard]] CssStyle resolveStyle(const std::string& tagName, const std::string& classAttr,
                                       const std::string& idAttr = {}, const CssParser* overlay = nullptr) const;
+
+  // Pseudo declarations are isolated from normal element styles. Content is bounded to 128
+  // decoded UTF-8 bytes. nullopt means undeclared; empty means explicit none/normal/reset.
+  [[nodiscard]] CssStyle resolvePseudoStyle(const std::string& tagName, const std::string& classAttr,
+                                            const std::string& idAttr, const std::string& pseudo,
+                                            const CssParser* overlay = nullptr) const;
+  [[nodiscard]] std::optional<std::string> generatedContentFor(const std::string& tagName, const std::string& classAttr,
+                                                               const std::string& idAttr, const std::string& pseudo,
+                                                               const CssParser* overlay = nullptr) const;
 
   /**
    * Parse an inline style attribute string.
@@ -287,6 +301,19 @@ class CssParser {
                                                       const CssParser* overlay = nullptr) const;
 
  private:
+  CssStyle resolveStyleFor(const std::string& tagName, const std::string& classAttr, const std::string& idAttr,
+                           const CssParser* overlay, const std::string& suffix) const;
+  struct ContentRule {
+    std::string selector;
+    std::string content;
+  };
+  static constexpr size_t MAX_CONTENT_RULES = 32;
+  mutable std::vector<ContentRule> contentRules_;
+  mutable bool contentRulesLoaded_ = false;
+  mutable bool contentExpected_ = false;
+  void recordContent(std::string_view selectors, const std::string& text);
+  bool saveContent() const;
+  bool loadContent() const;
   const CssParser* fontCatalogOwner_ = nullptr;
   uint64_t fontScopeId_ = 0;
   bool collectingDocumentFaces_ = false;

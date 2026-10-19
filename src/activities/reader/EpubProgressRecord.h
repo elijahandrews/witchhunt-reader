@@ -8,7 +8,7 @@
 
 // The EPUB reader's progress.bin record, little-endian:
 //   spine(2) page(2) pageCount(2) percent(1) [paragraph(2) [chapterPage(2) chapterTotal(2)
-//   printedPageLength(1) printedPage(n)]]
+//   printedPageLength(1) printedPage(n) ["SRC1" sourceByte(4) sourceCharacter(2)]]]
 //
 // The paragraph is the page's entry in the section's paragraph LUT (the same index KOReader sync
 // anchors on). It is written when the reader closes a book, so a book reopened under a different
@@ -20,11 +20,21 @@
 // screen's overlay would otherwise count pages per spine item and look up the printed page in the
 // section cache on its own, and disagree with the screen the user just left.
 //
+// The tagged source tail preserves the exact passage through all reopen/reflow paths,
+// including long/nested paragraphs and layout changes that keep the same page count.
+// It is captured on reader close; routine page saves keep the existing short format.
+// Truncated/unknown tails are ignored while retaining the old progress prefix.
+//
 // Older files are shorter, and every other reader of the file (home progress badge, older
 // firmware) reads a fixed prefix, so the optional tail is invisible to them.
 struct EpubProgressRecord {
   // A printed-page label longer than this is left out rather than cut mid-label.
   static constexpr size_t kMaxPrintedPage = 15;
+
+  struct Source {
+    uint32_t offset = UINT32_MAX;
+    uint16_t characterOffset = 0;
+  };
 
   struct Shown {
     uint16_t chapterPage = 0;   // 1-based page within the whole TOC chapter (#325, ChapterPageSpan)
@@ -38,29 +48,38 @@ struct EpubProgressRecord {
   uint8_t percent = 0;
   std::optional<uint16_t> paragraph;
   std::optional<Shown> shown;
+  std::optional<Source> source;
 
-  static constexpr size_t kMaxSize = 14 + kMaxPrintedPage;
+  static constexpr size_t kSourceTailSize = 10;
+  static constexpr size_t kMaxSize = 14 + kMaxPrintedPage + kSourceTailSize;
 
   // Returns the number of bytes written to `out`: 7 or 9 as before without `shown`, otherwise the
   // full tail, with the paragraph slot written as 0 (the LUT's "none") when there is no paragraph.
+  // A source without Shown writes an empty Shown slot before its tagged tail.
   size_t encode(uint8_t (&out)[kMaxSize]) const {
     put16(out, spineIndex);
     put16(out + 2, page);
     put16(out + 4, pageCount);
     out[6] = percent;
     const uint16_t anchor = paragraph ? *paragraph : 0;
-    if (!shown) {
+    const bool hasSource = source && source->offset != UINT32_MAX;
+    if (!shown && !hasSource) {
       if (anchor == 0) return 7;
       put16(out + 7, anchor);
       return 9;
     }
     put16(out + 7, anchor);
-    put16(out + 9, shown->chapterPage);
-    put16(out + 11, shown->chapterTotal);
-    const size_t labelLength = shown->printedPage.size() <= kMaxPrintedPage ? shown->printedPage.size() : 0;
+    put16(out + 9, shown ? shown->chapterPage : 0);
+    put16(out + 11, shown ? shown->chapterTotal : 0);
+    const size_t labelLength = shown && shown->printedPage.size() <= kMaxPrintedPage ? shown->printedPage.size() : 0;
     out[13] = static_cast<uint8_t>(labelLength);
-    memcpy(out + 14, shown->printedPage.data(), labelLength);
-    return 14 + labelLength;
+    if (labelLength) memcpy(out + 14, shown->printedPage.data(), labelLength);
+    const size_t tail = 14 + labelLength;
+    if (!hasSource) return tail;
+    memcpy(out + tail, "SRC1", 4);
+    for (size_t i = 0; i < 4; ++i) out[tail + 4 + i] = static_cast<uint8_t>(source->offset >> (8 * i));
+    put16(out + tail + 8, source->characterOffset);
+    return tail + kSourceTailSize;
   }
 
   // Accepts every size the reader has ever written: 4 (spine, page), 6 (+ pageCount),
@@ -84,6 +103,14 @@ struct EpubProgressRecord {
         s.chapterTotal = get16(data + 11);
         s.printedPage.assign(reinterpret_cast<const char*>(data + 14), labelLength);
         r.shown = std::move(s);
+        const size_t tail = 14 + labelLength;
+        if (size >= tail + kSourceTailSize && memcmp(data + tail, "SRC1", 4) == 0) {
+          Source source;
+          source.offset = 0;
+          for (size_t i = 0; i < 4; ++i) source.offset |= static_cast<uint32_t>(data[tail + 4 + i]) << (8 * i);
+          source.characterOffset = get16(data + tail + 8);
+          if (source.offset != UINT32_MAX) r.source = source;
+        }
       }
     }
     return r;

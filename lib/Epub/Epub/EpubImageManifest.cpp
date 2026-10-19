@@ -17,6 +17,7 @@
 #include "converters/GifToFramebufferConverter.h"
 #include "converters/JpegToFramebufferConverter.h"
 #include "converters/PngToFramebufferConverter.h"
+#include "converters/SvgToFramebufferConverter.h"
 
 namespace {
 constexpr const char* kImagesBinFile = "/images.bin";
@@ -49,7 +50,9 @@ bool parseImageDimensions(const uint8_t* buf, size_t n, ImageDimensions& dims, b
     case ImageFormatDetector::Format::Gif:
       return GifToFramebufferConverter::getDimensionsFromBuffer(buf, n, dims);
     case ImageFormatDetector::Format::Unknown:
-      return false;
+      // SVG is XML, so it has no fixed binary signature. The bounded XML header
+      // parser validates the root instead of treating every XML resource as an image.
+      return SvgToFramebufferConverter::getDimensionsFromBuffer(buf, n, dims);
   }
   return false;
 }

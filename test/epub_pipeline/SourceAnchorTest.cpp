@@ -12,6 +12,7 @@
 #include "Epub/parsers/ChapterHtmlSlimParser.h"
 #include "GfxRenderer.h"
 #include "StoredZipWriter.h"
+#include "src/activities/reader/EpubProgressRecord.h"
 
 namespace {
 class SourceAnchorTest : public testing::Test {
@@ -321,3 +322,195 @@ TEST_F(SourceAnchorTest, LiteralEntityDropCapOverflowRetainsOriginalByteOffsets)
 }
 
 }  // namespace
+
+TEST_F(SourceAnchorTest, PersistedPassageSurvivesGlobalMarginsAndLongNestedParagraphReflow) {
+  for (bool nested : {false, true}) {
+    makeBook((nested ? "<div><section>" : "") + std::string("<p>") + numberedWords(1200) + "</p>" +
+                 (nested ? "</section></div>" : ""),
+             "body{margin:0 20px}p{margin:0;text-indent:0}");
+    auto original = build(400);
+    const uint16_t middle = original->pageCount / 2;
+    const auto anchor = original->getSourceAnchorForPage(middle);
+    ASSERT_TRUE(anchor);
+    const auto text = textAt(*original, middle);
+    const auto needle = text.substr(0, text.find(' ')) + " ";
+    EpubProgressRecord record;
+    record.page = middle;
+    record.pageCount = original->pageCount;
+    record.source = EpubProgressRecord::Source{anchor->sourceOffset, anchor->characterOffset};
+    uint8_t bytes[EpubProgressRecord::kMaxSize] = {};
+    const size_t size = record.encode(bytes);
+    const auto restored = EpubProgressRecord::decode(bytes, size);
+    ASSERT_TRUE(restored && restored->source);
+    const SourceAnchor saved{restored->source->offset, restored->source->characterOffset};
+    for (int width : {180, 520, 400}) {
+      auto p = params(width);
+      p.ignorePublisherPageMargins = true;
+      Section resized(book, 0, renderer);
+      resized.setSourceLookupTarget(saved);
+      ASSERT_TRUE(resized.createSectionFile(p, {}, true));
+      ASSERT_TRUE(resized.loadSectionFile(p));
+      const auto landed = resized.sourceLookupPage();
+      ASSERT_TRUE(landed);
+      EXPECT_NE(textAt(resized, *landed).find(needle), std::string::npos);
+      // Each reopen keeps the original passage, not the new page's earlier first word.
+      record.source = restored->source;
+      EXPECT_EQ(record.source->offset, anchor->sourceOffset);
+    }
+  }
+}
+
+TEST_F(SourceAnchorTest, PersistedSourceResolvesEvenWhenThePageCountDoesNotChange) {
+  makeBook("<p>" + numberedWords(100) + "</p>", "body{margin:0 8px}p{margin:0;text-indent:0}");
+  auto original = build(400, {}, 240);
+  ASSERT_GT(original->pageCount, 1);
+  const uint16_t middle = original->pageCount / 2;
+  const auto anchor = original->getSourceAnchorForPage(middle);
+  ASSERT_TRUE(anchor);
+  const auto text = textAt(*original, middle);
+  const auto needle = text.substr(0, text.find(' ')) + " ";
+  EpubProgressRecord record;
+  record.page = middle;
+  record.pageCount = original->pageCount;
+  record.source = EpubProgressRecord::Source{anchor->sourceOffset, anchor->characterOffset};
+  uint8_t bytes[EpubProgressRecord::kMaxSize] = {};
+  const auto restored = EpubProgressRecord::decode(bytes, record.encode(bytes));
+  ASSERT_TRUE(restored && restored->source);
+  auto p = params(400, 240);
+  p.ignorePublisherPageMargins = true;
+  Section resized(book, 0, renderer);
+  resized.setSourceLookupTarget({restored->source->offset, restored->source->characterOffset});
+  ASSERT_TRUE(resized.createSectionFile(p, {}, true));
+  ASSERT_TRUE(resized.loadSectionFile(p));
+  ASSERT_EQ(resized.pageCount, original->pageCount);
+  ASSERT_TRUE(resized.sourceLookupPage());
+  EXPECT_LT(*resized.sourceLookupPage(), middle);  // Old page-number restoration misses this passage.
+  EXPECT_NE(textAt(resized, *resized.sourceLookupPage()).find(needle), std::string::npos);
+}
+
+TEST_F(SourceAnchorTest, StatusBarHeightToggleKeepsTheSamePassageAcrossRepeatedReflows) {
+  makeBook("<p>" + numberedWords(1200) + "</p>", "p{margin:0;text-indent:0}");
+  auto original = build(400, {}, 200);
+  const uint16_t originalPage = original->pageCount / 2;
+  const auto anchor = original->getSourceAnchorForPage(originalPage);
+  ASSERT_TRUE(anchor);
+  const auto text = textAt(*original, originalPage);
+  const auto needle = text.substr(0, text.find(' ')) + " ";
+  for (const int height : {240, 200, 240, 200}) {
+    auto resized = build(400, *anchor, height);
+    ASSERT_TRUE(resized->sourceLookupPage());
+    EXPECT_NE(textAt(*resized, *resized->sourceLookupPage()).find(needle), std::string::npos);
+    if (height == 200) EXPECT_EQ(*resized->sourceLookupPage(), originalPage);
+  }
+}
+
+TEST_F(SourceAnchorTest, DropCapFallbackUsesVisibleSoftHyphenOffsets) {
+  const std::string source =
+      "\xc2\xad"
+      "abcde\xc2\xad\xc2\xad"
+      "fghijklmnop";
+  makeBook("<p>PAD</p><p><span class=\"cap\">" + source + "</span>suffix AFTER</p>",
+           ".cap{float:left;font-size:300%;text-transform:uppercase}");
+  const auto origin = static_cast<uint32_t>(xhtml.find(source));
+  for (uint16_t target : {0, 5, 12}) {
+    auto section = build(45, {origin, target}, 48);
+    ASSERT_TRUE(section->sourceLookupPage());
+    const auto text = textAt(*section, *section->sourceLookupPage());
+    EXPECT_NE(text.find(static_cast<char>('A' + target)), std::string::npos) << text;
+  }
+}
+
+TEST_F(SourceAnchorTest, SoftHyphenLookupFindsVisibleCharacterAcrossReflow) {
+  const std::string plain = "abcdefghijklmnopqrstuvwxyz";
+  const std::string shy = "\xc2\xad";
+  const std::string authored = shy + shy + "abcdefgh" + shy + shy + "ijklmnop" + shy + "qrstuvwxyz";
+  makeBook("<p>" + authored + "</p>");
+  const auto origin = static_cast<uint32_t>(xhtml.find(authored));
+  for (bool bionic : {false, true}) {
+    for (int width : {65, 150}) {
+      for (uint16_t target : {0, 7, 8, 15, 16, 25, 200}) {
+        auto actual = build(width, {origin, target}, 48, bionic);
+        ASSERT_TRUE(actual->sourceLookupPage());
+        const auto text = textAt(*actual, *actual->sourceLookupPage());
+        const char expected = plain[std::min<size_t>(target, plain.size() - 1)];
+        EXPECT_NE(text.find(expected), std::string::npos)
+            << "target=" << target << " width=" << width << " bionic=" << bionic << " text=" << text;
+      }
+    }
+  }
+}
+
+TEST_F(SourceAnchorTest, FootnoteLabelTruncationKeepsCompleteUtf8AcrossMarkupFragments) {
+  // Exercise every truncation position for two-, three-, and four-byte glyphs.
+  // Body text stays whole; only the bounded navigation label is abbreviated.
+  for (const std::string glyph : {std::string("é"), std::string("…"), std::string("🌙")}) {
+    for (size_t prefixLength = 27; prefixLength <= 31; ++prefixLength) {
+      const std::string prefix(prefixLength, 'a');
+      const std::string label = prefix + glyph + "tail";
+      makeBook("<p><a href=\"#note\">" + prefix + "<em>" + glyph +
+               "</em>tail</a></p><p id=\"note\">Original note.</p>");
+      auto section = build(1200, {}, 600);
+      auto page = section->loadPageFromSectionFile();
+      ASSERT_NE(page, nullptr);
+      ASSERT_EQ(page->footnotes.size(), 1u);
+      const size_t glyphEnd = prefixLength + glyph.size();
+      const std::string expected = glyphEnd <= 31 ? label.substr(0, 31) : prefix;
+      EXPECT_EQ(std::string(page->footnotes.front().number), expected);
+      EXPECT_EQ(std::string(page->footnotes.front().href), "#note");
+      EXPECT_NE(textAt(*section, 0).find(glyph), std::string::npos);
+    }
+  }
+}
+
+TEST_F(SourceAnchorTest, OptionalBreaksPreserveTextAndSourceAcrossNarrowReflow) {
+  makeBook("<p>alpha/<wbr/><em>beta.</em><wbr/>gamma</p>", "p{hyphens:none;text-indent:0}");
+  const SourceAnchor target{static_cast<uint32_t>(xhtml.find("beta.")), 0};
+  for (const bool bionic : {false, true}) {
+    for (const int width : {400, 65}) {
+      auto section = build(width, target, 48, bionic);
+      ASSERT_TRUE(section->sourceLookupPage());
+      std::string joined;
+      size_t lines = 0;
+      bool foundOptionalBreak = false;
+      for (uint16_t i = 0; i < section->pageCount; ++i) {
+        section->currentPage = i;
+        auto page = section->loadPageFromSectionFile();
+        ASSERT_NE(page, nullptr);
+        for (const auto& el : page->elements) {
+          if (el->getTag() != TAG_PageLine) continue;
+          ++lines;
+          const auto& line = *static_cast<const PageLine&>(*el).getBlock();
+          for (uint16_t word = 0; word < line.wordCount(); ++word) {
+            joined += line.wordText(word);
+            if (line.wordTypography(word) & wordTypography::BREAK_BEFORE) {
+              foundOptionalBreak = true;
+              EXPECT_TRUE(line.wordContinues(word));
+            }
+          }
+        }
+      }
+      EXPECT_EQ(joined, "alpha/beta.gamma");
+      EXPECT_TRUE(foundOptionalBreak);
+      if (width == 400)
+        EXPECT_EQ(lines, 1u);
+      else
+        EXPECT_GE(lines, 3u);
+      EXPECT_NE(textAt(*section, *section->sourceLookupPage()).find("be"), std::string::npos);
+    }
+  }
+}
+
+TEST_F(SourceAnchorTest, OptionalBreakDoesNotConsumeWhitespaceOrLeakAcrossParagraphs) {
+  makeBook("<p>alpha/<wbr/> beta</p><p><wbr/>gamma</p>", "p{hyphens:none;text-indent:0}");
+  auto section = build(400, {}, 400);
+  auto page = section->loadPageFromSectionFile();
+  ASSERT_NE(page, nullptr);
+  for (const auto& el : page->elements) {
+    if (el->getTag() != TAG_PageLine) continue;
+    const auto& line = *static_cast<const PageLine&>(*el).getBlock();
+    for (uint16_t word = 0; word < line.wordCount(); ++word) {
+      EXPECT_EQ(line.wordTypography(word) & wordTypography::BREAK_BEFORE, 0u);
+      EXPECT_FALSE(line.wordContinues(word));
+    }
+  }
+}

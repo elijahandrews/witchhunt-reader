@@ -1,31 +1,46 @@
 #pragma once
 
-// Minimal STORED-only zip writer for tests that need a purpose-shaped EPUB.
+// Minimal ZIP writer for tests that need a purpose-shaped EPUB.
 //
 // Generated rather than checked in: several tests care about a book's SHAPE (spine sizes, note
 // counts, a reference to an entry that does not exist) and a fixture per case would be a pile of
-// binaries no one can diff. ZipFile reads method 0, so no deflater is needed here; the tests that
-// specifically need the inflate path use the corpus books instead.
+// binaries no one can diff. addDeflated uses uncompressed DEFLATE blocks to exercise
+// ZIP method 8 without a test dependency on zlib.
 
+#include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace test_zip {
 
-// --- minimal STORED-only zip writer -------------------------------------------------------
+// --- bounded fixture ZIP writer -----------------------------------------------------------
 
 class StoredZipWriter {
  public:
-  void add(const std::string& name, const std::string& data) { entries_.push_back({name, data, 0}); }
+  void add(const std::string& name, const std::string& data) { entries_.push_back({name, data, 0, 0, {}}); }
+  void addDeflated(const std::string& name, const std::string& data) {
+    Entry entry{name, data, 0, 8, {}};
+    size_t position = 0;
+    do {
+      const auto count = static_cast<uint16_t>(std::min<size_t>(65535, data.size() - position));
+      entry.compressed.push_back(position + count == data.size() ? '\1' : '\0');
+      put16(entry.compressed, count);
+      put16(entry.compressed, static_cast<uint16_t>(~count));
+      entry.compressed.append(data, position, count);
+      position += count;
+    } while (position < data.size());
+    entries_.push_back(std::move(entry));
+  }
 
   void write(const std::string& path) {
     std::string out;
     for (Entry& e : entries_) {
       e.localOffset = static_cast<uint32_t>(out.size());
       appendLocalHeader(out, e);
-      out += e.data;
+      out += e.method == 8 ? e.compressed : e.data;
     }
     const uint32_t centralStart = static_cast<uint32_t>(out.size());
     for (const Entry& e : entries_) {
@@ -42,6 +57,8 @@ class StoredZipWriter {
     std::string name;
     std::string data;
     uint32_t localOffset;
+    uint16_t method;
+    std::string compressed;
   };
 
   static void put16(std::string& out, const uint16_t v) {
@@ -63,13 +80,13 @@ class StoredZipWriter {
   }
   static void appendLocalHeader(std::string& out, const Entry& e) {
     put32(out, 0x04034B50);
-    put16(out, 20);  // version needed
-    put16(out, 0);   // flags
-    put16(out, 0);   // method: stored
-    put16(out, 0);   // time
-    put16(out, 0);   // date
+    put16(out, 20);        // version needed
+    put16(out, 0);         // flags
+    put16(out, e.method);  // stored or DEFLATE
+    put16(out, 0);         // time
+    put16(out, 0);         // date
     put32(out, crc32(e.data));
-    put32(out, static_cast<uint32_t>(e.data.size()));
+    put32(out, static_cast<uint32_t>(e.method == 8 ? e.compressed.size() : e.data.size()));
     put32(out, static_cast<uint32_t>(e.data.size()));
     put16(out, static_cast<uint16_t>(e.name.size()));
     put16(out, 0);
@@ -80,11 +97,11 @@ class StoredZipWriter {
     put16(out, 20);  // version made by
     put16(out, 20);  // version needed
     put16(out, 0);
-    put16(out, 0);  // method: stored
+    put16(out, e.method);  // stored or DEFLATE
     put16(out, 0);
     put16(out, 0);
     put32(out, crc32(e.data));
-    put32(out, static_cast<uint32_t>(e.data.size()));
+    put32(out, static_cast<uint32_t>(e.method == 8 ? e.compressed.size() : e.data.size()));
     put32(out, static_cast<uint32_t>(e.data.size()));
     put16(out, static_cast<uint16_t>(e.name.size()));
     put16(out, 0);  // extra

@@ -66,7 +66,7 @@ HTML dictionaries that declare `sametypesequence=h` use the EPUB text-layout eng
 - **Confirm** — look the same word up in the next installed dictionary, cycling through them. Only offered when more than one dictionary is installed; the current one is named to the right of the headword. The choice is remembered, so later lookups use it too.
 - **Back** — return to word selection
 
-Definitions render in Noto Sans at a fixed size rather than in your reading font. That is the one font carrying the phonetic alphabet — a dictionary's pronunciation notation needs about 100 codepoints that no reading font here ships, and putting them in every font and size would cost roughly five times the flash. Any character still missing falls back to the closest available shape (schwa as `e`, the primary-stress mark as an apostrophe) rather than an empty box.
+Definitions render in fixed 12pt Noto Sans, with left alignment and normal text spacing. Book settings, including Bionic Reading and per-book overrides, do not affect definitions; semantic bold and italic markup is preserved. That is the one font carrying the phonetic alphabet — a dictionary's pronunciation notation needs about 100 codepoints that no reading font here ships, and putting them in every font and size would cost roughly five times the flash. Any character still missing falls back to the closest available shape (schwa as `e`, the primary-stress mark as an apostrophe) rather than an empty box.
 
 
 

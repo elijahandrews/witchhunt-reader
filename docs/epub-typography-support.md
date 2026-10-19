@@ -27,6 +27,20 @@ plain embedded OpenType fonts on the X4 Pro.
 - MathML `altimg` fallback through the existing image renderer. Without a usable
   fallback image, descendant text remains available instead of disappearing.
 
+- Solid top and bottom borders, pale backgrounds, minimum-height wrappers and
+  empty explicit-height spacers. Boxes split into bounded fragments across pages.
+- `break-inside: avoid` / `page-break-inside: avoid` keeps a group together when
+  it fits on one screen. Oversized groups stream normally without losing text.
+- Literal `::before` / `::after` text and first-line small capitals, tracking and
+  ligature controls. First-line styling follows reflow rather than a fixed word count.
+- Publisher hyphenation policies, prefix/suffix limits and consecutive-line limits.
+  An oversized token can still wrap at the screen edge; `hyphens: none` inserts no
+  printed hyphen during that emergency wrap.
+- `<wbr>` supplies an optional break without adding visible spaces or hyphens.
+  Search and saved reading positions retain the original adjacent text.
+- Right-aligned text floats, float clearing and explicit percentage inline image
+  wrappers. External SVG images support bounded filled paths and inherited fills.
+
 The runtime font engine uses PSRAM and a shared 3 MiB payload budget with bounded
 least-recently-used eviction. Font extraction and allocation failures mark affected
 pagination as degraded so the existing bounded retry policy can rebuild it.
@@ -83,7 +97,8 @@ This is a bounded reader engine, not a complete browser EPUB renderer:
   arbitrary `font-variation-settings` are not implemented. Numeric CSS weights
   still resolve through the reader’s normal/bold style model.
 - CSS support retains the existing selector and layout limits, including complex
-  selectors/pseudo-elements, row-spanning table cells, general vector SVG and
+  selectors and pseudo-elements beyond the cases above, row-spanning table cells,
+  unrestricted SVG (filters, masks, scripts and external resources) and
   native MathML typesetting. Hard preformatted line breaks inside table cells
   are not yet supported.
 - Embedded fonts and local styles have explicit resource limits. Very large or
@@ -94,8 +109,9 @@ This is a bounded reader engine, not a complete browser EPUB renderer:
 
 The synthetic [typography EPUB](../test/epubs/README.md) contains original text
 and original geometric TrueType/CFF outlines, four faces, caps, ligatures and
-variable axes. A second EPUB exercises preformatted text and equation-image
-fallbacks. No personal book text or commercial font assets are added by these
+variable axes. The [feature EPUB](../test/epubs/test_epub_features.epub) exercises preformatted text,
+equation-image fallbacks, boxes, first-line styles, generated punctuation and SVG
+ornaments. Rebuild it with `python3 test/epubs/make_test_epub_features.py`. No personal book text or commercial font assets are added by these
 fixtures.
 
 Host tests cover CSS/catalog persistence, chapter scope, layout, v6 decoding,
@@ -105,3 +121,12 @@ font pixels and validates grayscale planes against the actual X4 Pro driver.
 AddressSanitizer and UndefinedBehaviorSanitizer check the new paths. Monitor
 previews verify software output; the physical e-ink panel remains the final
 appearance check.
+
+## Reopening after layout changes
+
+Closing an EPUB now saves an optional source-text anchor alongside the existing
+page progress. Reopening after changing global font size or page margins restores
+that passage, including inside long or nested paragraphs and when the total page
+count stays the same. Existing progress files remain readable; without an anchor,
+the reader retains its previous page/paragraph fallback. Older firmware reads the
+unchanged progress prefix and may drop the optional anchor when saving again.

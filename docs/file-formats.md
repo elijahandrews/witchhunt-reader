@@ -117,6 +117,11 @@ if (parsedSize != fileSize) {
 - `paragraphLutOffset` extended: each per-page entry is now `u32 xhtmlByteOffset + u16 paragraphIndex + u16 listItemIndex` (added the running `<li>` count for KOReader list-item XPath sync).
 - `pageBreakMapOffset` (`u32`) added in the header between `anchorMapOffset` and `paragraphLutOffset`. The block at that offset stores printed-page labels: `u16 count`, then per entry `u16 pageIndex + String label`. Populated from inline `doc-pagebreak` markers and from the per-book `pagelist.bin` (NCX `<pageList>` / EPUB 3 `<nav epub:type="page-list">` / EPUB 2.01 `page-map.xml`). See `docs/epub-toc-navigation.md` for the source-format selection rules.
 
+Fractional glyph positioning invalidates previously rounded ink bounds (main v91;
+integration v92). Glyph advances retain their precision, but an antialiased edge
+can extend a word's measured box by one pixel. The section payload is unchanged;
+separate version numbers preserve the branches' existing layout compatibility boundary.
+
 ### Version 21
 
 ImHex Pattern:
@@ -282,3 +287,25 @@ Selection rules (see `docs/epub-toc-navigation.md`):
 - The NCX `<pageList>` writer runs only if the nav writer produced nothing.
 - The EPUB 2.01 `page-map.xml` writer runs only if `pagelist.bin` doesn't already exist on disk.
 - Inline `doc-pagebreak` markers in XHTML are matched at chapter parse time and don't need the cache file; they coexist with whichever source above won.
+
+## Hanging-indent line wrapping
+
+Only a line beginning at the first word receives CSS `text-indent`. Continuation
+lines use the full content width after paragraph margins and padding are removed.
+The layout cache is invalidated so already-cached clipped lines are rebuilt. Main
+uses section version 89 and the preserved highlighting branch uses 88; the separate versions
+prevent reading highlight-provenance records as main-branch word records.
+
+The corrected continuation width changes 24 synthetic layout goldens. Ordered text
+and word styles are preserved. On main, one previously flattened oversized table
+row now fits the grid, retaining its cells instead of using paragraph fallback.
+
+## Publisher decoration records
+
+Section version 89 adds element tag 5 (`PageBox`): signed 16-bit x/y/width/height,
+a 16-bit background luminance (0–255, or 256 for transparent), and byte top/bottom
+border widths. Fragments precede their content, so background fills cannot cover
+text. First-line styling and disabled ligatures are stored in the final word
+annotations; typography bit 25 disables ordinary ligatures, and bit 26 permits a
+break before an attached token without adding a space. Bits 27–31 remain reserved.
+Older section caches are rebuilt, while source progress records remain compatible.

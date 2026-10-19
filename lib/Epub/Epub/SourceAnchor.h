@@ -3,7 +3,8 @@
 #include <cstdint>
 
 // Stable within the unmodified chapter XHTML. The optional character offset selects a
-// fragment of a layout-split word, in the normalized/transformed text, independently of font
+// fragment of a layout-split word, in visible normalized/transformed text (excluding soft
+// hyphens and layout-inserted hyphens), independently of font
 // metrics. A changed text-transform may clamp that offset within the same source word.
 struct SourceAnchor {
   uint32_t sourceOffset = UINT32_MAX;

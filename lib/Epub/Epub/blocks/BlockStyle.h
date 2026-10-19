@@ -42,6 +42,29 @@ struct BlockStyle {
   bool whitespaceIndentDefault = false;
   bool whitespaceAlignmentDefault = false;
 
+  // Computed inherited hyphen policy and first-line overrides. Layout-only: the
+  // emitted TextBlock stores the selected per-word flags, not these declarations.
+  CssHyphens hyphens = CssHyphens::Inherit;
+  uint8_t hyphenateLimitBefore = 2, hyphenateLimitAfter = 2, hyphenateLimitLines = 0;
+  bool firstLineStyleDefined = false;
+  uint8_t firstLineSmallCaps = 0;
+  bool firstLineSmallCapsDefined = false;
+  int16_t firstLineTracking = 0;
+  bool firstLineTrackingDefined = false;
+  bool firstLineLigaturesNone = false;
+  bool firstLineLigaturesDefined = false;
+  uint8_t firstLineFontStyle(uint8_t style) const {
+    return firstLineSmallCapsDefined ? static_cast<uint8_t>((style & ~0xc0u) | (firstLineSmallCaps == 2   ? 0xc0u
+                                                                                : firstLineSmallCaps == 1 ? 0x40u
+                                                                                                          : 0u))
+                                     : style;
+  }
+  uint32_t firstLineWordTypography(uint32_t typography) const {
+    if (firstLineTrackingDefined) typography = (typography & ~0xffffu) | static_cast<uint16_t>(firstLineTracking);
+    if (firstLineLigaturesDefined) typography = (typography & ~(1u << 25)) | (firstLineLigaturesNone ? 1u << 25 : 0u);
+    return typography;
+  }
+
   // Spacing (in pixels)
   int16_t marginTop = 0;
   int16_t marginBottom = 0;
@@ -101,6 +124,20 @@ struct BlockStyle {
   BlockStyle getCombinedBlockStyle(const BlockStyle& child) const {
     BlockStyle combinedBlockStyle;
     combinedBlockStyle.whiteSpace = child.whiteSpace;
+    combinedBlockStyle.hyphens = child.hyphens;
+    combinedBlockStyle.hyphenateLimitBefore = child.hyphenateLimitBefore;
+    combinedBlockStyle.hyphenateLimitAfter = child.hyphenateLimitAfter;
+    combinedBlockStyle.hyphenateLimitLines = child.hyphenateLimitLines;
+    // A pending parent's first line reaches its first text child. Once consumed,
+    // the parser clears these flags, so neither continuations nor siblings inherit it.
+    const BlockStyle& first = child.firstLineStyleDefined ? child : *this;
+    combinedBlockStyle.firstLineStyleDefined = first.firstLineStyleDefined;
+    combinedBlockStyle.firstLineSmallCaps = first.firstLineSmallCaps;
+    combinedBlockStyle.firstLineSmallCapsDefined = first.firstLineSmallCapsDefined;
+    combinedBlockStyle.firstLineTracking = first.firstLineTracking;
+    combinedBlockStyle.firstLineTrackingDefined = first.firstLineTrackingDefined;
+    combinedBlockStyle.firstLineLigaturesNone = first.firstLineLigaturesNone;
+    combinedBlockStyle.firstLineLigaturesDefined = first.firstLineLigaturesDefined;
 
     // Vertical margins between a parent and its child collapse (CSS collapsing margins):
     // the combined margin is the larger of the two, not their sum. Without this, a
@@ -176,6 +213,10 @@ struct BlockStyle {
                                  const uint16_t viewportWidth = 0, const float rootEmSize = 0) {
     BlockStyle blockStyle;
     blockStyle.whiteSpace = cssStyle.whiteSpace;
+    blockStyle.hyphens = cssStyle.hasHyphens() ? cssStyle.hyphens : CssHyphens::Inherit;
+    blockStyle.hyphenateLimitBefore = cssStyle.hyphenateLimitBefore;
+    blockStyle.hyphenateLimitAfter = cssStyle.hyphenateLimitAfter;
+    blockStyle.hyphenateLimitLines = cssStyle.hyphenateLimitLines;
     const float vw = viewportWidth;
     const auto maxHorizontalInsetPx = static_cast<int16_t>(emSize * MAX_HORIZONTAL_INSET_EM);
     const auto pixels = [&](const CssLength& length) {

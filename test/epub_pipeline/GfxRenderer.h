@@ -39,8 +39,8 @@ class GfxRenderer {
     if (family >= 5 && familyFallback) family = familyFallback(family);
     return {family == 2 ? -2000000 : (family == 1 ? -1000000 : (family == 4 ? -3000000 : fontId)), 1.0f};
   }
-  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                            int16_t tracking) const {
+  int getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                            bool = true) const {
     int count = 0;
     for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
       if ((*p & 0xc0) != 0x80) ++count;
@@ -50,12 +50,12 @@ class GfxRenderer {
     return std::max(
         0, static_cast<int>(std::lround(width * scale * familyScale + std::max(0, count - 1) * tracking / 16.0f)));
   }
-  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
-                         int16_t tracking) const {
+  int getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
+                         bool = true) const {
     return getTextAdvanceXSpaced(fontId, text, style, scale, tracking);
   }
   void drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style, float scale,
-                      int16_t) const {
+                      int16_t, bool = true) const {
     drawTextScaled(fontId, x, y, text, black, style, scale);
   }
 
@@ -74,14 +74,21 @@ class GfxRenderer {
   int getDisplayHeight() const { return 800; }
   uint16_t getDisplayWidthBytes() const { return 60; }
   Orientation getOrientation() const { return Portrait; }
-  RenderMode getRenderMode() const { return BW; }
+  RenderMode testRenderMode = BW;
+  bool opaqueReplay = false;
+  std::function<void(int, int, bool)> pixelSink;
+  RenderMode getRenderMode() const { return testRenderMode; }
+  void setRenderMode(RenderMode mode) { testRenderMode = mode; }
+  bool isErasingOpaqueGlyphs() const { return opaqueReplay; }
   uint8_t* getWriteTarget() const { return frameBuffer_; }
   int getWriteOriginY() const { return 0; }
   int getWriteRows() const { return 800; }
   void clearScreen(uint8_t = 0xFF) const {}
 
   // --- Drawing (no-ops: the harness never inspects pixels) ---
-  void drawPixel(int, int, bool = true) const {}
+  void drawPixel(int x, int y, bool state = true) const {
+    if (pixelSink) pixelSink(x, y, state);
+  }
   void drawLine(int, int, int, int, bool = true) const {}
   void drawLine(int, int, int, int, int, bool) const {}
   void drawRect(int, int, int, int, bool = true) const {}

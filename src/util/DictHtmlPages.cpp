@@ -5,7 +5,6 @@
 #include <Logging.h>
 #include <Memory.h>
 
-#include "CrossPointSettings.h"
 #include "DictHtmlNormalize.h"
 
 namespace {
@@ -83,10 +82,12 @@ bool buildDictionaryHtmlPages(GfxRenderer& renderer, const std::string& definiti
     // stack local. A null epub is safe here because imageRendering=2 suppresses
     // <img> entirely, and every path that dereferences epub sits behind either
     // that check or a non-empty image src that only that path can set.
+    // Definitions are reference UI: do not inherit global book typography. In particular,
+    // the global bionic flag can differ from the active book's per-book override.
     auto parser = makeUniqueNoThrow<ChapterHtmlSlimParser>(
-        nullptr, renderer, fontId, SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacing != 0,
-        SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
-        SETTINGS.fontSizeNormalization != 0, SETTINGS.bionicReading != 0,
+        nullptr, renderer, fontId, /*lineCompression=*/0.95f, /*extraParagraphSpacing=*/false,
+        static_cast<uint8_t>(CssTextAlign::Left), viewportWidth, viewportHeight, /*hyphenationEnabled=*/false,
+        /*fontSizeNormalization=*/false, /*bionicReadingEnabled=*/false,
         [&pagesOut, &resourceLimitHit, &retainedElements, &limitReason](std::unique_ptr<Page> page) {
           if (resourceLimitHit) return;
           const size_t pageElements = page->elements.size();

@@ -37,29 +37,21 @@ namespace {
 // v82: embedded fonts, named families, true caps and preformatted text.
 // v81: scaled glyph ink bounds preserve fractional baseline/side bearings.
 // v79: CSS case transforms and inherited line spacing invalidate cached text and positions.
-constexpr uint8_t SECTION_FILE_VERSION = 85;  // v85: body insets, inline markers and computed CSS spacing
-                                              // v78: a span indent (poem line shape) gives way
-                                              // before its line wraps; v77 pages of such poems
-                                              // carry the wrapped lines
-                                              // v77: the status byte records a heap-degraded
-                                              // image build (kStatusImageHeaderDegraded); a v76
-                                              // cache may be image-less without saying so
-                                              // v76: a percentage wrapper (<div
-                                              // style="width:60%">) no longer shrinks a block
-                                              // image below min(native, column), so image
-                                              // sizes baked into v75 pages are stale
-                                              // v75: the reader ladder gained rungs above
-                                              // 18 pt (20/22/24/26), so a heading snaps to a
-                                              // different face and residual than it did under
-                                              // v74 and breaks across lines differently. The
-                                              // ladder is derived from the body fontId and so is
-                                              // deliberately absent from the property hash; the
-                                              // hash therefore still MATCHES, and this version
-                                              // is the only thing that rejects a v74 cache
-                                              // v74: the HTML `hidden` attribute now
-                                              // suppresses an element, so a v73 cache still
-                                              // holds the laid-out text it should have hidden
-                                              // v73: an internal link honours CSS
+constexpr uint8_t SECTION_FILE_VERSION = 91;  // v91: fractional glyph ink bounds; v89: publisher boxes, first-line
+                                              // typography and SVG layout v78: a span indent (poem line shape) gives
+                                              // way before its line wraps; v77 pages of such poems carry the wrapped
+                                              // lines v77: the status byte records a heap-degraded image build
+                                              // (kStatusImageHeaderDegraded); a v76 cache may be image-less without
+                                              // saying so v76: a percentage wrapper (<div style="width:60%">) no longer
+                                              // shrinks a block image below min(native, column), so image sizes baked
+                                              // into v75 pages are stale v75: the reader ladder gained rungs above 18
+                                              // pt (20/22/24/26), so a heading snaps to a different face and residual
+                                              // than it did under v74 and breaks across lines differently. The ladder
+                                              // is derived from the body fontId and so is deliberately absent from the
+                                              // property hash; the hash therefore still MATCHES, and this version is
+                                              // the only thing that rejects a v74 cache v74: the HTML `hidden`
+                                              // attribute now suppresses an element, so a v73 cache still holds the
+                                              // laid-out text it should have hidden v73: an internal link honours CSS
                                               // vertical-align, so footnote references marked
                                               // `a { vertical-align: super }` are raised and
                                               // shrunk. Word size/position are baked into layout

@@ -699,10 +699,12 @@ void EpubReaderActivity::onEnter() {
     const int dataSize = f.read(data, sizeof(data));
     if (const auto record = EpubProgressRecord::decode(data, dataSize > 0 ? static_cast<size_t>(dataSize) : 0)) {
       currentSpineIndex = record->spineIndex;
-      // A Page target even when the paragraph is known: a Page target is shown the moment its
-      // page is built (Background-C), and the paragraph only matters after a relayout.
-      navTarget = NavigationTarget::makePage(record->page);
-      navTarget.restoreParagraph = record->paragraph.value_or(0);
+      // Prefer the exact source passage after any reflow, even when page counts match.
+      // Older records retain the Page target and paragraph fallback.
+      navTarget = record->source ? NavigationTarget::makeSourceOffset(record->source->offset, record->page,
+                                                                      record->source->characterOffset)
+                                 : NavigationTarget::makePage(record->page);
+      if (!record->source) navTarget.restoreParagraph = record->paragraph.value_or(0);
       navTarget.cachedSpineIdx = currentSpineIndex;
       navTarget.cachedPageCount = record->pageCount;
       hadSavedProgress = true;
@@ -859,11 +861,22 @@ void EpubReaderActivity::onExit() {
   // section cache and the page index, and the per-page saves only need to survive a reboot, which
   // comes back to the same layout. Past the last spine the finished-book flow has written its own
   // 100% record; leave that alone.
-  if (section && readerPhase_ == ReaderPhase::READING && !section->hasActiveBuild() && section->pageCount > 0 && epub &&
+  if (epub && navTarget.kind == NavigationTarget::Kind::Source && currentSpineIndex >= 0 &&
       currentSpineIndex < epub->getSpineItemsCount()) {
+    // A settings change can close the reader while its target is still indexing.
+    // Preserve its original fallback too, not the page-zero indexing cursor.
+    saveProgress(currentSpineIndex, navTarget.fallbackPage, navTarget.cachedPageCount, std::nullopt, std::nullopt,
+                 sourceForProgress(currentSpineIndex, navTarget.fallbackPage));
+  } else if (section && readerPhase_ == ReaderPhase::READING && section->pageCount > 0 && epub &&
+             currentSpineIndex < epub->getSpineItemsCount()) {
     const auto page = static_cast<uint16_t>(section->currentPage);
-    saveProgress(currentSpineIndex, section->currentPage, section->pageCount, section->getParagraphIndexForPage(page),
-                 shownProgress());
+    const bool activeBuild = section->hasActiveBuild();
+    // A built visible page has provenance in the live LUT, but pages-so-far is
+    // not the completed page count and must not be used to rescale a fallback.
+    saveProgress(currentSpineIndex, section->currentPage, activeBuild ? 0 : section->pageCount,
+                 activeBuild ? std::nullopt : section->getParagraphIndexForPage(page),
+                 activeBuild ? std::nullopt : std::optional<EpubProgressRecord::Shown>(shownProgress()),
+                 sourceForProgress(currentSpineIndex, section->currentPage));
   }
 
   // Save bookmarks before exit
@@ -2325,9 +2338,14 @@ void EpubReaderActivity::openDictionary() {
   // During an active build the on-disk LUT is not written yet, so the page has
   // to come from the in-memory one -- the same choice the pre-render pass makes.
   std::unique_ptr<Page> page;
+  RenderLayout layout{};
+  int effectiveFontId = 0;
   {
     RenderLock lock(*this);
     if (!section) return;
+    // Capture the page and its geometry from the same locked reader state.
+    layout = computeRenderLayout();
+    effectiveFontId = getEffectiveReaderFontId();
     page = section->hasActiveBuild() ? section->loadPageFromActiveBuild(static_cast<uint16_t>(section->currentPage))
                                      : section->loadPageFromSectionFile();
   }
@@ -2336,8 +2354,6 @@ void EpubReaderActivity::openDictionary() {
     return;
   }
 
-  const RenderLayout layout = computeRenderLayout();
-  const int effectiveFontId = getEffectiveReaderFontId();
   // Before startActivityForResult, which only hands back the borrowed buffer:
   // the overlay wants the heap a completed look-ahead section is sitting on.
   suspendBackgroundWork();
@@ -2694,6 +2710,19 @@ void EpubReaderActivity::applyPendingBookmarkJump() {
   }
   jump.clear();
   APP_STATE.saveToFile();
+}
+
+std::optional<EpubProgressRecord::Source> EpubReaderActivity::sourceForProgress(const int spine, const int page) const {
+  if (spine != currentSpineIndex) return std::nullopt;
+  if (navTarget.kind == NavigationTarget::Kind::Source && navTarget.sourceOffset != UINT32_MAX)
+    return EpubProgressRecord::Source{navTarget.sourceOffset, navTarget.sourceCharacterOffset};
+  if (reflowSource_.valid() && reflowSourceSpine_ == spine && reflowSourcePage_ == page)
+    return EpubProgressRecord::Source{reflowSource_.sourceOffset, reflowSource_.characterOffset};
+  if (section && page >= 0 && page < section->pageCount) {
+    if (const auto source = section->getSourceAnchorForPage(static_cast<uint16_t>(page)))
+      return EpubProgressRecord::Source{source->sourceOffset, source->characterOffset};
+  }
+  return std::nullopt;
 }
 
 void EpubReaderActivity::captureSourceBeforeReflow() {
@@ -5140,7 +5169,8 @@ bool EpubReaderActivity::maybeRestartForFragmentedHeap(const uint32_t freeHeap, 
 bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, const int spineIndex,
                                                   const int currentPage, const int pageCount, const uint8_t percent,
                                                   const std::optional<uint16_t> paragraphIndex,
-                                                  const std::optional<EpubProgressRecord::Shown>& shown) {
+                                                  const std::optional<EpubProgressRecord::Shown>& shown,
+                                                  const std::optional<EpubProgressRecord::Source> source) {
   FsFile f;
   if (!Storage.openFileForWrite("ERS", cachePath + "/progress.bin", f)) {
     LOG_ERR("ERS", "Failed to open progress cache: %s", cachePath.c_str());
@@ -5154,6 +5184,7 @@ bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, 
   record.percent = percent;
   record.paragraph = paragraphIndex;
   record.shown = shown;
+  record.source = source;
   uint8_t data[EpubProgressRecord::kMaxSize] = {};
   const size_t size = record.encode(data);
   f.write(data, size);
@@ -5163,10 +5194,11 @@ bool EpubReaderActivity::writeReaderProgressCache(const std::string& cachePath, 
 
 void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount,
                                       const std::optional<uint16_t> paragraphIndex,
-                                      const std::optional<EpubProgressRecord::Shown>& shown) {
+                                      const std::optional<EpubProgressRecord::Shown>& shown,
+                                      const std::optional<EpubProgressRecord::Source> source) {
   const uint8_t percent = epubProgressPercentByte(*epub, spineIndex, currentPage, pageCount);
   if (!writeReaderProgressCache(epub->getCachePath(), spineIndex, currentPage, pageCount, percent, paragraphIndex,
-                                shown)) {
+                                shown, source)) {
     LOG_ERR("ERS", "Could not save progress!");
     return;
   }
@@ -6211,6 +6243,7 @@ void EpubReaderActivity::renderBackgroundDebugOverlay() const {
 }
 
 bool EpubReaderActivity::shouldSkipPeriodicUpdate() const {
+  if (!SETTINGS.statusBarVisible) return true;  // page/reflow updates are requested explicitly
   // Background-B holds the secondary buffer: any render takes it back, and taking it back
   // discards B's live build (endBackgroundBorrow). A clock-minute or battery tick would do that
   // once a minute, and a build takes ~7-15 s of slices -- so a status refresh waits for B to hand
@@ -6869,6 +6902,24 @@ void EpubReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION 
     case BA::BTN_READER_MENU:
       if (epub) {
         openReaderMenu();
+      }
+      break;
+    case BA::BTN_TOGGLE_STATUS_BAR:
+      if (epub) {
+        // Wait for the whole render pass: it may temporarily release the mutex
+        // while retaining section/page pointers and staged grayscale planes.
+        RenderLock lock{RenderLock::ExclusiveActivityAccess{}};
+        captureSourceBeforeReflow();
+        SETTINGS.statusBarVisible = !SETTINGS.statusBarVisible;
+        SETTINGS.saveToFile();
+        pendingPreRender = false;
+        usePreRenderedBuffer = false;
+        preRenderedPage.ready = false;
+        preRenderedPlanesStaged_ = false;
+        pendingGrayscale_ = {};
+        section.reset();
+        ReaderUtils::enforceExitFullRefresh(renderer);
+        requestUpdate();
       }
       break;
     case BA::BTN_TOGGLE_BIONIC_READING:

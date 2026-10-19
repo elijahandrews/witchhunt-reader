@@ -213,8 +213,15 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
     return;
   }
 
+  const auto styleFor = [&](size_t i) {
+    return static_cast<EpdFontFamily::Style>(range.firstLineOverride
+                                                 ? range.firstLineOverride->firstLineFontStyle(styleSrc[first + i])
+                                                 : styleSrc[first + i]);
+  };
   const auto typographyFor = [&](size_t i) {
-    return packedTypography(hasTypographySrc ? (*range.typography)[first + i] : 0, styleSrc[first + i]);
+    const uint32_t original = hasTypographySrc ? (*range.typography)[first + i] : 0;
+    return packedTypography(
+        range.firstLineOverride ? range.firstLineOverride->firstLineWordTypography(original) : original, styleFor(i));
   };
   if (count) {
     uniformTypography = typographyFor(0);
@@ -278,7 +285,7 @@ TextBlock::TextBlock(const WordRange& range, const std::vector<int16_t>& word_xp
   for (uint16_t i = 0; i < numWords; i++) {
     textOff[i] = off;
     xpos[i] = word_xpos[i];
-    styles[i] = packStyle(styleSrc[first + i], continuesSrc != nullptr && (*continuesSrc)[first + i]);
+    styles[i] = packStyle(styleFor(i), continuesSrc != nullptr && (*continuesSrc)[first + i]);
     // Copy the word one soft-hyphen-free run at a time.
     const std::string& w = words[first + i];
     size_t start = 0;
@@ -352,7 +359,8 @@ TextBlock::WordBox TextBlock::wordBox(const GfxRenderer& renderer, const uint16_
   else if (style & EpdFontFamily::SUB)
     box.y += blockAscender / 4;
   box.width =
-      renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)));
+      renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)),
+                                  wordTypography::ligatures(wordTypography(i)));
   box.height = renderer.getLineHeightScaled(f.fontId, scale);
   return box;
 }
@@ -366,7 +374,8 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     for (uint16_t i = 0; i < numWords; ++i) {
       const auto f = renderer.resolveTextFont(baseFont, wordTypography::family(wordTypography(i)), wordScale(i));
       renderer.drawTextSpaced(f.fontId, x + xposArr[i], y, wordText(i), true, wordStyle(i), wordScale(i) * f.scale,
-                              wordTypography::tracking(wordTypography(i)));
+                              wordTypography::tracking(wordTypography(i)),
+                              wordTypography::ligatures(wordTypography(i)));
     }
     return;
   }
@@ -390,11 +399,12 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     else if (style & EpdFontFamily::SUB)
       wordY += blockAscender / 4;
     renderer.drawTextSpaced(f.fontId, wordX, wordY, wordText(i), true, style, scale,
-                            wordTypography::tracking(wordTypography(i)));
+                            wordTypography::tracking(wordTypography(i)), wordTypography::ligatures(wordTypography(i)));
     const bool decorated = style & (EpdFontFamily::UNDERLINE | EpdFontFamily::STRIKETHROUGH);
     if (!guideDotsEnabled && !decorated) continue;
     const int width =
-        renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)));
+        renderer.getTextWidthSpaced(f.fontId, wordText(i), style, scale, wordTypography::tracking(wordTypography(i)),
+                                    wordTypography::ligatures(wordTypography(i)));
     const int baseline = wordY + ascender;
     if (guideDotsEnabled && i > 0) {
       const int gap = wordX - prevWordEndX;

@@ -88,3 +88,35 @@ follows **Settings → Reader → Spacing → Ignore publisher page margins**.
 Other chapters without outer margins should keep their layout. Reopen the book
 to check persistence, and open a second book to check that its choice is independent.
 Repeat the toggle from **Quick Overrides** and check that the passage stays visible.
+
+
+## Publisher layout specimens
+
+The feature EPUB also contains original examples for these checks with embedded
+styles enabled:
+
+- **Rules and shaded blocks:** top/bottom rules, a pale background with padding,
+  right-aligned labels and a paragraph that clears the float.
+- **Generated decorations and first line:** generated heading brackets, an
+  attribution prefix, first-line small capitals/tracking and optional ligatures.
+  Change font size to check that only the first displayed line keeps its style.
+- **Empty spacers and heading height:** authored empty gaps, zero-height elements
+  and immediate-parent minimum-height/background inheritance.
+- **SVG ornaments and percentage icons:** original curved paths and an elliptical
+  ring, scaled within percentage-width wrappers.
+- **Figures kept with captions:** a bounded illustration/caption group that moves
+  together across a page boundary when it fits.
+- **Hyphenation policies:** none/manual/automatic policies, consecutive-line
+  limits and an invented URL with optional breaks that add no spaces or hyphens.
+
+The fixture includes only invented text, geometric fonts and original graphics.
+
+
+## Small text spacing
+
+The **Small text spacing** chapter adds original short words and sentences at
+80%, 100%, and 120%, italic, bold, small caps, combining accents, ligatures, and
+fine positive/negative tracking. Use a 10pt reading font with antialiasing on.
+Compare the i/l stems in “still” and “little” with the saved production-renderer
+specimen. Check regular and HD fonts, then reopen the book and repeat at another
+size. Host pixel checks live in `test/real_renderer/fractional.cpp`.

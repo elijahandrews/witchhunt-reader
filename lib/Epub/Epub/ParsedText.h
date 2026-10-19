@@ -86,6 +86,13 @@ class ParsedText {
   // layout gate. std::vector growth cannot fail gracefully under -fno-exceptions, so the
   // check has to happen before the reserve.
   bool wordGrowthRefused_ = false;
+  // Only the first physical line uses ::first-line. SIZE_MAX while its break is being
+  // measured, then the actual end index. Original word styles/provenance stay untouched.
+  size_t firstLineEnd_ = 0;
+  uint8_t consecutiveHyphenLines_ = 0;
+  EpdFontFamily::Style layoutStyle(size_t index) const;
+  uint32_t layoutTypography(size_t index) const;
+  bool authoredHyphenationAllowed() const;
   size_t bionicTransformedUpTo_ = 0;  ///< words[0..bionicTransformedUpTo_) have already been bionic-transformed
 
   float wordHeight(const GfxRenderer& renderer, int fontId, size_t index) const;

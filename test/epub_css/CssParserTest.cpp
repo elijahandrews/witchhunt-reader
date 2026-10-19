@@ -70,16 +70,20 @@ TEST(CssParserDeclarations, ImageWidthImportant) {
 
 // Issue #388: every value but `none` used to read as Block, so a <span> styled display:inline
 // could not be told from one styled display:block -- and the parser lays out only the latter
-// as a block. Block-level values are Block; every other shown value is Inline.
+// as a block. Inline-block also preserves its distinct replaced-box sizing behavior.
 TEST(CssParserDeclarations, DisplayKeepsBlockAndInlineApart) {
   const struct {
     const char* declaration;
     CssDisplay want;
   } cases[] = {
-      {"display: block", CssDisplay::Block},         {"display: list-item", CssDisplay::Block},
-      {"display: table", CssDisplay::Block},         {"display: inline", CssDisplay::Inline},
-      {"display: inline-block", CssDisplay::Inline}, {"display: table-cell", CssDisplay::Inline},
-      {"display: none", CssDisplay::None},           {"DISPLAY: BLOCK !important", CssDisplay::Block},
+      {"display: block", CssDisplay::Block},
+      {"display: list-item", CssDisplay::Block},
+      {"display: table", CssDisplay::Block},
+      {"display: inline", CssDisplay::Inline},
+      {"display: inline-block", CssDisplay::InlineBlock},
+      {"display: table-cell", CssDisplay::Inline},
+      {"display: none", CssDisplay::None},
+      {"DISPLAY: BLOCK !important", CssDisplay::Block},
   };
   for (const auto& c : cases) {
     const CssStyle style = CssParser::parseInlineStyle(c.declaration);
@@ -201,4 +205,74 @@ TEST(CssParserDeclarations, TrackingAcceptsLengthsAndRejectsInvalidValues) {
     EXPECT_FALSE(CssParser::parseInlineStyle(std::string("letter-spacing:") + value).hasLetterSpacing()) << value;
   EXPECT_EQ(CssParser::parseInlineStyle("letter-spacing:1em;letter-spacing:normal").letterSpacing.value, 0);
   EXPECT_EQ(CssParser::parseInlineStyle("letter-spacing:unset").letterSpacing.unit, CssUnit::Auto);
+}
+
+TEST(CssAuditDeclarations, DimensionsBordersBackgroundAndResets) {
+  auto s = CssParser::parseInlineStyle(
+      "min-height:1.5em;max-height:90%;max-width:32rem;border-top:0.8px solid #000;border-bottom:1pt solid "
+      "black;background-color:#e7e7e9;clear:both;break-inside:avoid;display:inline-block");
+  EXPECT_TRUE(s.hasMinHeight());
+  EXPECT_FLOAT_EQ(s.minHeight.value, 1.5f);
+  EXPECT_EQ(s.minHeight.unit, CssUnit::Em);
+  EXPECT_EQ(s.maxHeight.unit, CssUnit::Percent);
+  EXPECT_FLOAT_EQ(s.maxHeight.value, 90);
+  EXPECT_EQ(s.maxWidth.unit, CssUnit::Rem);
+  EXPECT_FLOAT_EQ(s.maxWidth.value, 32);
+  EXPECT_EQ(s.borderTopStyle, CssBorderStyle::Solid);
+  EXPECT_FLOAT_EQ(s.borderTopWidth.value, .8f);
+  EXPECT_EQ(s.borderBottomStyle, CssBorderStyle::Solid);
+  EXPECT_EQ(s.borderBottomWidth.unit, CssUnit::Points);
+  EXPECT_EQ(s.backgroundGray, 231);
+  EXPECT_EQ(s.cssClear, CssClear::Both);
+  EXPECT_TRUE(s.breakInsideAvoid);
+  EXPECT_EQ(s.display, CssDisplay::InlineBlock);
+  s.applyOver(
+      CssParser::parseInlineStyle("min-height:inherit;max-height:none;max-width:initial;border-top:none;border-bottom-"
+                                  "width:0;background:transparent;clear:none;break-inside:auto"));
+  EXPECT_EQ(s.minHeight.unit, CssUnit::Inherit);
+  EXPECT_EQ(s.maxHeight.unit, CssUnit::Auto);
+  EXPECT_EQ(s.maxWidth.unit, CssUnit::Auto);
+  EXPECT_EQ(s.borderTopStyle, CssBorderStyle::None);
+  EXPECT_FLOAT_EQ(s.borderBottomWidth.value, 0);
+  EXPECT_EQ(s.backgroundGray, 256);
+  EXPECT_EQ(s.cssClear, CssClear::None);
+  EXPECT_FALSE(s.breakInsideAvoid);
+  s.reset();
+  EXPECT_FALSE(s.defined.anySet());
+  EXPECT_EQ(s.backgroundGray, 256);
+}
+TEST(CssAuditDeclarations, HyphenAliasesLimitsAndLigaturesKeepInitialInheritanceDistinct) {
+  EXPECT_FALSE(CssParser::parseInlineStyle("").hasHyphens());
+  for (const auto* name : {"hyphens", "-webkit-hyphens", "-moz-hyphens", "adobe-hyphenate", "-epub-hyphens"}) {
+    EXPECT_EQ(CssParser::parseInlineStyle(std::string(name) + ":none").hyphens, CssHyphens::None);
+    EXPECT_EQ(CssParser::parseInlineStyle(std::string(name) + ":manual").hyphens, CssHyphens::Manual);
+    EXPECT_EQ(CssParser::parseInlineStyle(std::string(name) + ":auto").hyphens, CssHyphens::Auto);
+    EXPECT_EQ(CssParser::parseInlineStyle(std::string(name) + ":unset").hyphens, CssHyphens::Inherit);
+  }
+  const auto s = CssParser::parseInlineStyle(
+      "-webkit-hyphenate-limit-before:4;-webkit-hyphenate-limit-after:4;-webkit-hyphenate-limit-lines:2;font-variant-"
+      "ligatures:none");
+  EXPECT_EQ(s.hyphenateLimitBefore, 4);
+  EXPECT_EQ(s.hyphenateLimitAfter, 4);
+  EXPECT_EQ(s.hyphenateLimitLines, 2);
+  EXPECT_EQ(s.ligatures, CssLigatures::None);
+  EXPECT_EQ(CssParser::parseInlineStyle("font-variant-ligatures:inherit").ligatures, CssLigatures::Inherit);
+  EXPECT_EQ(CssParser::parseInlineStyle("font-variant-ligatures:normal").ligatures, CssLigatures::Normal);
+  for (const auto* value : {"-1", "256", "99999999999999", "2.5", "garbage", "nan"}) {
+    EXPECT_FALSE(CssParser::parseInlineStyle(std::string("hyphenate-limit-before:") + value).hasHyphenateLimitBefore())
+        << value;
+    EXPECT_FALSE(CssParser::parseInlineStyle(std::string("hyphenate-limit-lines:") + value).hasHyphenateLimitLines())
+        << value;
+  }
+  EXPECT_EQ(CssParser::parseInlineStyle("hyphenate-limit-before:inherit").hyphenateLimitBefore, 255);
+  EXPECT_EQ(CssParser::parseInlineStyle("hyphenate-limit-lines:no-limit").hyphenateLimitLines, 0);
+}
+TEST(CssAuditDeclarations, MalformedLengthsAndUnsupportedBordersDoNotOverride) {
+  for (const auto* value : {"-1px", "nan", "inf", "1garbage", "calc(2em)", "inheritjunk"})
+    EXPECT_FALSE(CssParser::parseInlineStyle(std::string("max-height:") + value).hasMaxHeight()) << value;
+  auto s = CssParser::parseInlineStyle("border-top:2px solid;border-top:dashed");
+  EXPECT_EQ(s.borderTopStyle, CssBorderStyle::Solid);
+  EXPECT_FLOAT_EQ(s.borderTopWidth.value, 2);
+  EXPECT_FALSE(CssParser::parseInlineStyle("background-color:garbage").hasBackgroundGray());
+  EXPECT_EQ(CssParser::parseInlineStyle("background-color:rgb(20, 40, 60)").backgroundGray, 36);
 }

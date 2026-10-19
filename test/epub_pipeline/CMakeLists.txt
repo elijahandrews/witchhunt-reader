@@ -37,6 +37,8 @@ set(PIPELINE_SOURCES
   ${REPO_ROOT}/lib/Epub/Epub/hyphenation/LiangHyphenation.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/GifToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageDecoderFactory.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/converters/SvgRasterizer.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/converters/SvgToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageToFramebufferDecoder.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/JpegToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/PngToFramebufferConverter.cpp
@@ -95,6 +97,7 @@ add_executable(EpubPipelineTest
   CssTypographyTest.cpp
   ComputedTextCssTest.cpp
   EpubFeatureTest.cpp
+  PublisherBoxLayoutTest.cpp
   StylesheetMediaLayoutTest.cpp
   BookTextSearchTest.cpp
   BookSearchNavigationTest.cpp
@@ -117,6 +120,10 @@ add_executable(EpubPipelineTest
   ImageManifestTest.cpp
   ImageWrapperWidthTest.cpp
   HeadingBlockLayoutTest.cpp
+  ParagraphIndentTest.cpp
+  DictionaryHtmlPagesTest.cpp
+  ${REPO_ROOT}/src/util/DictHtmlPages.cpp
+  ${REPO_ROOT}/src/util/DictHtmlNormalize.cpp
   SpineCacheLayoutTest.cpp
   SaxStateInArenaTest.cpp
   JpegDownscaleTest.cpp

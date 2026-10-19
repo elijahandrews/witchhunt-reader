@@ -10,6 +10,7 @@
 
 #include "SdCardFontGlobals.h"
 #include "fontIds.h"
+#include "util/ButtonActionOptions.h"
 
 // Font ID 0 is reserved as the SD card font "not found" sentinel
 // (SdCardFontManager::computeFontId() never returns 0). Guard against any
@@ -69,6 +70,7 @@ bool CrossPointSettings::isReaderScopedAction(const uint8_t action) {
     case BTN_EXIT_READER:
     case BTN_READER_MENU:
     case BTN_TOGGLE_BIONIC_READING:
+    case BTN_TOGGLE_STATUS_BAR:
     case BTN_KOREADER_SYNC:
     case BTN_CYCLE_FONT_SIZE:
     case BTN_FONT_SIZE_SMALLER:
@@ -86,9 +88,7 @@ bool CrossPointSettings::isReaderScopedAction(const uint8_t action) {
 }
 
 void CrossPointSettings::dropUnsupportedActions(CrossPointSettings& settings, const bool hasFrontlight,
-                                                const bool hasWarmLight) {
-  if (hasFrontlight && hasWarmLight) return;
-
+                                                const bool hasWarmLight, const bool hasUsbDrive) {
   // Every field that stores a BUTTON_ACTION. Listed once, here, so a sweep over
   // them cannot quietly miss one the way scattered per-field checks would.
   static constexpr uint8_t CrossPointSettings::* ACTION_FIELDS[] = {
@@ -143,9 +143,7 @@ void CrossPointSettings::dropUnsupportedActions(CrossPointSettings& settings, co
 
   for (const auto field : ACTION_FIELDS) {
     const uint8_t action = settings.*field;
-    const bool needsLight = action == BTN_LIGHT_TOGGLE || action == BTN_LIGHT_BRIGHTER || action == BTN_LIGHT_DIMMER;
-    const bool needsWarm = action == BTN_LIGHT_WARMER || action == BTN_LIGHT_COOLER;
-    if ((needsLight && !hasFrontlight) || (needsWarm && !hasWarmLight)) {
+    if (!buttonActionAvailable(action, {hasFrontlight, hasWarmLight, hasUsbDrive})) {
       settings.*field = BTN_DEFAULT;
     }
   }

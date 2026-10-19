@@ -959,7 +959,8 @@ class EpubReaderActivity final : public Activity {
   bool maybeRestartForFragmentedHeap(uint32_t freeHeap, uint32_t contigHeap);
   void saveProgress(int spineIndex, int currentPage, int pageCount,
                     std::optional<uint16_t> paragraphIndex = std::nullopt,
-                    const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
+                    const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt,
+                    std::optional<EpubProgressRecord::Source> source = std::nullopt);
   // Writes the canonical EPUB progress.bin record (EpubProgressRecord): spine(2) + page(2) +
   // pageCount(2) + percent(1), plus paragraph(2) when one is given, plus what the status bar
   // showed when that is given. Used by the per-page saveProgress() and by transient writers (sync
@@ -968,7 +969,8 @@ class EpubReaderActivity final : public Activity {
   // needs no instance state.
   static bool writeReaderProgressCache(const std::string& cachePath, int spineIndex, int currentPage, int pageCount,
                                        uint8_t percent, std::optional<uint16_t> paragraphIndex = std::nullopt,
-                                       const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt);
+                                       const std::optional<EpubProgressRecord::Shown>& shown = std::nullopt,
+                                       std::optional<EpubProgressRecord::Source> source = std::nullopt);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
@@ -1058,6 +1060,7 @@ class EpubReaderActivity final : public Activity {
   // Re-point navTarget at the page currently displayed. Must be called after every move of
   // section->currentPage that stays inside the loaded section — see the definition for why.
   void captureSourceBeforeReflow();
+  std::optional<EpubProgressRecord::Source> sourceForProgress(int spine, int page) const;
   void anchorNavTargetToCurrentPage(bool preserveSourceAnchor = false);
   bool stepPageState(bool isForwardTurn);
   bool stepPageStateLocked(bool isForwardTurn);

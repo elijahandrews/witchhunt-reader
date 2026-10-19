@@ -1,5 +1,6 @@
 #include <EpdOutlineFontCallbacks.h>
 #include <GfxRenderer.h>
+#include <PublisherBox.h>
 
 #include <algorithm>
 #include <array>
@@ -83,7 +84,12 @@ int runOverlapChecks(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily&
             };
             const Frame composed = capture(g, d, both), staged = capture(g, d, both, true);
             bool ok = strongest(composed, a, b) && composed == staged;
-            if (firstStyle == secondStyle) {
+            // Separate public draw calls start on integer origins. They equal a
+            // continuous run only when the boundary itself is integral; fractional
+            // boundaries are checked against a pixel oracle in fractional.cpp.
+            const int boundary = int(std::lround(f.advanceX * actualScale)) +
+                                 int(std::lround(family.getKerning('f', 'T', firstStyle) * actualScale));
+            if (firstStyle == secondStyle && boundary % 16 == 0) {
               const Frame oneRun =
                   capture(g, d, [&] { g.drawTextSpaced(id, 20, 20, "fT", true, firstStyle, scale, 0); });
               ok &= oneRun == composed;
@@ -136,6 +142,41 @@ int runOverlapChecks(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily&
               std::cerr << "Decoration overlap font=" << id << " kind=" << decoration << " scale=" << scale
                         << " reversed=" << reversed << '\n';
           }
+        }
+      }
+    }
+  }
+  // Run the actual page-box paint helper through both production AA paths.
+  // The final background (including a nested white replacement) and glyph ink
+  // must compose identically, with solid dither pixels winning over gray edges.
+  for (auto orientation : {GfxRenderer::Portrait, GfxRenderer::PortraitInverted, GfxRenderer::LandscapeClockwise,
+                           GfxRenderer::LandscapeCounterClockwise}) {
+    g.setOrientation(orientation);
+    g.setTextDarkness(0);
+    for (uint16_t shade : {uint16_t(232), uint16_t(128), uint16_t(255)}) {
+      for (int nested : {0, 1, 2}) {
+        auto boxes = [&](auto emit) {
+          emit(20, 20, 230, 110, shade, 1, 2);
+          if (nested) emit(40, 35, 150, 65, uint16_t(255), 0, 0);
+        };
+        auto background = [&] {
+          drawPublisherBox(g, 20, 20, 230, 110, shade, 1, 2);
+          if (nested == 1) drawPublisherBox(g, 40, 35, 150, 65, 255, 0, 0);
+          if (nested == 2) clearPublisherImageBackdrop(g, 40, 35, 150, 65);
+          finalizePublisherBoxes(g, boxes, [] { return false; });
+        };
+        auto text = [&] { g.drawTextSpaced(id, 30, 40, "fT office", true, EpdFontFamily::ITALIC, .75f, 0); };
+        auto page = [&] {
+          background();
+          text();
+        };
+        const Frame bg = capture(g, d, background), glyphs = capture(g, d, text);
+        const Frame captured = capture(g, d, page), staged = capture(g, d, page, true);
+        ++checks;
+        if (!(captured == staged) || !strongest(captured, bg, glyphs)) {
+          ++failures;
+          std::cerr << "Publisher box AA mismatch font=" << id << " shade=" << shade << " nested=" << nested
+                    << " orientation=" << int(orientation) << '\n';
         }
       }
     }
