@@ -24,9 +24,22 @@ Not supported: dictionaries with 64-bit index offsets (`idxoffsetbits=64` in the
 2. Open **Settings → Reader → Dictionary** on the device.
 3. Select a dictionary from the list, or **None** to disable lookups.
 
+Keep the folder name to 31 characters or fewer: the reader remembers the chosen dictionary by its folder name and keeps no more than that, so a longer one cannot be selected.
+
 Folders containing more than one dictionary (multiple `.idx` stems) are skipped as ambiguous, as are folders holding an `.idx` with no matching `.dict`/`.dict.dz` next to it -- a dictionary that would only fail once you tried to use it.
 
 If you can, decompress `.dict.dz` to `.dict` on your computer (`dictunzip yourdict.dict.dz`). A `.dict.dz` lookup needs a 32 KB contiguous inflate window, and that is the one allocation on this path a fragmented reading heap cannot always supply; a plain `.dict` needs none of it and is read directly.
+
+## Install from the Web Interface
+
+Start **File Transfer** on the device, open its address in a browser and go to **Dictionaries** (`http://<device-ip>/dictionary`). The page does the preparation above for you:
+
+- Choose the archive you downloaded (`.zip`, `.tar.gz`, `.tgz`, `.tar.bz2` or `.tar`) or the dictionary's own files (`.ifo`, `.idx` or `.idx.gz`, `.dict` or `.dict.dz`, optional `.syn`), or drop them on the page. Other archive formats (`.tar.xz`, `.7z`, `.rar`) are refused: repack them as `.zip`.
+- Your browser unpacks `.idx.gz` and `.syn.gz`, and offers to unpack `.dict.dz` to `.dict` (on by default, showing the size it will have). A dictionary with `idxoffsetbits=64`, or without an index or data file, is refused with the reason.
+- Each dictionary goes into its own folder under `/dictionaries`, named after the title in its `.ifo` (or the archive), shortened to 31 characters — you can change the name before installing. An archive holding several dictionaries is split into one folder each. A folder that already exists is replaced only after you confirm.
+- The list of installed dictionaries shows each one's title, word count, files and whether the reader can use it, and **Remove** deletes a dictionary's folder.
+
+Then choose the dictionary on the device as usual (**Settings → Reader → Dictionary**). Unpacking happens in the browser, so a large dictionary needs a current Chrome, Edge, Firefox or Safari and some patience while it uploads; a `.tar.bz2` is decoded more slowly than the other formats.
 
 ## Looking Up a Word
 
@@ -51,9 +64,9 @@ On the very first lookup with a dictionary (and again whenever the `.idx` or `.s
 
 ### How Lookup Works
 
-1. **Direct match** — the word is found as-is (case-insensitive) in the dictionary index. Surrounding punctuation is ignored.
+1. **Direct match** — the word is found as-is (case-insensitive) in the dictionary index. Surrounding punctuation is ignored, including guillemets (`«mot»`), `¿` and `¡`, and CJK and fullwidth punctuation. Where a dictionary holds both a common word and a name spelled alike (`husk` and `Husk`), the lowercase entry wins; a word that only exists capitalized (`Paris`) is still found. A word capitalized with a letter outside plain ASCII (`Über`, `STRAẞE`, `Привет`, `Γεια`) that has no entry as written is retried in lowercase, in Latin, Greek and Cyrillic scripts.
 2. **Synonyms** — on a miss, if the dictionary ships a `.syn` file, alternate spellings and irregular forms recorded there are resolved to their headword (e.g. `oxen` → `ox`, `colour` → `color`). This step is skipped if the `.sidx` sidecar could not be built (e.g. transient low memory during indexing); the dictionary otherwise stays usable, and the build is retried the next time it is opened.
-3. **Stemming** — still no match: common English word forms are retried automatically: possessives and plurals (`dogs` → `dog`, `stories` → `story`) and verb endings (`walked` → `walk`, `running` → `run`, `making` → `make`).
+3. **Stemming** — still no match: common English word forms are retried automatically: possessives and plurals (`dogs` → `dog`, `stories` → `story`) and verb endings (`walked` → `walk`, `running` → `run`, `making` → `make`). A French elision with no entry of its own is looked up by the word after its apostrophe (`l’histoire` → `histoire`, `qu’après` → `après`); one the dictionary carries (`d'accord`) is found as it is.
 4. **Not found** — a short popup appears and you return to word selection.
 
 ## The Definition Screen
@@ -63,6 +76,7 @@ When a word is found, the definition screen shows the matched headword at the to
 HTML dictionaries that declare `sametypesequence=h` use the EPUB text-layout engine for semantic formatting such as headings, bold, italics, lists, and line breaks. Images and CSS styling are ignored. Definitions that are too large or cannot be laid out within the available memory fall back to plain text.
 
 - **Left/Right** or side **Up/Down** — previous / next page
+- **Power** — next or previous page too, when its Short Press is set to page forward or back (Settings → Controls → Button Actions → Power), as in the book
 - **Confirm** — look the same word up in the next installed dictionary, cycling through them. Only offered when more than one dictionary is installed; the current one is named to the right of the headword. The choice is remembered, so later lookups use it too.
 - **Back** — return to word selection
 

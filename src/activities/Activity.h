@@ -105,6 +105,11 @@ class Activity {
   // here so the capture matches the display. Default is a no-op.
   virtual void prepareFramebufferForCapture() {}
 
+  // Appends what a test script needs to know about this activity's state to `out`, as
+  // space-separated key=value pairs, for the serial CMD:STATE. Called under the render lock.
+  // Default: nothing beyond the activity's name, which the caller already writes.
+  virtual void appendDebugState(std::string& /*out*/) const {}
+
   // Called while this activity is buried on the stack, before a download that needs the heap in
   // one piece (releaseMemoryForDownload()). Drop what the activity built only to draw itself, such
   // as row lists and labels; the object must stay valid to destroy. Return true if anything was
@@ -132,6 +137,13 @@ class Activity {
   // current activity. Override in reader activities to handle reader-specific actions.
   // Non-reader activities can ignore this (default is no-op).
   virtual void onButtonAction(CrossPointSettings::BUTTON_ACTION) {}
+
+  // Whether a reader-scoped `action` configured on `button` comes here through onButtonAction()
+  // although this is not the reader. Off that screen the press normally falls through raw, so the
+  // screen's own use of the button wins (see main.cpp) -- which leaves a button it has no use for
+  // doing nothing. A paginated screen opened from the reader opts in for the page turns on such a
+  // button, so a Power button set to turn pages turns its pages too.
+  virtual bool takesButtonAction(CrossPointSettings::BUTTON_ACTION, MappedInputManager::Button) const { return false; }
 
   // A manual force refresh (a button or gesture bound to Force Refresh) while this activity is on
   // top. Return true when the activity repaints itself in `mode`; false lets main.cpp re-flush the

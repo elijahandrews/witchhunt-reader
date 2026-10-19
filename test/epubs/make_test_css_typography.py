@@ -9,6 +9,7 @@ from html import escape
 import argparse
 import importlib.util
 import json
+import sys
 import tempfile
 
 from typography_font_fixture import embedded_fonts, STYLE_NAMES
@@ -220,7 +221,13 @@ def write_v6_preview(directory, fonts):
     converter_path = Path(__file__).resolve().parents[2] / 'lib/EpdFont/scripts/fontconvert_sdcard.py'
     spec = importlib.util.spec_from_file_location('fixture_fontconvert', converter_path)
     converter = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(converter)
+    # Match the converter's CLI import path without changing the caller's path.
+    converter_search_path = list(sys.path)
+    try:
+      sys.path.insert(0, str(converter_path.parent))
+      spec.loader.exec_module(converter)
+    finally:
+      sys.path[:] = converter_search_path
     directory.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='typography-preview-') as temporary:
       sources = {}

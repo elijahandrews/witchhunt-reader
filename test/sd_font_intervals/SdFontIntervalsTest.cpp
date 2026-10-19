@@ -731,8 +731,8 @@ TEST(SdFontV6, GenuineGlyphsKerningAndBitmapSurviveAllCacheModes) {
       EXPECT_EQ(face->getKerning(0x110000, 0x110001), -240);
       EXPECT_EQ(face->getKerning(0x110001, 0x110000), 300);
       EXPECT_EQ(face->getKerning(0x110001, 0x110001), 0);
-      EXPECT_EQ(face->data->capsGlyph(face->data->glyphMissCtx, 'V', 1), 0u);
-      EXPECT_EQ(face->data->capsGlyph(face->data->glyphMissCtx, 'A', 3), 0u);
+      EXPECT_EQ(face->data->capsGlyph(face->data->glyphFeatureCtx, 'V', 1), 0u);
+      EXPECT_EQ(face->data->capsGlyph(face->data->glyphFeatureCtx, 'A', 3), 0u);
     };
     verify();  // Fresh stub callbacks, before any prewarm.
     for (const bool metadata : {true, false, true}) {

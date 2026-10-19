@@ -22,7 +22,15 @@ restore = extract("      currentSpineIndex = record->spineIndex;", "      hadSav
 close = extract("  // 100% record; leave that alone.\n", "\n  // Save bookmarks before exit")
 generated = out / "probe.cpp"
 shell = (Path(__file__).with_name("Probe.cpp.in")).read_text()
-generated.write_text(shell.replace("// CAPTURE_IMPLEMENTATION", capture)
+header = (repo / "src/activities/reader/EpubReaderActivity.h").read_text()
+nav_decl = "  struct NavigationTarget {" + header.split("  struct NavigationTarget {", 1)[1].split(
+    "  // Phase lifecycle for memory management", 1)[0]
+nav_start = "std::optional<int> EpubReaderActivity::NavigationTarget::relaidOutRestorePage("
+nav_impl = nav_start + extract(nav_start, "// navTarget is the anchor a section (re)build resolves into.")
+
+generated.write_text(shell.replace("// NAVIGATION_DECLARATION", nav_decl)
+                          .replace("// NAVIGATION_IMPLEMENTATION", nav_impl)
+                          .replace("// CAPTURE_IMPLEMENTATION", capture)
                           .replace("// RESTORE_STATEMENTS", "currentSpineIndex = record->spineIndex;" + restore)
                           .replace("// CLOSE_STATEMENTS", close))
 binary = out / "reader-source-progress"

@@ -111,11 +111,17 @@ void logPrintf(const char* level, const char* origin, const char* format, ...) {
   }
   // add the user message
   {
-    int len = vsnprintf(c, sizeof(buf) - (c - buf), format, args);
+    const size_t room = sizeof(buf) - (c - buf);
+    int len = vsnprintf(c, room, format, args);
     if (len < 0) {
       va_end(args);
       return;
     }
+    // A line cut short at the buffer's end lost the '\n' its format ends in (the LOG_* macros append
+    // it), so it ran into the next line on the wire, and getLastLogs() spliced the two into one in
+    // a crash report. Keep the line end and lose a character of the message instead.
+    // Based on crosspoint-reader PR #2686 (DarkStarDS9, a draft).
+    if (static_cast<size_t>(len) >= room) buf[sizeof(buf) - 2] = '\n';
   }
   va_end(args);
   // Everything above is local state (buf, and HalClock::formatLogTime, which is
@@ -145,9 +151,17 @@ void logPrintf(const char* level, const char* origin, const char* format, ...) {
     // this transport, not a safeguard.
     logSerial.write(reinterpret_cast<const uint8_t*>(buf), strlen(buf));
 #else
-    if (logSerial) {
-      logSerial.print(buf);
-    }
+    // Unguarded for the same reason, on the C3 boards (X4, X3) and the X4 Pro. At the
+    // 10 MHz low-power clock FreeRTOS ticks arrive late, the USB Serial/JTAG SOF
+    // watchdog briefly reports the host gone, and the next `Serial` check makes HWCDC
+    // clear its `connected` flag until a TX interrupt fires. Every line in that window
+    // was dropped -- and we drop to 10 MHz after 500 ms idle and during every waveform
+    // wait, so the losses clustered around refreshes. Disconnected, HWCDC::write()
+    // does not block: it queues into the TX ring (oldest bytes give way) and re-arms
+    // the interrupt that sets `connected` again; connected, nothing changes.
+    // Ported from crosspoint-reader PR #3737 ("fix: stop dropping log lines at the
+    // low-power clock", Sung-jin Brian Hong / @serialx).
+    logSerial.print(buf);
 #endif
   }
   addToLogRingBuffer(buf);

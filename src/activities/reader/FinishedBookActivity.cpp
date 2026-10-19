@@ -1,6 +1,7 @@
 #include "FinishedBookActivity.h"
 
 #include <Bitmap.h>
+#include <BuildArena.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
@@ -9,6 +10,7 @@
 #include <I18n.h>
 #include <JpegToBmpConverter.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <PngToBmpConverter.h>
 #include <SidecarFiles.h>
 #include <Txt.h>
@@ -23,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "BookRelocation.h"
 #include "KOReaderCredentialStore.h"
 #include "OpdsServerStore.h"
 #include "ReaderActivity.h"
@@ -73,13 +76,17 @@ std::string findUniquePathWithSuffix(const std::string& basePath) {
 std::string findUniqueCompletedSidecarPath(const std::string& basePath) { return findUniquePathWithSuffix(basePath); }
 
 std::string convertSidecarToBmp(const std::string& cacheDir, const std::string& sidecarPath, int width, int height,
-                                const std::string& fileName) {
+                                const std::string& fileName, BuildArena* scratch) {
   if (!Storage.exists(cacheDir.c_str())) {
     Storage.mkdir(cacheDir.c_str());
   }
   const std::string bmpPath = cacheDir + "/" + fileName;
   if (Storage.exists(bmpPath.c_str())) {
     return bmpPath;
+  }
+  // A BMP sidecar is cached as it is (copyFile removes a failed copy).
+  if (FsHelpers::hasBmpExtension(sidecarPath)) {
+    return Storage.copyFile("FIN", sidecarPath, bmpPath.c_str()) ? bmpPath : "";
   }
 
   FsFile src;
@@ -94,17 +101,10 @@ std::string convertSidecarToBmp(const std::string& cacheDir, const std::string& 
 
   bool ok = false;
   if (FsHelpers::hasJpgExtension(sidecarPath)) {
-    ok = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(src, dst, width, height, nullptr,
+    ok = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(src, dst, width, height, scratch,
                                                              CoverGridLayout::kThumbCrop);
   } else if (FsHelpers::hasPngExtension(sidecarPath)) {
     ok = PngToBmpConverter::pngFileTo1BitBmpStreamWithSize(src, dst, width, height, CoverGridLayout::kThumbCrop);
-  } else if (FsHelpers::hasBmpExtension(sidecarPath)) {
-    uint8_t buffer[1024];
-    while (src.available()) {
-      size_t bytesRead = src.read(buffer, sizeof(buffer));
-      dst.write(buffer, bytesRead);
-    }
-    ok = true;
   }
 
   src.close();
@@ -116,7 +116,7 @@ std::string convertSidecarToBmp(const std::string& cacheDir, const std::string& 
   return bmpPath;
 }
 
-std::string getSidecarCoverBmpPath(const std::string& bookPath, int width, int height) {
+std::string getSidecarCoverBmpPath(const std::string& bookPath, int width, int height, BuildArena* scratch) {
   const std::string sidecarPath = ReaderActivity::sidecarCoverPath(bookPath);
   if (sidecarPath.empty()) {
     return "";
@@ -127,7 +127,7 @@ std::string getSidecarCoverBmpPath(const std::string& bookPath, int width, int h
   }
 
   const std::string fileName = "thumb_" + std::to_string(width) + "x" + std::to_string(height) + ".bmp";
-  return convertSidecarToBmp(ReaderActivity::bookCacheDir(bookPath), sidecarPath, width, height, fileName);
+  return convertSidecarToBmp(ReaderActivity::bookCacheDir(bookPath), sidecarPath, width, height, fileName, scratch);
 }
 
 // A sidecar is bound to its book by filename, so every one of them has to
@@ -169,7 +169,8 @@ struct NextBookMetadata {
   std::string coverPath;
 };
 
-NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
+// `scratch` (may be null) backs the cover decoders; see LentCoverScratch.
+NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath, BuildArena* scratch) {
   NextBookMetadata metadata;
   if (nextBookPath.empty()) {
     return metadata;
@@ -188,11 +189,12 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
       if (!metadata.series.empty() && !epub.getSeriesIndex().empty()) {
         metadata.series += " #" + epub.getSeriesIndex();
       }
-      if (epub.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, /*allowExtract=*/true, nullptr,
+      if (epub.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, /*allowExtract=*/true, scratch,
                                 CoverGridLayout::kThumbCrop) == ThumbResult::Ok) {
         metadata.coverPath = epub.getThumbBmpPath(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
       } else {
-        metadata.coverPath = getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
+        metadata.coverPath =
+            getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, scratch);
       }
     }
     return metadata;
@@ -206,7 +208,8 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
       if (xtc.generateThumbBmp(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight)) {
         metadata.coverPath = xtc.getThumbBmpPath(kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
       } else {
-        metadata.coverPath = getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
+        metadata.coverPath =
+            getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, scratch);
       }
     }
     return metadata;
@@ -219,7 +222,8 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
       if (txt.generateCoverBmp()) {
         metadata.coverPath = txt.getCoverBmpPath();
       } else {
-        metadata.coverPath = getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight);
+        metadata.coverPath =
+            getSidecarCoverBmpPath(nextBookPath, kFinishedBookCoverMaxWidth, kFinishedBookCoverHeight, scratch);
       }
     }
     return metadata;
@@ -227,6 +231,54 @@ NextBookMetadata loadNextBookMetadata(const std::string& nextBookPath) {
 
   return metadata;
 }
+
+// The secondary framebuffer, lent to the cover decoders for one preview load. The reader this screen sits on
+// still holds its fonts, caches and both framebuffers, and without a scratch region the JPEG decoder asks for
+// 40 KB of free heap: on the X3 it found 39,684 B and the next book's cover was skipped. With the region its heap
+// floor is 8 KB. The lend is the one HomeActivity and FileBrowserActivity make: the write buffer is brought up to
+// the frame on the panel and, on the X4, RED RAM seeded with it, which single-buffer fast diff requires. Nothing
+// is drawn from the region, so giving it back cannot fail. Without a secondary buffer to lend (a caller that has
+// it lent already), the decoders use the heap as before.
+class LentCoverScratch {
+ public:
+  LentCoverScratch(Activity& activity, GfxRenderer& renderer) : activity_(activity), renderer_(renderer) {
+    if (!renderer_.hasSecondaryBuffer()) return;
+    RenderLock lock(activity_);
+    renderer_.syncWriteBufferFromDisplayed();
+    renderer_.syncRedRamFromFrameBuffer();
+    size_t size = 0;
+    uint8_t* region = renderer_.borrowSecondaryBuffer(&size);
+    if (region == nullptr) return;
+    arena_ = makeUniqueNoThrow<BuildArena>(region, size);
+    if (!arena_ || !arena_->valid()) {
+      arena_.reset();
+      renderer_.returnSecondaryBuffer();
+      return;
+    }
+    renderer_.setSingleBufferFastDiff(true);
+    LOG_INF("FIN", "Lent secondary framebuffer for the next book's cover (%u bytes, free=%lu)",
+            static_cast<unsigned>(size), static_cast<unsigned long>(esp_get_free_heap_size()));
+  }
+
+  ~LentCoverScratch() {
+    if (!arena_) return;
+    RenderLock lock(activity_);
+    arena_.reset();
+    renderer_.returnSecondaryBuffer();
+    renderer_.setSingleBufferFastDiff(false);
+    LOG_INF("FIN", "Returned secondary framebuffer (free=%lu)", static_cast<unsigned long>(esp_get_free_heap_size()));
+  }
+
+  LentCoverScratch(const LentCoverScratch&) = delete;
+  LentCoverScratch& operator=(const LentCoverScratch&) = delete;
+
+  BuildArena* arena() const { return arena_.get(); }
+
+ private:
+  Activity& activity_;
+  GfxRenderer& renderer_;
+  std::unique_ptr<BuildArena> arena_;
+};
 
 bool isSupportedBookFile(const std::string& fileName) {
   return FsHelpers::hasEpubExtension(fileName) || FsHelpers::hasXtcExtension(fileName) ||
@@ -449,7 +501,8 @@ std::string findNextBookInDirectory(const std::string& currentBookPath, const st
   return findNextAlphabeticalBook(directory, currentFilename);
 }
 
-bool moveFinishedBookToCompleted(const std::string& currentBookPath, std::string& outMovedPath) {
+bool moveFinishedBookToCompleted(const std::string& currentBookPath, std::string& outMovedPath,
+                                 const bool openInReader) {
   if (pathIsInCompleted(currentBookPath)) {
     outMovedPath = currentBookPath;
     return true;
@@ -478,9 +531,29 @@ bool moveFinishedBookToCompleted(const std::string& currentBookPath, std::string
   if (!moveSidecarFilesToCompleted(currentBookPath, targetPath)) {
     LOG_ERR("FIN", "One or more sidecar files failed to move for %s", currentBookPath.c_str());
   }
+  // Without this the book reopened from /COMPLETED at its first page with no bookmarks, its cache
+  // stayed behind under the old path, and a kept recents row pointed at a missing file.
+  // Based on crosspoint-reader PR #3354 (Sylve, @s0lness).
+  if (openInReader) {
+    BookRelocation::bookMovedWhileOpen(currentBookPath, targetPath);
+  } else {
+    BookRelocation::bookMoved(currentBookPath, targetPath);
+  }
 
   outMovedPath = targetPath;
   return true;
+}
+
+std::string applyFinishedBookSettings(const std::string& bookPath, const bool openInReader) {
+  // Forget first: the move carries a recents row over to the new path.
+  if (SETTINGS.removeFinishedBooksFromRecents) {
+    RECENT_BOOKS.removeBook(bookPath);
+  }
+  std::string movedPath;
+  if (SETTINGS.moveFinishedBooksToCompleted && moveFinishedBookToCompleted(bookPath, movedPath, openInReader)) {
+    return movedPath;
+  }
+  return bookPath;
 }
 
 void launchFinishedBookFlow(Activity& host, GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -520,16 +593,7 @@ void launchFinishedBookFlow(Activity& host, GfxRenderer& renderer, MappedInputMa
         // The move-to-/COMPLETED and forget-book settings apply no matter which of the three
         // actions below was picked, and no matter whether the sync toggle is also on — the
         // toggle composes with the picked action rather than replacing it.
-        std::string effectiveBookPath = bookPath;
-        if (SETTINGS.moveFinishedBooksToCompleted) {
-          std::string movedPath;
-          if (moveFinishedBookToCompleted(bookPath, movedPath)) {
-            effectiveBookPath = movedPath;
-          }
-        }
-        if (SETTINGS.removeFinishedBooksFromRecents) {
-          RECENT_BOOKS.removeBook(bookPath);
-        }
+        const std::string effectiveBookPath = applyFinishedBookSettings(bookPath, true);
         const bool syncToKOReader =
             onSyncToKOReader != nullptr && KOREADER_STORE.hasCredentials() && SETTINGS.syncFinishedBookToKOReader;
         if (syncToKOReader) {
@@ -694,7 +758,12 @@ bool FinishedBookActivity::handleCustomInput() {
 }
 
 void FinishedBookActivity::loadNextBookPreview() {
-  const auto metadata = loadNextBookMetadata(nextBookPath_);
+  NextBookMetadata metadata;
+  {
+    // Lent only while the decoders run: the region goes back before the panel below is drawn.
+    const LentCoverScratch scratch(*this, renderer);
+    metadata = loadNextBookMetadata(nextBookPath_, scratch.arena());
+  }
   // The panel places the text beside the cover, so it needs the cover's size on every layout pass.
   // Read the header once, here, rather than open the file on the render task each pass.
   std::string coverPath;

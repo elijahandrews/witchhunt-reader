@@ -88,8 +88,9 @@ bool buildDictionaryHtmlPages(GfxRenderer& renderer, const std::string& definiti
         nullptr, renderer, fontId, /*lineCompression=*/0.95f, /*extraParagraphSpacing=*/false,
         static_cast<uint8_t>(CssTextAlign::Left), viewportWidth, viewportHeight, /*hyphenationEnabled=*/false,
         /*fontSizeNormalization=*/false, /*bionicReadingEnabled=*/false,
+        // Always true: past a limit the pages are dropped here, and the parse is left to finish.
         [&pagesOut, &resourceLimitHit, &retainedElements, &limitReason](std::unique_ptr<Page> page) {
-          if (resourceLimitHit) return;
+          if (resourceLimitHit) return true;
           const size_t pageElements = page->elements.size();
           // Name the limit that fired. "Exceeded the budget" with three
           // possible causes is not a diagnosis, and the difference matters:
@@ -109,10 +110,11 @@ bool buildDictionaryHtmlPages(GfxRenderer& renderer, const std::string& definiti
                     static_cast<unsigned long>(ESP.getFreeHeap()), static_cast<unsigned long>(ESP.getMaxAllocHeap()));
             resourceLimitHit = true;
             pagesOut.clear();
-            return;
+            return true;
           }
           retainedElements += pageElements;
           pagesOut.push_back(std::move(page));
+          return true;
         },
         /*embeddedStyle=*/false, /*contentBase=*/"", /*imageBasePath=*/"", /*imageRendering=*/2);
     if (!parser) {

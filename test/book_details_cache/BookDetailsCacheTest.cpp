@@ -27,8 +27,12 @@ class BookDetailsCacheTest : public ::testing::Test {
     BookDetails d;
     d.title = "Der Zauberberg";
     d.author = "Thomas Mann";
+    d.primaryAuthor = "Thomas Mann";
+    d.authorSort = "Mann, Thomas";
     d.series = "Werke";
     d.seriesIndex = "3";
+    d.isbn = "9783596294336";
+    d.asin = "B004OL2JMS";
     return d;
   }
 
@@ -42,8 +46,12 @@ TEST_F(BookDetailsCacheTest, RoundTrips) {
   ASSERT_TRUE(BookDetailsCache::read(path_, 12345, 77, out));
   EXPECT_EQ(out.title, "Der Zauberberg");
   EXPECT_EQ(out.author, "Thomas Mann");
+  EXPECT_EQ(out.primaryAuthor, "Thomas Mann");
+  EXPECT_EQ(out.authorSort, "Mann, Thomas");
   EXPECT_EQ(out.series, "Werke");
   EXPECT_EQ(out.seriesIndex, "3");
+  EXPECT_EQ(out.isbn, "9783596294336");
+  EXPECT_EQ(out.asin, "B004OL2JMS");
 }
 
 TEST_F(BookDetailsCacheTest, EmptyRecordOfAFailedParseIsStillAnAnswer) {
@@ -88,6 +96,30 @@ TEST_F(BookDetailsCacheTest, AnotherFormatVersionIsNotAnswered) {
   {
     std::fstream f(path_, std::ios::in | std::ios::out | std::ios::binary);
     f.put(static_cast<char>(99));
+  }
+  BookDetails out;
+  EXPECT_FALSE(BookDetailsCache::read(path_, 1, 0, out));
+}
+
+// A version 1 record has no primary author. Answering from it would group the book under "Unknown
+// author" for good, so it is parsed again instead.
+TEST_F(BookDetailsCacheTest, AVersionOneRecordIsNotAnswered) {
+  ASSERT_TRUE(BookDetailsCache::write(path_, 1, 0, sample()));
+  {
+    std::fstream f(path_, std::ios::in | std::ios::out | std::ios::binary);
+    f.put(static_cast<char>(1));
+  }
+  BookDetails out;
+  EXPECT_FALSE(BookDetailsCache::read(path_, 1, 0, out));
+}
+
+// A version 2 record has no ISBN or ASIN. Answering from it would leave KOReader sync without them
+// until the book changed, so it is parsed again instead.
+TEST_F(BookDetailsCacheTest, AVersionTwoRecordIsNotAnswered) {
+  ASSERT_TRUE(BookDetailsCache::write(path_, 1, 0, sample()));
+  {
+    std::fstream f(path_, std::ios::in | std::ios::out | std::ios::binary);
+    f.put(static_cast<char>(2));
   }
   BookDetails out;
   EXPECT_FALSE(BookDetailsCache::read(path_, 1, 0, out));

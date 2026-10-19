@@ -15,7 +15,7 @@
 #endif
 
 // The build's scratch buffers are carved from a preallocated BuildArena
-// (docs/compiled-book-pipeline-plan.md Phase 2), device-validated 2026-07-18
+// (docs/memory-allocation-strategy.md §4, class C), device-validated 2026-07-18
 // (X3: highWater=9216/10240, failedAlloc=0, build time neutral). The former
 // per-site new/realloc path has been removed.
 #include <BuildArena.h>
@@ -32,37 +32,29 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-// v84: source-text page anchors preserve position through reflow.
-// v83: display:block spans and heading block inheritance invalidate laid-out pages (#388).
-// v82: embedded fonts, named families, true caps and preformatted text.
-// v81: scaled glyph ink bounds preserve fractional baseline/side bearings.
-// v79: CSS case transforms and inherited line spacing invalidate cached text and positions.
-constexpr uint8_t SECTION_FILE_VERSION = 91;  // v91: fractional glyph ink bounds; v89: publisher boxes, first-line
-                                              // typography and SVG layout v78: a span indent (poem line shape) gives
-                                              // way before its line wraps; v77 pages of such poems carry the wrapped
-                                              // lines v77: the status byte records a heap-degraded image build
-                                              // (kStatusImageHeaderDegraded); a v76 cache may be image-less without
-                                              // saying so v76: a percentage wrapper (<div style="width:60%">) no longer
-                                              // shrinks a block image below min(native, column), so image sizes baked
-                                              // into v75 pages are stale v75: the reader ladder gained rungs above 18
-                                              // pt (20/22/24/26), so a heading snaps to a different face and residual
-                                              // than it did under v74 and breaks across lines differently. The ladder
-                                              // is derived from the body fontId and so is deliberately absent from the
-                                              // property hash; the hash therefore still MATCHES, and this version is
-                                              // the only thing that rejects a v74 cache v74: the HTML `hidden`
-                                              // attribute now suppresses an element, so a v73 cache still holds the
-                                              // laid-out text it should have hidden v73: an internal link honours CSS
-                                              // vertical-align, so footnote references marked
-                                              // `a { vertical-align: super }` are raised and
-                                              // shrunk. Word size/position are baked into layout
-                                              // v72: `!important` is now stripped from every
-                                              // CSS declaration value, so margins, text-align and
-                                              // text-indent that carry the marker take effect. Those
-                                              // feed layout, so a v71 cache holds the old geometry
-                                              // v71: the packed word style byte now carries a
-                                              // per-word "continues the previous word" bit, so the
-                                              // dictionary overlay can select a bionic-split or
-                                              // hyphenated word as one word. A v70 cache reads the
+constexpr uint8_t SECTION_FILE_VERSION = 92;  // v92: fractional glyph ink bounds; v90: combined visible/raw source LUT,
+                                              // upstream token boundaries and publisher layout v78: a span indent (poem
+                                              // line shape) gives way before its line wraps; v77 pages of such poems
+                                              // carry the wrapped lines v77: the status byte records a heap-degraded
+                                              // image build (kStatusImageHeaderDegraded); a v76 cache may be image-less
+                                              // without saying so v76: a percentage wrapper (<div style="width:60%">)
+                                              // no longer shrinks a block image below min(native, column), so image
+                                              // sizes baked into v75 pages are stale v75: the reader ladder gained
+                                              // rungs above 18 pt (20/22/24/26), so a heading snaps to a different face
+                                              // and residual than it did under v74 and breaks across lines differently.
+                                              // The ladder is derived from the body fontId and so is deliberately
+                                              // absent from the property hash; the hash therefore still MATCHES, and
+                                              // this version is the only thing that rejects a v74 cache v74: the HTML
+                                              // `hidden` attribute now suppresses an element, so a v73 cache still
+                                              // holds the laid-out text it should have hidden v73: an internal link
+                                              // honours CSS vertical-align, so footnote references marked `a {
+                                              // vertical-align: super }` are raised and shrunk. Word size/position are
+                                              // baked into layout v72: `!important` is now stripped from every CSS
+                                              // declaration value, so margins, text-align and text-indent that carry
+                                              // the marker take effect. Those feed layout, so a v71 cache holds the old
+                                              // geometry v71: the packed word style byte now carries a per-word
+                                              // "continues the previous word" bit, so the dictionary overlay can select
+                                              // a bionic-split or hyphenated word as one word. A v70 cache reads the
                                               // bit as clear everywhere, i.e. keeps the old split
                                               // selection, so it has to be rebuilt
                                               // v70: a wrapper's horizontal inset reaches every
@@ -128,10 +120,12 @@ constexpr uint8_t kStatusCssDegraded = 1 << 3;
 //   heap condition: deterministic, so nothing rebuilds on it (audit R4).
 constexpr uint8_t kStatusSimplified = 1 << 4;
 
-// On-disk paragraph LUT entry: u32 xhtmlByteOffset + u16 paragraphIndex + u16 listItemIndex.
-// listItemIndex is the running <li> count at page-break time; together with
-// paragraphIndex it lets KOReader-supplied <p>- and <li>-anchored XPaths snap to
-// the exact page on download.
+// On-disk 22B entry: u32 visibleTextOffset + u16 paragraphIndex + u16 listItemIndex,
+// followed by raw SourceAnchor (u32+u16) and sourceMin/sourceEnd (two u32).
+// visibleTextOffset is the number of visible bytes (VisibleText.h) of the chapter's source text
+// before the page's first element: KOReader sync pushes it and resolves pulled positions to a
+// page with it. paragraphIndex and listItemIndex let <p>- and <li>-anchored XPaths snap to a
+// page when a resolver had no offset.
 constexpr uint32_t SOURCE_LUT_OFFSET = sizeof(uint32_t) + 2 * sizeof(uint16_t);
 constexpr uint32_t PARAGRAPH_LUT_ENTRY_SIZE = SOURCE_LUT_OFFSET + 3 * sizeof(uint32_t) + sizeof(uint16_t);
 inline uint32_t paragraphLutEntryOffset(uint32_t lutStart, uint16_t page) {
@@ -286,7 +280,7 @@ constexpr size_t PARSE_CHUNK_BYTES = 1024;
 // PARSE_CHUNK_BYTES before phase (b). The grow is best-effort: on failure the 1 KB buffer is kept.
 constexpr size_t EXTRACT_CHUNK_BYTES = 8192;
 
-// Parse-scratch arena budget (Phase 2 of docs/compiled-book-pipeline-plan.md).
+// Parse-scratch arena budget for a build with nothing lent (docs/memory-allocation-strategy.md §4).
 // One up-front allocation backing the build's scratch buffers: chunk feed buffer
 // (PARSE_CHUNK_BYTES base + EXTRACT_CHUNK_BYTES extraction scope) + alignment.
 constexpr size_t SCT_PARSE_ARENA_BYTES = 10 * 1024;
@@ -525,9 +519,8 @@ uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
   //   allocBlk flat, freeBlk rising      -> pure fragmentation; the bytes come back split
   // Measured X3 2026-08-11: contig fell 40948 -> 15348 across one 17-page parse while free
   // oscillated 20-40 KB, with the arena covering the ring, the chunk feed AND the CSS ruleset
-  // (failedAlloc=0). So whatever does this is on the heap and is NOT arena-eligible — but no
-  // measurement yet names it. That is the open question in docs/memory-allocation-strategy.md
-  // section 8.4, unchanged since it was written; these three counters are what answer it.
+  // (failedAlloc=0). So whatever does this is on the heap. These three counters named it: churn
+  // and placement, not retention (docs/memory-allocation-strategy.md §8.4).
   multi_heap_info_t pageHeapInfo{};
   heap_caps_get_info(&pageHeapInfo, MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
   // The build arena beside the heap (memory audit 2026-09, allocation inventory): its cursor now,
@@ -701,23 +694,29 @@ bool Section::loadSectionFile(const BuildParams& p) {
     return false;
   }
   // 4 bytes a page: a chapter is a few hundred bytes, a book that is one XHTML file several KB in
-  // one block. Without that block the pages read their offsets from the file instead (one more
-  // 4-byte read per page load) -- a failed resize would abort the device, and failing the load
-  // would delete a good cache.
-  if (!heapHasBlockFor(pageCount * sizeof(uint32_t))) {
+  // one block, taken as the table's first chunk. Without that block the pages read their offsets
+  // from the file instead (one more 4-byte read per page load) -- failing the load would delete a
+  // good cache. The reserve is nothrow, so an answer that went stale falls back the same way.
+  lut.clear();
+  if (!heapHasBlockFor(pageCount * sizeof(uint32_t)) || !lut.reserve(pageCount)) {
     LOG_ERR("SCT", "No %u-byte block for the %u-page LUT; reading page offsets from the file",
             static_cast<unsigned>(pageCount * sizeof(uint32_t)), pageCount);
-    lut.clear();
-    lut.shrink_to_fit();
     lutFileOffset_ = lutOffset;
   } else {
-    lut.resize(pageCount);
-    for (uint32_t& pos : lut) {
+    for (uint16_t i = 0; i < pageCount; ++i) {
+      uint32_t pos = 0;
       serialization::readPod(file, pos);
       if (pos < header::kSize || pos >= lutOffset) {
         LOG_ERR("SCT", "Deserialization failed: LUT entry %u out of range [%u, %u)", pos, header::kSize, lutOffset);
         clearCache();
         return false;
+      }
+      if (!lut.push_back(pos)) {
+        // Inside the reserved chunk this cannot be refused; if it ever is, read from the file
+        // (which range-checks every entry as it loads) rather than hold a table with a hole.
+        lut.clear();
+        lutFileOffset_ = lutOffset;
+        break;
       }
     }
   }
@@ -768,7 +767,7 @@ bool Section::clearCache() {
 }
 
 // Live state of an in-progress section build. Holds exactly the locals that span build
-// phases; see docs/epubreader-control-flow-refactor.md §2.7. Held by Section as a
+// phases. Held by Section as a
 // unique_ptr so its address (and thus visitor's completePageFn lut capture) is stable
 // across phase calls and, later, across loop ticks.
 struct Section::BuildState {
@@ -787,7 +786,9 @@ struct Section::BuildState {
   bool statValid = false;
   bool statResolved = false;  // resolveSpineStat ran (statValid/inflatedSize are meaningful)
   CssParser* cssParser = nullptr;
-  std::vector<uint32_t> lut;
+  // The parser stops a build at MAX_PAGES_PER_SECTION, so the table must never refuse below it.
+  static_assert(PageLut::minMaxSize() >= Page::MAX_PAGES_PER_SECTION, "page LUT smaller than a section may be");
+  PageLut lut;
   std::unique_ptr<ChapterHtmlSlimParser> visitor;
   // Live ZIP-side state of the parse, created on the first runBuildParse call and
   // released the moment the compressed stream is exhausted. zip must outlive reader
@@ -1084,7 +1085,8 @@ Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
   st.lut.clear();
   // One u32 per page, appended by the completePageFn below across the whole parse. Pre-sized for
   // the same reason as the parser's paragraph LUT — see estimatePagesForSpine and
-  // docs/memory-allocation-strategy.md §9.6.
+  // docs/memory-allocation-strategy.md §9.6. Best effort: without the block the first page
+  // allocates a small chunk instead, and a chapter past the estimate grows in chunks either way.
   st.lut.reserve(estimatePagesForSpine(st.inflatedSize));
 
   // Derive the content base directory and image cache path prefix for the parser
@@ -1145,7 +1147,17 @@ Section::BuildPhaseResult Section::runBuildSetup(BuildState& st) {
   st.visitor = std::make_unique<ChapterHtmlSlimParser>(
       epub, renderer, p.fontId, p.lineCompression, p.extraParagraphSpacing, p.paragraphAlignment, p.viewportWidth,
       p.viewportHeight, p.hyphenationEnabled, p.fontSizeNormalization, p.bionicReadingEnabled,
-      [this, &st](std::unique_ptr<Page> page) { st.lut.emplace_back(this->onPageComplete(std::move(page))); },
+      [this, &st](std::unique_ptr<Page> page) {
+        // The page's LUT entry first: a page written without one could never be loaded, and
+        // pageCount would run ahead of the table. Refused (no chunk for it), the page is not
+        // written and the parser stops the build there, keeping the pages before it.
+        if (!st.lut.push_back(0)) {
+          LOG_ERR("SCT", "No room in the page LUT for page %u; the build stops here", pageCount);
+          return false;
+        }
+        st.lut.back() = this->onPageComplete(std::move(page));
+        return true;
+      },
       p.embeddedStyle, st.contentBase, st.imageBasePath, p.imageRendering, std::move(tocAnchors), st.progressFn,
       st.cssParser, epub->getImageManifest());
   st.visitor->setIgnorePublisherPageMargins(p.ignorePublisherPageMargins);
@@ -1716,10 +1728,7 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     file.write(reinterpret_cast<const uint8_t*>(label), len);
   });
 
-  // Write per-page paragraph LUT: count + array of {xhtmlByteOffset(u32), paragraphIndex(u16),
-  // listItemIndex(u16)}. The byte offset was a seek hint for KOReader XPath generation; nothing
-  // reads it any more, it stays as part of the entry layout. Source anchoring adds
-  // preferred u32+u16 plus u32 min/end (22 bytes total per entry).
+  // Visible source bytes and paragraph/list coordinates, then raw XHTML anchor/range (22 bytes).
   const uint32_t paragraphLutOffset = file.position();
   const auto& paragraphLut = visitor.getParagraphLutPerPage();
   if (paragraphLut.size() != static_cast<size_t>(pageCount)) {
@@ -1730,16 +1739,16 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     return BuildPhaseResult::Failed;
   }
   serialization::writePod(file, static_cast<uint16_t>(paragraphLut.size()));
-  for (const auto& entry : paragraphLut) {
-    serialization::writePod(file, entry.xhtmlByteOffset);
+  for (size_t page = 0; page < paragraphLut.size(); ++page) {
+    const auto& entry = paragraphLut[page];
+    serialization::writePod(file, entry.visibleTextOffset);
     serialization::writePod(file, entry.paragraphIndex);
     serialization::writePod(file, entry.listItemIndex);
     serialization::writePod(file, entry.sourceOffset);
     serialization::writePod(file, entry.sourceCharacterOffset);
     serialization::writePod(file, entry.sourceMin);
     serialization::writePod(file, entry.sourceEnd);
-    if (entry.sourceProbeMatched && !sourceLookupPage_)
-      sourceLookupPage_ = static_cast<uint16_t>(&entry - paragraphLut.data());
+    if (entry.sourceProbeMatched && !sourceLookupPage_) sourceLookupPage_ = static_cast<uint16_t>(page);
   }
 
   // Patch header with final parseComplete/pageCount and offsets.
@@ -1777,7 +1786,11 @@ Section::BuildPhaseResult Section::runBuildFinalize(BuildState& st) {
     st.cssParser->clearCaches();
   }
 
-  buildTocBoundaries(anchors);
+  // From the anchor map just written, not from `anchors`: that holds only the records the parser
+  // kept resident, which since anchors spill to SD is normally none, so every TOC entry of the
+  // spine started at page 0 until the section was next loaded from the cache. The write handle
+  // is read/write, so this opens no second handle (see the LUT note below for why that matters).
+  buildTocBoundariesFromFile(file);
 
   // The labels were just written to the cache; the first query reads them back from there
   // (see pageBreakLabelsPending_ for why they are not copied from the parser here). Swap, not
@@ -2269,56 +2282,12 @@ void Section::warmAllImageCaches(const int xOffset, const int yOffset, const boo
   }
 }
 
-// Resolve TOC anchor-to-page mappings from the parser's in-memory anchor vector.
-// Called after createSectionFile when anchors are already in memory.
-// See buildTocBoundariesFromFile for the on-disk variant; the two are kept separate
-// because the anchor resolution has fundamentally different iteration patterns
-// (scan in-memory vector vs. stream from file with early exit).
-void Section::buildTocBoundaries(const std::vector<std::pair<std::string, uint16_t>>& anchors) {
-  const int startTocIndex = epub->getTocIndexForSpineIndex(spineIndex);
-  if (startTocIndex < 0) return;
-
-  // Count TOC entries for this spine and how many have anchors to resolve
-  const int tocCount = epub->getTocItemsCount();
-  uint16_t totalEntries = 0;
-  uint16_t unresolvedCount = 0;
-  for (int i = startTocIndex; i < tocCount; i++) {
-    const auto entry = epub->getTocItem(i);
-    if (entry.spineIndex != spineIndex) break;
-    totalEntries++;
-    if (!entry.anchor.empty()) unresolvedCount++;
-  }
-
-  // If no TOC entries have anchors, all chapters start at page 0 and
-  // getTocIndexForPage falls back to epub->getTocIndexForSpineIndex,
-  // so there's nothing to resolve and no value in storing boundaries.
-  if (totalEntries == 0 || unresolvedCount == 0) return;
-
-  tocBoundaries.reserve(totalEntries);
-  for (int i = startTocIndex; i < startTocIndex + totalEntries; i++) {
-    const auto entry = epub->getTocItem(i);
-    uint16_t page = 0;
-    if (!entry.anchor.empty()) {
-      for (const auto& [key, val] : anchors) {
-        if (key == entry.anchor) {
-          page = val;
-          break;
-        }
-      }
-    }
-    tocBoundaries.push_back({i, page});
-  }
-
-  // Defensive sort in case TOC entries are out of document order in a malformed epub
-  std::sort(tocBoundaries.begin(), tocBoundaries.end(),
-            [](const TocBoundary& a, const TocBoundary& b) { return a.startPage < b.startPage; });
-}
-
 // Resolve TOC anchor-to-page mappings by scanning the section cache's on-disk anchor data.
-// Called from loadSectionFile when anchors are not in memory. Caches the small set of
-// TOC anchor strings first (since getTocItem does file I/O to BookMetadataCache), then
-// streams through on-disk anchors matching only those, stopping as soon as all are found.
-// See buildTocBoundaries for the in-memory variant.
+// Called from loadSectionFile, and at the end of a build with the still-open write handle (the
+// anchors spill to SD during the parse, so the cache's anchor map is the only complete copy).
+// Caches the small set of TOC anchor strings first (since getTocItem does file I/O to
+// BookMetadataCache), then streams through on-disk anchors matching only those, stopping as
+// soon as all are found.
 void Section::buildTocBoundariesFromFile(FsFile& f) {
   const int startTocIndex = epub->getTocIndexForSpineIndex(spineIndex);
   if (startTocIndex < 0) return;
@@ -2788,7 +2757,7 @@ std::optional<uint16_t> Section::getParagraphIndexForPage(const uint16_t page) c
     return std::nullopt;
   }
 
-  // Seek directly to the paragraphIndex field of the requested entry (skip xhtmlByteOffset)
+  // Seek directly to the paragraphIndex field of the requested entry (skip visibleTextOffset)
   f.seek(entryOffset);
   uint16_t pIdx;
   serialization::readPod(f, pIdx);
@@ -2818,7 +2787,7 @@ std::optional<uint16_t> Section::getPageForListItemIndex(const uint16_t liIndex)
 
   // Mirror getPageForParagraphIndex: each entry stores the running li count at page-break
   // time, so the target li first appears on the smallest i where storedLiIdx[i] >= liIndex.
-  // The listItemIndex field follows xhtmlByteOffset + paragraphIndex within each entry.
+  // The listItemIndex field follows visibleTextOffset + paragraphIndex within each entry.
   for (uint16_t i = 0; i < count; i++) {
     const uint32_t entryOffset = paragraphLutEntryOffset(lutStart, i) + sizeof(uint32_t) + sizeof(uint16_t);
     const uint64_t requiredOffset = static_cast<uint64_t>(entryOffset) + sizeof(uint16_t);
@@ -2837,4 +2806,86 @@ std::optional<uint16_t> Section::getPageForListItemIndex(const uint16_t liIndex)
 
   f.close();
   return static_cast<uint16_t>(count - 1);
+}
+
+std::optional<uint32_t> Section::getVisibleTextOffsetForPage(const uint16_t page) const {
+  FsFile f;
+  uint16_t count = 0;
+  uint32_t lutStart = 0;
+  if (!readParagraphLutHeader(f, count, lutStart)) {
+    return std::nullopt;
+  }
+  if (page >= count) {
+    f.close();
+    return std::nullopt;
+  }
+  const uint32_t entryOffset = paragraphLutEntryOffset(lutStart, page);
+  if (static_cast<uint64_t>(entryOffset) + sizeof(uint32_t) > f.size()) {
+    f.close();
+    return std::nullopt;
+  }
+  f.seek(entryOffset);
+  uint32_t offset;
+  serialization::readPod(f, offset);
+  f.close();
+  return offset;
+}
+
+std::optional<uint32_t> Section::getVisibleTextOffsetAfterPage(const uint16_t page) const {
+  FsFile f;
+  uint16_t count = 0;
+  uint32_t lutStart = 0;
+  if (!readParagraphLutHeader(f, count, lutStart)) {
+    return std::nullopt;
+  }
+  const uint32_t fileSize = f.size();
+  std::optional<uint32_t> own;
+  for (uint16_t i = page; i < count; i++) {
+    const uint32_t entryOffset = paragraphLutEntryOffset(lutStart, i);
+    if (static_cast<uint64_t>(entryOffset) + sizeof(uint32_t) > fileSize) {
+      break;
+    }
+    f.seek(entryOffset);
+    uint32_t start;
+    serialization::readPod(f, start);
+    if (i == page) {
+      own = start;
+    } else if (start > *own) {
+      f.close();
+      return start;
+    }
+  }
+  f.close();
+  return std::nullopt;
+}
+
+std::optional<uint16_t> Section::getPageForVisibleTextOffset(const uint32_t offset) const {
+  FsFile f;
+  uint16_t count = 0;
+  uint32_t lutStart = 0;
+  if (!readParagraphLutHeader(f, count, lutStart)) {
+    return std::nullopt;
+  }
+  const uint32_t fileSize = f.size();
+  // Starts are in page order. The answer is the last page whose start is <= offset, so a run of
+  // pages sharing one start (an image, rule or table page followed by the text at the same offset)
+  // answers its LAST page, the one holding the text at that offset. An offset below page 0's start
+  // (a chapter that opens with hidden text) is on page 0.
+  std::optional<uint16_t> found;
+  for (uint16_t i = 0; i < count; i++) {
+    const uint32_t entryOffset = paragraphLutEntryOffset(lutStart, i);
+    if (static_cast<uint64_t>(entryOffset) + sizeof(uint32_t) > fileSize) {
+      break;
+    }
+    f.seek(entryOffset);
+    uint32_t start;
+    serialization::readPod(f, start);
+    if (start > offset) {
+      if (i == 0) found = 0;
+      break;
+    }
+    found = i;
+  }
+  f.close();
+  return found;
 }

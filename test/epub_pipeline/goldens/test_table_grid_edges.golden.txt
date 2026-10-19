@@ -1139,36 +1139,36 @@ SPINE 5 href=OEBPS/chapter6.xhtml pages=3 truncated=0 cssFallback=0
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=Bulk20038
    W x=88 s=0 z=100 t=Bulk20039
-  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=4
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=18 s=0 z=100 t=Bulk30000
-   W x=139 s=0 z=100 t=Bulk30001
-   W x=254 s=0 z=100 t=Bulk30002
-   W x=370 s=0 z=100 t=Bulk30003
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=4
-   W x=0 s=0 z=100 t=Bulk30004
-   W x=121 s=0 z=100 t=Bulk30005
-   W x=243 s=0 z=100 t=Bulk30006
-   W x=366 s=0 z=100 t=Bulk30007
-  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=5
-   W x=0 s=0 z=100 t=Bulk30008
-   W x=95 s=0 z=100 t=Bulk30009
-   W x=191 s=0 z=100 t=Bulk30010
-   W x=286 s=0 z=100 t=Bulk30011
-   W x=375 s=0 z=100 t=Bulk30012
+   W x=18 s=0 z=100 t=Bulk30001
+   W x=134 s=0 z=100 t=Bulk30002
+   W x=251 s=0 z=100 t=Bulk30003
+   W x=369 s=0 z=100 t=Bulk30004
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=Bulk30005
+   W x=123 s=0 z=100 t=Bulk30006
+   W x=247 s=0 z=100 t=Bulk30007
+   W x=372 s=0 z=100 t=Bulk30008
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=5
-   W x=0 s=0 z=100 t=Bulk30013
-   W x=91 s=0 z=100 t=Bulk30014
-   W x=183 s=0 z=100 t=Bulk30015
-   W x=276 s=0 z=100 t=Bulk30016
-   W x=370 s=0 z=100 t=Bulk30017
-  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=2
-   W x=0 s=0 z=100 t=Bulk30018
-   W x=87 s=0 z=100 t=Bulk30019
-  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=4
-   W x=18 s=0 z=100 t=Bulk30020
-   W x=141 s=0 z=100 t=Bulk30021
-   W x=258 s=0 z=100 t=Bulk30022
-   W x=376 s=0 z=100 t=Bulk30023
+   W x=0 s=0 z=100 t=Bulk30009
+   W x=97 s=0 z=100 t=Bulk30010
+   W x=193 s=0 z=100 t=Bulk30011
+   W x=283 s=0 z=100 t=Bulk30012
+   W x=374 s=0 z=100 t=Bulk30013
+  LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Bulk30014
+   W x=93 s=0 z=100 t=Bulk30015
+   W x=187 s=0 z=100 t=Bulk30016
+   W x=282 s=0 z=100 t=Bulk30017
+   W x=378 s=0 z=100 t=Bulk30018
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=5
+   W x=0 s=0 z=100 t=Bulk30019
+   W x=92 s=0 z=100 t=Bulk30020
+   W x=190 s=0 z=100 t=Bulk30021
+   W x=282 s=0 z=100 t=Bulk30022
+   W x=375 s=0 z=100 t=Bulk30023
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=Bulk30024
    W x=93 s=0 z=100 t=Bulk30025

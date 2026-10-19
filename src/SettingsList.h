@@ -224,19 +224,13 @@ inline void buildSettings(const RowSink& emit) {
   emit(SettingInfo::Enum(StrId::STR_UI_FONT_SIZE, &CrossPointSettings::uiFontSize,
                          {StrId::STR_NORMAL, StrId::STR_LARGE}, "uiFontSize", StrId::STR_CAT_DISPLAY));
   // Home screen entries: on = on the home screen, off = behind its "More" entry.
-  emit(SettingInfo::Toggle(StrId::STR_BROWSE_FILES, &CrossPointSettings::showBrowseFilesOnHome, "showBrowseFilesOnHome",
+  emit(SettingInfo::Toggle(StrId::STR_LIBRARY, &CrossPointSettings::showLibraryOnHome, "showLibraryOnHome",
                            StrId::STR_CAT_DISPLAY)
-           .withSubmenu(StrId::STR_MENU_DISP_HOME));
-  emit(SettingInfo::Toggle(StrId::STR_MENU_RECENT_BOOKS, &CrossPointSettings::showRecentBooksOnHome,
-                           "showRecentBooksOnHome", StrId::STR_CAT_DISPLAY)
            .withSubmenu(StrId::STR_MENU_DISP_HOME));
   emit(SettingInfo::Toggle(StrId::STR_READING_STATS, &CrossPointSettings::showReadingStatsOnHome,
                            "showReadingStatsOnHome", StrId::STR_CAT_DISPLAY)
            .withSubmenu(StrId::STR_MENU_DISP_HOME));
   emit(SettingInfo::Toggle(StrId::STR_GLOBAL_BOOKMARKS, &CrossPointSettings::showBookmarksOnHome, "showBookmarksOnHome",
-                           StrId::STR_CAT_DISPLAY)
-           .withSubmenu(StrId::STR_MENU_DISP_HOME));
-  emit(SettingInfo::Toggle(StrId::STR_OPDS_BROWSER, &CrossPointSettings::showOpdsBrowserOnHome, "showOpdsBrowserOnHome",
                            StrId::STR_CAT_DISPLAY)
            .withSubmenu(StrId::STR_MENU_DISP_HOME));
   emit(SettingInfo::Toggle(StrId::STR_FILE_TRANSFER, &CrossPointSettings::showFileTransferOnHome,
@@ -314,16 +308,15 @@ inline void buildSettings(const RowSink& emit) {
            .withSubcategory(StrId::STR_MENU_READER_FONT)
            .withSubmenu(StrId::STR_MENU_READER_FONT)
            .withSelectorActivity());
-  {
-    // Labels, not enumValues: these read "12pt", "14pt" ... straight off
-    // CrossPointSettings::FONT_SIZE_RUNGS, so a rung added or changed there needs no edit here.
-    auto row =
-        SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize, {}, "fontSize", StrId::STR_CAT_READER)
-            .withSubmenu(StrId::STR_MENU_READER_FONT)
-            .withSelectorActivity();
-    row.enumLabels = CrossPointSettings::fontSizeLabels();
-    emit(std::move(row));
-  }
+  // Stored as a point size; shown as an index into the sizes the selected family offers, read
+  // live so the list follows a family chosen earlier in the same submenu. The getter and setter
+  // translate, and persisting() saves the point size itself under the key.
+  emit(SettingInfo::DynamicEnum(StrId::STR_FONT_SIZE, {}, fontSizeDynamicGetter, fontSizeDynamicSetter, "fontSize",
+                                StrId::STR_CAT_READER)
+           .persisting(&CrossPointSettings::fontPointSize, "fontSize", CrossPointSettings::MAX_FONT_POINT_SIZE)
+           .withDynamicOptions(fontSizeOptionCount, fontSizeOptionLabel)
+           .withSubmenu(StrId::STR_MENU_READER_FONT)
+           .withSelectorActivity());
   emit(SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",
                            StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_FONT));
@@ -347,14 +340,12 @@ inline void buildSettings(const RowSink& emit) {
                                 StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_TXT_FONT)
            .withSelectorActivity());
-  {
-    auto row = SettingInfo::Enum(StrId::STR_TXT_FONT_SIZE, &CrossPointSettings::txtFontSize, {}, "txtFontSize",
-                                 StrId::STR_CAT_READER)
-                   .withSubmenu(StrId::STR_MENU_TXT_FONT)
-                   .withSelectorActivity();
-    row.enumLabels = CrossPointSettings::fontSizeLabels();
-    emit(std::move(row));
-  }
+  emit(SettingInfo::DynamicEnum(StrId::STR_TXT_FONT_SIZE, {}, txtFontSizeDynamicGetter, txtFontSizeDynamicSetter,
+                                "txtFontSize", StrId::STR_CAT_READER)
+           .persisting(&CrossPointSettings::txtFontPointSize, "txtFontSize", CrossPointSettings::MAX_FONT_POINT_SIZE)
+           .withDynamicOptions(txtFontSizeOptionCount, txtFontSizeOptionLabel)
+           .withSubmenu(StrId::STR_MENU_TXT_FONT)
+           .withSelectorActivity());
   emit(SettingInfo::Enum(StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
                          {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT,
                           StrId::STR_BOOK_S_STYLE},

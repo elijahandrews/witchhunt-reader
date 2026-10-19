@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,9 @@
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
 #include "TouchUi.h"
+#include "activities/browser/OpdsBackTo.h"
+#include "activities/home/LibraryTab.h"
+#include "activities/network/NetworkMode.h"
 
 class Activity;                       // forward declaration
 class RenderLock;                     // forward declaration
@@ -22,9 +26,10 @@ enum class HomeMenuAction : uint8_t;  // activities/home/HomeMenu.h
 
 // Where a "child" activity (launched via one of the replaceWith* helpers) should route
 // control when it exits successfully. See ActivityManager::returnFromChild().
+// Library carries the tab in ReturnHint::selectIndex, and an open author's hash in selectionContext.
 // AllFiles is the file browser opened from Settings on every file of the card: it comes back as
 // itself, so the images and other files it lists do not vanish on the way back from the viewer.
-enum class ReturnTo : uint8_t { Home, FileBrowser, AllFiles, RecentBooks, GlobalBookmarks, Reader };
+enum class ReturnTo : uint8_t { Home, Library, AllFiles, GlobalBookmarks, Reader };
 
 // Minimal state the returning parent needs to restore its previous view (directory,
 // focused item, list index, or bookmark selection). Kept as a plain struct stored by
@@ -141,18 +146,24 @@ class ActivityManager {
   void replaceActivity(std::unique_ptr<Activity>&& newActivity);
 
   // goTo... functions are convenient wrapper for replaceActivity()
-  void goToFileTransfer();
+  // File Transfer, its menu opening on `selected`'s row.
+  void goToFileTransfer(NetworkMode selected = NetworkMode::JOIN_NETWORK);
   void goToSerialTransfer();  // direct entry (also used by the boot-into-transfer path)
   void goToUsbDrive();        // no-op logging an error on boards without FREEINK_CAP_USB_MSC
   void goToSettings();
   void toggleSettings();  // full device settings; reopen the book when returning from a reader
   void goToClockSettings();
   void goToKOReaderSettings();
-  void goToFileBrowser(std::string path = {}, std::string focusName = {});
-  void goToRecentBooks(std::string focusName = {});
+  // The Library on `tab`: Books in `path` (the root when empty); `focusName` selected; on Authors,
+  // `author` (a hash) open.
+  void goToLibrary(LibraryTab tab, std::string path = {}, std::string focusName = {},
+                   std::optional<uint32_t> author = std::nullopt);
   void goToGlobalBookmarks();
   void goToGlobalBookmarks(ReturnHint hint);
+  // The OPDS catalog, or the server picker first when more than one server is configured. Opened
+  // from File Transfer, so Back returns there.
   void goToBrowser();
+  // The same, searching `query` on arrival: a finished book's "more by this author". Back goes Home.
   void goToBrowserWithSearch(std::string query);
   void goToReader(std::string path);
   void goToKOReaderSync();
@@ -204,7 +215,8 @@ class ActivityManager {
   // the caller's own children included, pop as usual. Returns how many dropped something.
   int releaseBuriedActivityState();
 
-  bool currentActivityUsesWifi() const { return activityUsesWifi.load(std::memory_order_relaxed); }
+  // An activity on the stack, current or buried under a child, holds the radio.
+  bool wifiActivityOnStack() const { return activityUsesWifi.load(std::memory_order_relaxed); }
 
   bool inSleepTransition() const { return sleepTransition; }
 
@@ -215,8 +227,9 @@ class ActivityManager {
   bool requiresExclusiveStorageLoop() const;
   // True while a reader is anywhere on the stack -- including under its own menu or TOC.
   bool isReaderActivity() const;
-  // True only while the reader itself is on top: the one case dispatchButtonAction() delivers a
-  // configured action. A list opened from the reader answers false here but true above.
+  // True only while the reader itself is on top: the one case every configured reader action is
+  // delivered (see currentTakesButtonAction()). A list opened from the reader answers false here
+  // but true above.
   bool currentIsReaderActivity() const;
   bool skipLoopDelay() const;
 
@@ -229,9 +242,19 @@ class ActivityManager {
   // buffer before a raw capture (e.g. a screenshot). See Activity::prepareFramebufferForCapture().
   void prepareFramebufferForCapture();
 
+  // For the serial CMD:STATE: "activity=<name> stack=<bottom>,...,<top>" plus the current
+  // activity's own key=value pairs (Activity::appendDebugState). Call under the render lock.
+  void describeState(std::string& out) const;
+
+  // True when a reader-scoped `action` configured on `button` goes to the activity on top instead
+  // of falling through as the raw press: always for the reader itself, and for another screen only
+  // when it opts in (Activity::takesButtonAction()).
+  bool currentTakesButtonAction(CrossPointSettings::BUTTON_ACTION action, MappedInputManager::Button button) const;
+
   // Dispatch a globally-configured button action to the current activity.
   // Reader-specific actions (page navigation, TOC, bookmarks, footnotes) are forwarded
-  // only when the current activity is a reader; others are no-ops in other contexts.
+  // to the reader on top, and to another screen only for what it opted into through
+  // currentTakesButtonAction(); others are no-ops in other contexts.
   void dispatchButtonAction(CrossPointSettings::BUTTON_ACTION action);
 
   // Offer a manual force refresh to the activity on top. False when it leaves the refresh to the

@@ -3,32 +3,37 @@
 #include <optional>
 #include "activities/reader/EpubProgressRecord.h"
 #include "SourceAnchor.h"
+#define LOG_DBG(...) ((void)0)
+#define LOG_INF(...) ((void)0)
+#define LOG_ERR(...) ((void)0)
 
 struct SectionProbe {
   bool active = false, anchorReady = true;
   int pageCount = 50, currentPage = 0;
   mutable int reads = 0;
   SourceAnchor anchor{9876, 0};
+  mutable int visibleLookups = 0, rawLookups = 0;
+  std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset) const {
+    ++visibleLookups; return offset == 50 ? std::optional<uint16_t>(3) : std::nullopt;
+  }
+  std::optional<uint16_t> getPageForSourceOffset(SourceAnchor at) const {
+    ++rawLookups; return at.sourceOffset == 50 && at.characterOffset == 2 ? std::optional<uint16_t>(7) : std::nullopt;
+  }
+  std::optional<uint16_t> sourceLookupPage() const { return std::nullopt; }
+  std::optional<uint16_t> getPageForTocIndex(int) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForAnchor(const std::string&) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForListItemIndex(uint16_t) const { return std::nullopt; }
+  std::optional<uint16_t> getPageForParagraphIndex(uint16_t) const { return 5; }
+  bool isTruncatedCache() const { return false; }
   bool hasActiveBuild() const { return active; }
   std::optional<uint16_t> getParagraphIndexForPage(uint16_t) const { return 91; }
   std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t) const { ++reads; return anchorReady ? std::optional<SourceAnchor>(anchor) : std::nullopt; }
 };
+using Section = SectionProbe;
 struct EpubProbe { int getSpineItemsCount() const { return 10; } };
 class EpubReaderActivity {
  public:
-  struct NavigationTarget {
-    enum class Kind { Page, Source };
-    Kind kind = Kind::Page;
-    uint32_t sourceOffset = UINT32_MAX;
-    uint16_t sourceCharacterOffset = 0;
-    int fallbackPage = 0, page = 0, cachedPageCount = 0, cachedSpineIdx = 0;
-    uint16_t restoreParagraph = 0;
-    static NavigationTarget makeSourceOffset(uint32_t source, int fallback, uint16_t character) {
-      NavigationTarget n; n.kind = Kind::Source; n.sourceOffset = source;
-      n.fallbackPage = fallback; n.sourceCharacterOffset = character; return n;
-    }
-    static NavigationTarget makePage(int page) { NavigationTarget n; n.page = page; return n; }
-  };
+// NAVIGATION_DECLARATION
   int currentSpineIndex = 3;
   NavigationTarget navTarget;
   SourceAnchor reflowSource_;
@@ -52,11 +57,31 @@ class EpubReaderActivity {
   }
 };
 // CAPTURE_IMPLEMENTATION
+// NAVIGATION_IMPLEMENTATION
 
 int main() {
   EpubReaderActivity reader;
   SectionProbe section;
   reader.section = &section;
+  // The same numeric offset means different things in raw XHTML and KOReader's
+  // visible-text coordinate space. Compile both branches from production source.
+  using Target = EpubReaderActivity::NavigationTarget;
+  auto rawTarget = Target::makeSourceOffset(50, 0, 2);
+  auto visibleTarget = Target::makeVisibleOffset(50);
+  rawTarget.resolveInto(section, 3);
+  assert(section.currentPage == 7 && section.rawLookups == 1 && section.visibleLookups == 0);
+  visibleTarget.resolveInto(section, 3);
+  assert(section.currentPage == 3 && section.rawLookups == 1 && section.visibleLookups == 1);
+  section.active = true;
+  assert(!rawTarget.sourceTargetPage(section) && section.rawLookups == 1);
+  assert(!visibleTarget.sourceTargetPage(section));
+  section.active = false;
+  for (auto target : {Target::makeSourceOffset(999, 20), Target::makeVisibleOffset(999, 20)}) {
+    target.cachedSpineIdx = 3; target.cachedPageCount = 100;
+    target.resolveInto(section, 3);
+    assert(section.currentPage == 10); // Both preserve upstream bounded rescaling on a miss.
+  }
+
   assert(!reader.sourceForProgress(2, 12));
   assert(section.reads == 0);
   auto source = reader.sourceForProgress(3, 12);

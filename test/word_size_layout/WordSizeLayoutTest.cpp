@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "Epub/FontSizeLadder.h"
@@ -282,6 +283,72 @@ TEST(WordContinuation, AttachedPunctuationIsMarkedAsContinuation) {
   EXPECT_TRUE(result.lines[0]->wordContinues(1));
 }
 
+// A non-breaking space reaches layout as a " " token glued to the words on both sides. In a
+// justified line it stretches like a word gap; the glue around it does not. No corpus book has one,
+// so the goldens do not pin this.
+TEST(WordContinuation, JustifiedNonBreakingSpaceStretchesLikeAWordGap) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  ParsedText text(false, false, style);
+  text.addWord("aaaa", EpdFontFamily::REGULAR);
+  text.addWord("bbbb", EpdFontFamily::REGULAR);
+  text.addWord(" ", EpdFontFamily::REGULAR, /*underline=*/false, /*attachToPrevious=*/true);
+  text.addWord("cccc", EpdFontFamily::REGULAR, /*underline=*/false, /*attachToPrevious=*/true);
+  text.addWord("dddd", EpdFontFamily::REGULAR);
+  text.addWord("eeee", EpdFontFamily::REGULAR);
+
+  // aaaa bbbb_cccc dddd is 175 px wide (the space token measures as a space); eeee would need 45
+  // more, so the first line is justified.
+  const auto result = layout(text, renderer, 200);
+  ASSERT_EQ(result.lines.size(), 2u);
+  const TextBlock& line = *result.lines[0];
+  ASSERT_EQ(line.wordCount(), 5);
+  constexpr int kWord = 4 * GfxRenderer::GLYPH_W;
+  const int wordGapStretch = line.wordXpos(1) - line.wordXpos(0) - kWord - GfxRenderer::SPACE_W;
+  EXPECT_GT(wordGapStretch, 0);
+  EXPECT_EQ(line.wordXpos(2) - line.wordXpos(1), kWord);  // bbbb is glued to the space
+  EXPECT_EQ(line.wordXpos(3) - line.wordXpos(2) - GfxRenderer::SPACE_W, wordGapStretch);
+  EXPECT_EQ(line.wordXpos(4) - line.wordXpos(3) - kWord - GfxRenderer::SPACE_W, wordGapStretch);
+}
+
+// At a page bottom the parser refuses a line that ends hyphenated; layout re-lays that line without
+// hyphenation (computeSingleLineBreakNoHyphen) and the rest with it (computeHyphenatedLineBreaksFromIndex).
+// Both must back up over glued tokens instead of breaking before them. The goldens run the retry
+// but never end a retried line at a glued token, so they do not pin this.
+TEST(WordContinuation, PageBottomRetryKeepsGluedGroupsWhole) {
+  GfxRenderer renderer;
+  ParsedText text(false, /*hyphenationEnabled=*/true, noIndentStyle());
+  text.addWord("aaaa", EpdFontFamily::REGULAR);
+  text.addWord("bb", EpdFontFamily::REGULAR);
+  text.addWord(" ", EpdFontFamily::REGULAR, /*underline=*/false, /*attachToPrevious=*/true);  // a no-break space
+  text.addWord("cc-dddddd", EpdFontFamily::REGULAR, /*underline=*/false, /*attachToPrevious=*/true);  // explicit hyphen
+  text.addWord("eeeeeee", EpdFontFamily::REGULAR);
+  text.addWord("ff", EpdFontFamily::REGULAR);
+  text.addWord("?", EpdFontFamily::REGULAR, /*underline=*/false, /*attachToPrevious=*/true);
+
+  std::vector<std::vector<std::string>> lines;
+  bool retried = false;
+  text.layoutAndExtractLines(
+      renderer, kFontId, 100,
+      [&](std::unique_ptr<TextBlock> line, const bool endsHyphenated, const bool suppressRetry) {
+        if (endsHyphenated && !suppressRetry && !retried) {  // what the parser does at a page bottom
+          retried = true;
+          return ParsedText::LineProcessResult::RetryWithoutHyphenation;
+        }
+        std::vector<std::string> words;
+        for (uint16_t i = 0; i < line->wordCount(); i++) words.emplace_back(line->wordText(i));
+        lines.push_back(std::move(words));
+        return ParsedText::LineProcessResult::Accepted;
+      },
+      /*includeLastLine=*/true);
+
+  ASSERT_TRUE(retried);
+  ASSERT_GE(lines.size(), 2u);
+  EXPECT_EQ(lines[0], (std::vector<std::string>{"aaaa"}));      // the retried line backs up over "bb cc-dddddd"
+  for (const auto& line : lines) EXPECT_NE(line.front(), "?");  // the resumed breaker backs up over "ff?"
+}
+
 // Hyphenation splits the word ACROSS lines, so the halves land in different blocks and no flag
 // can join them. What survives is the shape the overlay keys on: the first line ends on the
 // inserted hyphen and the next starts with the rest of the word.
@@ -427,6 +494,74 @@ TEST(FontSizeLadderTest, ResidualDeadZoneSnapsToNativeGlyphs) {
   const FontSizeLadder empty;
   EXPECT_FLOAT_EQ(empty.resolve(102.0f).residual, 1.0f);
   EXPECT_FLOAT_EQ(empty.resolve(95.0f).residual, 0.95f);
+}
+
+// A TTF family: every size its own face, at whole pixels per em.
+namespace {
+constexpr int32_t kNativeBase = 0x12345600;
+constexpr uint32_t kBody14pt = (14 * 64 * 150 + 36) / 72;  // 29.17 px per em, 26.6
+
+FontSizeLadder nativeLadder() {
+  FontSizeLadder ladder;
+  ladder.setNative(kNativeBase, kBody14pt, 10, 120);
+  return ladder;
+}
+}  // namespace
+
+TEST(FontSizeLadderTest, ANativeLadderGivesEachSizeItsOwnWholePixelFace) {
+  const auto ladder = nativeLadder();
+  // h1 160%: 46.7 px, drawn at 47 px; the 0.7% left over is inside the dead zone.
+  const auto h1 = ladder.resolve(160.0f);
+  EXPECT_EQ(kNativeBase | 47, h1.fontId);
+  EXPECT_FLOAT_EQ(1.0f, h1.residual);
+  const auto h2 = ladder.resolve(140.0f);
+  EXPECT_EQ(kNativeBase | 41, h2.fontId);
+  EXPECT_FLOAT_EQ(1.0f, h2.residual);
+  // A footnote at 80%: 23.3 px at 23 px.
+  const auto small = ladder.resolve(80.0f);
+  EXPECT_EQ(kNativeBase | 23, small.fontId);
+  EXPECT_FLOAT_EQ(1.0f, small.residual);
+}
+
+TEST(FontSizeLadderTest, ANativeLadderKeepsTheBodyFaceNearTheBodySize) {
+  const auto ladder = nativeLadder();
+  for (const float pct : {97.5f, 100.0f, 102.5f}) {
+    const auto r = ladder.resolve(pct);
+    EXPECT_EQ(0, r.fontId) << pct;
+    EXPECT_FLOAT_EQ(1.0f, r.residual) << pct;
+  }
+  // 96%: 28.0 px is a face of its own, not the body's 29.17.
+  EXPECT_EQ(kNativeBase | 28, ladder.resolve(96.0f).fontId);
+}
+
+TEST(FontSizeLadderTest, ANativeLadderScalesTheLargestFaceBeyondIt) {
+  const auto ladder = nativeLadder();
+  // A 5x drop cap: 145.8 px, the 120 px face scaled by the rest.
+  const auto cap = ladder.resolve(500.0f);
+  EXPECT_EQ(kNativeBase | 120, cap.fontId);
+  EXPECT_NEAR(145.83f / 120.0f, cap.residual, 0.001f);
+  // Tiny text: the smallest face, scaled down.
+  const auto tiny = ladder.resolve(30.0f);
+  EXPECT_EQ(kNativeBase | 10, tiny.fontId);
+  EXPECT_NEAR(8.75f / 10.0f, tiny.residual, 0.001f);
+}
+
+TEST(FontSizeLadderTest, ANativeLadderClampsAbsurdSizesBeforeConvertingThem) {
+  // A book's CSS can ask for any size (font-size: 1e12%); converting a float beyond int's range is undefined, and
+  // differs between the host and the device. The largest face serves, scaled.
+  const auto ladder = nativeLadder();
+  EXPECT_EQ(kNativeBase | 120, ladder.resolve(1e12f).fontId);
+  EXPECT_EQ(kNativeBase | 120, ladder.resolve(3e38f).fontId);
+  EXPECT_EQ(kNativeBase | 10, ladder.resolve(1e-30f).fontId);
+}
+
+TEST(FontSizeLadderTest, AnIncompleteNativeLadderIsIgnored) {
+  FontSizeLadder ladder;
+  ladder.setNative(0, kBody14pt, 10, 120);
+  ladder.setNative(kNativeBase, 0, 10, 120);
+  ladder.setNative(kNativeBase, kBody14pt, 20, 10);
+  EXPECT_FALSE(ladder.native());
+  EXPECT_FLOAT_EQ(1.6f, ladder.resolve(160.0f).residual);  // the scale fallback
 }
 
 // ---------------------------------------------------------------------------

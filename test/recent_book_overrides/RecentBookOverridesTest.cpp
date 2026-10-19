@@ -132,6 +132,34 @@ int main() {
     assert(RECENT_BOOKS.loadFromFile());
     assert(margins(firstBook) == -1);
   }
+  // Upstream point-size migrations must coexist with the new per-book field.
+  for (const auto& migration : {std::pair{0, 12}, std::pair{1, 10}, std::pair{2, 1}}) {
+    Storage.files[recentFile] = "{\"fontSizeOrderV\":" + std::to_string(migration.first) +
+                                ",\"books\":[{\"path\":\"/specimen-a.epub\",\"fontSizeOverride\":" +
+                                std::to_string(migration.first == 2 ? 1 : 0) +
+                                ",\"ignorePublisherPageMarginsOverride\":1}]}";
+    assert(RECENT_BOOKS.loadFromFile());
+    const RecentBooksStore::Hold hold;  // keep upstream lazy storage resident through the explicit save
+    const auto book = RECENT_BOOKS.getBookByPath(firstBook);
+    assert(book.fontSizeOverride == migration.second && book.ignorePublisherPageMarginsOverride == 1);
+    assert(RECENT_BOOKS.saveToFile());
+    assert(RECENT_BOOKS.loadFromFile());
+    assert(RECENT_BOOKS.getBookByPath(firstBook).fontSizeOverride == migration.second);
+  }
+  // Relocation changes the path/cache prefix while retaining both new and old overrides.
+  freshBooks();
+  RECENT_BOOKS.addBook(firstBook, "Moved specimen", "", "", "/cache-old/cover.bmp");
+  assert(RECENT_BOOKS.setReaderOverrides(firstBook, 1, 0, -1, "Synthetic family", 13, int8_t{-1}, 2, 1, 0, 1, 0, 1, 1));
+  Storage.files["/relocated.epub"] = Storage.files[firstBook];
+  Storage.files.erase(firstBook);
+  RECENT_BOOKS.relocate(firstBook, "/relocated.epub", "/cache-old", "/cache-new");
+  assert(RECENT_BOOKS.loadFromFile());
+  const auto moved = RECENT_BOOKS.getBookByPath("/relocated.epub");
+  assert(moved.path == "/relocated.epub" && moved.coverBmpPath == "/cache-new/cover.bmp");
+  assert(moved.ignorePublisherPageMarginsOverride == 1 && moved.fontSizeOverride == 13);
+  assert(moved.bionicReadingOverride == -1 && moved.paragraphAlignmentOverride == 2);
+
   std::cout << "PASS: paragraph default, effective override matrix, JSON round trips, book isolation, "
-               "reopen, metadata updates, all legacy setters, missing/invalid values, both menu result paths\n";
+               "reopen, metadata updates, all legacy setters, missing/invalid values, both menu result paths, "
+               "point-size migration and relocation\n";
 }

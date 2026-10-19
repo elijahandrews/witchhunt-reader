@@ -151,6 +151,9 @@ bool HalStorage::beginUsbDrive() {
 #if FREEINK_CAP_USB_MSC
   StorageLock lock;
   if (usbMassStorage.active()) return false;
+  // Recorded while the card is still the firmware's to write: the host may change anything, and the
+  // power may go before the session ends.
+  noteContentChange(nullptr);
   auto* const blockDevice = SDCard.detachFilesystemForRawAccess();
   if (!blockDevice) {
     LOG_ERR("USB", "USB Drive needs a mounted SD card");
@@ -264,6 +267,10 @@ bool isCachePath(const char* path) {
   return strncmp(path, kCacheRoot, kLength) == 0 && (path[kLength] == '\0' || path[kLength] == '/');
 }
 
+// Left by the first change after HalStorage::markContentSeen(); inside the cache folder, so writing it
+// is not itself a change.
+constexpr char kChangeMarker[] = "/.crosspoint/content-changed";
+
 bool opensForWriting(const oflag_t oflag) {
   return (oflag & O_ACCMODE) != O_RDONLY || (oflag & (O_CREAT | O_TRUNC | O_APPEND)) != 0;
 }
@@ -275,6 +282,34 @@ bool opensForWriting(const oflag_t oflag) {
 void HalStorage::noteContentChange(const char* path) {
   if (path != nullptr && isCachePath(path)) return;
   contentGeneration_.fetch_add(1, std::memory_order_relaxed);
+  persistChangeMarker();
+}
+
+// The first change after the mark leaves the marker; later ones find it there. StorageLock is
+// recursive, so this is safe from inside the operations that note a change.
+void HalStorage::persistChangeMarker() {
+  StorageLock lock;
+  if (changeMarker_ == 1) return;
+  FsFile marker = SDCard.open(kChangeMarker, O_WRONLY | O_CREAT);
+  if (!marker) return;  // tried again at the next change
+  marker.close();
+  changeMarker_ = 1;
+}
+
+bool HalStorage::contentChangedSinceMark() {
+  StorageLock lock;
+  if (changeMarker_ < 0) changeMarker_ = SDCard.exists(kChangeMarker) ? 1 : 0;
+  return changeMarker_ == 1;
+}
+
+// A change bumps the generation first and leaves the marker under the lock after, so whichever way
+// it falls against this, it is kept: before the comparison, the generation differs and the marker
+// stays; after it, the change waits for the lock and leaves the marker again.
+void HalStorage::markContentSeen(const uint32_t generation) {
+  StorageLock lock;
+  if (contentGeneration_.load(std::memory_order_relaxed) != generation) return;
+  SDCard.remove(kChangeMarker);
+  changeMarker_ = 0;
 }
 
 std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
@@ -387,6 +422,32 @@ bool HalStorage::rmdir(const char* path) {
   HAL_STORAGE_WRAPPED_CALL(rmdir, path);
 }
 
+// Ported from crosspoint-reader PR #3979 (phuclee, @phucisstupid). A directory entry is known by
+// where it sits: the first cluster of its folder and its index in that folder. Every spelling that
+// opens it, other letter case or 8.3 alias alike, lands on the same entry.
+bool HalStorage::areSameFile(const char* first, const char* second, bool& same) {
+  StorageLock lock;
+  same = false;
+  const auto locate = [](const char* path, uint32_t& folderCluster, uint32_t& entryIndex) {
+    const std::string name(path);
+    const size_t slash = name.rfind('/');
+    const std::string folderPath = slash == std::string::npos || slash == 0 ? "/" : name.substr(0, slash);
+    FsFile folder = SDCard.open(folderPath.c_str(), O_RDONLY);
+    FsFile entry = SDCard.open(path, O_RDONLY);
+    if (!folder || !folder.isDirectory() || !entry) {
+      LOG_ERR("SD", "Cannot tell which file %s is", path);
+      return false;
+    }
+    folderCluster = folder.firstCluster();
+    entryIndex = entry.dirIndex();
+    return true;
+  };
+  uint32_t firstFolder = 0, firstEntry = 0, secondFolder = 0, secondEntry = 0;
+  if (!locate(first, firstFolder, firstEntry) || !locate(second, secondFolder, secondEntry)) return false;
+  same = firstFolder == secondFolder && firstEntry == secondEntry;
+  return true;
+}
+
 bool HalStorage::openFileForRead(const char* moduleName, const char* path, HalFile& file) {
   StorageLock lock;  // ensure thread safety for the duration of this function
   FsFile fsFile;
@@ -452,12 +513,17 @@ bool HalStorage::copyFile(const char* moduleName, const std::string& srcPath, co
   if (!buf) {
     dst.close();
     src.close();
+    remove(dstPath);
     return false;
   }
   bool ok = true;
   while (src.available()) {
     const auto bytesRead = src.read(buf, BUF_SIZE);
-    if (bytesRead <= 0) break;
+    if (bytesRead <= 0) {
+      // available() said there was more, so this is a failed read, not the end of the file.
+      ok = false;
+      break;
+    }
     if (dst.write(buf, bytesRead) != static_cast<size_t>(bytesRead)) {
       ok = false;
       break;
@@ -466,6 +532,9 @@ bool HalStorage::copyFile(const char* moduleName, const std::string& srcPath, co
   delete[] buf;
   dst.close();
   src.close();
+  // Callers treat an existing destination as a finished copy (cover and thumb caches do), so a
+  // failed or partial one must not stay behind.
+  if (!ok) remove(dstPath);
   return ok;
 }
 

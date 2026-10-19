@@ -100,7 +100,7 @@ class CssParser {
   // v26: 125-byte fixed styles and sparse extras retain box constraints/rules/shades,
   //      clear/avoid, hyphen policies/limits and ligatures. Pseudo styles have isolated
   //      keys; header flag 0x04 requires the bounded versioned literal-content sidecar.
-  static constexpr uint8_t CSS_CACHE_VERSION = 26;
+  static constexpr uint8_t CSS_CACHE_VERSION = 27;
   // Bytes before the sorted offset index: version(1) + ruleCount(2) + totalSelectorCandidates(4)
   // + unsupportedSelectorSkips(4) + flags(1).
   static constexpr uint32_t CSS_CACHE_HEADER_BYTES = 12;
@@ -252,7 +252,7 @@ class CssParser {
   };
   [[nodiscard]] ResidentFootprint getResidentFootprint() const;
 
-  // Phase-2 arena mode (docs/compiled-book-pipeline-plan.md). A section built with the
+  // Arena mode (docs/memory-allocation-strategy.md §4, class C). A section built with the
   // secondary framebuffer BORROWED (not freed) runs with ~52 KB less general heap than a
   // released build, so the resolver would otherwise self-degrade below MIN_FREE_HEAP_FOR_CSS
   // and its result gets discarded. These two knobs relocate the resolver's footprint into

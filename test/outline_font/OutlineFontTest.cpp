@@ -110,11 +110,11 @@ static void sharedBankChecks(const std::vector<uint8_t>& font) {
   assert(bank.used == 0);
 }
 int main(int argc, char** argv) {
-  assert(freeink::font::gpos::PairKernAdjustment(kernChain, sizeof(kernChain), 1, 2) == -30);
+  assert(witchoutline::font::gpos::PairKernAdjustment(kernChain, sizeof(kernChain), 1, 2) == -30);
   assert(outlineCapsSubstitution(capsChain, sizeof(capsChain), 1, 0x736d6370) == 4);
   assert(outlineCapsSubstitution(capsUnsupported, sizeof(capsUnsupported), 1, 0x736d6370) == 0);
   for (size_t n = 0; n < sizeof(capsChain); ++n) (void)outlineCapsSubstitution(capsChain, n, 1, 0x736d6370);
-  for (size_t n = 0; n < sizeof(kernChain); ++n) (void)freeink::font::gpos::PairKernAdjustment(kernChain, n, 1, 2);
+  for (size_t n = 0; n < sizeof(kernChain); ++n) (void)witchoutline::font::gpos::PairKernAdjustment(kernChain, n, 1, 2);
 
   assert(argc >= 3);
   for (int a = 1; a < argc; ++a) {

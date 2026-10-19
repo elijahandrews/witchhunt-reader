@@ -10,10 +10,12 @@ class SdCardFont;
 #include <cstring>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "Bitmap.h"
+#include "FontLookup.h"
 
 // Color representation: uint8_t mapped to 4x4 Bayer matrix dithering levels
 // 0 = transparent, 1-16 = gray levels (white to black)
@@ -77,11 +79,19 @@ class GfxRenderer {
   size_t bwSnapshotSizeBytes = 0;
   size_t bwBufferChunkSize = BW_BUFFER_CHUNK_SIZE;
   std::vector<uint8_t*> bwBufferChunks;
-  std::map<int, EpdFontFamily> fontMap;
-  // Font IDs that render another family's faces at a fixed scale -- see insertScaledFont(). Only
-  // synthesised sizes appear here, so the map is empty on a build that ships every size for real
-  // and the lookup is a miss that costs one comparison.
-  std::map<int, float> fontBaseScales;
+  // Mutable because a lookup from a const draw or measure call may register a font the resolver
+  // supplies on demand (findFontFamily). Same compromise as sdCardFonts_ below.
+  mutable std::map<int, EpdFontFamily> fontMap;
+  FontResolverHook<EpdFontFamily> fontResolver_;
+  // The one place a font ID becomes a family: fontMap, then the resolver for an unknown ID.
+  const EpdFontFamily* findFontFamily(const int fontId) const {
+    return findOrResolveFont(fontMap, fontBaseScales, fontId, fontResolver_);
+  }
+  // Font IDs that render another family's faces at a fixed scale -- see insertScaledFont(), and a
+  // resolver's stand-in for a size it could not make. Only synthesised sizes appear here, so the
+  // map is empty on a build that ships every size for real and the lookup is a miss that costs one
+  // comparison. Mutable for the resolver, as fontMap.
+  mutable std::map<int, float> fontBaseScales;
   // Mutable because ensureFontReady() is const (called from layout code that
   // holds a const GfxRenderer&) but triggers SD card reads and heap allocation
   // inside the SdCardFont objects. Same pragmatic compromise as fontCacheManager_.
@@ -109,8 +119,9 @@ class GfxRenderer {
   // distinct (glyph, scale, selector) and lets renderGlyphFastBW() — the same
   // 8-pixel-chunk blitter unscaled text uses — draw every occurrence.
   //
-  // Budget: 80 x 16B table + 3.5 KB arena ≈ 4.75 KB, two allocations made lazily
-  // on the first scaled glyph and released by releaseScaledGlyphCache(). It is
+  // Budget: 80 x 16B table + 3.5 KB arena ≈ 4.75 KB, two allocations taken at
+  // reader entry (ensureScaledGlyphCache) and given back at reader exit
+  // (releaseGlyphCaches). It is
   // a bump allocator that resets wholesale when full: no per-glyph allocation,
   // nothing to fragment, and a page whose working set overflows the arena
   // degrades toward the uncached path instead of growing.
@@ -135,7 +146,7 @@ class GfxRenderer {
     uint8_t sel;           // drawMask for this coverage/AA plane
     uint8_t w;
     uint8_t h;
-    int8_t phase;  // signed output-pixel sixteenths; fits existing padding
+    int8_t phase; // signed output-pixel sixteenths; fits existing padding
   };
   // Keeps the documented budget honest if a field is ever added.
   static_assert(sizeof(ScaledGlyphEntry) <= 16, "scaled-glyph entry grew; update the cache budget comment");
@@ -288,11 +299,9 @@ class GfxRenderer {
   ///
   /// Callers that need a size in pixels should use the ordinary accessors, which already apply
   /// this; it is exposed for the few places that must know a size is synthesised at all.
-  float fontBaseScale(int fontId) const {
-    const auto it = fontBaseScales.find(fontId);
-    return it == fontBaseScales.end() ? 1.0f : it->second;
-  }
-  void setFontCacheManager(FontCacheManager* m) { fontCacheManager_ = m; }
+  float fontBaseScale(int fontId) const { return resolvedBaseScale(fontMap, fontBaseScales, fontId, fontResolver_); }
+  // The manager prewarms through this renderer's font lookup, so it reaches the faces the resolver makes.
+  void setFontCacheManager(FontCacheManager* m);
   FontCacheManager* getFontCacheManager() const { return fontCacheManager_; }
   // Drop every rebuildable font cache (glyph metadata, bitmaps, kern) while leaving
   // the fonts loaded and usable — everything faults back in on demand. Lets callers
@@ -301,6 +310,14 @@ class GfxRenderer {
   bool releaseFontCaches();
   bool isFontCacheScanning() const;
   const std::map<int, EpdFontFamily>& getFontMap() const { return fontMap; }
+  /// Lets a font source supply families for IDs nobody registered yet, on first use. The
+  /// resolver is asked on every lookup of an ID that is not in fontMap, so declining must be
+  /// cheap. A family it returns is emplaced into fontMap directly (no insertFont(): no cache
+  /// invalidation, no log), with its scale, if not 1, in the base scales. It must not look fonts
+  /// up through this renderer, or it recurses.
+  void setFontResolver(std::optional<ResolvedFont<EpdFontFamily>> (*resolve)(void* ctx, int fontId), void* ctx) {
+    fontResolver_ = FontResolverHook<EpdFontFamily>{resolve, ctx};
+  }
   // Each of these can retire an EpdFontData a cached scaled mask is keyed on, so
   // they all drop the cache (see ScaledGlyphEntry).
   void registerSdCardFont(int fontId, SdCardFont* font) {
@@ -396,7 +413,7 @@ class GfxRenderer {
   //
   // Output is clamped to the panel, so a caller always gets an on-screen point.
   // Ported verbatim from upstream/develop; see
-  // docs/touch-input-migration-2026-08-14.md phase 2.
+  // docs/contributing/touch-architecture.md, "Coordinate transform".
   void tapToLogical(float nx, float ny, int& outX, int& outY) const;
   // Same, but into an EXPLICIT orientation's frame rather than the live one. For geometry
   // that was drawn in a fixed frame regardless of how the screen is rotated -- the button
@@ -461,7 +478,10 @@ class GfxRenderer {
   // Keep fast differential alive (X4) after releaseSecondaryBuffer() by diffing
   // against the controller's retained baseline. See HalDisplay::setSingleBufferFastDiff.
   void setSingleBufferFastDiff(bool enabled) const { display.setSingleBufferFastDiff(enabled); }
-  bool isX3() const { return display.deviceIsX3(); }
+  // What the panel does -- see HalDisplay::fastRefreshNeedsHostFrame and friends.
+  bool fastRefreshNeedsHostFrame() const { return display.fastRefreshNeedsHostFrame(); }
+  bool asyncRefreshHoldsFrameBuffer() const { return display.asyncRefreshHoldsFrameBuffer(); }
+  bool ghostsUnderFastRefresh() const { return display.ghostsUnderFastRefresh(); }
 
   // True when triggerDisplayAsync() genuinely overlaps the waveform on this
   // panel. Ask this before spending the async gap on work; see
@@ -632,6 +652,9 @@ class GfxRenderer {
   }
   void registerFontPointSize(int fontId, float points) { fontPointSizes_[fontId] = points; }
   float fontPointSize(int fontId) const {
+    // Lazy native-size IDs register their logical size in the resolver. Resolve
+    // before asking the publisher-font dispatcher to choose an outline size.
+    if (fontPointSizes_.find(fontId) == fontPointSizes_.end()) (void)findFontFamily(fontId);
     const auto it = fontPointSizes_.find(fontId);
     return it == fontPointSizes_.end() ? 14.0f : it->second;
   }
@@ -845,11 +868,12 @@ class GfxRenderer {
   // each plane to the controller immediately after rendering it. No extra allocation
   // needed — the BW framebuffer is the scratch pad for both passes.
   //
-  // After displayGrayBuffer(), cleanupGrayscaleWithPreviousBuffer() reseeds the
-  // controller's RED RAM and the in-RAM active buffer from frameBufferActive —
-  // which holds the exact full BW page (including images) that displayBuffer()
-  // left there before the grayscale pass began. This is the correct differential
-  // baseline for the next fast refresh.
+  // After displayGrayBuffer(), cleanupGrayscaleWithPreviousBuffer() hands the driver
+  // frameBufferActive -- the full BW page (including images) that displayBuffer() left
+  // there before the grayscale pass began -- as the baseline for the next fast refresh,
+  // and copies it back into the write buffer. With the secondary away (lent or released)
+  // the driver is told there is no baseline and takes a clean sync on its next push; the
+  // write buffer then keeps the last plane.
   //
   // renderFn runs a normal and opaque-ink finalization pass per plane. The argument tells it which
   // pass is running. The caller sets setFastGrayscaleLut() before calling.
@@ -895,7 +919,7 @@ class GfxRenderer {
     const unsigned long t2 = millis();
     t.displayMs = t2 - t1;
 
-    // Reseed RED RAM and frameBufferActive from the previous-frame slot, which
+    // Restore the driver's baseline and the write buffer from frameBufferActive, which
     // holds the full BW page exactly as displayBuffer() left it. Using this
     // instead of re-rendering gives the correct baseline (images + text) and
     // costs only one SPI write.
@@ -1030,20 +1054,18 @@ class GfxRenderer {
   // grayscale path, which leaves the panel's gray planes loaded but the BW
   // framebuffer untouched.
   //
-  // const-correctness caveat: on X3 the underlying display call (see
-  // EInkDisplay::cleanupGrayscaleBuffers) performs an in-place Y-flip of the
-  // framebuffer bytes, sends them, and flips back. The framebuffer's logical
-  // contents are identical before and after, but during the call the bytes
-  // are transiently reordered. The method stays `const` because the renderer's
-  // observable state doesn't change; callers must not race a framebuffer
-  // reader against this call.
+  // The FreeInk drivers stream planes row-reversed (EpdBus::sendPlaneFlipped) and never
+  // modify the framebuffer, so these calls leave it untouched.
+  //
+  // Safe to call on any panel: one whose FAST refresh needs no host frame
+  // (fastRefreshNeedsHostFrame() false) has no RED to seed, and the call returns at once.
   void syncRedRamFromFrameBuffer() const;
   void cleanupGrayscaleWithFrameBuffer() const;
-  // Reseed controller RED RAM and frameBufferActive from the display's internal
-  // previous-frame buffer (frameBufferActive in EInkDisplay). This holds the
-  // exact full BW page that displayBuffer() committed before the grayscale pass
-  // — including images — giving a correct differential baseline for the next
-  // fast refresh without any re-render.
+  // Restore the driver's baseline and the write buffer from the display's previous-frame
+  // buffer (FreeInkDisplay's frameBufferActive), which holds the full BW page that
+  // displayBuffer() committed before the grayscale pass, images included. With the
+  // secondary away the driver is told there is no baseline and takes a clean sync on its
+  // next push.
   void cleanupGrayscaleWithPreviousBuffer() const;
 
   // Font helpers
@@ -1054,10 +1076,8 @@ class GfxRenderer {
   // find returns the cached mask for an exact key match, alloc reserves a zeroed
   // mask of w*h bits for the caller to fill, or nullptr when the glyph is too
   // large to cache or the arena could not be allocated.
-  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
-                                     int8_t phase = 0) const;
-  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
-                                int8_t phase = 0) const;
+  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
+  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
 
   // Drop every cached mask, keeping the arena. MUST run whenever a font is added
   // or removed: entries are keyed by EpdFontData address, which a later font
@@ -1066,6 +1086,13 @@ class GfxRenderer {
     scaledGlyphCount_ = 0;
     scaledGlyphUsed_ = 0;
   }
+  // Everything glyph drawing keeps between pages: FontCacheManager's page slots and the
+  // scaled-glyph cache. Readers give it back on exit, so Home, Settings and the font selector do
+  // not run 7-12 KB short after every book (X3, 2026-10-07: 5,064 B + ~2 KB, or 10,056 B + ~2 KB
+  // after a synthesised body size); the next reader takes it again in onEnter. Network sessions
+  // give it back too (trimMemoryForNetworkSession).
+  void releaseGlyphCaches() const;
+
   // Give the ~4 KB arena back. The cache re-allocates lazily if rendering resumes.
   void releaseScaledGlyphCache() const {
     scaledGlyphEntries_.reset();

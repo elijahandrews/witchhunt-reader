@@ -2,7 +2,7 @@
 
 #include "Gpos.h"
 
-namespace freeink {
+namespace witchoutline {
 namespace font {
 namespace gpos {
 
@@ -276,4 +276,4 @@ int32_t PairKernAdjustment(const uint8_t* gposBytes, size_t gposSize, uint32_t l
 
 }  // namespace gpos
 }  // namespace font
-}  // namespace freeink
+}  // namespace witchoutline

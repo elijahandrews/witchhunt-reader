@@ -15,3 +15,5 @@ Supported OpenType layout is deliberately bounded: Latin/DFLT default language s
 `SdkGpos.cpp`, `SdkGsub.cpp` and their headers derive from FreeInk SDK commit `c6e1d2bd36e31bb9f1abaf42706215e4bf004cb7`; the local pair reader adds authored lookup accumulation. Its MIT license is included in `LICENSE.SDK`. The independent caps parser preserves authored lookup order and rejects unsupported selected lookups. Pinned FreeType source/license provenance is documented in `../FreeType/README.md`.
 
 Host checks are under `../../test/outline_font`; they compile this production backend and the checked-in FreeType translation units directly, without a system FreeType dependency.
+
+The local OpenType readers use the `witchoutline` namespace to coexist with upstream native TTF readers. Native SD TTF retains upstream synthetic small caps; embedded outlines and v6 converted fonts can use authored `smcp`/`c2sc` glyphs.

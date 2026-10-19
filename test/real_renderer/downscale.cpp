@@ -127,7 +127,7 @@ void checkGlyph(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fami
       const auto gid = data->outline->glyphId(data->outlineCtx, codepoint, mode);
       return gid ? EPD_ALTERNATE_GLYPH_BASE + gid : 0;
     }
-    return data->capsGlyph ? data->capsGlyph(data->glyphMissCtx, codepoint, mode) : 0;
+    return data->capsGlyph ? data->capsGlyph(data->glyphFeatureCtx, codepoint, mode) : 0;
   };
   if (style & EpdFontFamily::ALL_SMALL_CAPS) alternate = mapped(2);
   if (!alternate && (style & (EpdFontFamily::SMALL_CAPS | EpdFontFamily::ALL_SMALL_CAPS))) alternate = mapped(1);

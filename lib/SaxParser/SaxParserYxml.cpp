@@ -1,5 +1,7 @@
+#include <cstdint>
 #include <cstring>
 #include <new>
+#include <type_traits>
 
 #include "SaxParser/SaxParser.h"
 #include "yxml.h"
@@ -41,6 +43,8 @@
 // kAttrValueLen + 8). At 12*(32+384+8) ≈ 5.0 KB (was 8*(32+256+8) ≈ 2.3 KB),
 // a ~2.7 KB transient bump. For chapter parsing this lands while the secondary
 // framebuffer is released (~52 KB headroom), so it does not tighten the hot path.
+// The table sits in the same allocation, after SaxParserImpl; Profile::Lean leaves it
+// out (stateBytes(Lean) = sizeof(SaxParserImpl)) for callers that never read attributes.
 // ---------------------------------------------------------------------------
 static constexpr size_t kStackSize = 2048;
 static constexpr size_t kElemNameLen = 32;
@@ -81,9 +85,12 @@ struct SaxParserImpl {
   uint32_t voidCloseSourceOffset = 0;
 
   // Opening-tag accumulation: collected between ELEMSTART and the first
-  // non-ATTR token, then fired as a single startCb call.
+  // non-ATTR token, then fired as a single startCb call. `attrs` is the table
+  // placed after this struct in the same allocation (Profile::Full), or null with
+  // attrCapacity 0 (Profile::Lean: attributes are parsed by yxml but not kept).
   char pendingElem[kElemNameLen];  // element name waiting to be fired
-  AttrPair attrs[kMaxAttrs];
+  AttrPair* attrs = nullptr;
+  size_t attrCapacity = 0;
   size_t attrCount = 0;
   bool inOpeningTag = false;
 
@@ -231,8 +238,22 @@ static void fireStart(SaxParserImpl* impl) {
 // SaxParser implementation
 // ---------------------------------------------------------------------------
 
-size_t SaxParser::stateBytes(const bool trackSourceOffsets) {
-  return sizeof(SaxParserImpl) + (trackSourceOffsets ? kCharBufLen * sizeof(uint32_t) : 0);
+// The attribute table follows SaxParserImpl in the same block, so the struct's size must keep it
+// aligned; both are plain data, so neither needs a destructor call when the block is freed.
+static_assert(alignof(SaxParserImpl) >= alignof(AttrPair), "attribute table must be aligned after the state");
+static_assert(sizeof(SaxParserImpl) % alignof(AttrPair) == 0, "attribute table must be aligned after the state");
+static_assert(std::is_trivially_destructible<SaxParserImpl>::value, "state is freed without a destructor call");
+static_assert(std::is_trivially_destructible<AttrPair>::value, "state is freed without a destructor call");
+
+static size_t attrTableBytes(const SaxParser::Profile profile) {
+  return profile == SaxParser::Profile::Full ? kMaxAttrs * sizeof(AttrPair) : 0;
+}
+
+static_assert(sizeof(SaxParserImpl) % alignof(uint32_t) == 0 && kMaxAttrs * sizeof(AttrPair) % alignof(uint32_t) == 0,
+              "optional byte origins remain aligned after either parser profile");
+
+size_t SaxParser::stateBytes(const Profile profile, const bool trackSourceOffsets) {
+  return sizeof(SaxParserImpl) + attrTableBytes(profile) + (trackSourceOffsets ? kCharBufLen * sizeof(uint32_t) : 0);
 }
 
 void SaxParser::setExternalState(void* storage, const size_t bytes) {
@@ -241,12 +262,11 @@ void SaxParser::setExternalState(void* storage, const size_t bytes) {
 }
 
 void SaxParser::reset() {
-  delete[] sourceOffsetsOwned_;
-  sourceOffsetsOwned_ = nullptr;
   if (!impl_) return;
-  // SaxParserImpl is plain data (arrays, pointers, counters): external state needs no destructor
-  // call, and must get none -- the arena it sits in may already have been rewound.
-  if (!implExternal_) delete static_cast<SaxParserImpl*>(impl_);
+  // SaxParserImpl and its attribute table are plain data (arrays, pointers, counters): no
+  // destructor call, and external state must get none -- the arena it sits in may already have
+  // been rewound. A heap block came from ::operator new and goes back the same way.
+  if (!implExternal_) ::operator delete(impl_);
   impl_ = nullptr;
   implExternal_ = false;
 }
@@ -254,7 +274,7 @@ void SaxParser::reset() {
 SaxParser::~SaxParser() { reset(); }
 
 bool SaxParser::init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxCharCb charCb, SaxDefaultCb defaultCb,
-                     bool htmlVoidTagRepair, bool trackSourceOffsets) {
+                     bool htmlVoidTagRepair, const Profile profile, const bool trackSourceOffsets) {
   reset();
   stopped_ = false;
   errorLine_ = 0;
@@ -262,35 +282,33 @@ bool SaxParser::init(void* userData, SaxStartCb startCb, SaxEndCb endCb, SaxChar
 
   // nothrow + null-check: firmware builds with -fno-exceptions, so a bare new
   // would abort() on OOM instead of letting init() honour its "returns false on
-  // allocation failure" contract. SaxParserImpl is ~10 KB (attr table + stacks),
+  // allocation failure" contract. The Full state is ~10 KB (attr table + stacks),
   // large enough to fail under heap fragmentation during a section build.
-  SaxParserImpl* impl = nullptr;
-  if (externalState_ && externalBytes_ >= sizeof(SaxParserImpl) &&
+  const size_t bytes = stateBytes(profile, trackSourceOffsets);
+  void* block = nullptr;
+  if (externalState_ && externalBytes_ >= bytes &&
       (reinterpret_cast<uintptr_t>(externalState_) % alignof(SaxParserImpl)) == 0) {
-    impl = new (externalState_) SaxParserImpl;
+    block = externalState_;
     implExternal_ = true;
   } else {
-    impl = new (std::nothrow) SaxParserImpl;
-  }
-  if (impl && trackSourceOffsets && implExternal_ && externalBytes_ >= stateBytes(true)) {
-    impl->charSources = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(externalState_) + sizeof(SaxParserImpl));
+    block = ::operator new(bytes, std::nothrow);
   }
   externalState_ = nullptr;  // one init per offer
   externalBytes_ = 0;
-  if (!impl) {
+  if (!block) {
     errorString_ = "SaxParser: out of memory allocating parser state";
     return false;
   }
-  if (trackSourceOffsets && !impl->charSources) {
-    // Reused for the entire parse; 256 raw origins cannot fit the small device task stack.
-    sourceOffsetsOwned_ = new (std::nothrow) uint32_t[kCharBufLen];
-    if (!sourceOffsetsOwned_) {
-      if (!implExternal_) delete impl;
-      implExternal_ = false;
-      errorString_ = "SaxParser: out of memory allocating source offsets";
-      return false;
-    }
-    impl->charSources = sourceOffsetsOwned_;
+  SaxParserImpl* impl = new (block) SaxParserImpl;
+  if (profile == Profile::Full) {
+    auto* table = reinterpret_cast<AttrPair*>(static_cast<unsigned char*>(block) + sizeof(SaxParserImpl));
+    for (size_t i = 0; i < kMaxAttrs; ++i) new (&table[i]) AttrPair;
+    impl->attrs = table;
+    impl->attrCapacity = kMaxAttrs;
+  }
+  if (trackSourceOffsets) {
+    impl->charSources = reinterpret_cast<uint32_t*>(static_cast<unsigned char*>(block) + sizeof(SaxParserImpl) +
+                                                    attrTableBytes(profile));
   }
   impl->startCb = startCb;
   impl->endCb = endCb;
@@ -373,7 +391,8 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         impl->inOpeningTag = true;
         break;
       case YXML_ATTRSTART:
-        if (impl->attrCount < kMaxAttrs) {
+        if (impl->attrCapacity == 0) break;  // Profile::Lean: parsed by yxml, not kept, not a truncation
+        if (impl->attrCount < impl->attrCapacity) {
           AttrPair& a = impl->attrs[impl->attrCount];
           if (strlen(impl->x.attr) > kElemNameLen - 1) impl->truncFlags |= SaxParser::kTruncAttrName;
           strncpy(a.name, impl->x.attr, kElemNameLen - 1);
@@ -385,7 +404,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         }
         break;
       case YXML_ATTRVAL:
-        if (impl->attrCount < kMaxAttrs) {
+        if (impl->attrCount < impl->attrCapacity) {
           AttrPair& a = impl->attrs[impl->attrCount];
           const char* p = impl->x.data;
           for (; *p && a.valueLen < kAttrValueLen - 1; ++p) {
@@ -396,7 +415,7 @@ bool SaxParser::feed(const uint8_t* buf, size_t len) {
         }
         break;
       case YXML_ATTREND:
-        if (impl->attrCount < kMaxAttrs) ++impl->attrCount;
+        if (impl->attrCount < impl->attrCapacity) ++impl->attrCount;
         break;
       case YXML_ELEMEND:
         if (impl->inOpeningTag) fireStart(impl);

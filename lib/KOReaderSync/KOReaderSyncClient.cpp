@@ -12,12 +12,15 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <memory>
 
 #include "KOReaderCredentialStore.h"
+#include "KOReaderProgressReply.h"
 
 int KOReaderSyncClient::lastHttpCode = 0;
 int KOReaderSyncClient::lastEspError = 0;
@@ -32,6 +35,8 @@ namespace {
 // ESP_ERR_HTTP base range. Only produced/consumed within this file.
 constexpr esp_err_t KO_ERR_CONNECT = static_cast<esp_err_t>(0x7001);  // connect/transport failure (retryable)
 constexpr esp_err_t KO_ERR_EAGAIN = static_cast<esp_err_t>(0x7002);   // timeout/truncated (retryable)
+// The most of a sync reply kept in memory; see performKoRequest().
+constexpr size_t KO_MAX_RESPONSE_BYTES = 16 * 1024;
 
 // Mirrors the app's "skip HTTPS validation" setting; see setSkipTlsValidation().
 bool g_skipTlsValidation = false;
@@ -323,6 +328,13 @@ esp_err_t performKoRequest(const char* method, const std::string& url, const cha
   // stay fully enforced either way; only the validity window is waived.
   http->setAllowCertificateDateErrors(!HalClock::isPlausibleForTls());
   http->setTimeout(5000);
+  // Sync replies are a few hundred bytes of JSON. A wrong server URL can answer with a whole web
+  // page (a Booklore root serves its app's index.html with 200), and buffering all of it grew one
+  // string until an allocation failed, which restarts the C3. Keep only the start: enough for
+  // shouldRejectBody() to recognise HTML.
+  // Ported from CrossInk commit 56a29f618 ("reject oversized KOReader authentication responses
+  // (#783)", Julia Nguyen), which aborts the request instead; here the status still comes through.
+  http->setMaxBufferedBody(KO_MAX_RESPONSE_BYTES);
   http->setUserAgent("WitchReader-ESP32-" CROSSPOINT_VERSION);
   http->clearHeaders();
   applyAuthHeaders(*http);
@@ -361,6 +373,10 @@ esp_err_t performKoRequest(const char* method, const std::string& url, const cha
   if (rc >= 100) {  // got an HTTP status line
     KOReaderSyncClient::lastHttpCode = rc;
     outBody = http->getBody();
+    if (http->bodyTruncated()) {
+      LOG_ERR("KOSync", "Response to %s %s is over %u bytes; kept only the start", method, url.c_str(),
+              static_cast<unsigned>(KO_MAX_RESPONSE_BYTES));
+    }
     logResponseBody(method, url, rc, outBody, elapsedMs, didHandshake);
     return ESP_OK;
   }
@@ -507,7 +523,12 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
   beginRequest("get progress");
   if (!checkHeapForTls()) return NETWORK_ERROR;
 
-  std::string url = KOREADER_STORE.getBaseUrl() + "/syncs/progress/" + documentHash;
+  // Calibre-Web NextGen withholds a percentage-only position (one its web reader or a Kobo
+  // wrote) from a client that does not say it can seek to one. Servers without the parameter
+  // route on the path and ignore it. Ported from crosspoint-reader PR #3219 (Micah Halter,
+  // @mehalter).
+  std::string url =
+      KOREADER_STORE.getBaseUrl() + "/syncs/progress/" + documentHash + "?position_kinds=locator,percentage";
   LOG_DBG("KOSync", "Getting progress: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
           lastContigHeapAtFailure);
 
@@ -572,36 +593,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       LOG_INF("KOSync", "HTTP %d with no body — treating as not found", httpCode);
       return NOT_FOUND;
     }
-
-    JsonDocument doc;
-    const DeserializationError error = deserializeJson(doc, responseBody);
-
-    if (error) {
-      LOG_ERR("KOSync", "JSON parse failed: %s", error.c_str());
-      return JSON_ERROR;
-    }
-
-    // kosync convention: no stored progress for the document is signalled by a 2xx
-    // carrying an empty payload, not by 404. What "empty" serializes to varies by
-    // implementation — "{}", "[]", "\"\"", or a bare null — so anything that is not an
-    // object carrying a "progress" key means no record. Detect that so the caller doesn't
-    // apply a zeroed-out position as if it were real progress.
-    if (!doc.is<JsonObject>() || doc["progress"].isNull()) {
-      std::string jsonDump;
-      serializeJson(doc, jsonDump);
-      LOG_INF("KOSync", "Empty progress payload — treating as not found | payload=%s", jsonDump.c_str());
-      return NOT_FOUND;
-    }
-
-    outProgress.document = documentHash;
-    outProgress.progress = doc["progress"].as<std::string>();
-    outProgress.percentage = doc["percentage"].as<float>();
-    outProgress.device = doc["device"].as<std::string>();
-    outProgress.deviceId = doc["device_id"].as<std::string>();
-    outProgress.timestamp = doc["timestamp"].as<int64_t>();
-
-    LOG_INF("KOSync", "Got progress: %.2f%% at %s", outProgress.percentage * 100, outProgress.progress.c_str());
-    return OK;
+    return parseProgressReply(responseBody, documentHash, outProgress);
   }
 
   if (httpCode == 401) return AUTH_FAILED;
@@ -635,6 +627,16 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
     meta["filename"] = progress.metadata->filename;
     meta["title"] = progress.metadata->title;
     meta["authors"] = progress.metadata->authors;
+    if (!progress.metadata->isbn.empty()) meta["isbn"] = progress.metadata->isbn;
+    if (!progress.metadata->asin.empty()) meta["asin"] = progress.metadata->asin;
+    if (!progress.metadata->series.empty()) meta["series"] = progress.metadata->series;
+    // A number; an index that is not one is left out rather than sent as text.
+    const std::string& index = progress.metadata->seriesIndex;
+    char* end = nullptr;
+    const float number = index.empty() ? 0.0f : std::strtof(index.c_str(), &end);
+    if (end != nullptr && end != index.c_str() && *end == '\0' && std::isfinite(number)) {
+      meta["series_index"] = number;
+    }
   }
 
   std::string body;

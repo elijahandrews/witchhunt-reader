@@ -10,6 +10,7 @@
 #include <esp_system.h>
 
 #include <algorithm>
+#include <cstdlib>
 
 #include "CrossPointState.h"
 #include "OpdsServerStore.h"
@@ -437,7 +438,11 @@ void ActivityManager::exitActivity(const RenderLock& lock) {
 }
 
 void ActivityManager::refreshWifiActivityFlag() {
-  activityUsesWifi.store(currentActivity && currentActivity->usesWifi(), std::memory_order_relaxed);
+  // The whole stack, not just the top: a network activity with a prompt or a picker above it still
+  // owns the radio -- it brought it up and takes it down in its own onExit().
+  bool uses = currentActivity && currentActivity->usesWifi();
+  for (const auto& buried : stackActivities) uses = uses || buried->usesWifi();
+  activityUsesWifi.store(uses, std::memory_order_relaxed);
 }
 
 void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
@@ -459,8 +464,8 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
   }
 }
 
-void ActivityManager::goToFileTransfer() {
-  replaceActivity(std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput));
+void ActivityManager::goToFileTransfer(const NetworkMode selected) {
+  replaceActivity(std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput, selected));
 }
 
 void ActivityManager::goToSerialTransfer() {
@@ -513,14 +518,14 @@ void ActivityManager::goToKOReaderSettings() {
   replaceActivity(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput));
 }
 
-void ActivityManager::goToFileBrowser(std::string path, std::string focusName) {
-  replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(path), std::move(focusName)));
-}
-
-// Recent Books is Browse Files over the recent-books list: the same views, keys and Options.
-void ActivityManager::goToRecentBooks(std::string focusName) {
-  replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, "/", std::move(focusName),
-                                                        FileBrowserActivity::Mode::Recents));
+// The Library is the file browser in one of its four tab modes; every tab has the same views, keys
+// and Options.
+void ActivityManager::goToLibrary(const LibraryTab tab, std::string path, std::string focusName,
+                                  const std::optional<uint32_t> author) {
+  auto library = std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(path), std::move(focusName),
+                                                       FileBrowserActivity::modeFor(tab));
+  if (author) library->openAuthorOnEnter(*author);
+  replaceActivity(std::move(library));
 }
 
 void ActivityManager::goToGlobalBookmarks() { goToGlobalBookmarks({}); }
@@ -534,18 +539,21 @@ void ActivityManager::goToBrowser() {
   const auto& servers = OPDS_STORE.getServers();
   // Skip the server picker when there's only one server configured
   if (servers.size() == 1) {
-    replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, servers[0]));
+    replaceActivity(
+        std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, servers[0], OpdsBackTo::FileTransfer));
   } else {
-    replaceActivity(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true));
+    replaceActivity(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true, OpdsBackTo::FileTransfer));
   }
 }
 
 void ActivityManager::goToBrowserWithSearch(std::string query) {
   const auto& servers = OPDS_STORE.getServers();
   if (servers.size() == 1) {
-    replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, servers[0], std::move(query)));
+    replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, servers[0], OpdsBackTo::Home,
+                                                              std::move(query)));
   } else {
-    replaceActivity(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true, std::move(query)));
+    replaceActivity(
+        std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true, OpdsBackTo::Home, std::move(query)));
   }
 }
 
@@ -565,9 +573,17 @@ void ActivityManager::goToKOReaderSync() {
     return;
   }
 
-  replaceActivity(std::make_unique<KOReaderSyncActivity>(
-      renderer, mappedInput, sync.epubPath, sync.spineIndex, sync.page, sync.totalPagesInSpine, sync.paragraphIndex,
-      sync.hasParagraphIndex, sync.paragraphIndexBefore, sync.intent));
+  SyncLocalPosition local;
+  local.spineIndex = sync.spineIndex;
+  local.page = sync.page;
+  local.totalPages = sync.totalPagesInSpine;
+  local.paragraphIndex = sync.paragraphIndex;
+  local.hasParagraphIndex = sync.hasParagraphIndex;
+  local.paragraphIndexBefore = sync.paragraphIndexBefore;
+  local.visibleOffsetAtPage = sync.visibleOffsetAtPage;
+  local.visibleOffsetAtNextPage = sync.visibleOffsetAtNextPage;
+  local.hasVisibleOffset = sync.hasVisibleOffset;
+  replaceActivity(std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, sync.epubPath, local, sync.intent));
 }
 
 void ActivityManager::replaceWithReader(std::string path, ReturnHint hint) {
@@ -596,16 +612,19 @@ void ActivityManager::returnFromChild() {
   hasReturnHint = false;
 
   switch (hint.target) {
-    case ReturnTo::FileBrowser:
-      goToFileBrowser(std::move(hint.path), std::move(hint.selectName));
+    case ReturnTo::Library: {
+      std::optional<uint32_t> author;
+      if (!hint.selectionContext.empty()) {
+        author = static_cast<uint32_t>(std::strtoul(hint.selectionContext.c_str(), nullptr, 10));
+      }
+      goToLibrary(libraryTabFrom(static_cast<uint8_t>(hint.selectIndex)), std::move(hint.path),
+                  std::move(hint.selectName), author);
       break;
+    }
     case ReturnTo::AllFiles:
       replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(hint.path),
                                                             std::move(hint.selectName),
                                                             FileBrowserActivity::Mode::AllFiles));
-      break;
-    case ReturnTo::RecentBooks:
-      goToRecentBooks(std::move(hint.selectName));
       break;
     case ReturnTo::GlobalBookmarks:
       goToGlobalBookmarks(std::move(hint));
@@ -643,20 +662,14 @@ void ActivityManager::goToHomeMore() { replaceActivity(std::make_unique<HomeMore
 
 void ActivityManager::goToHomeMenuAction(const HomeMenuAction action) {
   switch (action) {
-    case HomeMenuAction::FileBrowser:
-      goToFileBrowser();
-      break;
-    case HomeMenuAction::Recents:
-      goToRecentBooks();
+    case HomeMenuAction::Library:
+      goToLibrary(libraryTabFrom(APP_STATE.libraryTab));
       break;
     case HomeMenuAction::ReadingStats:
       goToReadingStats();
       break;
     case HomeMenuAction::GlobalBookmarks:
       goToGlobalBookmarks();
-      break;
-    case HomeMenuAction::OpdsBrowser:
-      goToBrowser();
       break;
     case HomeMenuAction::FileTransfer:
       goToFileTransfer();
@@ -738,8 +751,29 @@ void ActivityManager::prepareFramebufferForCapture() {
   }
 }
 
+void ActivityManager::describeState(std::string& out) const {
+  out += "activity=";
+  out += currentActivity ? currentActivity->getName() : std::string("none");
+  out += " stack=";
+  for (size_t i = 0; i < stackActivities.size(); ++i) {
+    if (i > 0) out += ',';
+    out += stackActivities[i]->getName();
+  }
+  if (currentActivity) currentActivity->appendDebugState(out);
+}
+
+bool ActivityManager::currentTakesButtonAction(const CrossPointSettings::BUTTON_ACTION action,
+                                               const MappedInputManager::Button button) const {
+  if (currentIsReaderActivity()) return true;
+  return currentActivity && currentActivity->takesButtonAction(action, button);
+}
+
 void ActivityManager::dispatchButtonAction(const CrossPointSettings::BUTTON_ACTION action) {
-  if (currentIsReaderActivity()) {
+  // A screen other than the reader opts in per button, which this call does not know, so it is
+  // let through here and vetted by the callers: main.cpp hands a reader-scoped button action to
+  // such a screen only once currentTakesButtonAction() agreed, and the gesture path offers it none
+  // outside the reader. Every other screen keeps the no-op onButtonAction().
+  if (currentActivity) {
     currentActivity->onButtonAction(action);
   }
 }
@@ -1163,9 +1197,10 @@ bool ActivityManager::isUpdateSuperseded() const {
 
 // RenderLock
 
-RenderLock::RenderLock() {
-  xSemaphoreTake(activityManager.renderingMutex, portMAX_DELAY);
-  isLocked = true;
+RenderLock::RenderLock(const Mode mode) {
+  // A zero timeout makes the take a pure attempt. portMAX_DELAY blocks until it succeeds (the
+  // kernel is built with INCLUDE_vTaskSuspend), so Blocking always ends up locked.
+  isLocked = xSemaphoreTake(activityManager.renderingMutex, mode == Mode::Try ? 0 : portMAX_DELAY) == pdTRUE;
 }
 
 RenderLock::RenderLock([[maybe_unused]] Activity&) {
@@ -1247,3 +1282,7 @@ void RenderLock::unlock() {
  * answers exactly the same question legally.
  */
 bool RenderLock::peek() { return xSemaphoreGetMutexHolder(activityManager.renderingMutex) != nullptr; };
+
+bool RenderLock::heldByCurrentTask() {
+  return xSemaphoreGetMutexHolder(activityManager.renderingMutex) == xTaskGetCurrentTaskHandle();
+}

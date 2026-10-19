@@ -1,6 +1,7 @@
 #pragma once
 
 #include <FileIndex.h>
+#include <LibraryIndexReader.h>
 
 #include <memory>
 #include <string>
@@ -14,14 +15,20 @@
 //
 // Two interchangeable backends behind one interface. A small folder keeps its names and
 // metadata in RAM and is sorted here; a folder of INDEX_THRESHOLD entries or more builds an
-// SD-backed FileIndex instead, so RAM stays bounded whatever the card holds. Both present the
-// same entry-name form -- a trailing '/' marks a directory -- so nothing above this class has
-// to know which one is live.
+// SD-backed FileIndex instead, so RAM stays bounded whatever the card holds. Should the index
+// fail to build (an SD write error), the folder is listed in RAM as far as the heap has room
+// for, and no further. Both present the same entry-name form -- a trailing '/' marks a
+// directory -- so nothing above this class has to know which one is live.
 //
 // Deliberately free of rendering, input and activity transitions: it answers "what is in this
 // directory, in what order", and leaves what a row MEANS to the activity. That is also why the
 // path is set rather than walked -- computing the parent or a child path is navigation, and
 // navigation stays with the screen.
+class BuildArena;
+namespace LibraryOrder {
+struct BookKey;
+}
+
 class FileBrowserModel {
  public:
   // Books = the books the reader can open, and nothing else: images and the sidecars beside a
@@ -31,7 +38,10 @@ class FileBrowserModel {
   // PickFolder = directories only, for choosing a destination to move a file into.
   // Recents lists the books lately opened, newest first, from wherever they are on the card --
   // the Recent Books screen. Its rows are paths, as a card-wide search's are.
-  enum class Mode { Books, AllFiles, PickFirmware, PickFolder, Recents };
+  // Added lists the books added to the card most recently (the book index's New); Authors lists the
+  // book index's authors and, once one is opened, that author's books. Both read the index that
+  // LibraryBuilder keeps.
+  enum class Mode { Books, AllFiles, PickFirmware, PickFolder, Recents, Added, Authors };
 
   // Whether the reader can open this file: a book, or an image for the viewer. Listing is the
   // mode's business; this is what selecting a row can do with it.
@@ -57,6 +67,12 @@ class FileBrowserModel {
   explicit FileBrowserModel(const Mode mode = Mode::Books) : mode(mode) {}
 
   [[nodiscard]] Mode getMode() const { return mode; }
+  // Switches what is listed -- the Library's tabs -- letting go of everything the old mode held. The
+  // folder path is kept; load() reads the new rows.
+  void setMode(const Mode newMode) {
+    clear();
+    mode = newMode;
+  }
 
   // The directory currently enumerated. setPath() only records it; call load() to re-read.
   [[nodiscard]] const std::string& path() const { return basepath; }
@@ -114,7 +130,40 @@ class FileBrowserModel {
   [[nodiscard]] bool isDeepSearch() const { return deepSearch; }
   // The rows are paths from all over the card -- a card-wide search, or Recents -- rather than
   // one folder's entries.
-  [[nodiscard]] bool listsPaths() const { return deepSearch || mode == Mode::Recents; }
+  [[nodiscard]] bool listsPaths() const {
+    return deepSearch || mode == Mode::Recents || mode == Mode::Added || (mode == Mode::Authors && openAuthorRow >= 0);
+  }
+
+  // A readable book's filename, by the rule Browse Files lists books with; for the library builder.
+  static bool isBookName(const char* name);
+
+  // Authors mode, showing the author list rather than one author's books.
+  [[nodiscard]] bool atAuthorList() const { return mode == Mode::Authors && openAuthorRow < 0; }
+  // Shows the books of the author at `row` of the author list, by series, series index and title.
+  // False when there is no such row.
+  bool openAuthor(size_t row);
+  // Back from an author's books to the author list; returns the row of the author that was open.
+  size_t closeAuthor();
+  // Opens the author whose hash is `hash`, after load(): how a return from a book, or a tab switched
+  // back to, finds the author it left. False when the index has no such author.
+  bool openAuthorByHash(uint32_t hash);
+  // The open author's name as its row shows it; "" at the author list.
+  std::string openAuthorName();
+  // The open author's hash, for openAuthorByHash(); meaningful only while !atAuthorList().
+  [[nodiscard]] uint32_t openAuthorKey() const { return openAuthorHash; }
+  // A row of the author list: its books, and its author hash (library::AUTHOR_UNKNOWN and
+  // AUTHOR_PENDING gather books with no author and books not indexed yet).
+  bool authorAt(size_t row, uint16_t& books, uint32_t& hash);
+  // Where an author's books are put in order: the screen's lent framebuffer, if it holds it at that
+  // moment (nullptr when not, and the books keep the index's order). Asked on the loop task only.
+  using ScratchSource = BuildArena* (*)(void* user);
+  void setScratchSource(const ScratchSource source, void* user) {
+    scratchSource = source;
+    scratchUser = user;
+  }
+  // The book index New and Authors read. Let go before the builder replaces it; load() reopens it.
+  void releaseIndex();
+  [[nodiscard]] const LibraryIndexReader& index() const { return bookIndex; }
   // True when the walk stopped at MAX_DEEP_RESULTS with more still out there.
   [[nodiscard]] bool deepResultsTruncated() const { return deepTruncated; }
   // Absolute path for a row, whichever mode is live. The caller no longer composes it.
@@ -140,7 +189,8 @@ class FileBrowserModel {
   [[nodiscard]] bool usesIndex() const { return fileIndex != nullptr; }
 
  private:
-  // At or above this many entries, the folder moves to the SD-backed index.
+  // At or above this many entries, the folder moves to the SD-backed index. Reading a folder
+  // keeps no more names than this: past it the entries are only counted, and the index lists them.
   static constexpr size_t INDEX_THRESHOLD = 64;
   // Ceiling on a single search's match list, so a one-letter query in a huge folder cannot
   // turn into an unbounded allocation. Four bytes each, so this is 4 KB at worst.
@@ -183,9 +233,32 @@ class FileBrowserModel {
   [[nodiscard]] bool acceptEntry(const char* name, bool isDir) const;
   [[nodiscard]] FileIndex::AcceptFn indexFilter() const;
 
-  void openIndexIfLarge();
+  // Reads the directory into the in-RAM backend: keeps the first `keep` entries it accepts and
+  // only counts the rest, and with a `heapFloor` keeps none once free heap falls below it.
+  // Returns how many entries it accepted in all.
+  size_t readDirectory(size_t keep, uint32_t heapFloor);
+  // How many of a folder's `entries` the in-RAM backend has room for on the heap as it is now:
+  // the listing for a folder whose index could not be built.
+  static size_t ramListingRoom(size_t entries);
+  // Lets go of the in-RAM backend's names and metadata, capacity included.
+  void releaseRamListing();
+  bool openIndex();
   void loadRecents();
   bool indexEntryAt(size_t displayIndex, FileIndex::Entry& out);
+
+  void loadAdded();
+  void loadAuthors();
+  void orderAuthorBooks();
+  static bool bookKey(void* self, uint16_t record, LibraryOrder::BookKey& key);
+  ScratchSource scratchSource = nullptr;
+  void* scratchUser = nullptr;
+  std::string authorRowName(size_t row);
+  std::string authorBookName(size_t row);
+
+  LibraryIndexReader bookIndex;
+  int openAuthorRow = -1;
+  uint32_t openAuthorHash = 0;        // to find the open author again after the index is rebuilt
+  std::vector<uint16_t> authorBooks;  // the open author's records, in display order
 
   Mode mode = Mode::Books;
   std::string basepath = "/";

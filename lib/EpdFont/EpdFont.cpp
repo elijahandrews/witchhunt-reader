@@ -7,6 +7,7 @@
 
 #include "../OutlineFont/EpdOutlineFontCallbacks.h"
 #include "GlyphFallback.h"
+#include "GlyphProvider.h"
 #include "GlyphScale.h"
 #include "SmallCaps.h"
 
@@ -147,10 +148,10 @@ int16_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const
     return left && right ? data->outline->kerning(data->outlineCtx, left, right) : 0;
   }
   if ((leftCp >= EPD_ALTERNATE_GLYPH_BASE || rightCp >= EPD_ALTERNATE_GLYPH_BASE) && data->alternateKerning)
-    return data->alternateKerning(data->glyphMissCtx, leftCp, rightCp);
-  if (!data->kernMatrix && !data->kernMatrixWide && !data->kernRowOffsets) {
-    return 0;
-  }
+    return data->alternateKerning(data->glyphFeatureCtx, leftCp, rightCp);
+  const bool hasKernTables = (data->kernMatrix || data->kernMatrixWide || data->kernRowOffsets) &&
+                             (data->kernLeftClasses || data->kernLeftCodepoints);
+  if (!hasKernTables) return data->provider ? data->provider->kerning(leftCp, rightCp) : 0;
   if (!data->kernLeftClasses && !data->kernLeftCodepoints) {
     return 0;
   }
@@ -281,7 +282,7 @@ EpdGlyphRef EpdFont::findGlyph(const uint32_t cp) const {
     return gid ? data->outline->metrics(data->outlineCtx, gid) : EpdGlyphRef{};
   }
   const int count = data->intervalCount;
-  if (count == 0 && !data->glyphMissHandler) return {};
+  if (count == 0 && !data->provider) return {};
 
   if (count > 0) {
     const EpdUnicodeInterval* intervals = data->intervals;
@@ -301,11 +302,9 @@ EpdGlyphRef EpdFont::findGlyph(const uint32_t cp) const {
     }
   }
 
-  // Codepoint not in interval table — try on-demand loading (SD card fonts).
-  if (data->glyphMissHandler) {
-    if (const EpdGlyph* loaded = data->glyphMissHandler(data->glyphMissCtx, cp)) {
-      // A ring entry, not an array one: there is no index to report, and the pointer is what
-      // SdCardFont::isOverflowGlyph() recognises it by.
+  // Resolve provider-owned records through the same wide-metric path as SD tables.
+  if (data->provider) {
+    if (const EpdGlyph* loaded = data->provider->missGlyph(cp)) {
       return epdResolveSdGlyph(loaded, 0, data->wideGlyphs);
     }
   }
@@ -340,7 +339,7 @@ uint32_t EpdFont::resolveCaps(uint32_t cp, uint8_t mode, float& scale) const {
       const auto gid = data->outline->glyphId(data->outlineCtx, cp, feature);
       return gid ? EPD_ALTERNATE_GLYPH_BASE + gid : 0;
     }
-    return data->capsGlyph ? data->capsGlyph(data->glyphMissCtx, cp, feature) : 0;
+    return data->capsGlyph ? data->capsGlyph(data->glyphFeatureCtx, cp, feature) : 0;
   };
   if (mode == 2) {
     if (const auto key = alternate(2)) return key;

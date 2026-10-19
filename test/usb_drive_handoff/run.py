@@ -33,26 +33,29 @@ struct MSCProbe {
  bool active() const { return running; }
  bool begin(int* dev) { assert(dev); events.push_back("msc"); running=ok; return ok; }
 } usbMassStorage;
-struct HalStorage { bool beginUsbDrive(); } storage;
+struct HalStorage {
+ void noteContentChange(const char* path) { assert(path==nullptr); events.push_back("content-change"); }
+ bool beginUsbDrive();
+} storage;
 '''+body+r'''
 void reset() { events.clear(); pads=true; SDCard.mounted=true; usbMassStorage.running=false; usbMassStorage.ok=true; }
 int main() {
 #if FREEINK_CAP_USB_MSC
  reset(); usbMassStorage.running=true; assert(!storage.beginUsbDrive()); assert(events.empty());
- reset(); SDCard.mounted=false; assert(!storage.beginUsbDrive()); assert(events==std::vector<std::string>{"detach"});
+ reset(); SDCard.mounted=false; assert(!storage.beginUsbDrive()); assert((events==std::vector<std::string>{"content-change","detach"}));
  reset(); assert(storage.beginUsbDrive());
 #if CONFIG_IDF_TARGET_ESP32S3 && ARDUINO_USB_MODE
- assert((events==std::vector<std::string>{"detach","pad-off","delay","msc"}));
+ assert((events==std::vector<std::string>{"content-change","detach","pad-off","delay","msc"}));
 #else
- assert((events==std::vector<std::string>{"detach","msc"}));
+ assert((events==std::vector<std::string>{"content-change","detach","msc"}));
 #endif
  reset(); usbMassStorage.ok=false; assert(!storage.beginUsbDrive());
 #if CONFIG_IDF_TARGET_ESP32S3 && ARDUINO_USB_MODE
- assert((events==std::vector<std::string>{"detach","pad-off","delay","msc","pad-on","remount"}));
+ assert((events==std::vector<std::string>{"content-change","detach","pad-off","delay","msc","pad-on","remount"}));
  assert(pads);
  reset(); pads=false; usbMassStorage.ok=false; assert(!storage.beginUsbDrive()); assert(!pads);
 #else
- assert((events==std::vector<std::string>{"detach","msc","remount"}));
+ assert((events==std::vector<std::string>{"content-change","detach","msc","remount"}));
 #endif
 #else
  reset(); assert(!storage.beginUsbDrive()); assert(events.empty());

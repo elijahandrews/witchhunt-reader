@@ -49,19 +49,41 @@ class SecureHttpClient {
   void setAllowCertificateDateErrors(bool allow) { _allowCertificateDateErrors = allow; }
   void setTimeout(uint32_t ms) { _timeoutMs = ms; }
   void setUserAgent(const std::string& ua) { _userAgent = ua; }
+  // Basic auth and the addHeader() headers are the credentials of the server a request starts at
+  // (KOSync's x-auth-user and x-auth-key ride in custom headers). They go only to that origin
+  // (scheme, host, port): a redirect anywhere else is followed without them, and they stay off for
+  // the rest of the request even if a later hop comes back. sameCredentialOrigin() has the rule.
   void setBasicAuth(const std::string& user, const std::string& pass) {
     _user = user;
     _pass = pass;
   }
-  // Per-request custom headers (cleared after each request unless keep()).
+  // Custom headers, sent until clearHeaders(). Credentials, as above.
   void addHeader(const std::string& name, const std::string& value) { _headers.push_back(name + ": " + value); }
   void clearHeaders() { _headers.clear(); }
+  // The credentials belong to url's origin instead of the URL each request starts at, until
+  // clearCredentialScope(). For a caller that sends later requests straight to where an earlier
+  // one was redirected (a chunked download's later chunks): that target is not the server the
+  // credentials were given for.
+  void setCredentialScope(const std::string& url) {
+    _credentialScopeUrl = url;
+    _credentialScopePinned = true;
+  }
+  void clearCredentialScope() {
+    _credentialScopeUrl.clear();
+    _credentialScopePinned = false;
+  }
   // Max redirect hops to follow (default 5; 0 disables following).
   void setMaxRedirects(int n) { _maxRedirects = n; }
   // Allow a redirect to step down from https to http. Off by default, because
   // the downgrade silently drops transport security; when refused, following
   // stops and the caller sees the 3xx status.
   void setAllowRedirectDowngrade(bool allow) { _allowRedirectDowngrade = allow; }
+  // Asked with the absolute URL of each redirect before it is followed. False
+  // stops there and the caller sees the 3xx status, as for a refused downgrade.
+  // For requests made on someone else's behalf whose reach is fenced to an
+  // allowlist: without it, an allowed host could send the request anywhere.
+  using RedirectFilter = std::function<bool(const std::string& url)>;
+  void setRedirectFilter(RedirectFilter filter) { _redirectFilter = std::move(filter); }
   // Ask for bytes first..last (inclusive) of the resource: a "Range: bytes=first-last" header on
   // every request, redirect hops included, until clearRange(). The response is a 206 with a
   // Content-Range (lastContentRange()), or a 200 from a server that ignores Range.
@@ -70,6 +92,11 @@ class SecureHttpClient {
   // Leave out the per-request trace line for requests that got a response (failures still log it),
   // for a transfer made of many small requests that logs one summary instead.
   void setQuietRequests(bool quiet) { _quietRequests = quiet; }
+  // request() keeps at most this many body bytes (0: no limit) and reads the rest off the
+  // connection without storing it, so the status and the start of the body still arrive.
+  // bodyTruncated() says whether anything was dropped. For callers that expect a small reply but
+  // may be pointed at a server that sends a large page instead.
+  void setMaxBufferedBody(size_t bytes) { _maxBufferedBody = bytes; }
 
   // --- requests ---
   // Open the connection for url (or keep the matching kept-alive one) without sending anything, so
@@ -88,6 +115,7 @@ class SecureHttpClient {
   int PUT(const std::string& url, const std::string& body) { return request("PUT", url, body); }
 
   const std::string& getBody() const { return _body; }
+  bool bodyTruncated() const { return _bodyTruncated; }
   // The current (inside a body sink) or last response: status, Content-Length (-1 when absent),
   // Content-Range, and the URL it came from after redirects. All set before the first body byte.
   int lastStatus() const { return _status; }
@@ -127,6 +155,12 @@ class SecureHttpClient {
   };
   static bool parseUrl(const std::string& in, Url& out);
   static std::string resolveRedirect(const Url& base, const std::string& location);
+  // Whether hop is the origin the credentials belong to (scope), so that they may go there.
+  static bool sameCredentialOrigin(const Url& scope, const Url& hop);
+  // Whether hop, number index of a request, may carry the credentials. The first hop sets scope:
+  // the pinned one, else its own origin. The caller stops asking once a hop says no, so no later
+  // hop of the request gets them back.
+  bool credentialsFollow(Url& scope, const Url& hop, int index) const;
 
   // Per-request trace for the half of a request that was never instrumented.
   //
@@ -180,9 +214,11 @@ class SecureHttpClient {
   // Connect (or reuse), send the request, and read the response headers — with
   // one transparent retry when a reused keep-alive socket turns out to be dead.
   // Returns 0, or a negative SecureHttpError.
-  int transact(const char* method, const Url& u, const uint8_t* body, size_t bodyLen, ResponseMeta& meta);
-  // Send the request line + headers (+ body for POST/PUT). Returns false on write failure.
-  bool sendRequest(const char* method, const Url& u, const uint8_t* body, size_t bodyLen);
+  int transact(const char* method, const Url& u, const uint8_t* body, size_t bodyLen, bool credentials,
+               ResponseMeta& meta);
+  // Send the request line + headers (+ body for POST/PUT), with the credentials only when told to.
+  // Returns false on write failure.
+  bool sendRequest(const char* method, const Url& u, const uint8_t* body, size_t bodyLen, bool credentials);
   // Read status line + headers into meta (status, body framing, Location, Content-Range).
   bool readHeaders(ResponseMeta& meta);
   // Stream the body per framing to sink (with progress). Returns 0 on success,
@@ -208,13 +244,18 @@ class SecureHttpClient {
   std::string _user;
   std::string _pass;
   std::vector<std::string> _headers;
+  std::string _credentialScopeUrl;  // setCredentialScope(), parsed as each request starts
+  bool _credentialScopePinned = false;
   std::string _rangeHeader;  // "bytes=a-b" while a Range is set, else empty
   bool _quietRequests = false;
+  size_t _maxBufferedBody = 0;
   int _maxRedirects = 5;
   bool _allowRedirectDowngrade = false;
+  RedirectFilter _redirectFilter;
 
   // per-request result
   std::string _body;
+  bool _bodyTruncated = false;
   int _status = 0;
   long _contentLength = -1;
   bool _hasContentRange = false;

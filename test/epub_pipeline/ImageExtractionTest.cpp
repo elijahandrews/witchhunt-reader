@@ -162,6 +162,40 @@ TEST_F(ImageExtractionFixture, ATruncatedExtractIsReplacedBeforeItIsDecoded) {
   EXPECT_TRUE(fs::exists(path + ".1bit.pxc") || fs::exists((work / "cut.1bit.pxc").string()));
 }
 
+// --- the bytes pick the decoder, not the name ---------------------------------------------
+//
+// FB2 conversions reference their images with no extension at all (images/img_32, which the
+// parser caches as .img), and some books call a PNG .jpg. A decoder chosen by the cache file's
+// extension was then none, or the wrong one, and the page showed nothing where the picture was.
+
+namespace {
+const char* kJpegBook = CORPUS_DIR "/test_jpeg_images.epub";
+const char* kJpegEntry = "OEBPS/images/jpeg_format.jpg";
+
+// Renders a block whose cache file `name` is extracted from `entry` on first render, and reports
+// whether the decode produced the 1-bit pixel cache that every later view of the page draws from.
+bool decodesTo(const fs::path& work, const char* name, const char* book, const char* entry) {
+  const fs::path path = work / name;
+  ImageBlock block(path.string(), 120, 160, "", book, entry);
+  GfxRenderer renderer;
+  block.render(renderer, 0, 0, /*forceLoad=*/true, /*monochromeOutput=*/true);
+  return fs::exists(fs::path(path).replace_extension(".1bit.pxc"));
+}
+}  // namespace
+
+TEST_F(ImageExtractionFixture, APngNamedJpgDecodesAsAPng) {
+  EXPECT_TRUE(decodesTo(work, "mislabeled.jpg", kBook, kEntry));
+}
+
+TEST_F(ImageExtractionFixture, AJpegNamedPngDecodesAsAJpeg) {
+  EXPECT_TRUE(decodesTo(work, "mislabeled.png", kJpegBook, kJpegEntry));
+}
+
+TEST_F(ImageExtractionFixture, AnImageCachedWithoutItsExtensionDecodesByItsBytes) {
+  EXPECT_TRUE(decodesTo(work, "nameless_png.img", kBook, kEntry));
+  EXPECT_TRUE(decodesTo(work, "nameless_jpeg.img", kJpegBook, kJpegEntry));
+}
+
 // --- large-image placeholder gate ------------------------------------------------------------
 //
 // This used to compare ImageBlock's width*height — the DISPLAY dimensions — against 800*600.
@@ -227,8 +261,37 @@ TEST_F(LargeImageFixture, PlaceholderIsSuppressedByForceLoad) {
   EXPECT_TRUE(block.wouldShowPlaceholder(/*forceLoad=*/false, /*monochromeOutput=*/true));
   EXPECT_FALSE(block.wouldShowPlaceholder(/*forceLoad=*/true, /*monochromeOutput=*/true))
       << "the user asked for it explicitly";
-  // (The other suppressor — an existing .pxc pixel cache — is not reachable from here: the cache
-  // path is derived internally from the tone filter id and is not exposed for a test to create.)
+}
+
+TEST_F(LargeImageFixture, PlaceholderIsSuppressedByThePixelCacheOfThatMode) {
+  const std::string big = writeExtracted("cached.png", LARGE_IMAGE_SOURCE_BYTES + 1);
+  ImageBlock block(big, 400, 600, "");
+  {
+    std::ofstream((work / "cached.1bit.pxc").string()) << 'x';
+  }
+
+  EXPECT_FALSE(block.wouldShowPlaceholder(/*forceLoad=*/false, /*monochromeOutput=*/true));
+  EXPECT_TRUE(block.wouldShowPlaceholder(/*forceLoad=*/false, /*monochromeOutput=*/false))
+      << "the greyscale variant has no cache yet";
+}
+
+// The size probe is the expensive half (a failed open plus a central-directory scan when the
+// image was never extracted), so it must not run while the cache already answers. Observed
+// through its memo: had the first call probed, it would have remembered "large", and the second
+// call -- cache gone, file now small -- would wrongly answer with a placeholder.
+TEST_F(LargeImageFixture, SizeIsNotProbedWhileTheCacheExists) {
+  const std::string path = writeExtracted("probe.png", LARGE_IMAGE_SOURCE_BYTES + 1);
+  const std::string cache = (work / "probe.1bit.pxc").string();
+  {
+    std::ofstream(cache) << 'x';
+  }
+  ImageBlock block(path, 400, 600, "");
+  ASSERT_FALSE(block.wouldShowPlaceholder(/*forceLoad=*/false, /*monochromeOutput=*/true));
+
+  fs::remove(cache);
+  fs::resize_file(path, 1024);
+  EXPECT_FALSE(block.wouldShowPlaceholder(/*forceLoad=*/false, /*monochromeOutput=*/true))
+      << "the size was probed (and remembered) while the cache existed";
 }
 
 // --- heap-degraded image headers -------------------------------------------------------------

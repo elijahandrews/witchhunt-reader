@@ -29,6 +29,14 @@ int main() {
   static_assert(S::BTN_LIGHT_TOGGLE == 28 && S::BTN_LIGHT_COOLER == 32);
   static_assert(S::BTN_TOGGLE_SETTINGS == 33 && S::BTN_USB_DRIVE == 34);
   static_assert(S::BTN_TOGGLE_STATUS_BAR == 35);
+  // Loading older settings preserves upstream's enum-to-point migration, including
+  // native family sizes that are absent from the built-in ladder.
+  assert(JsonSettingsIO::loadSettings(SETTINGS, "{\"fontSizeOrderV\":0,\"fontSize\":0,\"txtFontSize\":1}"));
+  assert(SETTINGS.fontPointSize == 12 && SETTINGS.txtFontPointSize == 14);
+  assert(JsonSettingsIO::loadSettings(SETTINGS, "{\"fontSizeOrderV\":1,\"fontSize\":0,\"txtFontSize\":1}"));
+  assert(SETTINGS.fontPointSize == 10 && SETTINGS.txtFontPointSize == 12);
+  assert(JsonSettingsIO::loadSettings(SETTINGS, "{\"fontSizeOrderV\":2,\"fontSize\":13,\"txtFontSize\":15}"));
+  assert(SETTINGS.fontPointSize == 13 && SETTINGS.txtFontPointSize == 15);
   assert(SETTINGS.statusBarVisible == 1);
   auto visible = row("statusBarVisible");
   assert(visible.valuePtr == &S::statusBarVisible);
@@ -164,8 +172,10 @@ int main() {
   assert(mappedAction({B::Down, P::Double}) == S::BTN_DEFAULT);
   // In a book, physical Down/PageForward aliases deliver exactly one action.
   buttons.setReaderOnTopQuery([] { return true; });
-  input.edge(B::PageForward, true, 3000); input.edge(B::PageForward, false, 3040);
-  input.edge(B::PageForward, true, 3140); input.edge(B::PageForward, false, 3180);
+  input.edge(B::PageForward, true, 3000);
+  input.edge(B::PageForward, false, 3040);
+  input.edge(B::PageForward, true, 3140);
+  input.edge(B::PageForward, false, 3180);
   hostNow = 3800;
   buttons.update();
   DispatchManagerProbe reader;
@@ -175,7 +185,8 @@ int main() {
   // Outside a reader, the short remains immediate and no toggle is dispatched.
   buttons.setReaderOnTopQuery([] { return false; });
   assert(!buttons.hasDoubleAction(B::Down) && !buttons.hasDoubleAction(B::PageForward));
-  input.edge(B::PageForward, true, 4000); input.edge(B::PageForward, false, 4040);
+  input.edge(B::PageForward, true, 4000);
+  input.edge(B::PageForward, false, 4040);
   hostNow = 4040;
   const auto forwardSingle = events(buttons);
   assert(forwardSingle.size() == 2);
@@ -185,6 +196,20 @@ int main() {
   buttons.pushEventFront({B::PageForward, P::Double});
   dispatchShortcuts(buttons, menu);
   assert(menu.statusBarCalls == 0);
+  // Preserve upstream's per-activity opt-in: only Power pages a dictionary definition.
+  buttons.drain();
+  SETTINGS.btnDoublePower = S::BTN_PAGE_FORWARD;
+  SETTINGS.btnDoublePageForward = S::BTN_PAGE_FORWARD;
+  DispatchManagerProbe dictionary;
+  dictionary.readerOnTop = false;
+  dictionary.dictionaryOnTop = true;
+  buttons.pushEventFront({B::PageForward, P::Double});
+  buttons.pushEventFront({B::Power, P::Double});
+  dispatchShortcuts(buttons, dictionary);
+  assert(dictionary.pageCalls == 1 && dictionary.statusBarCalls == 0);
+  ButtonEventManager::ButtonEvent untouched;
+  assert(buttons.consumeEvent(untouched) && untouched.button == B::PageForward);
+  assert(!buttons.consumeEvent(untouched));
   // Existing reader-only defaults still avoid double-click delay on other screens.
   assert(!buttons.hasDoubleAction(B::Left));
   std::cout << "PASS: stable action IDs, capability filtering, real settings JSON/UI, production dispatch and double "

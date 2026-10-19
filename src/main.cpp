@@ -60,6 +60,7 @@
 #include "platform/UsbSerialJtagHandoff.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
+#include "util/SerialLineBuffer.h"
 #include "util/Timezones.h"
 #include "util/WakeTrace.h"
 
@@ -243,10 +244,13 @@ constexpr uint32_t SILENT_REBOOT_TARGET_KOREADER_SETTINGS = 6;
 // (the WiFi Networks picker, Weather's city search), so the user lands back where
 // they started instead of on Home.
 constexpr uint32_t SILENT_REBOOT_TARGET_SETTINGS = 7;
+// Boot into File Transfer, on its OPDS Browser row, after Back left an OPDS catalog
+// session, so the user lands where they opened the browser instead of on Home.
+constexpr uint32_t SILENT_REBOOT_TARGET_FILE_TRANSFER_OPDS = 8;
 // Upper bound for the cold-boot sanity check on silentRebootTarget (RTC_NOINIT is
 // uninitialized on power-up). Must equal the highest target above — keep it in
 // sync when adding one, or the new target silently reads as HOME.
-constexpr uint32_t SILENT_REBOOT_TARGET_MAX = SILENT_REBOOT_TARGET_SETTINGS;
+constexpr uint32_t SILENT_REBOOT_TARGET_MAX = SILENT_REBOOT_TARGET_FILE_TRANSFER_OPDS;
 constexpr uint32_t HEAP_RECOVERY_RESTART_LATCH_MAGIC = 0x48EA9C01;
 
 // How the device is coming back to life, resolved once at boot. Both resume
@@ -322,6 +326,15 @@ void silentRestartToSettings() {
   globalReadingSessionTracker().end();
   armSilentReboot(SILENT_REBOOT_TARGET_SETTINGS);
   LOG_DBG("MAIN", "Silent restart (target=settings)");
+  delay(50);
+  ESP.restart();
+}
+
+void silentRestartToFileTransferOpds() {
+  if (deepSleepInProgress) return;
+  globalReadingSessionTracker().end();
+  armSilentReboot(SILENT_REBOOT_TARGET_FILE_TRANSFER_OPDS);
+  LOG_DBG("MAIN", "Silent restart (target=file-transfer-opds)");
   delay(50);
   ESP.restart();
 }
@@ -800,7 +813,7 @@ void ensureSdFontLoadedForPath(const char* path) {
                        static_cast<bool (*)(std::string_view)>(FsHelpers::hasMarkdownExtension)(filePath);
   if (isTxtMd) {
     // TXT/MD has no per-book SD font override — use global settings directly.
-    sdFontSystem.ensureLoaded(renderer, SETTINGS.txtSdFontFamilyName, SETTINGS.txtFontSize, onColdFontLoad);
+    sdFontSystem.ensureLoaded(renderer, SETTINGS.txtSdFontFamilyName, SETTINGS.txtFontPointSize, onColdFontLoad);
     return;
   }
 
@@ -809,7 +822,7 @@ void ensureSdFontLoadedForPath(const char* path) {
   // RecentBooksStore already has the persisted overrides for this path.
   const RecentBook book = RECENT_BOOKS.getBookByPath(path);
   const uint8_t effectiveSize =
-      (book.fontSizeOverride >= 0) ? static_cast<uint8_t>(book.fontSizeOverride) : SETTINGS.fontSize;
+      (book.fontSizeOverride >= 0) ? static_cast<uint8_t>(book.fontSizeOverride) : SETTINGS.fontPointSize;
 
   if (!book.sdFontFamilyOverride.empty()) {
     // Per-book SD font override: load that family at the effective size.
@@ -1481,6 +1494,8 @@ void setup() {
     activityManager.goToKOReaderSettings();
   } else if (resume == BootResume::Silent && silentRebootTargetSnapshot == SILENT_REBOOT_TARGET_SETTINGS) {
     activityManager.goToSettings();
+  } else if (resume == BootResume::Silent && silentRebootTargetSnapshot == SILENT_REBOOT_TARGET_FILE_TRANSFER_OPDS) {
+    activityManager.goToFileTransfer(NetworkMode::OPDS_BROWSER);
   } else if (resume == BootResume::Silent) {
     // target == home (or reader with no open book): land on home — don't fall
     // through to the sleep-wake "resume reader" logic, which fires on stale
@@ -1531,6 +1546,110 @@ void setup() {
   logStartupMemory("setup_complete");
 }
 
+// Serial commands for scripted device tests: a script drives the UI, then checks where it went.
+//   CMD:BTN:<BACK|CONFIRM|LEFT|RIGHT|UP|DOWN>[:LONG]   -> BTN_OK
+//   CMD:ACT:<HOME|READER:<path>|SETTINGS|BOOKMARKS|LIBRARY[:<BOOKS|RECENT|NEW|AUTHORS>]|FILES:<dir>>
+//                                                      -> ACT_OK, or ACT_ERROR:<reason>
+//   CMD:STATE                                          -> STATE:activity=<name> stack=<...> <activity's pairs>
+// A press goes through HalGPIO::injectPress, so the user's button mapping and the long-press
+// threshold apply as for a real key. ACT only reaches the navigation routines the UI itself calls,
+// and none that would take the serial port away (file transfers, USB drive, sleep).
+// Returns false for a command that is not one of these.
+static bool handleTestCommand(const String& cmd) {
+  if (cmd.startsWith("BTN:")) {
+    String name = cmd.substring(4);
+    const bool longPress = name.endsWith(":LONG");
+    if (longPress) name = name.substring(0, name.length() - 5);
+    struct NamedButton {
+      const char* name;
+      uint8_t index;
+    };
+    static constexpr NamedButton kButtons[] = {{"BACK", HalGPIO::BTN_BACK}, {"CONFIRM", HalGPIO::BTN_CONFIRM},
+                                               {"LEFT", HalGPIO::BTN_LEFT}, {"RIGHT", HalGPIO::BTN_RIGHT},
+                                               {"UP", HalGPIO::BTN_UP},     {"DOWN", HalGPIO::BTN_DOWN}};
+    for (const NamedButton& button : kButtons) {
+      if (name == button.name) {
+        gpio.injectPress(button.index, longPress);
+        logSerial.printf("BTN_OK\n");
+        return true;
+      }
+    }
+    logSerial.printf("BTN_ERROR:unknown button %s\n", name.c_str());
+    return true;
+  }
+  if (cmd.startsWith("ACT:")) {
+    const String target = cmd.substring(4);
+    if (target == "HOME") {
+      activityManager.goHome();
+    } else if (target.startsWith("READER:")) {
+      std::string path = target.substring(7).c_str();
+      if (!Storage.exists(path.c_str())) {
+        logSerial.printf("ACT_ERROR:no such file %s\n", path.c_str());
+        return true;
+      }
+      activityManager.goToReader(std::move(path));
+    } else if (target == "SETTINGS") {
+      activityManager.goToSettings();
+    } else if (target == "BOOKMARKS") {
+      activityManager.goToGlobalBookmarks();
+    } else if (target.startsWith("FILES:")) {
+      activityManager.goToLibrary(LibraryTab::Books, target.substring(6).c_str());
+    } else if (target == "LIBRARY" || target.startsWith("LIBRARY:")) {
+      const String tab = target.length() > 8 ? target.substring(8) : String("BOOKS");
+      LibraryTab libraryTab = LibraryTab::Books;
+      if (tab == "RECENT") {
+        libraryTab = LibraryTab::Recent;
+      } else if (tab == "NEW") {
+        libraryTab = LibraryTab::New;
+      } else if (tab == "AUTHORS") {
+        libraryTab = LibraryTab::Authors;
+      } else if (tab != "BOOKS") {
+        logSerial.printf("ACT_ERROR:unknown library tab %s\n", tab.c_str());
+        return true;
+      }
+      activityManager.goToLibrary(libraryTab);
+    } else {
+      logSerial.printf("ACT_ERROR:unknown activity %s\n", target.c_str());
+      return true;
+    }
+    logSerial.printf("ACT_OK\n");
+    return true;
+  }
+  if (cmd == "STATE") {
+    std::string state;
+    {
+      RenderLock lock;  // the activity's state is also read by the render task
+      activityManager.describeState(state);
+    }
+    logSerial.printf("STATE:%s\n", state.c_str());
+    return true;
+  }
+  return false;
+}
+
+// ScreenshotUtil's host sender: the frame over serial, framed for scripts/debugging_monitor.py.
+static void sendScreenshotToHost(const uint8_t* frame, const uint32_t size, const int width, const int height,
+                                 const bool busy) {
+  if (busy) {
+    logSerial.printf("SCREENSHOT_ERROR:busy\n");
+    return;
+  }
+  if (!frame) {
+    // Framebuffers are released during the web server session — nothing to send.
+    logSerial.printf("SCREENSHOT_ERROR:framebuffer released\n");
+    return;
+  }
+  logSerial.printf("SCREENSHOT_START:%d:%d:%lu\n", width, height, static_cast<unsigned long>(size));
+  // ~52 KB in one go is exactly the sustained write that trips the short-write
+  // behaviour, so the END marker must not be sent if the payload was cut short:
+  // a truncated frame with a valid trailer looks complete to the host.
+  if (writeAllToSerial(frame, size)) {
+    logSerial.printf("SCREENSHOT_END\n");
+  } else {
+    logSerial.printf("SCREENSHOT_ERROR:transfer stalled\n");
+  }
+}
+
 void loop() {
   static unsigned long maxLoopDuration = 0;
   const unsigned long loopStartTime = millis();
@@ -1573,6 +1692,7 @@ void loop() {
   halTiltSensor.update(static_cast<CrossPointTiltPageTurn::Value>(SETTINGS.tiltPageTurn),
                        static_cast<CrossPointOrientation::Value>(SETTINGS.orientation),
                        activityManager.isReaderActivity());
+  powerManager.serviceGaugeCapacityLoad();
 
   renderer.setFadingFix(SETTINGS.fadingFix);
   renderer.setTextDarkness(SETTINGS.textDarkness);
@@ -1645,37 +1765,37 @@ void loop() {
   // Skip while an activity owns the serial input (e.g. the USB serial
   // file-transfer activity): it drives a binary protocol on logSerial and this
   // line reader would otherwise steal bytes from its stream.
-  if (logSerial.available() > 0 && !activityManager.currentOwnsSerialInput()) {
-    String line = logSerial.readStringUntil('\n');
+  // Only what has arrived is read; a line still on its way is finished on a later pass
+  // (SerialLineBuffer says why). One line per pass, as before: a script's next command waits for
+  // the loop to act on this one.
+  static SerialLineBuffer serialLine;
+  bool serialLineComplete = false;
+  if (activityManager.currentOwnsSerialInput()) {
+    serialLine.reset();
+  } else {
+    while (!serialLineComplete && logSerial.available() > 0) {
+      serialLineComplete = serialLine.feed(static_cast<char>(logSerial.read()));
+    }
+  }
+  if (serialLineComplete) {
+    const String line(serialLine.take().c_str());
     if (line.startsWith("CMD:")) {
       String cmd = line.substring(4);
       cmd.trim();
       if (cmd == "SCREENSHOT") {
-        uint8_t* buf = display.getFrameBuffer();
-        if (buf) {
-          const uint16_t width = display.getDisplayWidth();
-          const uint16_t height = display.getDisplayHeight();
-          const uint32_t bufferSize = display.getBufferSize();
-          logSerial.printf("SCREENSHOT_START:%d:%d:%d\n", width, height, bufferSize);
-          // ~52 KB in one go is exactly the sustained write that trips the short-write
-          // behaviour, so the END marker must not be sent if the payload was cut short:
-          // a truncated frame with a valid trailer looks complete to the host.
-          if (writeAllToSerial(buf, bufferSize)) {
-            logSerial.printf("SCREENSHOT_END\n");
-          } else {
-            logSerial.printf("SCREENSHOT_ERROR:transfer stalled\n");
-          }
-        } else {
-          // Framebuffers are released during the web server session — nothing to send.
-          logSerial.printf("SCREENSHOT_ERROR:framebuffer released\n");
-        }
+        ScreenshotUtil::request(ScreenshotUtil::Target::Host);
       } else if (cmd == "BOOTLOG") {
         // On-demand replay of this session's boot summary, for when the monitor was
         // attached too late to catch it and the automatic repeats are used up.
         BootDiag::logSummary();
+      } else if (!handleTestCommand(cmd)) {
+        logSerial.printf("CMD_ERROR:unknown command %s\n", cmd.c_str());
       }
     }
   }
+
+  // Before the POWER+DOWN block below, which returns while the combo is held.
+  ScreenshotUtil::service(renderer, &sendScreenshotToHost);
 
   // Check for any user activity (button press or release, screen touch) or
   // active background work.
@@ -1716,13 +1836,7 @@ void loop() {
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.isPressed(HalGPIO::BTN_DOWN)) {
     if (screenshotButtonsReleased) {
       screenshotButtonsReleased = false;
-      {
-        RenderLock lock;
-        // The reader may have left a pre-rendered next page in the frame buffer; ask the
-        // current activity to redraw the visible page first so the screenshot matches the screen.
-        activityManager.prepareFramebufferForCapture();
-        ScreenshotUtil::takeScreenshot(renderer);
-      }
+      ScreenshotUtil::request(ScreenshotUtil::Target::Card);
       // Discard the POWER+DOWN presses so they don't fire Short/Long events
       // (e.g. page turn, sleep) once the user releases the combo.
       buttonEventManager.drain();
@@ -1885,11 +1999,14 @@ void loop() {
     // (button, pressType) event fall through to the activity instead. The predicate is
     // shared with the gesture path, which needs the same answer for the same reason.
     //
-    // "In the reader" is currentIsReaderActivity(), the reader ON TOP — the same test
-    // dispatchButtonAction() makes. isReaderActivity() also answers true under a screen opened
+    // "In the reader" is currentIsReaderActivity(), the reader ON TOP — the test
+    // currentTakesButtonAction() starts from. isReaderActivity() also answers true under a screen opened
     // from the reader (its menu, TOC, starred pages), where the action would be claimed and then
     // dropped: in landscape the printed-page dialog lost its Double (±10) that way, because its
     // digit buttons are the front Left/Right and those carry a reader-scoped double by default.
+    //
+    // The one exception is a screen that opts in for a button it has no use for of its own: the
+    // dictionary definition takes the page turns configured on Power, a button it otherwise ignores.
     const auto isReaderScopedAction = [](const uint8_t a) { return CrossPointSettings::isReaderScopedAction(a); };
     // Executes one resolved action. Extracted from the button loop below so the
     // gesture path runs exactly the same code: a gesture bound to "Reader Menu"
@@ -2060,8 +2177,10 @@ void loop() {
     while (buttonEventManager.consumeEvent(ev)) {
       const uint8_t action = actionFor(ev);
       // Fall through to the activity when the event has no global effect here: either an
-      // explicit Default mapping, or a reader-scoped action while not in the reader.
-      if (action == BA::BTN_DEFAULT || (isReaderScopedAction(action) && !activityManager.currentIsReaderActivity())) {
+      // explicit Default mapping, or a reader-scoped action while not in the reader -- unless the
+      // screen on top takes that action from this button (Activity::takesButtonAction()).
+      if (action == BA::BTN_DEFAULT || (isReaderScopedAction(action) && !activityManager.currentTakesButtonAction(
+                                                                            static_cast<BA>(action), ev.button))) {
         defaultEvents.push_back(ev);
         continue;
       }

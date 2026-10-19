@@ -11,6 +11,12 @@ struct KOReaderMetadata {
   std::string filename;
   std::string title;
   std::string authors;
+  // Sent only when known. The field names follow crosspoint-reader PR #3804, so a server written
+  // for its extended metadata reads ours.
+  std::string isbn;
+  std::string asin;
+  std::string series;
+  std::string seriesIndex;  // as the book writes it ("3", "2.5"); sent as a number
 };
 
 /**
@@ -18,7 +24,7 @@ struct KOReaderMetadata {
  */
 struct KOReaderProgress {
   std::string document;                      // Document hash
-  std::string progress;                      // XPath-like progress string
+  std::string progress;                      // XPath-like progress string; empty: percentage only
   float percentage = 0.0f;                   // Progress percentage (0.0 to 1.0)
   std::string device;                        // Device name
   std::string deviceId;                      // Device ID

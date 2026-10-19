@@ -43,22 +43,33 @@ from collections import namedtuple
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
+from kern_extract import extract_raw_kerning
+from kern_reduce import reduce_kern_classes
+
 try:
     from PIL import Image
 except ImportError:
     Image = None
 
 # --- Unicode interval presets ---
+# The browser converter has the same presets in tools/ftwasm/js/cpfont-raster.mjs; change both
+# (test/web/interval_presets_test.mjs compares them).
+
+# European languages: Latin with Extended-A/B and Additional, General Punctuation, Currency Symbols
+# (euro), Letterlike Symbols (trade mark, numero) and the minus sign. Shared by latin-ext and
+# latin-cyrillic. Currency, letterlike and minus ported from crosspoint-reader commit 14423d4af
+# (PR #3801, Stefan VanBuren): without them a latin-ext font had no glyph for "€", "™", "№" or "−".
+_LATIN_EXT = [(0x0020, 0x007E), (0x0080, 0x00FF), (0x0100, 0x024F),
+              (0x1E00, 0x1EFF), (0x2000, 0x206F),
+              (0x20A0, 0x20CF), (0x2100, 0x214F), (0x2212, 0x2212)]
+_CYRILLIC = [(0x0400, 0x04FF), (0x0500, 0x052F),
+             (0x1C80, 0x1C8F), (0x2DE0, 0x2DFF), (0xA640, 0xA69F)]
 
 INTERVAL_PRESETS = {
     "ascii":       [(0x0020, 0x007E)],
     "latin1":      [(0x0080, 0x00FF)],
-    "latin-ext":      [(0x0020, 0x007E), (0x0080, 0x00FF), (0x0100, 0x024F),
-                        (0x1E00, 0x1EFF), (0x2000, 0x206F)],
-    "latin-cyrillic": [(0x0020, 0x007E), (0x0080, 0x00FF), (0x0100, 0x024F),
-                        (0x1E00, 0x1EFF), (0x2000, 0x206F),
-                        (0x0400, 0x04FF), (0x0500, 0x052F),
-                        (0x1C80, 0x1C8F), (0x2DE0, 0x2DFF), (0xA640, 0xA69F)],
+    "latin-ext":      _LATIN_EXT,
+    "latin-cyrillic": _LATIN_EXT + _CYRILLIC,
     # Pronunciation notation. Dictionaries write it in IPA Extensions plus the
     # stress and length marks from Spacing Modifier Letters, and reach into Greek
     # for theta and chi; the rest of IPA's letters are already in Latin-1 and
@@ -69,8 +80,7 @@ INTERVAL_PRESETS = {
     "greek":          [(0x0370, 0x03FF), (0x1F00, 0x1FFF)],
     "greek-letters":  [(0x0370, 0x03FF)],
     "musical-symbols": [(0x2660, 0x266F), (0x1D100, 0x1D1FF)],
-    "cyrillic":       [(0x0400, 0x04FF), (0x0500, 0x052F),
-                        (0x1C80, 0x1C8F), (0x2DE0, 0x2DFF), (0xA640, 0xA69F)],
+    "cyrillic":       _CYRILLIC,
     "georgian":       [(0x10A0, 0x10FF), (0x2D00, 0x2D2F)],
     "armenian":    [(0x0530, 0x058F)],
     "ethiopic":    [(0x1200, 0x137F), (0x1380, 0x139F), (0x2D80, 0x2DDF)],
@@ -384,61 +394,6 @@ STANDARD_LIGATURE_MAP = {
 }
 
 
-def _extract_pairpos_subtable(subtable, glyph_to_cp, raw_kern):
-    """Extract kerning from a PairPos subtable (Format 1 or 2)."""
-    if subtable.Format == 1:
-        # Individual pairs
-        for i, coverage_glyph in enumerate(subtable.Coverage.glyphs):
-            if coverage_glyph not in glyph_to_cp:
-                continue
-            pair_set = subtable.PairSet[i]
-            for pvr in pair_set.PairValueRecord:
-                if pvr.SecondGlyph not in glyph_to_cp:
-                    continue
-                xa = 0
-                if hasattr(pvr, 'Value1') and pvr.Value1:
-                    xa = getattr(pvr.Value1, 'XAdvance', 0) or 0
-                if xa != 0:
-                    key = (coverage_glyph, pvr.SecondGlyph)
-                    raw_kern[key] = raw_kern.get(key, 0) + xa
-    elif subtable.Format == 2:
-        # Class-based pairs — iterate by class, not by glyph, to avoid
-        # O(glyphs²) explosion for CJK fonts with many requested glyphs.
-        class_def1 = subtable.ClassDef1.classDefs if subtable.ClassDef1 else {}
-        class_def2 = subtable.ClassDef2.classDefs if subtable.ClassDef2 else {}
-        coverage_set = set(subtable.Coverage.glyphs)
-
-        # Build reverse mappings: class_id -> list of glyph names
-        left_by_class = {}   # only glyphs in coverage AND glyph_to_cp
-        for glyph in glyph_to_cp:
-            if glyph not in coverage_set:
-                continue
-            c1 = class_def1.get(glyph, 0)
-            left_by_class.setdefault(c1, []).append(glyph)
-
-        right_by_class = {}  # all glyphs in glyph_to_cp
-        for glyph in glyph_to_cp:
-            c2 = class_def2.get(glyph, 0)
-            right_by_class.setdefault(c2, []).append(glyph)
-
-        # Iterate class pairs (typically << glyph pairs)
-        for c1, class1_rec in enumerate(subtable.Class1Record):
-            if c1 not in left_by_class:
-                continue
-            for c2, c2_rec in enumerate(class1_rec.Class2Record):
-                xa = 0
-                if hasattr(c2_rec, 'Value1') and c2_rec.Value1:
-                    xa = getattr(c2_rec.Value1, 'XAdvance', 0) or 0
-                if xa == 0:
-                    continue
-                if c2 not in right_by_class:
-                    continue
-                for lg in left_by_class[c1]:
-                    for rg in right_by_class[c2]:
-                        key = (lg, rg)
-                        raw_kern[key] = raw_kern.get(key, 0) + xa
-
-
 def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False,
                               glyph_aliases=None, alternate_only=False):
     """Extract kerning pairs from a font file using fonttools.
@@ -463,43 +418,8 @@ def extract_kerning_fonttools(font_path, codepoints, ppem, wide=False,
     # Flat dict for membership checks and subtable extraction (uses keys only)
     glyph_to_cp = glyph_to_cps
 
-    # Collect raw kerning values in font design units
-    raw_kern = {}  # (left_glyph_name, right_glyph_name) -> design_units
-
-    # 1. Legacy kern table
-    if 'kern' in font:
-        for subtable in font['kern'].kernTables:
-            if hasattr(subtable, 'kernTable'):
-                for (lg, rg), val in subtable.kernTable.items():
-                    if lg in glyph_to_cp and rg in glyph_to_cp:
-                        raw_kern[(lg, rg)] = raw_kern.get((lg, rg), 0) + val
-
-    # 2. GPOS 'kern' feature
-    if 'GPOS' in font:
-        gpos = font['GPOS'].table
-        kern_lookup_indices = set()
-        if gpos.FeatureList:
-            for fr in gpos.FeatureList.FeatureRecord:
-                if fr.FeatureTag == 'kern':
-                    kern_lookup_indices.update(fr.Feature.LookupListIndex)
-        for li in kern_lookup_indices:
-            lookup = gpos.LookupList.Lookup[li]
-            for st in lookup.SubTable:
-                actual = st
-                # Unwrap Extension (lookup type 9) wrappers. After unwrapping,
-                # `lookup.LookupType` is still 9 and the unwrapped subtable
-                # carries `Format` rather than `LookupType`, so the *effective*
-                # type for the dispatch below comes from `st.ExtensionLookupType`.
-                if lookup.LookupType == 9 and hasattr(st, 'ExtSubTable'):
-                    actual = st.ExtSubTable
-                effective_type = getattr(st, 'ExtensionLookupType', lookup.LookupType)
-                if hasattr(actual, 'Format'):
-                    if effective_type == 2:
-                        _extract_pairpos_subtable(actual, glyph_to_cp, raw_kern)
-                    else:
-                        print(f"  Debug: skipping unsupported GPOS kern lookupType="
-                              f"{effective_type} (outer={lookup.LookupType}, Format={actual.Format})",
-                              file=sys.stderr)
+    # Raw kerning values in font design units
+    raw_kern = extract_raw_kerning(font, glyph_to_cp)  # (left_glyph_name, right_glyph_name) -> design_units
 
     font.close()
 
@@ -538,6 +458,16 @@ def derive_kern_classes(kern_map, strict=False):
     if not kern_map:
         return [], [], [], 0, 0
 
+    # A class number is one byte: past 255 classes a side, merge the closest (kern_reduce.py)
+    # rather than lose the style's kerning.
+    pairs = len(kern_map)
+    kern_map, reduced = (kern_map, None) if strict else reduce_kern_classes(kern_map)
+    if reduced:
+        print(f"WARNING: kerning needed {reduced['left'][0]} left and {reduced['right'][0]} right classes, "
+              f"more than the 255 a font can store; merged the closest to {reduced['left'][1]} and "
+              f"{reduced['right'][1]} ({reduced['pairs_changed']} of {pairs} pairs changed)",
+              file=sys.stderr)
+
     all_left_cps = {lcp for lcp, _ in kern_map}
     all_right_cps = {rcp for _, rcp in kern_map}
 
@@ -569,15 +499,8 @@ def derive_kern_classes(kern_map, strict=False):
     kern_left_class_count = left_class_id - 1
     kern_right_class_count = right_class_id - 1
 
-    if kern_left_class_count > 255 or kern_right_class_count > 255:
-        if strict:
-            raise ValueError(f"kerning class count exceeds uint8 range: "
-                             f"left={kern_left_class_count}, right={kern_right_class_count}")
-        print(f"WARNING: kerning class count exceeds uint8_t range "
-              f"(left={kern_left_class_count}, right={kern_right_class_count}), "
-              f"dropping kerning for this style",
-              file=sys.stderr)
-        return ([], [], [], 0, 0)
+    if strict and (kern_left_class_count > 255 or kern_right_class_count > 255):
+        raise ValueError("kerning class count exceeds 255; HD fonts require lossless class tables")
 
     # Build the class x class matrix
     kern_matrix = [0] * (kern_left_class_count * kern_right_class_count)

@@ -314,7 +314,7 @@ class HalGPIO {
   //
   // Names and signatures are copied verbatim from upstream/develop's HalGPIO so
   // the layers above stay diff-comparable; see
-  // docs/touch-input-migration-2026-08-14.md §1.
+  // docs/contributing/touch-architecture.md, "Layers".
   //
   // No FREEINK_CAP_TOUCH guards are needed: every InputManager touch method is
   // already guarded inside the SDK and compiles to an inert false/0 on non-touch
@@ -373,6 +373,10 @@ class HalGPIO {
   // Safe to call from any context (e.g. mid-stall inside loop()); does not
   // consume the edge — update() will still see it on the next main-loop tick.
   bool hasPendingInput() const;
+  // hasPendingInput() for one raw button, under the same contract: any context, non-consuming.
+  // For a caller stuck inside a long blocking call that must react to one specific button
+  // without draining the rest away from the loop (File Transfer's upload cancel).
+  bool hasPendingPress(uint8_t buttonIndex) const;
 
   // Pop the oldest queued button edge (FIFO). Returns false when the queue is
   // empty. Drained by ButtonEventManager to drive its press-type FSM.

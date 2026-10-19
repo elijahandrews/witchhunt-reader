@@ -7,4 +7,4 @@ struct Config {
   ViewableInsets viewableInsets;
 };
 inline constexpr Config ACTIVE{{9, 3, 3, 3}};
-} // namespace BoardConfig
+}  // namespace BoardConfig

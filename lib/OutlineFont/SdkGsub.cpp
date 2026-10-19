@@ -2,7 +2,7 @@
 
 #include "Gsub.h"
 
-namespace freeink {
+namespace witchoutline {
 namespace font {
 namespace gsub {
 
@@ -188,4 +188,4 @@ uint32_t LigatureGlyphId(const uint8_t* gsubBytes, size_t gsubSize, const uint32
 
 }  // namespace gsub
 }  // namespace font
-}  // namespace freeink
+}  // namespace witchoutline

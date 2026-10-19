@@ -88,6 +88,10 @@ class HalStorage {
   bool remove(const char* path);
   bool rename(const char* oldPath, const char* newPath);
   bool rmdir(const char* path);
+  // Whether two paths name one file or folder. FAT compares names without case, so
+  // "/Books/a.epub" and "/books/A.EPUB" are the same file, which comparing the strings misses.
+  // False when either cannot be opened, `same` then false as well.
+  bool areSameFile(const char* first, const char* second, bool& same);
 
   bool openFileForRead(const char* moduleName, const char* path, HalFile& file);
   bool openFileForRead(const char* moduleName, const std::string& path, HalFile& file);
@@ -102,6 +106,8 @@ class HalStorage {
   bool openFileForUpdate(const char* moduleName, const char* path, HalFile& file);
   bool openFileForUpdate(const char* moduleName, const std::string& path, HalFile& file);
   bool removeDir(const char* path);
+  // Copies srcPath to dstPath (replacing it). True only for a complete copy: on any failure,
+  // a read error included, dstPath is removed rather than left half-written.
   bool copyFile(const char* moduleName, const std::string& srcPath, const char* dstPath);
 
   uint64_t sdTotalBytes() const;
@@ -116,6 +122,19 @@ class HalStorage {
   // off or asleep (a wake is a boot) is not something it can see.
   uint32_t contentGeneration() const { return contentGeneration_.load(std::memory_order_relaxed); }
 
+  // Whether the card may have changed since markContentSeen() -- across reboots too, which the
+  // generation cannot say. The first change after the mark leaves a marker file in the firmware's
+  // cache folder, and markContentSeen() removes it. A USB Drive session counts from its start: the
+  // host may write anything, and the power may go before the session ends.
+  bool contentChangedSinceMark();
+  // Marks the card seen as it was at `generation` (a contentGeneration() read earlier): the marker
+  // goes unless a change came since. Decided under the storage lock, so a change made by another
+  // task while it runs is never lost with the marker.
+  void markContentSeen(uint32_t generation);
+  // A change the firmware found on the card rather than made -- a book it never wrote -- counted like
+  // one of its own: the generation goes up and the marker is left.
+  void noteFoundChange() { noteContentChange(nullptr); }
+
   static HalStorage& getInstance() { return instance; }
 
   class StorageLock;  // private class, used internally
@@ -124,12 +143,14 @@ class HalStorage {
   friend class HalFile;  // HalFile::rename() changes the card too
 
   void noteContentChange(const char* path);
+  void persistChangeMarker();
 
   static HalStorage instance;
 
   bool initialized = false;
   SemaphoreHandle_t storageMutex = nullptr;
   std::atomic<uint32_t> contentGeneration_{0};
+  int8_t changeMarker_ = -1;  // the marker file: -1 not looked for yet, 0 absent, 1 present
 };
 
 #define Storage HalStorage::getInstance()

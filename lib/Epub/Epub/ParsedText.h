@@ -3,10 +3,12 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "SourceAnchor.h"
+#include "TokenBoundary.h"
 #include "blocks/BlockStyle.h"
 #include "blocks/TextBlock.h"
 
@@ -69,11 +71,32 @@ class ParsedText {
   // bytes that die with page N.
   std::function<void(float lineHeight)> beforeLine_;
   std::vector<EpdFontFamily::Style> wordStyles;
-  std::vector<bool> wordContinues;  // true = word attaches to previous (no space before it)
+  // How each word joins the one before it (TokenBoundary.h): a space, glued, or a breakable CJK gap.
+  // In lockstep with `words` through every insert/erase, like the per-word vectors below.
+  std::vector<TokenBoundary::Boundary> wordBoundaries;
   // Per-word font size, percent of the block font size (100 = block size). Kept in
   // lockstep with `words` through every insert/erase; the sizes are handed to each
   // TextBlock line so inline font-size spans survive into the page cache.
   std::vector<uint8_t> wordSizes;
+  // Where each word begins in the chapter's visible text (VisibleText.h's rule), in lockstep with
+  // `words` through every insert/erase. The section cache records the first word of each page from
+  // it (KOReader sync, content offsets). 4 B per word; grown with the other word vectors in one
+  // step and counted in addWord's heap gate.
+  std::vector<uint32_t> wordVisibleOffsets;
+  // The first word's offset of the line most recently handed to processLine. Read by the parser's
+  // line callbacks, which only get the TextBlock.
+  uint32_t lastLineVisibleOffset_ = 0;
+  // Only exceptional tokens have a map; references pack its pool slot and cooked-byte start.
+  // Maps are transient and immutable through split/retry/bionic, never page-cache data.
+  struct VisibleMap {
+    std::vector<uint32_t> origins;
+  };
+  std::vector<VisibleMap> visibleMaps_;
+  std::vector<uint32_t> wordVisibleMapRefs_;
+  uint32_t visibleOffsetAt(size_t word, size_t byte) const;
+  uint32_t visibleMapRef(size_t word) const;
+  bool appendVisibleMap(const std::vector<uint32_t>* origins);
+  void releaseUnusedVisibleMaps();
   std::vector<uint32_t> wordTypography_;
   std::vector<SourceWordSpan> wordSources_;
   BlockStyle blockStyle;
@@ -107,14 +130,18 @@ class ParsedText {
   // advance; maxFloatLineHeight_ bounds the other end of the possible vertical
   // interval. Equal bounds give exact uniform-font geometry. A zero upper bound skips floats.
   int widthForLine(int lineIndex, int lineHeight, int16_t blockStartY, int pageWidth) const;
+  // The natural gap before words[j] (j > 0), unscaled: kerning across a glued boundary, nothing at a
+  // CJK gap, else the space advance. Every breaker measures gaps through this.
+  int naturalGapBefore(const GfxRenderer& renderer, int fontId, size_t j) const;
 
   // The three breakers fill `lineBreakIndices` (cleared first) rather than returning a vector,
   // so the caller's scratch member is reused instead of reallocated per paragraph.
   void computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth, std::vector<uint16_t>& wordWidths,
-                         std::vector<bool>& continuesVec, int firstLineIndent, int16_t blockStartY, int lineHeight,
-                         std::vector<size_t>& lineBreakIndices);
+                         const std::vector<TokenBoundary::Boundary>& boundaries, int firstLineIndent,
+                         int16_t blockStartY, int lineHeight, std::vector<size_t>& lineBreakIndices);
   void computeHyphenatedLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
-                                   std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
+                                   std::vector<uint16_t>& wordWidths,
+                                   const std::vector<TokenBoundary::Boundary>& boundaries,
                                    std::vector<bool>& lineEndsWithHyphenatedWord,
                                    std::vector<int>& splitPrefixWordIndexes, std::vector<bool>& splitInsertedHyphen,
                                    int firstLineIndent, int16_t blockStartY, int lineHeight,
@@ -122,23 +149,25 @@ class ParsedText {
   // Recompute hyphenated breaks for a suffix that starts at startIndex.
   // Used after a single-line retry so later lines keep normal hyphenation.
   void computeHyphenatedLineBreaksFromIndex(const GfxRenderer& renderer, int fontId, int pageWidth,
-                                            std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
-                                            size_t startIndex, std::vector<bool>& lineEndsWithHyphenatedWord,
+                                            std::vector<uint16_t>& wordWidths,
+                                            const std::vector<TokenBoundary::Boundary>& boundaries, size_t startIndex,
+                                            std::vector<bool>& lineEndsWithHyphenatedWord,
                                             std::vector<int>& splitPrefixWordIndexes,
                                             std::vector<bool>& splitInsertedHyphen, int16_t blockStartY, int lineHeight,
                                             int startLineIdx, std::vector<size_t>& lineBreakIndices);
   // Compute exactly one line break without hyphenating words.
   // Used only for the page-boundary retry line.
   size_t computeSingleLineBreakNoHyphen(const GfxRenderer& renderer, int fontId, int pageWidth,
-                                        const std::vector<uint16_t>& wordWidths, const std::vector<bool>& continuesVec,
-                                        size_t lineStartIndex, int lineIndex, int firstLineIndent,
-                                        int16_t blockStartY = 0, int lineHeight = 0) const;
+                                        const std::vector<uint16_t>& wordWidths,
+                                        const std::vector<TokenBoundary::Boundary>& boundaries, size_t lineStartIndex,
+                                        int lineIndex, int firstLineIndent, int16_t blockStartY = 0,
+                                        int lineHeight = 0) const;
   bool hyphenateWordAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                             std::vector<uint16_t>& wordWidths, bool allowFallbackBreaks,
                             bool* outInsertedHyphen = nullptr);
   LineProcessResult extractLine(
-      size_t breakIndex, int pageWidth, const std::vector<uint16_t>& wordWidths, const std::vector<bool>& continuesVec,
-      const std::vector<size_t>& lineBreakIndices,
+      size_t breakIndex, int pageWidth, const std::vector<uint16_t>& wordWidths,
+      const std::vector<TokenBoundary::Boundary>& boundaries, const std::vector<size_t>& lineBreakIndices,
       const std::function<LineProcessResult(std::unique_ptr<TextBlock>, bool, bool)>& processLine,
       const GfxRenderer& renderer, int fontId, bool lineEndsWithHyphenatedWord, bool suppressHyphenationRetry,
       int firstLineIndent, int16_t blockStartY = 0, int lineHeight = 0);
@@ -170,11 +199,14 @@ class ParsedText {
   void releaseLayoutScratch();
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
-               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0, SourceWordSpan source = {});
+               uint8_t sizePct = DEFAULT_WORD_SIZE_PCT, uint32_t typography = 0, SourceWordSpan source = {},
+               uint32_t visibleOffset = 0, const std::vector<uint32_t>* visibleOrigins = nullptr);
   // True once addWord had to drop a word because the word vectors could not grow (see
   // wordGrowthRefused_). ChapterHtmlSlimParser::ensureHeapForTextLayout turns it into a
   // partial-cache abort.
   bool wordGrowthRefused() const { return wordGrowthRefused_; }
+  // Exceptional synchronization maps are bounded to 16 KiB; stream prose before half fills.
+  size_t visibleMappingBytes() const;
   // If every word shares one non-100% size (a span wrapping the whole paragraph, e.g.
   // Alice's mouse-tale lines), fold that percent into the block-level fontSizeMultiplier
   // and reset the per-word sizes to 100. This routes whole-paragraph spans through the
@@ -188,6 +220,11 @@ class ParsedText {
   void setBeforeLineHook(std::function<void(float lineHeight)> hook) { beforeLine_ = std::move(hook); }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }
+  uint32_t lastLineVisibleOffset() const { return lastLineVisibleOffset_; }
+  std::optional<uint32_t> firstWordVisibleOffset() const {
+    if (wordVisibleOffsets.empty()) return std::nullopt;
+    return wordVisibleOffsets.front();
+  }
   bool isEmpty() const { return words.empty(); }
   bool isContinuation() const { return isContinuation_; }
 

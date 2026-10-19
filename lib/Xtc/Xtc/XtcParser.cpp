@@ -226,6 +226,20 @@ XtcError XtcParser::readFirstPageInfo() {
   m_defaultHeight = entry.height;
 
   LOG_DBG("XTC", "Page table validated: %u pages, default %dx%d", m_header.pageCount, m_defaultWidth, m_defaultHeight);
+
+  // The pages decide the bit depth, not the container: xtctool writes a 1-bit "XTC" header around
+  // 2-bit "XTH" pages, and every page load then failed its magic check ("Page load error").
+  // Ported from crosspoint-reader PR #3806 (Daniil Pankov, @T-Damer).
+  uint32_t pageMagic = 0;
+  if (entry.dataOffset <= fileSize && sizeof(pageMagic) <= fileSize - entry.dataOffset &&
+      m_file.seek64(entry.dataOffset) &&
+      m_file.read(reinterpret_cast<uint8_t*>(&pageMagic), sizeof(pageMagic)) == sizeof(pageMagic)) {
+    const uint8_t pageDepth = pageMagic == XTH_MAGIC ? 2 : pageMagic == XTG_MAGIC ? 1 : 0;
+    if (pageDepth != 0 && pageDepth != m_bitDepth) {
+      LOG_INF("XTC", "Container says %u-bit, pages are %u-bit: following the pages", m_bitDepth, pageDepth);
+      m_bitDepth = pageDepth;
+    }
+  }
   return XtcError::OK;
 }
 
@@ -595,15 +609,17 @@ XtcError XtcParser::loadPageStreaming(uint32_t pageIndex,
 
   while (totalRead < bitmapSize) {
     size_t toRead = std::min(chunkSize, bitmapSize - totalRead);
-    size_t bytesRead = m_file.read(chunk.data(), toRead);
+    // read() returns -1 on error; checked before it becomes a length, or the callback would be
+    // handed SIZE_MAX bytes of a chunkSize buffer.
+    const int bytesRead = m_file.read(chunk.data(), toRead);
 
-    if (bytesRead == 0) {
+    if (bytesRead <= 0) {
       closeFile();
       return XtcError::READ_ERROR;
     }
 
-    callback(chunk.data(), bytesRead, totalRead);
-    totalRead += bytesRead;
+    callback(chunk.data(), static_cast<size_t>(bytesRead), totalRead);
+    totalRead += static_cast<size_t>(bytesRead);
   }
 
   closeFile();

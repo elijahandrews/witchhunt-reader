@@ -14,8 +14,9 @@
 #include "activities/ActivityManager.h"
 
 namespace {
-// The reader's position as ProgressComparison wants it: the page, and the paragraph LUT at the
-// end of this page and of the one before.
+// The reader's position as ProgressComparison wants it: the page; the paragraph LUT at the end of
+// this page and of the one before; and the page's content-offset window [start, end), where end is
+// the first later page start greater than this page's (UINT32_MAX on the last page).
 LocalReadingPosition localReadingPosition(const Section& section, const int spineIndex, const int page) {
   LocalReadingPosition local;
   local.spineIndex = spineIndex;
@@ -23,6 +24,12 @@ LocalReadingPosition localReadingPosition(const Section& section, const int spin
   local.paragraphAtPageEnd = section.getParagraphIndexForPage(static_cast<uint16_t>(page)).value_or(0);
   if (page > 0) {
     local.paragraphAtPreviousPageEnd = section.getParagraphIndexForPage(static_cast<uint16_t>(page - 1)).value_or(0);
+  }
+  if (const auto start = section.getVisibleTextOffsetForPage(static_cast<uint16_t>(page))) {
+    local.visibleOffsetAtPage = *start;
+    local.visibleOffsetAtNextPage =
+        section.getVisibleTextOffsetAfterPage(static_cast<uint16_t>(page)).value_or(UINT32_MAX);
+    local.hasVisibleOffset = true;
   }
   return local;
 }
@@ -37,17 +44,38 @@ std::string hashFor(const std::string& path, const DocumentMatchMethod method) {
 }
 }  // namespace
 
+// Auto-sync runs on the loop task (serviceAutoSync() from loop()), but what it reads belongs to
+// the render task: `section`, which the render task replaces under the render lock, and `epub`'s
+// metadata cache, whose seek-then-read pairs the status bar also runs (BookMetadataCache keeps
+// one file position). It used to peek at the lock and then read with nothing held, so a pass that
+// started in between could free the Section being read or move the cache's file position mid-read.
+//
+// So every entry point takes the lock WITHOUT waiting (RenderLock::Mode::Try) and holds it for
+// all of its section and epub reads. A busy lock means a pass is in flight: skip the tick, as
+// the peek meant to. The cost is that a pass wanting the lock waits for the read to finish --
+// for a push or an upload that includes the chapter inflate behind the local XPath. That happens
+// once per push interval at most, and only while the reader is otherwise idle.
+//
+// The lock is NOT recursive, so nothing that takes it itself may run under it: the compare screen
+// is launched after release (pollAutoSyncPull), and silentApplyRemote() relies on its caller's lock.
+
+// The caller holds the render lock (see above).
 bool EpubReaderActivity::autoSyncReaderIsQuiet() const {
-  return epub != nullptr && section != nullptr && !section->hasActiveBuild() && readerPhase_ == ReaderPhase::READING &&
-         !RenderLock::peek();
+  return epub != nullptr && section != nullptr && !section->hasActiveBuild() && readerPhase_ == ReaderPhase::READING;
 }
 
+// The caller holds the render lock: this reads `section`'s lookup tables, and ProgressMapper reads
+// `epub`'s metadata cache.
 KOReaderPosition EpubReaderActivity::currentKoPosition(const int page, const int pageCount) const {
   CrossPointPosition pos{};
   pos.spineIndex = currentSpineIndex;
   pos.pageNumber = page;
   pos.totalPages = pageCount;
   if (section) {
+    if (const auto off = section->getVisibleTextOffsetForPage(static_cast<uint16_t>(page))) {
+      pos.visibleTextOffset = *off;
+      pos.hasVisibleTextOffset = true;
+    }
     if (const auto paragraph = section->getParagraphIndexForPage(static_cast<uint16_t>(page))) {
       pos.paragraphIndex = *paragraph;
       pos.hasParagraphIndex = true;
@@ -61,8 +89,14 @@ void EpubReaderActivity::maybeAutoPullOnWake() {
     autoSyncPullPending = false;
     return;
   }
-  if (KOReaderAutoSync::jobActive() || !autoSyncReaderIsQuiet()) {
+  if (KOReaderAutoSync::jobActive()) {
     return;
+  }
+  {
+    RenderLock lock(RenderLock::Mode::Try);
+    if (!lock.ownsLock() || !autoSyncReaderIsQuiet()) {
+      return;
+    }
   }
   if (!KOReaderAutoSync::heapAllowsBackgroundSession("Wake pull")) {
     return;
@@ -107,15 +141,26 @@ bool EpubReaderActivity::pollAutoSyncPull() {
     autoSyncPullSeq = 0;
     autoSyncPullJobPending = true;
   }
-  if (!autoSyncPullJobPending || !autoSyncReaderIsQuiet()) {
+  if (!autoSyncPullJobPending) {
     return false;
   }
-  autoSyncPullJobPending = false;
-  evaluateAutoSyncPull();
+  bool askUser = false;
+  {
+    RenderLock lock(RenderLock::Mode::Try);
+    if (!lock.ownsLock() || !autoSyncReaderIsQuiet()) {
+      return false;
+    }
+    autoSyncPullJobPending = false;
+    askUser = evaluateAutoSyncPull();
+  }
+  // After release: launching the compare screen pushes an activity, which takes the lock.
+  autoSyncPullDialogLaunched = askUser && handOffToInteractiveSync();
   return autoSyncPullDialogLaunched;
 }
 
-void EpubReaderActivity::evaluateAutoSyncPull() {
+// The caller holds the render lock. Settles what it can silently and returns true when the user
+// has to be asked instead (the caller launches the compare screen once the lock is released).
+bool EpubReaderActivity::evaluateAutoSyncPull() {
   autoSyncPullDialogLaunched = false;
   KOReaderSyncJob job = std::exchange(autoSyncPullJob, {});
 
@@ -143,18 +188,17 @@ void EpubReaderActivity::evaluateAutoSyncPull() {
   }
 
   if (result == KOReaderSyncClient::NOT_FOUND) {
-    if (smart) {
-      LOG_DBG("AutoSync", "Wake pull: no remote progress; uploading local silently");
-      silentUploadCurrentPosition();
-    } else {
-      autoSyncPullDialogLaunched = handOffToInteractiveSync();
+    if (!smart) {
+      return true;
     }
-    return;
+    LOG_DBG("AutoSync", "Wake pull: no remote progress; uploading local silently");
+    silentUploadCurrentPosition();
+    return false;
   }
   if (result != KOReaderSyncClient::OK) {
     LOG_INF("AutoSync", "Wake pull failed (%s); keeping current position", KOReaderSyncClient::errorString(result));
     AUTOSYNC_STATE.markSyncFailed();
-    return;
+    return false;
   }
 
   const int page = section->currentPage;
@@ -169,19 +213,19 @@ void EpubReaderActivity::evaluateAutoSyncPull() {
       AUTOSYNC_STATE.markSynced(path, currentSpineIndex, page);
       LOG_DBG("AutoSync", "Wake pull: remote matches local (%.6f at %s); nothing to do", remote.percentage,
               remote.progress.c_str());
-      return;
+      return false;
     case ProgressComparison::LocalAhead:
       if (smart) {
         LOG_DBG("AutoSync", "Wake pull: local ahead, uploading silently");
         silentUploadCurrentPosition();
-        return;
+        return false;
       }
       break;
     case ProgressComparison::RemoteAhead:
       if (smart) {
         LOG_DBG("AutoSync", "Wake pull: remote ahead, applying silently");
         silentApplyRemote(remote);
-        return;
+        return false;
       }
       break;
     case ProgressComparison::Unknown:
@@ -189,7 +233,7 @@ void EpubReaderActivity::evaluateAutoSyncPull() {
       break;
   }
 
-  autoSyncPullDialogLaunched = handOffToInteractiveSync();
+  return true;
 }
 
 bool EpubReaderActivity::handOffToInteractiveSync() {
@@ -201,6 +245,7 @@ bool EpubReaderActivity::handOffToInteractiveSync() {
   return true;
 }
 
+// The caller holds the render lock.
 void EpubReaderActivity::silentUploadCurrentPosition() {
   if (autoSyncPushSeq != 0) {
     LOG_DBG("AutoSync", "Wake upload deferred: another push in flight");
@@ -219,6 +264,9 @@ void EpubReaderActivity::silentUploadCurrentPosition() {
                                                       epub->getAuthor());
 }
 
+// The caller holds the render lock, which covers both the position mapping (epub's metadata
+// cache) and the jump below. It used to take the lock just for the jump; under the caller's
+// lock that would now deadlock, the mutex not being recursive.
 void EpubReaderActivity::silentApplyRemote(const KOReaderProgress& remote) {
   if (!epub) {
     return;
@@ -232,7 +280,9 @@ void EpubReaderActivity::silentApplyRemote(const KOReaderProgress& remote) {
   }
 
   NavigationTarget target;
-  if (remotePos.hasListItemIndex) {
+  if (remotePos.hasVisibleTextOffset) {
+    target = NavigationTarget::makeVisibleOffset(remotePos.visibleTextOffset, remotePos.pageNumber);
+  } else if (remotePos.hasListItemIndex) {
     target = NavigationTarget::makeListItem(remotePos.listItemIndex, remotePos.pageNumber);
   } else if (remotePos.hasParagraphIndex) {
     target = NavigationTarget::makeParagraph(remotePos.paragraphIndex, remotePos.pageNumber);
@@ -241,12 +291,9 @@ void EpubReaderActivity::silentApplyRemote(const KOReaderProgress& remote) {
   }
   target.cachedSpineIdx = remotePos.spineIndex;
 
-  {
-    RenderLock lock(*this);
-    currentSpineIndex = remotePos.spineIndex;
-    navTarget = target;
-    section.reset();
-  }
+  currentSpineIndex = remotePos.spineIndex;
+  navTarget = target;
+  section.reset();
   if (!writeReaderProgressCache(epub->getCachePath(), remotePos.spineIndex, remotePos.pageNumber, 0, 0)) {
     LOG_ERR("AutoSync", "Wake apply: failed to persist remote position; live state still seeded");
   }
@@ -260,7 +307,7 @@ void EpubReaderActivity::maybeAutoPushInterval() {
   if (activityManager.inSleepTransition()) {
     return;
   }
-  if (!KOReaderAutoSync::intervalPushEnabled() || !autoSyncReaderIsQuiet()) {
+  if (!KOReaderAutoSync::intervalPushEnabled()) {
     return;
   }
   if (!AUTOSYNC_STATE.lastNoteWasTurn()) {
@@ -275,6 +322,11 @@ void EpubReaderActivity::maybeAutoPushInterval() {
     return;
   }
 
+  // Taken last, once a push is actually due, so the cheap checks above never touch the mutex.
+  RenderLock lock(RenderLock::Mode::Try);
+  if (!lock.ownsLock() || !autoSyncReaderIsQuiet()) {
+    return;
+  }
   const int page = section->currentPage;
   const int total = section->estimatedTotalPages();
   if (page < 0 || total <= 0) {
@@ -319,13 +371,22 @@ void EpubReaderActivity::serviceAutoSync() {
   }
   pollAutoSyncJob();
   refreshAutoSyncIndicator();
-  if (RenderLock::peek()) {
-    return;
-  }
 
-  if (epub != nullptr && section != nullptr) {
-    AUTOSYNC_STATE.noteProgress(epub->getPath(), currentSpineIndex, section->currentPage);
+  int spine = 0;
+  int page = 0;
+  {
+    RenderLock lock(RenderLock::Mode::Try);
+    if (!lock.ownsLock()) {
+      return;
+    }
+    if (epub == nullptr || section == nullptr) {
+      return;
+    }
+    spine = currentSpineIndex;
+    page = section->currentPage;
   }
+  // Outside the lock: noteProgress() may write its state file.
+  AUTOSYNC_STATE.noteProgress(epub->getPath(), spine, page);
   maybeAutoPushInterval();
 }
 
@@ -342,6 +403,8 @@ void EpubReaderActivity::releaseAutoSyncSlot() {
   autoSyncPullJobPending = false;
 }
 
+// From onExit(), which ActivityManager runs under the exclusive render lock, so the section and
+// epub reads here are already covered.
 void EpubReaderActivity::maybeAutoPushOnSleep() {
   if (epub != nullptr && section != nullptr) {
     AUTOSYNC_STATE.noteProgress(epub->getPath(), currentSpineIndex, section->currentPage);
@@ -351,7 +414,10 @@ void EpubReaderActivity::maybeAutoPushOnSleep() {
   if (!activityManager.inSleepTransition() || !KOReaderAutoSync::sleepPushEnabled() || !AUTOSYNC_STATE.isPending()) {
     return;
   }
-  if (footnoteDepth > 0) {
+  // A link followed in THIS session, not the persisted Back stack (footnoteDepth): a stack loaded
+  // from linkstack.bin would otherwise skip the push on every sleep until the reader pressed Back,
+  // and every link pushes, contents links included.
+  if (sessionLinkDepth_ > 0) {
     LOG_DBG("AutoSync", "Footnote open at sleep; push deferred to the next boundary");
     return;
   }

@@ -87,7 +87,20 @@ class MappedInputManager {
     if args.negative_control:
         assert 'pendingAction == PendingAction::None' in gate
         gate = '!drainInput && currentActivity'
-    replay = r'''enum class PendingAction { None, Push, Pop, Replace };
+    dictionary = (repo / 'src/activities/reader/DictionaryDefinitionActivity.cpp').read_text()
+    dictionary_opt_in = 'bool DictionaryDefinitionActivity::takesButtonAction' + between(dictionary,
+        'bool DictionaryDefinitionActivity::takesButtonAction', 'void DictionaryDefinitionActivity::onButtonAction')
+    library_migration = (repo / 'src/activities/home/HomeMenu.cpp').read_text().split(
+        'uint8_t libraryOnHomeFromLegacy(', 1)[1]
+    library_migration = 'uint8_t libraryOnHomeFromLegacy(' + library_migration
+    dispatch_cases = '        case BA::BTN_PAGE_FORWARD:' + between(main_cpp,
+        '        case BA::BTN_PAGE_FORWARD:', '        case BA::BTN_TOGGLE_SETTINGS:') + dispatch_cases
+    replay = r'''class DictionaryDefinitionActivity {
+ public:
+  bool takesButtonAction(CrossPointSettings::BUTTON_ACTION, MappedInputManager::Button) const;
+};
+''' + dictionary_opt_in + r'''
+enum class PendingAction { None, Push, Pop, Replace };
 struct DispatchManagerProbe {
   int current = 1;
   int* currentActivity = &current;
@@ -96,9 +109,15 @@ struct DispatchManagerProbe {
   int destination = 0;
   bool readerOnTop = true;
   int statusBarCalls = 0;
+  int pageCalls = 0;
+  bool dictionaryOnTop = false;
+  bool currentTakesButtonAction(CrossPointSettings::BUTTON_ACTION action, MappedInputManager::Button button) const {
+    return readerOnTop || (dictionaryOnTop && DictionaryDefinitionActivity{}.takesButtonAction(action, button));
+  }
   bool currentIsReaderActivity() const { return readerOnTop; }
   void dispatchButtonAction(CrossPointSettings::BUTTON_ACTION a) {
-    assert(a == CrossPointSettings::BTN_TOGGLE_STATUS_BAR); ++statusBarCalls;
+    if (a == CrossPointSettings::BTN_TOGGLE_STATUS_BAR) ++statusBarCalls;
+    else { assert(a == CrossPointSettings::BTN_PAGE_FORWARD || a == CrossPointSettings::BTN_PAGE_BACK); ++pageCalls; }
   }
   void toggleSettings() { pendingAction=PendingAction::Replace; destination=1; }
   void goToUsbDrive() { pendingAction=PendingAction::Replace; destination=2; }
@@ -167,7 +186,7 @@ inline std::string deobfuscateFromBase64(const char* p, size_t, bool* ok, bool* 
 CrossPointSettings CrossPointSettings::instance;
 ''' + methods + '\n' + helper + '\n'
         + 'template<class Visitor> void forEachSetting(Visitor emit) {\n' + labels + buttons + visibility + '\n}\n'
-        + json + '\n'
+        + library_migration + '\n' + json + '\n'
         + 'uint8_t mappedAction(const ButtonEventManager::ButtonEvent& event) { using B=MappedInputManager::Button; using BA=CrossPointSettings::BUTTON_ACTION;\n'
         + action_for + '\nreturn actionFor(event); }\n'
         + replay + '\n' + (Path(__file__).with_name('ShortcutTest.cpp')).read_text())

@@ -119,7 +119,7 @@ void EpubReaderSearchActivity::render(RenderLock&&) {
   } else if (session_ && session_->count()) {
     snprintf(status, sizeof(status), tr(STR_BOOK_SEARCH_COUNT), static_cast<unsigned long>(session_->count()));
   } else {
-    snprintf(status, sizeof(status), "%s", tr(STR_SEARCH_NO_MATCHES));
+    snprintf(status, sizeof(status), "%s", tr(STR_BOOK_SEARCH_NO_MATCHES));
   }
   const auto statusLine = renderer.truncatedText(UI_10_FONT_ID, status, rect.width - 30);
   renderer.drawText(UI_10_FONT_ID, rect.x + 15, rect.y + 78, statusLine.c_str());

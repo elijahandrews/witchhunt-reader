@@ -28,7 +28,13 @@ REPO = Path(__file__).resolve().parents[2]
 CONVERTER = REPO / 'lib/EpdFont/scripts/fontconvert_sdcard.py'
 spec = importlib.util.spec_from_file_location('fontconvert_sdcard', CONVERTER)
 convert = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(convert)
+# Match direct script execution so its shared kerning helper is importable.
+converter_search_path = list(sys.path)
+try:
+    sys.path.insert(0, str(CONVERTER.parent))
+    spec.loader.exec_module(convert)
+finally:
+    sys.path[:] = converter_search_path
 
 
 def make_source(path):

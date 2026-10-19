@@ -2,11 +2,13 @@
 .idea
 .DS_Store
 .vscode
+.superpowers
 lib/EpdFont/fontsrc
 lib/I18n/I18nKeys.h
 lib/I18n/I18nStrings.h
 lib/I18n/I18nStrings.cpp
 *.generated.h
+*.generated.gz
 .vs
 # CMake out-of-source build dirs (build, build2, build-debug, test/build, …)
 build
@@ -60,5 +62,7 @@ src/idf_component.yml
 # Private reader backups, firmware releases, dictionaries and local worktrees
 /.local-device/
 
-# Only this original synthetic EPUB is approved for version control.
+# Ignore new EPUBs; upstream corpus files already tracked remain tracked.
+# Only this original synthetic EPUB is approved as a new tracked fixture.
+*.epub
 !test/epubs/test_epub_features.epub

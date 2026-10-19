@@ -285,20 +285,19 @@ TEST_F(SourceAnchorTest, WrappedDropCapFallbackProbesTheTargetFragment) {
 
 TEST_F(SourceAnchorTest, LutGrowthFailureStopsWithoutEmittingOrAppendingStalePage) {
   makeBook("<p>" + numberedWords(1000) + "</p>");
-  const auto saved = ESP.getMaxAllocHeap();
-  struct RestoreHeap {
-    uint32_t value;
-    ~RestoreHeap() { ESP.setMaxAllocHeap(value); }
-  } restore{saved};
+  struct RestoreAllocationLimit {
+    ~RestoreAllocationLimit() { chunkedVectorAllocationsLeft() = SIZE_MAX; }
+  } restore;
   size_t completed = 0;
   auto parser = std::make_unique<ChapterHtmlSlimParser>(
       book, renderer, 0, 1.0f, false, 0, 100, 24, false, false, false,
       [&](std::unique_ptr<Page> page) {
-        ASSERT_TRUE(page);
+        EXPECT_TRUE(page);
+        if (!page) return false;
         ++completed;
-        // The first allocation has16 entries. Drop contiguous space exactly after
-        // completing them, while this word batch still has many lines to lay out.
-        if (completed == 16) ESP.setMaxAllocHeap(700);
+        // Refuse the next nonmoving chunk, while a buffered word batch still has lines.
+        if (completed == 16) chunkedVectorAllocationsLeft() = 0;
+        return true;
       },
       false, "", book->getCachePath());
   ASSERT_TRUE(parser->setup(0));  // no reserve hint, so the first LUT growth is16

@@ -1,7 +1,10 @@
 Host-side gtest unit tests for crosspoint-reader.
 
-Build and run:
+Build and run (Python with FontTools is required to generate original font fixtures):
 
+  python3 -m venv .venv
+  . .venv/bin/activate
+  python -m pip install fonttools
   cmake -S test -B build/test
   cmake --build build/test
   ctest --test-dir build/test --output-on-failure -j
@@ -59,3 +62,10 @@ file to re-run the experiment from scratch.
 
 The mapping table in the conformance runner is a hand transcription of
 KOReaderSyncClient.cpp; there is no automatic link, so change both together.
+
+Compact X4 Pro diagnostics compile the real logging macros under 16 profiles:
+
+  python3 test/compact_logging/run.py --out /tmp/compact-logging --sanitize
+
+This checks preserved argument evaluation and source locations, full/disabled
+logging, and omission of long error format strings from compact binaries.

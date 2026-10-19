@@ -82,6 +82,31 @@ include(GoogleTest)
 # tests cannot influence what the firmware ships.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+# Only the feature EPUB is checked in by this fork. Generate the additional
+# original typography/font fixture into its ignored corpus path at configure
+# time, before corpus discovery and publisher-font extraction are configured.
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c "import fontTools"
+  RESULT_VARIABLE FONTTOOLS_STATUS
+  ERROR_QUIET
+)
+if(NOT FONTTOOLS_STATUS EQUAL 0)
+  message(FATAL_ERROR "Host tests need FontTools to generate their original font fixtures. Install it with '${Python3_EXECUTABLE} -m pip install fonttools', or select a Python3_EXECUTABLE that has it.")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${REPO_ROOT}/test/epubs/make_test_css_typography.py
+  ${REPO_ROOT}/test/epubs/typography_font_fixture.py
+)
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/epubs/make_test_css_typography.py
+          --output ${REPO_ROOT}/test/epubs/test_css_typography.epub
+  RESULT_VARIABLE TYPOGRAPHY_FIXTURE_STATUS
+  ERROR_VARIABLE TYPOGRAPHY_FIXTURE_ERROR
+)
+if(NOT TYPOGRAPHY_FIXTURE_STATUS EQUAL 0)
+  message(FATAL_ERROR "Cannot generate the typography fixture: ${TYPOGRAPHY_FIXTURE_ERROR}")
+endif()
+
 set(I18N_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/I18n")
 set(I18N_GENERATED_KEYS "${I18N_GENERATED_DIR}/I18nKeys.h")
 # The generator writes the string blob alongside the keys. Declared as an OUTPUT below so a test
@@ -118,15 +143,18 @@ add_subdirectory(${REPO_ROOT}/lib/SaxParser ${CMAKE_CURRENT_BINARY_DIR}/SaxParse
 add_subdirectory(buffered_io)
 add_subdirectory(natural_sort)
 add_subdirectory(sidecar_files)
+add_subdirectory(file_replace)
 add_subdirectory(book_details_cache)
 add_subdirectory(timezone)
 add_subdirectory(path_containment)
+add_subdirectory(protected_paths)
 add_subdirectory(firmware_board_tag)
 add_subdirectory(cover_grid_layout)
 add_subdirectory(carousel_cover_layout)
 add_subdirectory(card_text_fit)
 add_subdirectory(list_grammar)
 add_subdirectory(double_action_wait)
+add_subdirectory(inline_list_function_ref)
 add_subdirectory(keyboard_layouts)
 add_subdirectory(link_marker_match)
 add_subdirectory(differential_rounding)
@@ -148,48 +176,70 @@ add_subdirectory(boot_diag_ring)
 add_subdirectory(image_dimensions_guard)
 add_subdirectory(word_size_layout)
 add_subdirectory(text_block_range)
+add_subdirectory(token_boundary)
 add_subdirectory(zip_entry_reader)
+add_subdirectory(koreader_document_id)
 # After zip_entry_reader: reuses its inflate_reader_host target.
 add_subdirectory(png_decoder)
 # After zip_entry_reader: reuses its inflate_reader_host target.
 add_subdirectory(book_metadata_cache)
 add_subdirectory(uzlib_lzcopy)
+add_subdirectory(sdfat_alloc)
 add_subdirectory(font_group_stream)
+add_subdirectory(font_cache_manager)  # after font_group_stream: links its uzlib_font_ring
 add_subdirectory(gif_decoder)
 add_subdirectory(svg_decoder)
 add_subdirectory(jpeg_decoder)
 add_subdirectory(serial_transfer)
+add_subdirectory(serial_line_buffer)
 add_subdirectory(opds_filename)
 add_subdirectory(epub_pipeline)
 add_subdirectory(memory_arena)
+add_subdirectory(chunked_vector)
 add_subdirectory(sd_font_intervals)
+add_subdirectory(sd_font_arena)
+add_subdirectory(sd_font_kern)
 add_subdirectory(sd_font_manager)
 add_subdirectory(touch_transform)
 add_subdirectory(button_hint_strip)
+add_subdirectory(hint_layout)
 add_subdirectory(list_touch_band)
 add_subdirectory(tap_targets)
 add_subdirectory(tap_zones)
 add_subdirectory(font_size_ladder)
+add_subdirectory(font_lookup)
+add_subdirectory(reader_font_sizes)
 add_subdirectory(slider_geometry)
 add_subdirectory(list_row_tap)
 add_subdirectory(list_row_cache)
 add_subdirectory(chapter_page_span)
 add_subdirectory(settings_grouping)
+add_subdirectory(setting_info_options)
 add_subdirectory(epub_progress_record)
 add_subdirectory(home_menu)
 add_subdirectory(ui_font_ladder)
 add_subdirectory(text_truncation)
 add_subdirectory(default_ignorable)
 add_subdirectory(utf8_compose)
+add_subdirectory(utf8_lower)
 add_subdirectory(adaptive_tone)
 add_subdirectory(gray8_writer)
 add_subdirectory(glyph_fallback)
+add_subdirectory(glyph_provider)
+add_subdirectory(glyph_store)
+add_subdirectory(ttf_rasterizer)
+add_subdirectory(ttf_font)
 # After zip_entry_reader: reuses its inflate_reader_host target and HalStorage shim.
 add_subdirectory(dictionary)
 add_subdirectory(reading_stats)
 add_subdirectory(font_manifest_parser)
 add_subdirectory(folder_count_memo)
+add_subdirectory(folder_search)
+add_subdirectory(file_browser_model)
 add_subdirectory(bitmap_rows)
 
 add_subdirectory(publisher_fonts)
 add_subdirectory(progress_comparison)
+add_subdirectory(kosync_progress_reply)
+add_subdirectory(library_index)
+add_subdirectory(xtc_parser)

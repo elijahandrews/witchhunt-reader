@@ -103,7 +103,7 @@ def main():
     # State declarations and exit methods come from the real menus. Only the
     # activity shell is replaced, so payload type/default bugs remain observable.
     (shim / "MenuProbe.h").write_text(
-        '#pragma once\n#include "activities/ActivityResult.h"\n'
+        '#pragma once\n#include "activities/ActivityResult.h"\nstruct ReaderSizeList;\n'
         'struct MenuProbeBase {\n'
         '  ActivityResult captured; bool finished = false;\n'
         '  void setResult(ActivityResult&& r) { captured = std::move(r); }\n'
@@ -133,7 +133,15 @@ def main():
     getter = signature + between(reader_source, signature, "bool EpubReaderActivity::getEffectiveEmbeddedStyle() const {")
     generated.write_text('#include <ArduinoJson.h>\n#include <Logging.h>\n#include "JsonSettingsIO.h"\n'
                          '#include "RecentBooksStore.h"\n#include "CrossPointSettings.h"\n'
-                         '#include "ReaderMarginProbe.h"\n#include "MenuProbe.h"\n'
+                         '''#include "ReaderMarginProbe.h"
+#include "MenuProbe.h"
+#include "activities/home/BookDetails.h"
+// No sidecar metadata service in this in-memory persistence probe.
+namespace BookDetailsLookup {
+bool cached(const std::string&, uint32_t, BookDetails&) { return false; }
+bool parse(const std::string&, uint32_t, BookDetails&, BuildArena*) { return false; }
+}
+'''
                          + recent_json + '\n' + getter + '\n' + exit_methods)
     arduino_json = args.arduino_json or repo / ".pio/libdeps/x4pro/ArduinoJson/src"
     if not (arduino_json / "ArduinoJson.h").is_file():

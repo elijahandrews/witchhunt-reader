@@ -10,6 +10,8 @@ Can be set in platformio.ini build_flags or as a compile definition
 
 Define LOG_LEVEL to control log verbosity:
 0 = ERR only
+WITCH_COMPACT_ERRORS=1 replaces ERR messages/values with source file and line.
+Use it for size-constrained builds; preserve the exact source to decode reports.
 1 = ERR + INF
 2 = ERR + INF + DBG
 3 = ERR + INF + DBG + TRC
@@ -62,7 +64,20 @@ bool isSerialWireMuted();
 
 #ifdef ENABLE_SERIAL_LOG
 #if LOG_LEVEL >= 0
+#if defined(WITCH_COMPACT_ERRORS) && WITCH_COMPACT_ERRORS
+namespace logging_detail {
+// Retain error events in both serial and RTC logs without embedding every format
+// string. By-value arguments preserve the original call's argument evaluation
+// (including bit fields); unused diagnostic values need not be stored or printed.
+template <typename... Args>
+__attribute__((always_inline)) inline void compactError(const char* origin, const char* file, int line, Args...) {
+  logPrintf("ERR", origin, "%s:%d\n", file, line);
+}
+}  // namespace logging_detail
+#define LOG_ERR(origin, format, ...) logging_detail::compactError(origin, __FILE_NAME__, __LINE__, ##__VA_ARGS__)
+#else
 #define LOG_ERR(origin, format, ...) logPrintf("ERR", origin, format "\n", ##__VA_ARGS__)
+#endif
 #else
 #define LOG_ERR(origin, format, ...)
 #endif

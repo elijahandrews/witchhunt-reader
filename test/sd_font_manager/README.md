@@ -16,3 +16,7 @@ The cases verify V4/V5 raster scales and composed size aliases; stale V4 and
 changed V5 payload cache refresh; unchanged cache hits; read-only loading without
 flash writes; oversized source fallback preserving an existing cache; and font
 registration cleanup. All fixture text and family names are synthetic.
+
+The native TTF case builds an original geometric font in memory, runs the real
+glyph store against simulated NOR, and verifies lazy native IDs, logical point
+metadata, body resizing, publisher-ID isolation, and resolver cleanup.

@@ -2,8 +2,8 @@
 
 This target compiles the production `EpubFontManager`, `CssFontCatalog`,
 `OutlineFontFace`, vendored FreeType modules, OpenType helpers, and bundled
-monospace faces. It extracts original diagnostic font fixtures from the checked-in
-typography test EPUB using Python's standard library. No downloaded commercial
+monospace faces. It extracts original diagnostic font fixtures from the typography
+test EPUB generated at CMake configure time. No downloaded commercial
 fonts or system FreeType library are used.
 
 ```sh
@@ -30,5 +30,5 @@ the real 3 MiB budget without mocking the allocator.
 For ASan/UBSan, configure a separate build with
 `-DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer'` and matching
 `CMAKE_CXX_FLAGS` and `CMAKE_EXE_LINKER_FLAGS`. This instruments the vendored C
-rasterizer as well as the C++ manager. Python `fonttools` is needed only to
-regenerate the original EPUB fixture, not to build or run this target.
+rasterizer as well as the C++ manager. Python `fonttools` is required at configure time to generate the original EPUB
+fixture; select that Python with `-DPython3_EXECUTABLE=/path/to/python`.

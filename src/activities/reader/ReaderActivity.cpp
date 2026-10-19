@@ -783,7 +783,7 @@ std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
 void ReaderActivity::goToLibrary(const std::string& fromBookPath) {
   // If coming from a book, start in that book's folder; otherwise start from root
   auto initialPath = fromBookPath.empty() ? "/" : extractFolderPath(fromBookPath);
-  activityManager.goToFileBrowser(std::move(initialPath));
+  activityManager.goToLibrary(LibraryTab::Books, std::move(initialPath));
 }
 
 void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
@@ -806,14 +806,12 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
     sync.paragraphIndex = 0;
     sync.hasParagraphIndex = false;
     sync.paragraphIndexBefore = 0;
+    sync.visibleOffsetAtPage = 0;
+    sync.visibleOffsetAtNextPage = UINT32_MAX;
+    sync.hasVisibleOffset = false;
     sync.intent = KOReaderSyncIntentState::AUTO_PULL;
     sync.outcome = KOReaderSyncOutcomeState::PENDING;
-    sync.resultSpineIndex = 0;
-    sync.resultPage = 0;
-    sync.resultParagraphIndex = 0;
-    sync.resultHasParagraphIndex = false;
-    sync.resultListItemIndex = 0;
-    sync.resultHasListItemIndex = false;
+    sync.clearResult();
     sync.postAction = KOReaderSyncPostAction::Reader;
     APP_STATE.saveToFile();
     // Drop the loaded Epub before TLS — sync activity will reload it for remote-position
@@ -941,7 +939,7 @@ void ReaderActivity::onEnter() {
       // The popup's FAST loaded RED RAM with the pre-popup frame, not the popup, and the first
       // FAST after the return below diffs against RED. Seed it with the displayed frame while the
       // secondary still holds it, as the X4's single-buffer fast diff requires (no-op on X3).
-      if (!renderer.isX3()) renderer.syncRedRamFromFrameBuffer();
+      renderer.syncRedRamFromFrameBuffer();
       lentForIndexing = renderer.borrowSecondaryBuffer(&lentSize);
       if (lentForIndexing) {
         renderer.setSingleBufferFastDiff(true);

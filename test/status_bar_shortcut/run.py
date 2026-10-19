@@ -82,10 +82,15 @@ struct LineReaderActivity {
  void restoreStatusBarSource(size_t);
 };
 bool locked=false;
+bool tryLockAllowed=true;
 struct RenderLock {
  struct ExclusiveActivityAccess {};
+ enum class Mode { Try };
+ bool owned=true;
  explicit RenderLock(ExclusiveActivityAccess) { assert(!locked); locked=true; }
- ~RenderLock() { locked=false; }
+ explicit RenderLock(Mode) : owned(tryLockAllowed && !locked) { if(owned) locked=true; }
+ bool ownsLock() const { return owned; }
+ ~RenderLock() { if(owned) locked=false; }
 };
 struct ReaderUtils { static void enforceExitFullRefresh(GfxRenderer&) { assert(locked); } };
 struct EpubProbe {
@@ -170,6 +175,7 @@ int main() {
  l.restoreStatusBarSource(200);
  l.beforeConfiguredAction(CrossPointSettings::BTN_TOGGLE_STATUS_BAR);
  assert(l.sourceBeforeStatusBarReflow()==200);
+ tryLockAllowed=false; assert(!p.shouldSkipPeriodicUpdate()); tryLockAllowed=true;
  s.statusBarVisible=0; p.backgroundBorrowActive_=true;
  assert(p.shouldSkipPeriodicUpdate() && !p.statusRefreshDeferred_ && l.shouldSkipPeriodicUpdate());
  s.statusBarVisible=1;

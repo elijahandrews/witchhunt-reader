@@ -1,12 +1,18 @@
 #pragma once
 // Registration-only renderer double: the actual manager and SD font loader are compiled.
 #include <EpdFontFamily.h>
+#include <FontLookup.h>
 
 #include <map>
 class SdCardFont;
 class GfxRenderer {
  public:
-  void registerFontPointSize(int, float) {}
+  std::map<int, float> pointSizes;
+  void registerFontPointSize(int id, float pt) { pointSizes[id] = pt; }
+  FontResolverHook<EpdFontFamily> hook;
+  void setFontResolver(decltype(hook.resolve) cb, void* ctx) { hook = {cb, ctx}; }
+  void insertFont(int id, const EpdFontFamily& f) { fonts.insert_or_assign(id, f); }
+  const EpdFontFamily* findFontFamily(int id) { return findOrResolveFont(fonts, scales, id, hook); }
   std::map<int, EpdFontFamily> fonts;
   std::map<int, float> scales;
   std::map<int, SdCardFont*> native, aliases;

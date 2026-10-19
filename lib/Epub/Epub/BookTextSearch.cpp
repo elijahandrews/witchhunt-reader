@@ -179,7 +179,7 @@ bool BookTextSearch::beginChapter() {
   utf8Remaining_ = 0;
   previousSpace_ = true;
   stopped_ = false;
-  return parser_.init(this, startElement, endElement, characters, entity, true, true);
+  return parser_.init(this, startElement, endElement, characters, entity, true, SaxParser::Profile::Full, true);
 }
 bool BookTextSearch::feed(const uint8_t* bytes, size_t length) { return parser_.feed(bytes, length); }
 bool BookTextSearch::finishChapter() {

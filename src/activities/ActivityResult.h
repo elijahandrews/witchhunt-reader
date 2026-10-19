@@ -79,6 +79,8 @@ struct SyncResult {
   bool hasParagraphIndex = false;  // true when paragraphIndex is available
   uint16_t listItemIndex = 0;      // running <li> count when XPath ends in /li[N]
   bool hasListItemIndex = false;   // true when listItemIndex is available
+  uint32_t visibleOffset = 0;
+  bool hasVisibleOffset = false;  // content offset in the spine (exact page via the section LUT)
 };
 
 enum class NetworkMode;
@@ -107,9 +109,16 @@ struct StarredPageResult {
   int pageNumber = 0;
 };
 
-using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
-                                   PageResult, SyncResult, NetworkModeResult, FootnoteResult, FilePathResult,
-                                   StarredPageResult, PrintedPageResult, DictionarySwitchResult, BookSearchResult>;
+// Which answer ConfirmationActivity was given, when it was not Cancel. Only a question with an
+// alternate answer needs to look: for a yes/no question isCancelled already says it all.
+struct ConfirmResult {
+  bool alternate = false;
+};
+
+using ResultVariant =
+    std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, PageResult,
+                 SyncResult, NetworkModeResult, FootnoteResult, FilePathResult, StarredPageResult, PrintedPageResult,
+                 DictionarySwitchResult, ConfirmResult, BookSearchResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

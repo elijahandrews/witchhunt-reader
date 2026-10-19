@@ -22,6 +22,15 @@ ProgressComparison compareProgress(const LocalReadingPosition& local, const floa
     if (local.spineIndex != remote.spineIndex) {
       return local.spineIndex > remote.spineIndex ? ProgressComparison::LocalAhead : ProgressComparison::RemoteAhead;
     }
+    // Same chapter. Content offsets, when both sides have them, are exact for every book.
+    if (local.hasVisibleOffset && remote.hasVisibleTextOffset) {
+      // Page 0 also owns offsets below its start (hidden text KOReader shows), as the offset lookup does.
+      if (local.page != 0 && remote.visibleTextOffset < local.visibleOffsetAtPage) {
+        return ProgressComparison::LocalAhead;
+      }
+      if (remote.visibleTextOffset < local.visibleOffsetAtNextPage) return ProgressComparison::Synchronized;
+      return ProgressComparison::RemoteAhead;
+    }
     // Same chapter. The paragraph LUT locates p[K]'s start, not a descendant text offset:
     // exact starts open on this page when K(p-1) < K <= K(p). Interior anchors need stricter bounds.
     if (remote.hasParagraphIndex && local.paragraphAtPageEnd > 0) {

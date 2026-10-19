@@ -434,7 +434,7 @@ int16_t OutlineFontFace::kerning(uint16_t l, uint16_t r) {
   auto& i = *impl_;
   FT_Pos value = 0;
   if (i.gpos) {
-    int32_t units = freeink::font::gpos::PairKernAdjustment(i.gpos, i.gposSize, l, r);
+    int32_t units = witchoutline::font::gpos::PairKernAdjustment(i.gpos, i.gposSize, l, r);
     value = FT_MulFix(units, i.face->size->metrics.x_scale);
   } else {
     FT_Vector delta{};
@@ -446,7 +446,7 @@ uint16_t OutlineFontFace::ligature(const uint16_t* gids, size_t n) {
   if (!ready() || !gids || n < 2 || n > 3) return 0;
   uint32_t seq[3] = {gids[0], gids[1], n == 3 ? gids[2] : 0u};
   auto& i = *impl_;
-  uint32_t gid = freeink::font::gsub::LigatureGlyphId(i.gsub, i.gsubSize, seq, unsigned(n));
+  uint32_t gid = witchoutline::font::gsub::LigatureGlyphId(i.gsub, i.gsubSize, seq, unsigned(n));
   return gid > 0 && gid < unsigned(i.face->num_glyphs) ? uint16_t(gid) : 0;
 }
 const EpdOutlineFontCallbacks& OutlineFontFace::callbacks() {

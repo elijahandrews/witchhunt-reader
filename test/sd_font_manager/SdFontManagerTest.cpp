@@ -12,6 +12,9 @@
 #include <string>
 #include <vector>
 
+#include "FontIdNamespace.h"
+#include "TtfBuilder.h"
+
 namespace flash_double {
 using Key = std::pair<std::string, uint8_t>;
 std::map<Key, std::vector<uint8_t>> entries;
@@ -204,3 +207,38 @@ TEST_F(SdFontManager, OversizeSourceDoesNotEraseExistingCache) {
   EXPECT_EQ(flash_double::entries.at({"Existing", 12}), prior);
 }
 }  // namespace
+
+TEST_F(SdFontManager, NativeTtfLazySizesRetainLogicalPointsAndSeparatePublisherIds) {
+  ttf_test::Font source;
+  source.glyphs.resize(2);
+  source.glyphs[1].contours = {{{0, 0, true}, {500, 0, true}, {500, 700, true}, {0, 700, true}}};
+  source.cmap['A'] = 1;
+  const auto bytes = ttf_test::buildFont(source);
+  auto family = write(bytes);
+  family.files[0].pointSize = 0;
+  SdCardFontManager manager;
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 10));
+  ASSERT_TRUE(manager.ttfLoaded());
+  const int body = manager.getFontId("Synthetic", 10);
+  ASSERT_NE(body, 0);
+  EXPECT_FALSE(fontIdNamespace::isPublisher(static_cast<uint32_t>(body)));
+  EXPECT_FLOAT_EQ(renderer.pointSizes.at(body), 10.f);
+  const auto sizes = manager.ttfNativeSizes(body);
+  ASSERT_TRUE(sizes.has_value());
+  for (const uint8_t px : {sizes->minPx, sizes->maxPx}) {
+    const int id = sizes->base | px;
+    EXPECT_FALSE(fontIdNamespace::isPublisher(static_cast<uint32_t>(id)));
+    EXPECT_EQ(renderer.fonts.count(id), 0u);
+    const auto* resolved = renderer.findFontFamily(id);
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_FLOAT_EQ(renderer.pointSizes.at(id), px * 72.f / 150.f);
+    EXPECT_TRUE(resolved->getGlyph('A'));
+  }
+  ASSERT_TRUE(manager.setTtfBodySize(renderer, 14));
+  const int resized = manager.getFontId("Synthetic", 14);
+  ASSERT_NE(resized, 0);
+  EXPECT_FLOAT_EQ(renderer.pointSizes.at(resized), 14.f);
+  manager.unloadAll(renderer);
+  EXPECT_FALSE(renderer.hook.resolve);
+  EXPECT_TRUE(renderer.fonts.empty());
+}

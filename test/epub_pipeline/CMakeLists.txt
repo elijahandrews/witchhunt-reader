@@ -16,6 +16,7 @@ set(PIPELINE_SOURCES
   ${REPO_ROOT}/lib/Epub/Epub/Page.cpp
   ${REPO_ROOT}/lib/Epub/Epub/ParsedText.cpp
   ${REPO_ROOT}/lib/Epub/Epub/BookMetadataCache.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/MetadataSidecar.cpp
   ${REPO_ROOT}/lib/Epub/Epub/FootnotePreviews.cpp
   ${REPO_ROOT}/lib/Epub/Epub/FootnoteShape.cpp
   ${REPO_ROOT}/lib/Epub/Epub/EpubImageManifest.cpp
@@ -103,23 +104,30 @@ add_executable(EpubPipelineTest
   BookSearchNavigationTest.cpp
   FingerprintTest.cpp
   LostTocRetryTest.cpp
+  TocSourceTest.cpp
   PageListSinkTest.cpp
   MetadataSidecarTest.cpp
   SidecarFilesTest.cpp
   SectionAbortTest.cpp
   SpinePageIndexTest.cpp
+  StreamedParseTest.cpp
   FootnotePreviewStoreTest.cpp
   FootnoteResolveSliceTest.cpp
   SourceAnchorTest.cpp
   ParagraphAnchorTest.cpp
+  ParsedTextOffsetTest.cpp
   LowHeapLoadTest.cpp
+  LongChapterPageTablesTest.cpp
   TableRowFallbackArenaTest.cpp
   AnchorMapTest.cpp
   AnchorPageAccuracyTest.cpp
+  TocBoundariesAfterBuildTest.cpp
+  SpanAnchorTest.cpp
   ImageExtractionTest.cpp
   ImageManifestTest.cpp
   ImageWrapperWidthTest.cpp
   HeadingBlockLayoutTest.cpp
+  NativeSizeLayoutTest.cpp
   ParagraphIndentTest.cpp
   DictionaryHtmlPagesTest.cpp
   ${REPO_ROOT}/src/util/DictHtmlPages.cpp
@@ -130,12 +138,17 @@ add_executable(EpubPipelineTest
   CompanionCacheTest.cpp
   ImageParkTest.cpp
   StoredEntryDecodeTest.cpp
+  PlaceholderOnlyScopeTest.cpp
   PixelCacheWriteTest.cpp
   BufferedPrintTest.cpp
   CoverPipelineTest.cpp
+  CoverWrapperTest.cpp
   ProgressMapperTest.cpp
   ProgressMapperRoundTripTest.cpp
   XPathExtractionTest.cpp
+  VisibleTextTest.cpp
+  VisibleTextOffsetLutTest.cpp
+  TextNodeRulesTest.cpp
   # lib/KOReaderSync position mapping: needs only the Epub and the SAX parser, not the network.
   ${REPO_ROOT}/lib/KOReaderSync/ProgressMapper.cpp
   ${REPO_ROOT}/lib/KOReaderSync/ChapterXPathIndexer.cpp
@@ -155,6 +168,9 @@ target_compile_definitions(EpubPipelineTest PRIVATE
   JPEG_FIXTURE_DIR="${REPO_ROOT}/test/jpeg_decoder/fixtures"
   ENABLE_SERIAL_LOG=1
   LOG_LEVEL=2
+  # LongChapterPageTablesTest refuses build-table chunks on purpose (see ChunkedVector.h). The
+  # hook is inert until a test arms it; firmware and the dump tools never define it.
+  CHUNKED_VECTOR_FAULT_INJECTION
 )
 target_link_libraries(EpubPipelineTest PRIVATE
   crosspoint_test_common

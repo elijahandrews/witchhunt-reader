@@ -4,7 +4,7 @@
  * size: 12
  * mode: 2-bit  compressed: zopfli
  * hinting: auto (FT_LOAD_FORCE_AUTOHINT — grid-fits stems to whole pixels; ink re-centred on the unhinted outline)
- * Command used: fontconvert.py notosans_12_bold 12 ../builtinFonts/source/NotoSans/NotoSans-Bold.ttf --2bit --compress --zopfli --additional-intervals 0x0250,0x02AF --additional-intervals 0x02B0,0x02B7 --additional-intervals 0x02BC,0x02BC --additional-intervals 0x02C8,0x02D1 --additional-intervals 0x02E1,0x02E1 --additional-intervals 0x03B2,0x03B2 --additional-intervals 0x03B8,0x03B8 --additional-intervals 0x03C7,0x03C7
+ * Command used: /Users/elijah/src/witch-hunt/.local-device/upstream-2-40-worktree/lib/EpdFont/scripts/fontconvert.py notosans_12_bold 12 /Users/elijah/src/witch-hunt/lib/EpdFont/builtinFonts/source/NotoSans/NotoSans-Bold.ttf --2bit --compress --zopfli --additional-intervals 0x0250,0x02AF --additional-intervals 0x02B0,0x02B7 --additional-intervals 0x02BC,0x02BC --additional-intervals 0x02C8,0x02D1 --additional-intervals 0x02E1,0x02E1 --additional-intervals 0x03B2,0x03B2 --additional-intervals 0x03B8,0x03B8 --additional-intervals 0x03C7,0x03C7
  */
 #pragma once
 #include "EpdFontData.h"
@@ -3082,7 +3082,7 @@ static const int8_t notosans_12_boldKernSparseValues[] = {
       -4,   -8,   38,   -4,   -4,   -8,   -4,    8,   24,   16,   -8,   16,  -64,   -8,   -8,   -4,
       16,  -16,    8,   -8,   20,   -8,   -4,  -12,  -12,   -4,  -12,  -12,   -4,   -4,  -24,  -12,
       -8,  -32,  -24,   -8,   -8,   -8,  -16,   40,  -16,  -12,  -16,   20,  -28,   -8,   44,  -28,
-     -16,  -24,   47,   42,   58,   53,   12,   28,   37,   20,   47,   20,   52,   54,   65,   56,
+     -16,  -24,   47,   42,   58,   53,   12,   28,   37,   20,   47,   20,   52,   46,   65,   56,
       38,   -8,    8,   24,   28,   20,   24,    8,   16,   20,  -12,   -4,    8,   28,   28,   20,
       24,  -12,   -8,   -8,    8,   20,   20,   28,   -4,   -8,   16,   20,  -28,  -20,   -8,  -12,
       -8,   -8,   -8,   -8,  -16,  -24,  -20,   -8,  -12,    8,  -20,  -16,  -12,  -12,    8,   -8,
@@ -3097,13 +3097,13 @@ static const int8_t notosans_12_boldKernSparseValues[] = {
       -4,   -4,   -4,   -4,   -4,   -8,  -52,   -4,   -4,   -8,   -4,  -24,   -8,  -20,  -24,   -8,
       -4,  -10,  -20,   -4,  -16,   -4,  -24,   -4,   -5,  -16,   -4,  -14,   -4,   -8,  -12,  -14,
      -12,  -16,  -12,   -4,  -10,   -6,   -6,   -4,   -8,   -4,  -16,  -14,   -8,   -4,   -4,   -2,
-     -24,  -15,   -4,  -12,   -8,   -4,   -8,   -4,  -12,   -4,   -4,   -2,  -12,   -4,   -4,   -4,
+      -8,  -15,   -4,   -4,   -8,   -4,   -8,   -4,  -12,   -4,   -4,   -2,  -12,   -4,   -4,   -4,
       -8,   -4,   -4,   12,  -16,   -8,   -8,  -12,  -12,   -4,  -16,   -4,  -12,   16,   -4,    8,
      -12,   40,    8,   12,   -6,    8,   10,   -6,  -12,   24,   -2,  -16,  -15,   -4,   -8,   -8,
       -4,   -8,   -4,  -12,   -4,   -4,   -4,   -4,   -6,   -4,   -6,   -4,   -8,   -8,   -8,   -4,
       -8,   12,  -12,   -1,    8,   -8,   -4,   -4,    8,  -16,   -8,   -8,  -12,   -4,   -4,  -20,
      -12,  -20,  -12,   16,  -32,   -4,  -24,   -8,   -4,   -4,   -4,  -28,   -8,   -8,  -24,  -18,
-     -16,   -8,   -8,  -12,   -8,  -12,   -4,  -16,   32,  -12,  -20,    8,   12,  -16,   -8,   -8,
+     -16,   -8,   -8,  -12,   -8,  -12,   -4,  -16,   16,  -12,  -20,    8,   12,  -16,   -8,   -8,
       10,  -12,  -12,   -4,  -16,   -4,  -12,   10,   10,   16,   -8,  -12,   -4,   -8,   12,    8,
       17,    6,   12,    8,   -4,  -16,   16,  -12,  -20,  -16,   -8,  -16,  -16,  -16,   -8,  -12,
       -8,  -12,  -28,   -8,  -20,  -12,  -12,   -8,   -8,   -8,  -16,   -4,   -4,  -24,  -16,  -24,
