@@ -10,6 +10,39 @@
 #include <iostream>
 #include <vector>
 
+// Test-only reference quantizer. Partition a row into constant-coverage runs,
+// preserving fractional plateaus uniformly. Between plateaus, round cumulative
+// area totals; this is independent of production's one-sample delay and carry.
+std::vector<uint8_t> quantizeReferenceCoverage(const std::vector<int64_t>& coverage, int w, int h, int64_t area) {
+  assert(area > 0 && coverage.size() == static_cast<size_t>(w * h));
+  std::vector<uint8_t> result(coverage.size());
+  for (int y = 0; y < h; ++y) {
+    int64_t prefix = 0, previous = 0;
+    for (int x = 0; x < w;) {
+      const int64_t value = coverage[y * w + x];
+      assert(value >= 0 && value <= 3 * area);
+      int end = x + 1;
+      while (end < w && coverage[y * w + end] == value) ++end;
+      if (end - x > 1 && value % area) {
+        const int64_t lower = value / area, remainder = value % area;
+        const uint8_t raw = lower + (remainder * 2 > area || (remainder * 2 == area && (lower & 1)));
+        std::fill(result.begin() + y * w + x, result.begin() + y * w + end, raw);
+        prefix = previous = 0;
+      } else {
+        for (int next = x; next < end; ++next) {
+          prefix += value;
+          const int64_t total = (prefix + (area - 1) / 2) / area;
+          assert(total >= previous && total - previous <= 3);
+          result[y * w + next] = total - previous;
+          previous = total;
+        }
+      }
+      x = end;
+    }
+  }
+  return result;
+}
+
 namespace {
 using Plane = std::array<uint8_t, 48000>;
 struct Frame {
@@ -68,11 +101,6 @@ void put(Frame& f, int x, int y, int raw, int darkness, GfxRenderer::Orientation
   if (raw < 3 && (darkness == 0 || darkness == 4 || (darkness == 1 && raw == 1))) f.msb[i] |= b;
   if (raw == 2 && darkness == 0) f.lsb[i] |= b;
 }
-int nearestEven(double v) {
-  int lo = int(std::floor(v));
-  if (std::abs(v - lo - .5) < 1e-9) return lo + (lo & 1);
-  return int(std::floor(v + .5));
-}
 // Independent forward projection: move each source pixel's rectangle onto the
 // display grid, then quantize coverage. No TextRun, GlyphScale, cache, or renderer
 // sampling helper participates in this oracle.
@@ -82,25 +110,29 @@ Frame project(const std::vector<int>& source, int w, int h, int left, int top, f
   f.bw.fill(255);
   f.lsb.fill(0);
   f.msb.fill(0);
-  // Match the documented fixed-point inverse scale, not its sampling algorithm.
-  const double step = std::lround(65536.0 / scale) / 65536.0;
-  const double factor = 1 / step;
+  // Exact forward geometry in 1/(16*step) display units. The extra factor
+  // represents the public 1/16-pixel pen phase without rounding its product.
+  const int64_t step = std::lround(65536.0 / scale), unit = step * 16;
+  constexpr int64_t one = 65536 * 16;
+  const int64_t pen16 = std::llround(pen * 16);
   const int x0 = int(std::floor(pen + left * scale)) - 1;
   const int x1 = int(std::ceil(pen + (left + w) * scale)) + 1;
   const int y0 = baseline + int(std::floor(-top * scale)) - 1;
   const int y1 = baseline + int(std::ceil((h - top) * scale)) + 1;
-  for (int y = y0; y < y1; ++y)
-    for (int x = x0; x < x1; ++x) {
-      double coverage = 0;
-      for (int sy = 0; sy < h; ++sy)
-        for (int sx = 0; sx < w; ++sx) {
-          double a = pen + (left + sx) * factor, b = a + factor;
-          double c = baseline + (sy - top) * factor, d = c + factor;
-          coverage += source[sy * w + sx] * std::max(0.0, std::min(b, x + 1.0) - std::max(a, double(x))) *
-                      std::max(0.0, std::min(d, y + 1.0) - std::max(c, double(y)));
-        }
-      put(f, x, y, std::clamp(nearestEven(coverage), 0, 3), darkness, orientation);
+  const int width = x1 - x0, height = y1 - y0;
+  std::vector<int64_t> coverage(width * height);
+  for (int sy = 0; sy < h; ++sy)
+    for (int sx = 0; sx < w; ++sx) {
+      const int64_t a = (pen16 - x0 * 16) * step + (sx + left) * one, b = a + one;
+      const int64_t c = (baseline - y0) * unit + (sy - top) * one, d = c + one;
+      for (int y = std::max<int64_t>(0, c / unit); y < std::min<int64_t>(height, (d + unit - 1) / unit); ++y)
+        for (int x = std::max<int64_t>(0, a / unit); x < std::min<int64_t>(width, (b + unit - 1) / unit); ++x)
+          coverage[y * width + x] += source[sy * w + sx] * (std::min(b, (x + 1) * unit) - std::max(a, x * unit)) *
+                                     (std::min(d, (y + 1) * unit) - std::max(c, y * unit));
     }
+  const auto raw = quantizeReferenceCoverage(coverage, width, height, unit * unit);
+  for (int y = 0; y < height; ++y)
+    for (int x = 0; x < width; ++x) put(f, x0 + x, y0 + y, raw[y * width + x], darkness, orientation);
   return f;
 }
 void save(const Frame& f) {
@@ -118,6 +150,25 @@ void save(const Frame& f) {
 
 int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
   int checks = 0, failures = 0;
+  // Fixed answers exercise the policy independently of both projection code
+  // and production: flat gray bars never acquire an alternating shade pattern.
+  const auto expect = [&](const std::vector<int64_t>& values, int64_t area, const std::vector<uint8_t>& expected) {
+    ++checks;
+    if (quantizeReferenceCoverage(values, values.size(), 1, area) != expected) {
+      ++failures;
+      std::cerr << "Reference plateau/area quantization example failed\n";
+    }
+  };
+  expect({1, 1}, 2, {0, 0});
+  expect({1, 1, 1, 1}, 2, {0, 0, 0, 0});
+  expect({3, 3, 5, 5}, 2, {2, 2, 2, 2});
+  expect({6, 5, 5, 6}, 10, {1, 0, 0, 1});
+  expect({1, 6, 1, 0, 1, 6, 1}, 2, {0, 3, 1, 0, 0, 3, 1});
+  expect({1, 2, 2, 1}, 2, {0, 1, 1, 1});
+  expect({1, 6, 2}, 2, {0, 3, 1});
+  expect({29, 48, 41, 2}, 16, {2, 3, 2, 0});
+  expect({23, 48, 43, 6}, 16, {1, 3, 3, 0});
+  expect({1, 9, 2}, 3, {0, 3, 1});
   const auto orientation = g.getOrientation();
   const std::vector<int> source{0, 1, 3, 0, 0, 1, 3, 2, 0, 0, 3, 3, 3, 2, 1, 0, 1, 3, 0, 0};
   std::array<uint8_t, 6> bits{};
@@ -157,7 +208,7 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
               g.drawTextSpaced(21, x, y, " \xf0\x9f\x84\xb0", true, EpdFontFamily::REGULAR, scale, tracking);
             });
             bool ok = actual == expected && actual == warm && actual == staged && actual == direct;
-            const int adv = (int(std::lround(64 * scale)) + tracking + int(std::lround(91 * scale)) + 8) >> 4;
+            const int adv = int(std::floor(((64.0 + 91) * scale + tracking) / 16 + .5));
             ok &= g.getTextAdvanceXSpaced(21, " A", EpdFontFamily::REGULAR, scale, tracking) == std::max(0, adv);
             const auto range = g.getTextRangeSpaced(21, " A", EpdFontFamily::REGULAR, scale, tracking, 1, 1);
             ok &= range.left <= int(std::floor(pen - x - scale));
@@ -169,6 +220,50 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
           }
         }
   }
+  // Odd density-2 advances must retain their half-sixteenth through the run.
+  // The old walk rounded 32 * (91/2) into 32 * 46: 92 px instead of 91 px.
+  // An independent double pen also exercises negative kern/tracking, synthetic
+  // caps, integer-only fonts, and the last selected character's draw position.
+  const EpdKernClassEntry kernClass[] = {{'A', 1}};
+  const int8_t kernValue[] = {-3};
+  for (bool kerned : {false, true}) {
+    data.kernLeftClasses = data.kernRightClasses = kerned ? kernClass : nullptr;
+    data.kernLeftEntryCount = data.kernRightEntryCount = kerned ? 1 : 0;
+    data.kernLeftClassCount = data.kernRightClassCount = kerned ? 1 : 0;
+    data.kernMatrix = kerned ? kernValue : nullptr;
+    for (bool fractional : {false, true}) {
+      data.is2Bit = fractional;
+      for (float scale : {.5f, .75f, 1.0f, 1.25f})
+        for (int tracking : {-49, -3, 0, 3})
+          for (auto style : {EpdFontFamily::REGULAR, EpdFontFamily::SMALL_CAPS}) {
+            const std::string run(32, style == EpdFontFamily::REGULAR ? 'A' : 'a');
+            const double actualScale = scale * (style == EpdFontFamily::REGULAR ? 1.0 : .75);
+            double pen = 0;
+            int count = 0, lastX = 0;
+            textRun::CharacterRange range{31, 31};
+            const auto measured = textRun::walk<true, false>(
+                family, run.c_str(), style, scale, tracking,
+                [&](uint32_t cp, int x, int, float, bool, int8_t phase) {
+                  assert(cp == 'A');
+                  if (count) pen += (tracking + (kerned ? -3 * actualScale : 0)) / 16;
+                  const int sixteenths = int(std::floor(pen * 16 + .5));
+                  const int expectedX =
+                      fractional ? int(std::floor(sixteenths / 16.0 + .5)) : int(std::floor(pen + .5));
+                  const int expectedPhase = fractional ? sixteenths - expectedX * 16 : 0;
+                  assert(x == expectedX && phase == expectedPhase);
+                  assert(phase >= -8 && phase < 8);
+                  lastX = x;
+                  pen += 91 * actualScale / 16;
+                  ++count;
+                },
+                &range, false);
+            assert(count == 32 && measured.advance == std::max(0, int(std::floor(pen + .5))));
+            assert(range.found && range.x == lastX && range.right >= int(std::floor(pen + .5)));
+            ++checks;
+          }
+    }
+  }
+  data.is2Bit = true;
   g.removeFont(21);
   g.setOrientation(GfxRenderer::Portrait);
   g.setTextDarkness(0);

@@ -69,15 +69,27 @@ Scaled entry-point tests cover ligatures, combining accents, kerning and scale
 cancellation; drawing and measurement use the same glyph walk. Scan-mode tests
 also ensure measurement continues to request the needed font glyphs.
 
-Area coverage rounds exact halfway values to the nearest even level. HD rasters
-already contain quantized coverage, so half-level samples are common; always
-rounding upward adds ink to their fringes. Nearest-even reduces this directional
-bias without changing non-ties, source outlines, spacing or darkness mappings.
-It does not make quantization lossless or guarantee zero bias for every glyph.
-Thirteen synthetic 2x2 tiles verify every quarter-level average, including exact
-ties, their neighbors, transparent/solid endpoints and a surviving thin stroke.
-The same checks exercise cached/direct sampling and all five darkness settings;
-native capitals and lowercase stems also use the independent area projection.
+Bitmap resampling balances rounding across varying edges within each glyph row.
+Previously, independent per-pixel rounding could give the first l in “will” more
+ink than the second at small HD sizes. A bounded scalar remainder now prevents
+that phase-dependent weight difference in isolated stems. No additional heap or
+cache storage is used; spacing and source font weights stay unchanged.
+
+Equal fractional-coverage runs retain uniform nearest-even rounding, resetting
+the remainder across the run. This protects flat gray serifs and crossbars from
+error-diffusion texture. Between protected plateaus, integrated totals round to
+the nearest shade unit with exact halves toward less ink (at most 1/6 display
+pixel of total coverage). This is not universal ink conservation: uniform flat
+hairlines retain their original quantization, and physical e-ink shades may be
+nonlinear. Native outline rasterization is unchanged by this bitmap fix.
+
+Independent integer-area forward projections check every pixel, including exact
+Q16 reciprocal boundaries. Hardcoded mixed-plateau examples and 1,027 geometric
+stem/flat-edge cases cover all phases, scales, orientations, cached/uncached and
+staged/captured paths. Original word specimens include “will still fill little
+tall hill”; the synthetic EPUB's **Repeated stems and smooth edges** chapter
+adds matching device checks at several sizes/styles. Inspect both stem weight
+and smooth horizontal edges with Normal darkness and antialiasing enabled.
 
 ## Outline references and quality criteria
 
@@ -166,8 +178,9 @@ Two-bit text in the EPUB/scaled glyph walk retains horizontal positions to 1/16
 of a display pixel. The area filter combines the origin with the scaled bearing
 before quantization. Native-size glyphs use an equivalent two-column filter.
 This shifts stored coverage; it does not invent higher-resolution outlines for
-legacy bitmap fonts or change their hinting. HD and runtime LIGHT-hinted fonts
-retain their existing denser rasters. Native one-bit UI fonts keep grid fitting.
+legacy bitmap fonts or change their hinting. HD bitmap fonts retain their existing denser rasters. Runtime outline fonts can
+rasterize at the final size and phase as described below. Native one-bit UI fonts
+keep grid fitting.
 
 The bounded scaled-glyph cache includes the horizontal phase in an existing
 padding byte; its allocation budget is unchanged. Measuring, selection bounds,
@@ -183,3 +196,80 @@ Bookerly 10pt advances for “still” and emits `fractional-spacing.png` with o
 sample text at four sizes. It detects cache aliases between phases and premature
 rounding of a fractional source origin at coverage ties. These are host raster
 checks; physical panel quality and page-turn timing still require device testing.
+
+
+Scaled glyph advances and kerning now accumulate in a 16.16 pen before conversion
+to the drawing phase or final integer width. Long odd-advance runs detect repeated
+rounding bias; the test covers integer-only and antialiased fonts, synthetic caps,
+negative kerning/tracking and selected-character geometry. The old per-glyph
+rounding fails the retained-advance negative control. Exact ink measurements reuse
+the walk's vertical bounds instead of looking up each glyph and raster again;
+`test/text_ink_metrics` checks geometry and provider call counts separately.
+
+
+## Final-size outlines and native TTF adapters
+
+The optional outline run also builds `outline_quality.cpp`. Its independent
+double-precision pen walk copies the final raster pixels directly into the documented
+SDK planes, without using `TextRun`, `GlyphScale`, renderer clipping, or renderer
+cache helpers. It checks 4/8/16 phase modes, all four orientations, left/top and
+right/bottom clipping, negative bearings/tracking, combining marks, both small-cap
+modes, scale changes, measured ink bounds, captured/staged equality, cache churn,
+and face reopen. An advance-only comparison holds layout metrics fixed across
+the three raster policies. Raw FreeType agreement has a separate backend test;
+these cases check integration into the actual renderer. The reference sums documented FP32/Q16-rounded terms in double precision and separately bounds them against an unquantized pen. Framebuffer and final-width comparisons remain exact, including boundary cases; binary-scale long-run checks retain exact width assertions.
+
+The run emits 18 `outline-quality-*.png` screens for 8/10/12pt, 4/8 phases, and
+legacy quantized-bitmap projection, 8-bit 2x projection, and final-size LIGHT
+hinting. `outline-comparison-q4.png` and `outline-comparison-q8.png` place those
+policies in columns and point sizes in rows. `outline-detail-p8-q*.png` enlarges
+the 8pt samples by exact pixel replication. Source, optical size, advances,
+kerning, strings and baselines stay fixed within each comparison. These images
+do not model the panel waveform, lighting, physical gray levels or refresh time.
+
+Test a local four-style native TTF family through the production flash store:
+
+```sh
+python3 test/real_renderer/run.py . --out /path/to/ignored/output --sanitize \
+  --native-fonts /path/Regular.ttf /path/Bold.ttf /path/Italic.ttf /path/BoldItalic.ttf
+```
+
+`native_outline.cpp` compares the adapter's actual pixels to a separately opened
+outline face, including phase zero, all four styles, body and native pixel sizes,
+unchanged legacy advances/kerning, captured/staged frames, and close/reload. Its
+NOR wrapper releases the memory behind an unmapped style, while maintaining
+coherent live index/log mappings. ASan therefore detects a stale style pointer
+that an ordinary permanent RAM buffer could conceal. No font assets are copied
+into the source tree.
+
+## Embedded stack budget
+
+Large host thread stacks can hide failures that reset the reader. The outline
+and native-font `run.py` modes automatically run the host compiler guard. Before
+a runtime font release, also run the actual-target and constrained-thread check:
+
+```sh
+python3 test/real_renderer/stack_budget.py \
+  --out /tmp/witch-font-stack \
+  --target-cc /path/to/xtensa-esp32s3-elf-gcc \
+  /path/to/local-cff.otf /path/to/local-truetype.ttf
+```
+
+It compiles **all** vendored FreeType modules with `-Os -fstack-usage`, rejecting
+individual frames over 4 KiB on the 64-bit host or 2 KiB on the optional actual
+Xtensa compiler, plus unbounded dynamic frames. It checks that the CFF
+interpreter, grayscale converter, and auto-hinter are present in the reports;
+an absent compiler report cannot pass. `--static-only` runs the compiler guard
+without font fixtures. Reports and exact commands are saved in `stack-usage.json`.
+
+The runtime probe opens each streamed face and renders native/LIGHT, final-size/
+oversampled glyphs at several sizes and phases on a 32 KiB pthread stack. An
+8 KiB live stack reservation accounts for application callers. Because macOS
+rounds the actual pthread allocation upward, stream and allocation callbacks
+also enforce the requested 32 KiB boundary explicitly and report observed depth.
+The probe exercises heap allocation, CFF accented glyphs, and cold caches.
+This probe deliberately does not use sanitizers, whose stack instrumentation
+would change that budget; run the normal renderer sanitizer suite separately.
+The compiler bound is per function and the pthread is a different ABI, so neither
+is a proof of every device call chain. Both supplement actual hardware navigation
+and stack high-water checks. No private font is copied into the repository.

@@ -1568,35 +1568,21 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   // 0 for continuation flushes (computed once in layoutAndExtractLines).
   const int lineIndent = (breakIndex == 0) ? firstLineIndent : 0;
 
-  // Calculate total word width for this line, count actual word gaps,
-  // and accumulate total natural gap widths (including space kerning adjustments).
+  // Count and stretch the same boundaries. Attached punctuation never stretches;
+  // a literal nonbreaking-space token stretches after its own measured width.
+  const auto stretchAfter = [&](const size_t wordIdx) {
+    if (wordIdx + 1 >= lineWordCount) return false;
+    const size_t current = lastBreakAt + wordIdx;
+    if (boundaries[current + 1].continues) return boundaries[current].continues && words[current] == " ";
+    return !isClosingPunctuation(firstCodepoint(words[current + 1]));
+  };
   int lineWordWidthSum = 0;
-  size_t actualGapCount = 0;
+  int actualGapCount = 0;
   int totalNaturalGaps = 0;
-
-  for (size_t wordIdx = 0; wordIdx < lineWordCount; wordIdx++) {
+  for (size_t wordIdx = 0; wordIdx < lineWordCount; ++wordIdx) {
     lineWordWidthSum += wordWidths[lastBreakAt + wordIdx];
-    // Count gaps: each word after the first creates a gap, unless it's a continuation.
-    // Gaps before closing punctuation (. , ) » etc.) are excluded from justification
-    // distribution so they stay at natural space width.
-    const uint32_t firstCp = firstCodepoint(words[lastBreakAt + wordIdx]);
-    const TokenBoundary::Boundary boundary = boundaries[lastBreakAt + wordIdx];
-    if (wordIdx > 0 && !boundary.continues) {
-      // A word gap or a CJK gap: both stretch when justified, only the word gap has a width.
-      const bool beforeClosing = isClosingPunctuation(firstCp);
-      if (!beforeClosing) actualGapCount++;
-      if (TokenBoundary::hasSpace(boundary))
-        totalNaturalGaps += naturalGapBefore(renderer, fontId, lastBreakAt + wordIdx);
-    } else if (wordIdx > 0) {
-      // Non-breaking space tokens (" " with continues=true) are visible, stretchable spaces —
-      // count them as justifiable gaps so justifyExtra is distributed to them too.
-      if (words[lastBreakAt + wordIdx] == " ") {
-        actualGapCount++;
-      }
-      // Cross-boundary kerning for continuation words (e.g. nonbreaking spaces, attached punctuation)
-      totalNaturalGaps +=
-          static_cast<int>(wordGap(renderer, fontId, lastBreakAt + wordIdx - 1, lastBreakAt + wordIdx, true));
-    }
+    if (wordIdx > 0) totalNaturalGaps += naturalGapBefore(renderer, fontId, lastBreakAt + wordIdx);
+    if (stretchAfter(wordIdx)) ++actualGapCount;
   }
 
   // Calculate spacing (account for float zone narrowing + first-line indent)
@@ -1607,12 +1593,28 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   // so relying only on breakIndex would incorrectly disable justification.
   const bool isLastLine = lineBreak == words.size();
 
-  // For justified text, compute per-gap extra to distribute remaining space evenly.
-  // Cap stretch to effectivePageWidth/8 per gap to prevent rivers in sparse lines.
+  // Distribute the remainder cumulatively so an uncapped line reaches its edge.
+  // Divide only once per line; the per-gap step needs only addition/comparison.
+  // The existing per-gap stretch ceiling still prevents rivers in sparse lines.
   const int spareSpace = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
-  const int justifyExtra = (blockStyle.alignment == CssTextAlign::Justify && !isLastLine && actualGapCount >= 1)
-                               ? std::min(spareSpace / static_cast<int>(actualGapCount), effectivePageWidth / 8)
-                               : 0;
+  int justifyExtra = 0, justifyRemainder = 0, remainderCarry = 0;
+  if (blockStyle.alignment == CssTextAlign::Justify && !isLastLine && actualGapCount > 0) {
+    const int quotient = spareSpace / actualGapCount;
+    justifyExtra = std::min(quotient, effectivePageWidth / 8);
+    if (quotient < effectivePageWidth / 8) justifyRemainder = spareSpace % actualGapCount;
+  }
+  const auto nextStretch = [&] {
+    int extra = justifyExtra;
+    remainderCarry += justifyRemainder;
+    if (remainderCarry >= actualGapCount) {
+      remainderCarry -= actualGapCount;
+      ++extra;
+    } else if (remainderCarry <= -actualGapCount) {
+      remainderCarry += actualGapCount;
+      --extra;
+    }
+    return extra;
+  };
 
   // Calculate initial x position (first line starts at indent for left/justified text;
   // may be negative for hanging indents, e.g. margin-left:3em; text-indent:-1em).
@@ -1632,30 +1634,10 @@ ParsedText::LineProcessResult ParsedText::extractLine(
   for (size_t wordIdx = 0; wordIdx < lineWordCount; wordIdx++) {
     lineXPos.push_back(static_cast<int16_t>(std::max(-32768, std::min(32767, xpos))));
 
-    const bool nextIsContinuation = wordIdx + 1 < lineWordCount && boundaries[lastBreakAt + wordIdx + 1].continues;
-    if (nextIsContinuation) {
-      int advance = wordWidths[lastBreakAt + wordIdx];
-      // Cross-boundary kerning for continuation words (e.g. nonbreaking spaces, attached punctuation)
-      advance += static_cast<int>(wordGap(renderer, fontId, lastBreakAt + wordIdx, lastBreakAt + wordIdx + 1, true));
-      // Non-breaking space tokens are stretchable — expand them during justification like normal spaces.
-      if (words[lastBreakAt + wordIdx] == " " && boundaries[lastBreakAt + wordIdx].continues &&
-          blockStyle.alignment == CssTextAlign::Justify && !isLastLine) {
-        advance += justifyExtra;
-      }
-      xpos += advance;
-    } else {
-      int gap = 0;
-      if (wordIdx + 1 < lineWordCount) {
-        const uint32_t nextFirstCp = firstCodepoint(words[lastBreakAt + wordIdx + 1]);
-        gap = naturalGapBefore(renderer, fontId, lastBreakAt + wordIdx + 1);
-        // Don't stretch the gap before closing punctuation — it looks wrong with
-        // extra space before ".", ")", "»" etc.
-        const bool nextIsClosing = isClosingPunctuation(nextFirstCp);
-        if (blockStyle.alignment == CssTextAlign::Justify && !isLastLine && !nextIsClosing) {
-          gap += justifyExtra;
-        }
-      }
-      xpos += wordWidths[lastBreakAt + wordIdx] + gap;
+    xpos += wordWidths[lastBreakAt + wordIdx];
+    if (wordIdx + 1 < lineWordCount) {
+      xpos += naturalGapBefore(renderer, fontId, lastBreakAt + wordIdx + 1);
+      if (stretchAfter(wordIdx)) xpos += nextStretch();
     }
   }
 

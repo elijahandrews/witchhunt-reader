@@ -8,22 +8,22 @@ SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=These
    W x=52 s=0 z=100 t=diagnostic
-   W x=151 s=0 z=100 t=outlines
-   W x=235 s=0 z=100 t=were
-   W x=274 s=0 z=100 t=drawn
-   W x=326 s=0 z=100 t=for
-   W x=363 s=0 z=100 t=this
-   W x=407 s=0 z=100 t=test.
+   W x=152 s=0 z=100 t=outlines
+   W x=237 s=0 z=100 t=were
+   W x=276 s=0 z=100 t=drawn
+   W x=329 s=0 z=100 t=for
+   W x=367 s=0 z=100 t=this
+   W x=412 s=0 z=100 t=test.
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=Only
    W x=42 s=0 z=100 t=the
-   W x=79 s=0 z=100 t=specimens
-   W x=161 s=0 z=100 t=use
-   W x=196 s=0 z=100 t=the
-   W x=233 s=0 z=100 t=embedded
-   W x=306 s=0 z=100 t=font;
-   W x=364 s=0 z=100 t=labels
-   W x=424 s=0 z=100 t=use
+   W x=80 s=0 z=100 t=specimens
+   W x=163 s=0 z=100 t=use
+   W x=199 s=0 z=100 t=the
+   W x=237 s=0 z=100 t=embedded
+   W x=311 s=0 z=100 t=font;
+   W x=370 s=0 z=100 t=labels
+   W x=431 s=0 z=100 t=use
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=the
    W x=37 s=0 z=100 t=reader
@@ -57,21 +57,21 @@ SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=The
    W x=41 s=0 z=100 t=bold
    W x=90 s=0 z=100 t=stems
-   W x=151 s=0 z=100 t=should
-   W x=226 s=0 z=100 t=be
-   W x=255 s=0 z=100 t=heavier;
-   W x=346 s=0 z=100 t=italic
-   W x=410 s=0 z=100 t=stems
+   W x=152 s=0 z=100 t=should
+   W x=227 s=0 z=100 t=be
+   W x=257 s=0 z=100 t=heavier;
+   W x=348 s=0 z=100 t=italic
+   W x=413 s=0 z=100 t=stems
   LINE y=275 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=should
    W x=73 s=0 z=100 t=lean
-   W x=126 s=0 z=100 t=to
-   W x=160 s=0 z=100 t=the
-   W x=203 s=0 z=100 t=right.
-   W x=272 s=0 z=100 t=Bold
-   W x=322 s=0 z=100 t=italic
-   W x=384 s=0 z=100 t=must
-   W x=436 s=0 z=100 t=do
+   W x=127 s=0 z=100 t=to
+   W x=161 s=0 z=100 t=the
+   W x=205 s=0 z=100 t=right.
+   W x=274 s=0 z=100 t=Bold
+   W x=325 s=0 z=100 t=italic
+   W x=387 s=0 z=100 t=must
+   W x=440 s=0 z=100 t=do
   LINE y=299 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=both.
   LINE y=332 x=0 align=0 mult=1.000 hfid=0 words=3
@@ -88,14 +88,14 @@ SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=The
    W x=37 s=0 z=100 t=CFF
-   W x=69 s=0 z=100 t=sample
-   W x=134 s=0 z=100 t=must
-   W x=184 s=0 z=100 t=match
-   W x=245 s=0 z=100 t=the
-   W x=286 s=0 z=100 t=Forms
-   W x=341 s=0 z=100 t=size;
-   W x=393 s=0 z=100 t=a
-   W x=415 s=0 z=100 t=much
+   W x=70 s=0 z=100 t=sample
+   W x=135 s=0 z=100 t=must
+   W x=186 s=0 z=100 t=match
+   W x=247 s=0 z=100 t=the
+   W x=289 s=0 z=100 t=Forms
+   W x=344 s=0 z=100 t=size;
+   W x=397 s=0 z=100 t=a
+   W x=420 s=0 z=100 t=much
   LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=larger
    W x=63 s=0 z=100 t=sample
@@ -119,11 +119,11 @@ SPINE 0 href=OEBPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=The
    W x=37 s=0 z=100 t=wide
    W x=76 s=0 z=100 t=sample
-   W x=141 s=0 z=100 t=should
-   W x=212 s=0 z=100 t=be
-   W x=237 s=0 z=100 t=wider.
-   W x=294 s=0 z=100 t=The
-   W x=331 s=0 z=100 t=missing-family
+   W x=142 s=0 z=100 t=should
+   W x=213 s=0 z=100 t=be
+   W x=239 s=0 z=100 t=wider.
+   W x=296 s=0 z=100 t=The
+   W x=334 s=0 z=100 t=missing-family
   LINE y=545 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=sample
    W x=61 s=0 z=100 t=should
@@ -159,30 +159,30 @@ SPINE 1 href=OEBPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=137 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Small
    W x=66 s=0 z=100 t=caps
-   W x=114 s=0 z=100 t=keep
-   W x=160 s=0 z=100 t=the
-   W x=205 s=0 z=100 t=initial
-   W x=279 s=0 z=100 t=capitals
-   W x=364 s=0 z=100 t=tall.
-   W x=428 s=0 z=100 t=All
+   W x=115 s=0 z=100 t=keep
+   W x=162 s=0 z=100 t=the
+   W x=208 s=0 z=100 t=initial
+   W x=283 s=0 z=100 t=capitals
+   W x=369 s=0 z=100 t=tall.
+   W x=434 s=0 z=100 t=All
   LINE y=161 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=small
    W x=56 s=0 z=100 t=caps
    W x=97 s=0 z=100 t=make
-   W x=143 s=0 z=100 t=both
-   W x=190 s=0 z=100 t=groups
-   W x=254 s=0 z=100 t=use
-   W x=290 s=0 z=100 t=the
-   W x=328 s=0 z=100 t=same
-   W x=375 s=0 z=100 t=authored
+   W x=144 s=0 z=100 t=both
+   W x=191 s=0 z=100 t=groups
+   W x=255 s=0 z=100 t=use
+   W x=292 s=0 z=100 t=the
+   W x=330 s=0 z=100 t=same
+   W x=378 s=0 z=100 t=authored
   LINE y=185 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=small-cap
    W x=90 s=0 z=100 t=outlines.
-   W x=184 s=0 z=100 t=Their
-   W x=232 s=0 z=100 t=stems
-   W x=286 s=0 z=100 t=must
-   W x=333 s=0 z=100 t=stay
-   W x=379 s=0 z=100 t=stronger
+   W x=185 s=0 z=100 t=Their
+   W x=233 s=0 z=100 t=stems
+   W x=288 s=0 z=100 t=must
+   W x=335 s=0 z=100 t=stay
+   W x=382 s=0 z=100 t=stronger
   LINE y=209 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=than
    W x=51 s=0 z=100 t=reduced
@@ -220,11 +220,11 @@ SPINE 1 href=OEBPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=407 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=Small
    W x=65 s=0 z=100 t=caps
-   W x=112 s=0 z=100 t=must
-   W x=165 s=0 z=100 t=resolve
-   W x=246 s=0 z=100 t=the
-   W x=290 s=0 z=100 t=individual
-   W x=392 s=0 z=100 t=letters
+   W x=113 s=0 z=100 t=must
+   W x=167 s=0 z=100 t=resolve
+   W x=248 s=0 z=100 t=the
+   W x=293 s=0 z=100 t=individual
+   W x=396 s=0 z=100 t=letters
   LINE y=431 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=before
    W x=60 s=0 z=100 t=the
@@ -261,11 +261,11 @@ SPINE 2 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=46 s=0 z=100 t=actual
-   W x=122 s=0 z=100 t=displayed
-   W x=212 s=0 z=100 t=point
-   W x=272 s=0 z=100 t=size,
-   W x=328 s=0 z=100 t=including
-   W x=423 s=0 z=100 t=CSS
+   W x=123 s=0 z=100 t=displayed
+   W x=213 s=0 z=100 t=point
+   W x=274 s=0 z=100 t=size,
+   W x=330 s=0 z=100 t=including
+   W x=426 s=0 z=100 t=CSS
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=scaling.
   LINE y=143 x=0 align=0 mult=0.800 hfid=0 words=4
@@ -296,7 +296,7 @@ SPINE 2 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
    W x=219 s=0 z=100 t=the
    W x=260 s=0 z=100 t=design
    W x=324 s=0 z=100 t=has
-   W x=367 s=0 z=100 t=relatively
+   W x=368 s=0 z=100 t=relatively
   LINE y=332 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=finer
    W x=53 s=0 z=100 t=strokes
@@ -309,11 +309,11 @@ SPINE 2 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=356 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=just
    W x=48 s=0 z=100 t=enlarge
-   W x=128 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=default
-   W x=250 s=0 z=100 t=design.
-   W x=325 s=0 z=100 t=Raster
-   W x=395 s=0 z=100 t=density
+   W x=129 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=default
+   W x=252 s=0 z=100 t=design.
+   W x=328 s=0 z=100 t=Raster
+   W x=399 s=0 z=100 t=density
   LINE y=380 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=must
    W x=46 s=0 z=100 t=not
@@ -364,13 +364,13 @@ SPINE 3 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=101 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=The
    W x=36 s=0 z=100 t=heading
-   W x=114 s=0 z=100 t=should
-   W x=184 s=0 z=100 t=be
-   W x=208 s=0 z=100 t=larger.
-   W x=284 s=0 z=100 t=The
-   W x=320 s=0 z=100 t=date
-   W x=368 s=0 z=100 t=should
-   W x=438 s=0 z=100 t=be
+   W x=115 s=0 z=100 t=should
+   W x=186 s=0 z=100 t=be
+   W x=211 s=0 z=100 t=larger.
+   W x=288 s=0 z=100 t=The
+   W x=325 s=0 z=100 t=date
+   W x=374 s=0 z=100 t=should
+   W x=445 s=0 z=100 t=be
   LINE y=125 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=smaller
    W x=72 s=0 z=100 t=and
@@ -435,12 +435,12 @@ SPINE 4 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=203 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=The
    W x=35 s=0 z=100 t=preceding
-   W x=118 s=0 z=100 t=line
-   W x=161 s=0 z=100 t=should
-   W x=230 s=0 z=100 t=appear
-   W x=291 s=0 z=100 t=as
-   W x=320 s=0 z=100 t=small
-   W x=377 s=0 z=100 t=capitals,
+   W x=119 s=0 z=100 t=line
+   W x=162 s=0 z=100 t=should
+   W x=232 s=0 z=100 t=appear
+   W x=293 s=0 z=100 t=as
+   W x=323 s=0 z=100 t=small
+   W x=381 s=0 z=100 t=capitals,
   LINE y=227 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=all
    W x=36 s=0 z=100 t=the
@@ -543,12 +543,12 @@ SPINE 6 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Each
    W x=52 s=0 z=100 t=group
-   W x=109 s=0 z=100 t=has
-   W x=151 s=0 z=100 t=three
-   W x=208 s=0 z=100 t=explicit
-   W x=277 s=0 z=100 t=lines.
-   W x=340 s=0 z=100 t=Tight
-   W x=394 s=0 z=100 t=should
+   W x=110 s=0 z=100 t=has
+   W x=153 s=0 z=100 t=three
+   W x=210 s=0 z=100 t=explicit
+   W x=280 s=0 z=100 t=lines.
+   W x=344 s=0 z=100 t=Tight
+   W x=399 s=0 z=100 t=should
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=have
    W x=54 s=0 z=100 t=a
@@ -557,7 +557,7 @@ SPINE 6 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
    W x=194 s=0 z=100 t=advance
    W x=274 s=0 z=100 t=than
    W x=328 s=0 z=100 t=normal;
-   W x=408 s=0 z=100 t=loose
+   W x=409 s=0 z=100 t=loose
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=should
    W x=67 s=0 z=100 t=be
@@ -719,7 +719,7 @@ SPINE 9 href=OEBPS/ch9.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 f=11 ls=0 t=SansLetter
    W x=160 s=0 z=100 f=11 ls=0 t=should
    W x=271 s=0 z=100 f=11 ls=0 t=look
-   W x=358 s=0 z=100 f=11 ls=0 t=distinctly
+   W x=359 s=0 z=100 f=11 ls=0 t=distinctly
   LINE y=137 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 f=11 ls=0 t=different
    W x=103 s=0 z=100 f=11 ls=0 t=from
@@ -754,11 +754,11 @@ SPINE 9 href=OEBPS/ch9.xhtml pages=1 truncated=0 cssFallback=0
    W x=20 s=0 z=250 f=11 ls=0 t=Q
    W x=50 s=0 z=100 f=0 ls=0 t=uoted
    W x=109 s=0 z=100 f=0 ls=0 t=cap
-   W x=143 s=0 z=100 f=0 ls=0 t=preserves
-   W x=231 s=0 z=100 f=0 ls=0 t=each
-   W x=280 s=0 z=100 f=0 ls=0 t=family
-   W x=344 s=0 z=100 f=0 ls=0 t=as
-   W x=374 s=0 z=100 f=0 ls=0 t=inline
+   W x=144 s=0 z=100 f=0 ls=0 t=preserves
+   W x=232 s=0 z=100 f=0 ls=0 t=each
+   W x=282 s=0 z=100 f=0 ls=0 t=family
+   W x=346 s=0 z=100 f=0 ls=0 t=as
+   W x=377 s=0 z=100 f=0 ls=0 t=inline
   LINE y=395 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=runs.
   TABLE y=428 x=0 w=460 h=42 cols=2 border=1 rows=1
@@ -786,19 +786,19 @@ SPINE 10 href=OEBPS/ch10.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=Above:
    W x=61 s=0 z=100 t=same
    W x=107 s=0 z=100 t=words,
-   W x=164 s=0 z=100 t=with
-   W x=204 s=0 z=100 t=the
-   W x=241 s=0 z=100 t=second
-   W x=303 s=0 z=100 t=line
-   W x=344 s=0 z=100 t=visibly
-   W x=406 s=0 z=100 t=spaced
+   W x=165 s=0 z=100 t=with
+   W x=205 s=0 z=100 t=the
+   W x=242 s=0 z=100 t=second
+   W x=305 s=0 z=100 t=line
+   W x=346 s=0 z=100 t=visibly
+   W x=409 s=0 z=100 t=spaced
   LINE y=128 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=farther
    W x=75 s=0 z=100 t=apart.
   LINE y=161 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 f=0 ls=0 t=NormalBefore
    W x=168 s=0 z=100 f=0 ls=29 t=TrackedInline
-   W x=356 s=0 z=100 f=0 ls=0 t=ResetInline
+   W x=357 s=0 z=100 f=0 ls=0 t=ResetInline
   LINE y=185 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 f=0 ls=29 t=TrackedAgain
    W x=134 s=0 z=100 f=0 ls=0 t=NormalAfter
@@ -822,16 +822,16 @@ SPINE 10 href=OEBPS/ch10.xhtml pages=1 truncated=0 cssFallback=0
    W x=213 s=0 z=100 f=0 ls=29 t=retain
    W x=293 s=0 z=100 f=0 ls=29 t=its
    W x=337 s=0 z=100 f=0 ls=29 t=spacing
-   W x=425 s=0 z=100 f=0 ls=29 t=all
+   W x=426 s=0 z=100 f=0 ls=29 t=all
   LINE y=410 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=0 ls=29 t=the
    W x=55 s=0 z=100 f=0 ls=29 t=way
    W x=105 s=0 z=100 f=0 ls=29 t=across
-   W x=191 s=0 z=100 f=0 ls=29 t=each
-   W x=256 s=0 z=100 f=0 ls=29 t=line
-   W x=316 s=0 z=100 f=0 ls=29 t=and
-   W x=371 s=0 z=100 f=0 ls=29 t=down
-   W x=433 s=0 z=100 f=0 ls=29 t=to
+   W x=192 s=0 z=100 f=0 ls=29 t=each
+   W x=257 s=0 z=100 f=0 ls=29 t=line
+   W x=318 s=0 z=100 f=0 ls=29 t=and
+   W x=373 s=0 z=100 f=0 ls=29 t=down
+   W x=436 s=0 z=100 f=0 ls=29 t=to
   LINE y=434 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=0 ls=29 t=the
    W x=50 s=0 z=100 f=0 ls=29 t=next
@@ -988,11 +988,11 @@ SPINE 13 href=OEBPS/ch13.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=All
    W x=40 s=0 z=100 t=letters
    W x=118 s=0 z=100 t=above
-   W x=183 s=0 z=100 t=should
-   W x=258 s=0 z=100 t=be
-   W x=287 s=0 z=100 t=uppercase,
-   W x=386 s=0 z=100 t=with
-   W x=434 s=0 z=100 t=no
+   W x=184 s=0 z=100 t=should
+   W x=259 s=0 z=100 t=be
+   W x=289 s=0 z=100 t=uppercase,
+   W x=388 s=0 z=100 t=with
+   W x=437 s=0 z=100 t=no
   LINE y=695 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=broken
    W x=60 s=0 z=100 t=UTF-8
@@ -1052,25 +1052,25 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Compare
    W x=74 s=0 z=100 t=this
-   W x=118 s=0 z=100 t=page
-   W x=163 s=0 z=100 t=with
-   W x=204 s=0 z=100 t=Bookerly
-   W x=286 s=0 z=100 t=and
-   W x=324 s=0 z=100 t=Adobe
-   W x=374 s=0 z=100 t=Garamond
+   W x=119 s=0 z=100 t=page
+   W x=165 s=0 z=100 t=with
+   W x=207 s=0 z=100 t=Bookerly
+   W x=290 s=0 z=100 t=and
+   W x=329 s=0 z=100 t=Adobe
+   W x=380 s=0 z=100 t=Garamond
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=12
    W x=0 s=0 z=100 t=Pro.
    W x=48 s=0 z=100 t=Thin
-   W x=92 s=0 z=100 t=strokes
-   W x=166 s=0 z=100 t=in
-   W x=192 s=0 z=100 t=A,
-   W x=217 s=0 z=100 t=M,
-   W x=240 s=0 z=100 t=N,
-   W x=264 s=0 z=100 t=W
-   W x=282 s=0 z=100 t=and
-   W x=322 s=0 z=100 t=R
-   W x=342 s=0 z=100 t=should
-   W x=412 s=0 z=100 t=stay
+   W x=93 s=0 z=100 t=strokes
+   W x=168 s=0 z=100 t=in
+   W x=195 s=0 z=100 t=A,
+   W x=221 s=0 z=100 t=M,
+   W x=244 s=0 z=100 t=N,
+   W x=269 s=0 z=100 t=W
+   W x=288 s=0 z=100 t=and
+   W x=329 s=0 z=100 t=R
+   W x=350 s=0 z=100 t=should
+   W x=421 s=0 z=100 t=stay
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=continuous.
   LINE y=119 x=0 align=0 mult=1.000 hfid=0 words=6
@@ -1124,11 +1124,11 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=363 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=All
    W x=40 s=0 z=100 t=samples
-   W x=118 s=0 z=100 t=should
-   W x=193 s=0 z=100 t=preserve
-   W x=277 s=0 z=100 t=their
-   W x=336 s=0 z=100 t=strokes,
-   W x=423 s=0 z=100 t=with
+   W x=119 s=0 z=100 t=should
+   W x=194 s=0 z=100 t=preserve
+   W x=279 s=0 z=100 t=their
+   W x=338 s=0 z=100 t=strokes,
+   W x=426 s=0 z=100 t=with
   LINE y=387 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=smooth
    W x=71 s=0 z=100 t=edges
@@ -1202,21 +1202,21 @@ SPINE 15 href=OEBPS/ch15.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=717 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=Garamond
    W x=91 s=0 z=100 t=has
-   W x=135 s=0 z=100 t=contrasting
-   W x=253 s=0 z=100 t=strokes
-   W x=329 s=0 z=100 t=and
-   W x=371 s=0 z=100 t=a
-   W x=394 s=0 z=100 t=T
-   W x=411 s=0 z=100 t=that
+   W x=136 s=0 z=100 t=contrasting
+   W x=255 s=0 z=100 t=strokes
+   W x=331 s=0 z=100 t=and
+   W x=374 s=0 z=100 t=a
+   W x=398 s=0 z=100 t=T
+   W x=416 s=0 z=100 t=that
  PAGE 1 elements=2 footnotes=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=extends
    W x=72 s=0 z=100 t=above
-   W x=132 s=0 z=100 t=the
-   W x=172 s=0 z=100 t=usual
-   W x=233 s=0 z=100 t=capital
-   W x=304 s=0 z=100 t=height.
-   W x=383 s=0 z=100 t=Preserve
+   W x=133 s=0 z=100 t=the
+   W x=174 s=0 z=100 t=usual
+   W x=235 s=0 z=100 t=capital
+   W x=307 s=0 z=100 t=height.
+   W x=387 s=0 z=100 t=Preserve
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=these
    W x=55 s=0 z=100 t=shapes

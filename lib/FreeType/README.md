@@ -14,3 +14,17 @@ The module registry contains SFNT, TrueType, CFF/CFF2, PostScript auxiliary supp
 The configuration headers select options. One documented source backport changes `tt_done_blend` to use `blend->num_axis` during cleanup, matching [upstream](https://github.com/freetype/freetype/blob/master/src/truetype/ttgxvar.c): release 2.14.3 dereferences a null `blend->mmvar` after a variable-font allocation failure. The real-backend host tests inject each of the first 49 allocation failures and verify clean rejection and zero retained allocations. The local `witch_ftoption.h` name avoids FreeType's relative include resolving its own default `ftoption.h` first. See the bundled `third_party/freetype/LICENSE.TXT` and `docs/FTL.TXT` for distribution requirements.
 
 The CFF native lightly-hinted path requires the PostScript hinter module even when using the Adobe CFF engine. Omitting it leaves the CFF decoder without `hints_funcs` and makes its loader scale already-hinted outline points a second time. It is included explicitly; native/light CFF raster bounds are tested against independent design-unit/reference bounds.
+
+## Bounded stack use
+
+The reader uses 8 KiB loop and 10 KiB render task stacks. Stock 2.14.3 places large CFF hint maps, the grayscale cell pool and autofitter hint arrays on the stack, exceeding those limits before the caller's own frames. Local source changes move that existing storage into allocator-owned workspaces without changing the raster/hinting algorithms or reducing their capacities:
+
+- The CFF instance lazily retains one interpreter block per supported recursion level (root glyph and one `seac` component). Nested `seac` remains rejected; each call still initializes and finalizes its internal arrays, and the instance finalizer frees both blocks.
+- The grayscale raster retains its full cell pool in the raster allocation.
+- The autofitter module lazily retains separate glyph and metrics hint workspaces plus a union for the sequential Latin/CJK metrics scratch. They are allocated before glyph loading and released with the module. Metrics discovery performs nested unscaled loads, so it must not reuse the active glyph workspace.
+
+All allocations use `FT_Memory`, hence the existing per-face/shared PSRAM budgets. The new workspaces are reused across glyphs; no permanent task-stack increase or global static scratch is introduced. One `OutlineFontFace` owns one FreeType library and requires serialized calls on that face. Different faces/libraries can render concurrently; callbacks must not recursively render through the same library. The firmware's render lock preserves this contract.
+
+Two related 2.14.3 failure paths also needed correction: the optional reverse character map can be null after allocation failure, so both adjustment consumers check it, and failed hash-table initialization frees only its empty wrapper before common cleanup. This preserves ordinary hinting when optional adjustments are unavailable.
+
+`test/real_renderer/stack_budget.py` rejects oversized optimized host/target frames and probes constrained runtime stack use; `test/outline_font/run_scratch.py` tests generated CFF counter-mask/seac input, nested-component rejection, allocation failure/recovery, scratch reuse, cleanup and concurrent independent faces. The corrected Xtensa build's largest audited FreeType frame is 1,568 bytes. Stack frames add along call chains, so the runtime probe and on-device validation remain necessary.

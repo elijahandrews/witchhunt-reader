@@ -57,6 +57,23 @@ the same physical size whichever way you hold the device.
 > turning it **off** needs its own gesture, and a corner hold is deliberate enough not
 > to fire while you shift your grip.
 
+### Hold a word for its definition
+
+In an EPUB, hold directly on a word for about half a second to open its dictionary
+entry. Back returns to the same reading page. The first use opens the dictionary
+picker if none is configured; after choosing one, hold the word again.
+
+A word takes priority over the hold action assigned to its zone, including corners.
+Holds on margins, pictures or spaces keep the zone action from the table above.
+Short taps and swipes are unchanged. Moving the finger, using multiple fingers, or
+changing the page or orientation cancels a word hold. Turning touch **page turns**
+off does not turn dictionary lookup off.
+
+The word must have selectable EPUB text; text baked into an image has no dictionary
+target. Styled pieces and the two halves of a hyphenated word on the current page
+are looked up as one word. Table-cell text is included, using its laid-out cell
+positions; words from different cells are kept separate.
+
 ### Swipe zones
 
 Vertical swipes are decided by **where your finger starts**, not where it ends. Put

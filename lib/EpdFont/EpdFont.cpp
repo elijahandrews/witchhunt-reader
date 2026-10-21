@@ -21,6 +21,15 @@ static uint16_t outlineGlyphId(const EpdFontData* data, uint32_t cp) {
   return data->outline->glyphId(data->outlineCtx, cp, 0);
 }
 
+bool EpdFont::rasterGlyph(const uint32_t cp, const float scale, const int8_t phase, EpdRasterGlyph& out) const {
+  if (data->outline && data->outline->raster) {
+    // Use the resolved glyph, including missing-character fallback and alternate glyph IDs.
+    const auto glyph = getGlyph(cp);
+    return glyph && data->outline->raster(data->outlineCtx, glyph.index, scale, phase, &out);
+  }
+  return data->provider && data->provider->rasterGlyph(cp, scale, phase, out);
+}
+
 // Scale a 12.4 fixed-point advance by the small-caps factor, rounding to nearest.
 static inline int32_t scaleAdvanceFP(const int32_t advanceFP) {
   return static_cast<int32_t>(std::lround(advanceFP * smallCaps::SCALE));

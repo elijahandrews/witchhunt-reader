@@ -3,6 +3,7 @@ add_executable(SdFontManagerTest
   ${REPO_ROOT}/lib/EpdFont/ttf/TtfFamily.cpp
   ${REPO_ROOT}/lib/EpdFont/ttf/TtfFont.cpp
   ${REPO_ROOT}/lib/EpdFont/ttf/TtfOpenType.cpp
+  ${REPO_ROOT}/lib/OutlineFont/Caps.cpp
   # the SDK's OpenType layout readers TtfOpenType uses (the firmware links them through FreeInkOpenType)
   ${REPO_ROOT}/freeink-sdk/libs/font/FreeInkFont/src/Gpos.cpp
   ${REPO_ROOT}/freeink-sdk/libs/font/FreeInkFont/src/Gsub.cpp
@@ -34,6 +35,7 @@ target_include_directories(SdFontManagerTest PRIVATE
   ${REPO_ROOT}/lib/hal
   ${REPO_ROOT}/lib/Memory
   ${REPO_ROOT}/freeink-sdk/libs/font/FreeInkOpenType/include
+  ${REPO_ROOT}/lib/OutlineFont
   ${REPO_ROOT}/test/shims
 )
 target_link_libraries(SdFontManagerTest PRIVATE crosspoint_test_common GTest::gtest_main)

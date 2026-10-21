@@ -15,6 +15,10 @@
 #include "TtfOpenType.h"
 #include "TtfRasterizer.h"
 
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+class OutlineFontFace;
+#endif
+
 /// One TrueType family drawn from the glyph store (spec 3.2), in flash mode: every style's whole TTF is copied
 /// into the `spiffs` partition when the family is installed, and read there in place. A glyph is rendered the
 /// first time it is looked up and stored, so later lookups, in this session and the next, read it from flash.
@@ -50,6 +54,7 @@ class TtfFont {
   static void setHooks(const Hooks& hooks);
 
   explicit TtfFont(NorFlash& flash);
+  ~TtfFont();
   TtfFont(const TtfFont&) = delete;
   TtfFont& operator=(const TtfFont&) = delete;
 
@@ -115,6 +120,9 @@ class TtfFont {
     bool ownsBitmap(const EpdGlyph* glyph, const uint8_t*& bitmap) const override {
       return owner->ownsBitmap(glyph, bitmap);
     }
+    bool rasterGlyph(uint32_t cp, float scale, int8_t phase, EpdRasterGlyph& out) override {
+      return owner->rasterGlyph(*size, style, cp, scale, phase, out);
+    }
     void prefetch(const char* utf8Text) override { owner->prefetch(*size, style, utf8Text); }
     int16_t kerning(const uint32_t leftCp, const uint32_t rightCp) override {
       return owner->kerning(*size, style, leftCp, rightCp);
@@ -174,6 +182,22 @@ class TtfFont {
   StylesResult openStyles(const ttf::FileSource (&files)[4], ttf::ScratchPlan* plan);
   bool install(const ttf::FileSource (&files)[4], const uint8_t* identity, const std::function<void()>& onBusy);
   bool fontBytes(uint8_t style, FontBytes* bytes);
+  uint32_t capsGlyph(uint8_t style, uint32_t codepoint, uint8_t mode);
+  bool rasterGlyph(const Size& size, uint8_t style, uint32_t cp, float scale, int8_t phase, EpdRasterGlyph& out);
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+  struct OutlineSource {
+    TtfFont* owner = nullptr;
+    uint8_t style = 0;
+  };
+  // Source pointers cannot be retained: mapStyle() maps only one style at a time.
+  // The stream callback obtains a fresh mapping for each bounded read.
+  OutlineSource outlineSources_[4];
+  std::unique_ptr<OutlineFontFace> outlines_[4];
+  bool outlineFailed_[4] = {};
+  size_t outlineMemory_ = 0;
+  static constexpr size_t kOutlineMemoryLimit = 1024 * 1024;
+  static size_t readOutline(void* ctx, uint32_t offset, uint8_t* buffer, size_t count);
+#endif
   bool configure(Size& size, uint32_t ppem);
   Size* nativeSize(uint8_t px);
   Size* nearestNative(uint32_t ppem);

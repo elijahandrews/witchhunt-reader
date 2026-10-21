@@ -11,6 +11,7 @@ class OutlineFontFace {
  public:
   using ReadFn = size_t (*)(void* ctx, uint32_t offset, uint8_t* buffer, size_t count);
   enum class Hinting : uint8_t { None, Native, Light };
+  enum class RasterPolicy : uint8_t { LegacyBitmap, Oversample2x, FinalSize };
   struct Options {
     float logicalPx = 14;
     // Zero derives typographic points from the display em at 150dpi.
@@ -18,6 +19,13 @@ class OutlineFontFace {
     uint16_t weight = 400;
     bool italic = false;
     Hinting hinting = Hinting::Light;
+    RasterPolicy rasterPolicy = RasterPolicy::FinalSize;
+    // Quantize fractional origins to 4, 8, or 16 phases per display pixel.
+    uint8_t phaseSteps = 8;
+    // Native SD adapters may keep the source's default variation instance and
+    // use their existing layout tables instead of allocating another copy.
+    bool applyVariations = true;
+    bool loadLayoutTables = true;
     size_t memoryLimit = 1024 * 1024;
     size_t tableLimit = 512 * 1024;
     // Optional shared budget. Callbacks and context must outlive the face.
@@ -51,6 +59,9 @@ class OutlineFontFace {
   uint16_t glyphId(uint32_t unicodeCp, uint8_t capsMode = 0);
   EpdGlyphRef metrics(uint16_t gid);
   const uint8_t* bitmap(uint16_t gid, size_t* bytes);
+  bool raster(uint16_t gid, float scale, int8_t phase, EpdRasterGlyph* out);
+  // Native integer-font adapter: ppem is 26.6 fixed-point display pixels.
+  bool rasterAtPpem(uint16_t gid, uint32_t ppem, float scale, int8_t phase, EpdRasterGlyph* out);
   int16_t kerning(uint16_t left, uint16_t right);
   uint16_t ligature(const uint16_t* gids, size_t count);
   static const EpdOutlineFontCallbacks& callbacks();

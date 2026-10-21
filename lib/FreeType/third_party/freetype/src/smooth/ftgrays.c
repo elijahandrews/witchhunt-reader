@@ -496,6 +496,8 @@ typedef ptrdiff_t  FT_PtrDist;
     PCell       cell_free;   /* call allocation next free slot           */
     PCell       cell_null;   /* last cell, used as dumpster and limit    */
 
+    TCell*      buffer;      /* heap-owned raster cell pool */
+
     PCell*      ycells;      /* array of cell linked-lists; one per      */
                              /* vertical coordinate in the current band  */
 
@@ -532,6 +534,10 @@ typedef ptrdiff_t  FT_PtrDist;
   typedef struct gray_TRaster_
   {
     void*  memory;
+
+    /* Witch-hunt: retain the full cell pool in the FT_Memory-owned raster, */
+    /* not a 16 KiB automatic array on an embedded render task's stack.   */
+    TCell  buffer[FT_MAX_GRAY_POOL];
 
   } gray_TRaster, *gray_PRaster;
 
@@ -1861,7 +1867,7 @@ typedef ptrdiff_t  FT_PtrDist;
   static int
   gray_convert_glyph( RAS_ARG )
   {
-    TCell    buffer[FT_MAX_GRAY_POOL];
+    TCell*   buffer = ras.buffer;
     size_t   height = (size_t)( ras.cbox.yMax - ras.cbox.yMin );
     size_t   n = FT_MAX_GRAY_POOL / 8;
     TCoord   y;
@@ -1974,6 +1980,8 @@ typedef ptrdiff_t  FT_PtrDist;
 
     if ( !raster )
       return FT_THROW( Invalid_Argument );
+
+    ras.buffer = ((gray_PRaster)raster)->buffer;
 
     /* this version does not support monochrome rendering */
     if ( !( params->flags & FT_RASTER_FLAG_AA ) )

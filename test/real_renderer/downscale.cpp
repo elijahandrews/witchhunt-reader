@@ -10,6 +10,7 @@
 #include "CpFontFixture.h"
 
 int runOverlapChecks(GfxRenderer&, HalDisplay&, int, const EpdFontFamily&);
+std::vector<uint8_t> quantizeReferenceCoverage(const std::vector<int64_t>&, int, int, int64_t);
 
 namespace rendererTest {
 void setScanning(bool);
@@ -81,38 +82,30 @@ void set(Plane& p, int x, int y, bool value) {
     byte &= ~mask;
 }
 
-// Independent source-pixel projection oracle: project each source pixel's
-// rectangle onto the destination and accumulate ink there. The production
-// sampler instead walks destination pixels in fixed point. Match its documented
-// 16.16 reciprocal precision, but not its traversal or threshold implementation.
+// Independent source-pixel projection oracle: project each source rectangle
+// onto the destination grid. Coordinates are exact integer multiples of 1/step,
+// preserving the documented Q16 reciprocal without a floating-point tie epsilon.
+// The production sampler instead walks destination pixels and bounded residuals.
 std::vector<uint8_t> reference(const uint8_t* bitmap, bool twoBit, int sw, int sh, int bearingLeft, int bearingTop,
                                float scale) {
   const int originX = std::floor(bearingLeft * scale), originY = std::floor(-bearingTop * scale);
   const int w = std::ceil((bearingLeft + sw) * scale) - originX;
   const int h = std::ceil((sh - bearingTop) * scale) - originY;
-  std::vector<double> coverage(w * h);
-  const double factor = 65536.0 / std::lround(65536.0 / scale);
+  const int64_t step = std::lround(65536.0 / scale);
+  constexpr int64_t one = 65536;
+  std::vector<int64_t> coverage(w * h);
   for (int sy = 0; sy < sh; ++sy)
     for (int sx = 0; sx < sw; ++sx) {
       const int i = sy * sw + sx;
       const int raw = twoBit ? (bitmap[i / 4] >> (6 - 2 * (i % 4))) & 3 : ((bitmap[i / 8] >> (7 - i % 8)) & 1) * 3;
-      const double left = (sx + bearingLeft) * factor - originX, right = (sx + bearingLeft + 1) * factor - originX;
-      const double top = (sy - bearingTop) * factor - originY, bottom = (sy - bearingTop + 1) * factor - originY;
-      for (int y = std::max(0, int(top)); y < std::min(h, int(std::ceil(bottom))); ++y)
-        for (int x = std::max(0, int(left)); x < std::min(w, int(std::ceil(right))); ++x)
-          coverage[y * w + x] += raw * (std::min(right, x + 1.0) - std::max(left, double(x))) *
-                                 (std::min(bottom, y + 1.0) - std::max(top, double(y)));
+      const int64_t left = (sx + bearingLeft) * one - originX * step, right = left + one;
+      const int64_t top = (sy - bearingTop) * one - originY * step, bottom = top + one;
+      for (int y = std::max<int64_t>(0, top / step); y < std::min<int64_t>(h, (bottom + step - 1) / step); ++y)
+        for (int x = std::max<int64_t>(0, left / step); x < std::min<int64_t>(w, (right + step - 1) / step); ++x)
+          coverage[y * w + x] += raw * (std::min(right, (x + 1) * step) - std::max(left, x * step)) *
+                                 (std::min(bottom, (y + 1) * step) - std::max(top, y * step));
     }
-  std::vector<uint8_t> result(w * h);
-  for (size_t i = 0; i < result.size(); ++i) {
-    const int lower = std::floor(coverage[i]);
-    // The independent floating-point projection can land a few ulps away from
-    // an exact half. Resolve that tie to the even level; all other values round
-    // to the nearest level without changing the coverage calculation.
-    const bool tie = std::abs(coverage[i] - lower - 0.5) < 1e-12;
-    result[i] = std::clamp(tie ? lower + (lower & 1) : int(std::floor(coverage[i] + 0.5)), 0, 3);
-  }
-  return result;
+  return quantizeReferenceCoverage(coverage, w, h, step * step);
 }
 
 int checks = 0, failures = 0;
@@ -228,11 +221,11 @@ void checkFamily(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fam
 }
 
 // Thirteen 2x2 tiles cover every quarter-level average from 0 through 3.
-// The literal expected sequence independently fixes endpoints, monotonicity,
-// exact half ties, and their immediate neighbors. In particular, a 0.75-level
-// hairline survives, while a 0.5 fringe does not always gain an extra ink level.
+// Literal differences of rounded cumulative areas fix row-ink conservation,
+// exact half ties, neighbors and endpoints. Individual pixels can round either
+// way as the preceding fractional coverage is carried into the next pixel.
 void checkCoverageTies(GfxRenderer& g, HalDisplay& d) {
-  constexpr uint8_t expected[] = {0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3};
+  constexpr uint8_t expected[] = {0, 0, 1, 0, 1, 2, 1, 2, 2, 2, 3, 2, 3};
   constexpr int width = 26, height = 2;
   std::array<uint8_t, width * height / 4> bitmap{};
   for (int total = 0; total <= 12; ++total)

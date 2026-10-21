@@ -231,6 +231,7 @@ class ActivityManager {
   // delivered (see currentTakesButtonAction()). A list opened from the reader answers false here
   // but true above.
   bool currentIsReaderActivity() const;
+  bool handleReaderWordHold();
   bool skipLoopDelay() const;
 
   // True while the current activity owns the raw serial input stream (see

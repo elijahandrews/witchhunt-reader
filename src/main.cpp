@@ -1582,6 +1582,12 @@ static bool handleTestCommand(const String& cmd) {
     if (target == "HOME") {
       activityManager.goHome();
     } else if (target.startsWith("READER:")) {
+      // Web transfer releases the canvas until its exit reboots to Home. Reader entry
+      // preloads the SD font before that exit and may paint a loading popup.
+      if (!renderer.getFrameBuffer()) {
+        logSerial.printf("ACT_ERROR:leave transfer mode with CMD:ACT:HOME then retry\n");
+        return true;
+      }
       std::string path = target.substring(7).c_str();
       if (!Storage.exists(path.c_str())) {
         logSerial.printf("ACT_ERROR:no such file %s\n", path.c_str());
@@ -2204,7 +2210,10 @@ void loop() {
     // cannot both run its action and fall through as a page turn.
     {
       BA gestureAction = BA::BTN_DEFAULT;
-      if (gestureEventManager.consumeAction(gestureAction, activityManager.currentIsReaderActivity()) &&
+      // A held word is more specific than a page-sized zone. Misses preserve the
+      // configured zone action; a successful lookup suppresses the full contact.
+      if (!activityManager.handleReaderWordHold() &&
+          gestureEventManager.consumeAction(gestureAction, activityManager.currentIsReaderActivity()) &&
           !runAction(gestureAction)) {
         return;
       }

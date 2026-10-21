@@ -18,9 +18,14 @@
 
 #include "../../src/util/SelectionPixels.h"
 int runFractionalChecks(GfxRenderer&, HalDisplay&);
+int runStemWeightChecks(GfxRenderer&, HalDisplay&);
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
+int runOutlineQualityChecks(GfxRenderer&, HalDisplay&, const char*);
+#endif
+#ifdef WITCH_TEST_NATIVE_OUTLINE
+int runNativeOutlineChecks(GfxRenderer&, HalDisplay&, const char* const*);
 #endif
 int main(int argc, char** argv) {
   HalDisplay d;
@@ -113,9 +118,8 @@ int main(int argc, char** argv) {
       for (int tracking : {0, 8, 16, -8}) {
         const EpdFont& font = id == 1 ? book : sans;
         const auto h = font.getGlyph('H');
-        const int expected = (4 * static_cast<int>(std::lround(h.advanceX * scale)) +
-                              3 * (tracking + static_cast<int>(std::lround(font.getKerning('H', 'H') * scale))) + 8) >>
-                             4;
+        const double retained = (4.0 * h.advanceX + 3.0 * font.getKerning('H', 'H')) * scale + 3.0 * tracking;
+        const int expected = static_cast<int>(std::floor(retained / 16 + .5));
         assert(g.getTextAdvanceXSpaced(id, "HHHH", EpdFontFamily::REGULAR, scale, tracking) == expected);
         assert(g.getTextWidthSpaced(id, "", EpdFontFamily::REGULAR, scale, tracking) == 0);
         d.fb.fill(255);
@@ -203,8 +207,15 @@ int main(int argc, char** argv) {
   int result =
       runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 && std::string(argv[1]) != "-" ? argv[1] : nullptr);
   result |= runFractionalChecks(g, d);
+  result |= runStemWeightChecks(g, d);
 #ifdef WITCH_TEST_OUTLINE
-  if (argc > 2) result |= runOutlineChecks(g, d, argv[2]);
+  if (argc > 2 && std::string(argv[2]) != "-") {
+    result |= runOutlineChecks(g, d, argv[2]);
+    result |= runOutlineQualityChecks(g, d, argv[2]);
+  }
+#endif
+#ifdef WITCH_TEST_NATIVE_OUTLINE
+  if (argc > 6) result |= runNativeOutlineChecks(g, d, argv + 3);
 #endif
   return result;
 }

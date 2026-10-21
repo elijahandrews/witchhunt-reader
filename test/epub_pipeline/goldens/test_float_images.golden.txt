@@ -12,12 +12,12 @@ SPINE 0 href=OEBPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=68 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=Expected:
    W x=104 s=0 z=100 t=text
-   W x=150 s=0 z=100 t=indents
-   W x=224 s=0 z=100 t=for
-   W x=264 s=0 z=100 t=~3
-   W x=288 s=0 z=100 t=lines
-   W x=342 s=0 z=100 t=beside
-   W x=399 s=0 z=100 t=image,
+   W x=151 s=0 z=100 t=indents
+   W x=226 s=0 z=100 t=for
+   W x=266 s=0 z=100 t=~3
+   W x=291 s=0 z=100 t=lines
+   W x=346 s=0 z=100 t=beside
+   W x=404 s=0 z=100 t=image,
   LINE y=92 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=then
    W x=48 s=0 z=100 t=runs
@@ -61,23 +61,23 @@ SPINE 0 href=OEBPS/ch1.xhtml pages=1 truncated=0 cssFallback=0
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=212 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=236 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=fox
    W x=35 s=0 z=100 t=jumps
@@ -105,7 +105,7 @@ SPINE 1 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
    W x=283 s=0 z=100 t=indent
    W x=345 s=0 z=100 t=for
    W x=382 s=0 z=100 t=the
-   W x=420 s=0 z=100 t=full
+   W x=421 s=0 z=100 t=full
   LINE y=92 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=image
    W x=54 s=0 z=100 t=height.
@@ -113,10 +113,10 @@ SPINE 1 href=OEBPS/ch2.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=116 x=64 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=Short
    W x=65 s=0 z=100 t=paragraph
-   W x=163 s=0 z=100 t=that
-   W x=218 s=0 z=100 t=fits
-   W x=264 s=0 z=100 t=entirely
-   W x=345 s=0 z=100 t=beside
+   W x=164 s=0 z=100 t=that
+   W x=220 s=0 z=100 t=fits
+   W x=267 s=0 z=100 t=entirely
+   W x=349 s=0 z=100 t=beside
   LINE y=140 x=64 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=the
    W x=37 s=0 z=100 t=image.
@@ -131,13 +131,13 @@ SPINE 2 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=34 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Expected:
    W x=102 s=0 z=100 t=text
-   W x=146 s=0 z=100 t=indented
-   W x=226 s=0 z=100 t=on
-   W x=257 s=0 z=100 t=the
-   W x=296 s=0 z=100 t=right
-   W x=351 s=0 z=100 t=for
-   W x=389 s=0 z=100 t=~3
-   W x=411 s=0 z=100 t=lines
+   W x=147 s=0 z=100 t=indented
+   W x=227 s=0 z=100 t=on
+   W x=259 s=0 z=100 t=the
+   W x=299 s=0 z=100 t=right
+   W x=354 s=0 z=100 t=for
+   W x=393 s=0 z=100 t=~3
+   W x=416 s=0 z=100 t=lines
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=beside
    W x=53 s=0 z=100 t=image.
@@ -178,23 +178,23 @@ SPINE 2 href=OEBPS/ch3.xhtml pages=1 truncated=0 cssFallback=0
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=178 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=202 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=fox
    W x=35 s=0 z=100 t=jumps
@@ -218,24 +218,24 @@ SPINE 3 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=68 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Text
    W x=59 s=0 z=100 t=before
-   W x=122 s=0 z=100 t=image.
-   W x=189 s=0 z=100 t=The
-   W x=225 s=0 z=100 t=quick
-   W x=273 s=0 z=100 t=brown
-   W x=325 s=0 z=100 t=fox
-   W x=363 s=0 z=100 t=jumps
-   W x=415 s=0 z=100 t=over
+   W x=123 s=0 z=100 t=image.
+   W x=190 s=0 z=100 t=The
+   W x=227 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=328 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
   LINE y=92 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=116 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -250,26 +250,26 @@ SPINE 3 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=140 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=dog.
    W x=50 s=0 z=100 t=The
-   W x=86 s=0 z=100 t=quick
-   W x=134 s=0 z=100 t=brown
-   W x=186 s=0 z=100 t=fox
-   W x=224 s=0 z=100 t=jumps
-   W x=276 s=0 z=100 t=over
-   W x=326 s=0 z=100 t=the
-   W x=366 s=0 z=100 t=lazy
-   W x=413 s=0 z=100 t=dog.
+   W x=87 s=0 z=100 t=quick
+   W x=136 s=0 z=100 t=brown
+   W x=188 s=0 z=100 t=fox
+   W x=227 s=0 z=100 t=jumps
+   W x=280 s=0 z=100 t=over
+   W x=330 s=0 z=100 t=the
+   W x=371 s=0 z=100 t=lazy
+   W x=419 s=0 z=100 t=dog.
   LINE y=164 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=The
    W x=33 s=0 z=100 t=quick
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=188 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=brown
    W x=49 s=0 z=100 t=fox
@@ -288,18 +288,18 @@ SPINE 3 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
    W x=273 s=0 z=100 t=brown
    W x=326 s=0 z=100 t=fox
    W x=365 s=0 z=100 t=jumps
-   W x=418 s=0 z=100 t=over
+   W x=419 s=0 z=100 t=over
   LINE y=296 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=320 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -314,26 +314,26 @@ SPINE 3 href=OEBPS/ch4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=344 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=dog.
    W x=50 s=0 z=100 t=The
-   W x=86 s=0 z=100 t=quick
-   W x=134 s=0 z=100 t=brown
-   W x=186 s=0 z=100 t=fox
-   W x=224 s=0 z=100 t=jumps
-   W x=276 s=0 z=100 t=over
-   W x=326 s=0 z=100 t=the
-   W x=366 s=0 z=100 t=lazy
-   W x=413 s=0 z=100 t=dog.
+   W x=87 s=0 z=100 t=quick
+   W x=136 s=0 z=100 t=brown
+   W x=188 s=0 z=100 t=fox
+   W x=227 s=0 z=100 t=jumps
+   W x=280 s=0 z=100 t=over
+   W x=330 s=0 z=100 t=the
+   W x=371 s=0 z=100 t=lazy
+   W x=419 s=0 z=100 t=dog.
   LINE y=368 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=The
    W x=33 s=0 z=100 t=quick
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=brown
    W x=49 s=0 z=100 t=fox
@@ -353,10 +353,10 @@ SPINE 4 href=OEBPS/ch5.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=34 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=18 s=0 z=100 t=Expected:
    W x=114 s=0 z=100 t=paragraph
-   W x=221 s=0 z=100 t=A
-   W x=249 s=0 z=100 t=indents
-   W x=333 s=0 z=100 t=beside
-   W x=400 s=0 z=100 t=image;
+   W x=222 s=0 z=100 t=A
+   W x=250 s=0 z=100 t=indents
+   W x=335 s=0 z=100 t=beside
+   W x=403 s=0 z=100 t=image;
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=paragraph
    W x=107 s=0 z=100 t=B
@@ -378,33 +378,33 @@ SPINE 4 href=OEBPS/ch5.xhtml pages=1 truncated=0 cssFallback=0
    W x=115 s=0 z=100 t=B
    W x=131 s=0 z=100 t=after
    W x=187 s=0 z=100 t=clear.
-   W x=249 s=0 z=100 t=The
-   W x=283 s=0 z=100 t=quick
-   W x=329 s=0 z=100 t=brown
-   W x=379 s=0 z=100 t=fox
-   W x=415 s=0 z=100 t=jumps
+   W x=250 s=0 z=100 t=The
+   W x=284 s=0 z=100 t=quick
+   W x=330 s=0 z=100 t=brown
+   W x=380 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=190 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=over
    W x=50 s=0 z=100 t=the
-   W x=90 s=0 z=100 t=lazy
-   W x=137 s=0 z=100 t=dog.
-   W x=187 s=0 z=100 t=The
-   W x=223 s=0 z=100 t=quick
-   W x=271 s=0 z=100 t=brown
-   W x=323 s=0 z=100 t=fox
-   W x=361 s=0 z=100 t=jumps
-   W x=413 s=0 z=100 t=over
+   W x=91 s=0 z=100 t=lazy
+   W x=139 s=0 z=100 t=dog.
+   W x=189 s=0 z=100 t=The
+   W x=226 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=327 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
   LINE y=214 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=238 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -455,7 +455,7 @@ SPINE 5 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
    W x=246 s=0 z=100 t=wider
    W x=293 s=0 z=100 t=than
    W x=348 s=0 z=100 t=image
-   W x=406 s=0 z=100 t=alone
+   W x=407 s=0 z=100 t=alone
   LINE y=92 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=(margin-right=8)
    W x=160 s=0 z=100 t=and
@@ -498,23 +498,23 @@ SPINE 5 href=OEBPS/ch6.xhtml pages=1 truncated=0 cssFallback=0
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=212 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=236 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=fox
    W x=35 s=0 z=100 t=jumps
@@ -539,82 +539,82 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=Expected:
    W x=107 s=0 z=100 t=the
    W x=151 s=0 z=100 t=striped
-   W x=220 s=0 z=100 t=60x100
-   W x=293 s=0 z=100 t=image
-   W x=354 s=0 z=100 t=is
-   W x=382 s=0 z=100 t=split
-   W x=435 s=0 z=100 t=at
+   W x=221 s=0 z=100 t=60x100
+   W x=294 s=0 z=100 t=image
+   W x=356 s=0 z=100 t=is
+   W x=384 s=0 z=100 t=split
+   W x=438 s=0 z=100 t=at
   LINE y=92 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=page
-   W x=85 s=0 z=100 t=boundary.
-   W x=179 s=0 z=100 t=The
-   W x=214 s=0 z=100 t=top
-   W x=250 s=0 z=100 t=portion
-   W x=323 s=0 z=100 t=appears
-   W x=393 s=0 z=100 t=at
-   W x=423 s=0 z=100 t=the
+   W x=86 s=0 z=100 t=boundary.
+   W x=181 s=0 z=100 t=The
+   W x=217 s=0 z=100 t=top
+   W x=253 s=0 z=100 t=portion
+   W x=327 s=0 z=100 t=appears
+   W x=398 s=0 z=100 t=at
+   W x=429 s=0 z=100 t=the
   LINE y=116 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=bottom
    W x=70 s=0 z=100 t=of
    W x=102 s=0 z=100 t=page
    W x=150 s=0 z=100 t=N
    W x=167 s=0 z=100 t=beside
-   W x=224 s=0 z=100 t=the
-   W x=265 s=0 z=100 t=opening
-   W x=341 s=0 z=100 t=lines
-   W x=395 s=0 z=100 t=of
-   W x=427 s=0 z=100 t=the
+   W x=225 s=0 z=100 t=the
+   W x=266 s=0 z=100 t=opening
+   W x=342 s=0 z=100 t=lines
+   W x=396 s=0 z=100 t=of
+   W x=429 s=0 z=100 t=the
   LINE y=140 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=paragraph;
    W x=111 s=0 z=100 t=the
-   W x=157 s=0 z=100 t=bottom
-   W x=232 s=0 z=100 t=portion
-   W x=312 s=0 z=100 t=appears
-   W x=389 s=0 z=100 t=at
-   W x=426 s=0 z=100 t=the
+   W x=158 s=0 z=100 t=bottom
+   W x=233 s=0 z=100 t=portion
+   W x=314 s=0 z=100 t=appears
+   W x=391 s=0 z=100 t=at
+   W x=429 s=0 z=100 t=the
   LINE y=164 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=top
    W x=38 s=0 z=100 t=of
    W x=70 s=0 z=100 t=page
    W x=118 s=0 z=100 t=N+1
-   W x=148 s=0 z=100 t=beside
-   W x=205 s=0 z=100 t=the
-   W x=246 s=0 z=100 t=continuation
-   W x=375 s=0 z=100 t=lines.
-   W x=439 s=0 z=100 t=No
+   W x=149 s=0 z=100 t=beside
+   W x=206 s=0 z=100 t=the
+   W x=247 s=0 z=100 t=continuation
+   W x=376 s=0 z=100 t=lines.
+   W x=441 s=0 z=100 t=No
   LINE y=188 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=phantom
    W x=82 s=0 z=100 t=indent
-   W x=146 s=0 z=100 t=should
-   W x=216 s=0 z=100 t=appear
-   W x=278 s=0 z=100 t=on
-   W x=310 s=0 z=100 t=lines
-   W x=363 s=0 z=100 t=below
-   W x=414 s=0 z=100 t=both
+   W x=147 s=0 z=100 t=should
+   W x=218 s=0 z=100 t=appear
+   W x=281 s=0 z=100 t=on
+   W x=314 s=0 z=100 t=lines
+   W x=368 s=0 z=100 t=below
+   W x=420 s=0 z=100 t=both
   LINE y=212 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=tiles.
   LINE y=236 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Filler
    W x=73 s=0 z=100 t=to
-   W x=103 s=0 z=100 t=push
-   W x=149 s=0 z=100 t=float
-   W x=210 s=0 z=100 t=near
-   W x=258 s=0 z=100 t=page
-   W x=304 s=0 z=100 t=bottom.
-   W x=382 s=0 z=100 t=The
-   W x=417 s=0 z=100 t=quick
+   W x=104 s=0 z=100 t=push
+   W x=150 s=0 z=100 t=float
+   W x=212 s=0 z=100 t=near
+   W x=260 s=0 z=100 t=page
+   W x=307 s=0 z=100 t=bottom.
+   W x=385 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=260 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=284 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=fox
    W x=40 s=0 z=100 t=jumps
@@ -630,35 +630,35 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=jumps
    W x=52 s=0 z=100 t=over
    W x=102 s=0 z=100 t=the
-   W x=142 s=0 z=100 t=lazy
-   W x=189 s=0 z=100 t=dog.
-   W x=239 s=0 z=100 t=The
-   W x=275 s=0 z=100 t=quick
-   W x=323 s=0 z=100 t=brown
-   W x=375 s=0 z=100 t=fox
-   W x=413 s=0 z=100 t=jumps
+   W x=143 s=0 z=100 t=lazy
+   W x=190 s=0 z=100 t=dog.
+   W x=241 s=0 z=100 t=The
+   W x=277 s=0 z=100 t=quick
+   W x=326 s=0 z=100 t=brown
+   W x=378 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=332 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=over
    W x=50 s=0 z=100 t=the
-   W x=90 s=0 z=100 t=lazy
-   W x=137 s=0 z=100 t=dog.
-   W x=187 s=0 z=100 t=The
-   W x=223 s=0 z=100 t=quick
-   W x=271 s=0 z=100 t=brown
-   W x=323 s=0 z=100 t=fox
-   W x=361 s=0 z=100 t=jumps
-   W x=413 s=0 z=100 t=over
+   W x=91 s=0 z=100 t=lazy
+   W x=139 s=0 z=100 t=dog.
+   W x=189 s=0 z=100 t=The
+   W x=226 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=327 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
   LINE y=356 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=380 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -673,37 +673,37 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=404 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=dog.
    W x=50 s=0 z=100 t=The
-   W x=86 s=0 z=100 t=quick
-   W x=134 s=0 z=100 t=brown
-   W x=186 s=0 z=100 t=fox
-   W x=224 s=0 z=100 t=jumps
-   W x=276 s=0 z=100 t=over
-   W x=326 s=0 z=100 t=the
-   W x=366 s=0 z=100 t=lazy
-   W x=413 s=0 z=100 t=dog.
+   W x=87 s=0 z=100 t=quick
+   W x=136 s=0 z=100 t=brown
+   W x=188 s=0 z=100 t=fox
+   W x=227 s=0 z=100 t=jumps
+   W x=280 s=0 z=100 t=over
+   W x=330 s=0 z=100 t=the
+   W x=371 s=0 z=100 t=lazy
+   W x=419 s=0 z=100 t=dog.
   LINE y=428 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=The
    W x=33 s=0 z=100 t=quick
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=452 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=476 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=fox
    W x=40 s=0 z=100 t=jumps
@@ -719,35 +719,35 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=jumps
    W x=52 s=0 z=100 t=over
    W x=102 s=0 z=100 t=the
-   W x=142 s=0 z=100 t=lazy
-   W x=189 s=0 z=100 t=dog.
-   W x=239 s=0 z=100 t=The
-   W x=275 s=0 z=100 t=quick
-   W x=323 s=0 z=100 t=brown
-   W x=375 s=0 z=100 t=fox
-   W x=413 s=0 z=100 t=jumps
+   W x=143 s=0 z=100 t=lazy
+   W x=190 s=0 z=100 t=dog.
+   W x=241 s=0 z=100 t=The
+   W x=277 s=0 z=100 t=quick
+   W x=326 s=0 z=100 t=brown
+   W x=378 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=524 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=over
    W x=50 s=0 z=100 t=the
-   W x=90 s=0 z=100 t=lazy
-   W x=137 s=0 z=100 t=dog.
-   W x=187 s=0 z=100 t=The
-   W x=223 s=0 z=100 t=quick
-   W x=271 s=0 z=100 t=brown
-   W x=323 s=0 z=100 t=fox
-   W x=361 s=0 z=100 t=jumps
-   W x=413 s=0 z=100 t=over
+   W x=91 s=0 z=100 t=lazy
+   W x=139 s=0 z=100 t=dog.
+   W x=189 s=0 z=100 t=The
+   W x=226 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=327 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
   LINE y=548 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=572 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -762,37 +762,37 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=596 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=dog.
    W x=50 s=0 z=100 t=The
-   W x=86 s=0 z=100 t=quick
-   W x=134 s=0 z=100 t=brown
-   W x=186 s=0 z=100 t=fox
-   W x=224 s=0 z=100 t=jumps
-   W x=276 s=0 z=100 t=over
-   W x=326 s=0 z=100 t=the
-   W x=366 s=0 z=100 t=lazy
-   W x=413 s=0 z=100 t=dog.
+   W x=87 s=0 z=100 t=quick
+   W x=136 s=0 z=100 t=brown
+   W x=188 s=0 z=100 t=fox
+   W x=227 s=0 z=100 t=jumps
+   W x=280 s=0 z=100 t=over
+   W x=330 s=0 z=100 t=the
+   W x=371 s=0 z=100 t=lazy
+   W x=419 s=0 z=100 t=dog.
   LINE y=620 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=The
    W x=33 s=0 z=100 t=quick
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=644 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=668 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=fox
    W x=40 s=0 z=100 t=jumps
@@ -808,36 +808,36 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=jumps
    W x=52 s=0 z=100 t=over
    W x=102 s=0 z=100 t=the
-   W x=142 s=0 z=100 t=lazy
-   W x=189 s=0 z=100 t=dog.
-   W x=239 s=0 z=100 t=The
-   W x=275 s=0 z=100 t=quick
-   W x=323 s=0 z=100 t=brown
-   W x=375 s=0 z=100 t=fox
-   W x=413 s=0 z=100 t=jumps
+   W x=143 s=0 z=100 t=lazy
+   W x=190 s=0 z=100 t=dog.
+   W x=241 s=0 z=100 t=The
+   W x=277 s=0 z=100 t=quick
+   W x=326 s=0 z=100 t=brown
+   W x=378 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=716 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=over
    W x=50 s=0 z=100 t=the
-   W x=90 s=0 z=100 t=lazy
-   W x=137 s=0 z=100 t=dog.
-   W x=187 s=0 z=100 t=The
-   W x=223 s=0 z=100 t=quick
-   W x=271 s=0 z=100 t=brown
-   W x=323 s=0 z=100 t=fox
-   W x=361 s=0 z=100 t=jumps
-   W x=413 s=0 z=100 t=over
+   W x=91 s=0 z=100 t=lazy
+   W x=139 s=0 z=100 t=dog.
+   W x=189 s=0 z=100 t=The
+   W x=226 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=327 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
  PAGE 1 elements=19 footnotes=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.
@@ -852,37 +852,37 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=dog.
    W x=50 s=0 z=100 t=The
-   W x=86 s=0 z=100 t=quick
-   W x=134 s=0 z=100 t=brown
-   W x=186 s=0 z=100 t=fox
-   W x=224 s=0 z=100 t=jumps
-   W x=276 s=0 z=100 t=over
-   W x=326 s=0 z=100 t=the
-   W x=366 s=0 z=100 t=lazy
-   W x=413 s=0 z=100 t=dog.
+   W x=87 s=0 z=100 t=quick
+   W x=136 s=0 z=100 t=brown
+   W x=188 s=0 z=100 t=fox
+   W x=227 s=0 z=100 t=jumps
+   W x=280 s=0 z=100 t=over
+   W x=330 s=0 z=100 t=the
+   W x=371 s=0 z=100 t=lazy
+   W x=419 s=0 z=100 t=dog.
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=The
    W x=33 s=0 z=100 t=quick
    W x=78 s=0 z=100 t=brown
    W x=127 s=0 z=100 t=fox
    W x=162 s=0 z=100 t=jumps
-   W x=211 s=0 z=100 t=over
-   W x=258 s=0 z=100 t=the
-   W x=295 s=0 z=100 t=lazy
-   W x=339 s=0 z=100 t=dog.
-   W x=386 s=0 z=100 t=The
-   W x=419 s=0 z=100 t=quick
+   W x=212 s=0 z=100 t=over
+   W x=259 s=0 z=100 t=the
+   W x=296 s=0 z=100 t=lazy
+   W x=340 s=0 z=100 t=dog.
+   W x=387 s=0 z=100 t=The
+   W x=421 s=0 z=100 t=quick
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=brown
    W x=52 s=0 z=100 t=fox
    W x=90 s=0 z=100 t=jumps
-   W x=142 s=0 z=100 t=over
-   W x=192 s=0 z=100 t=the
-   W x=232 s=0 z=100 t=lazy
-   W x=279 s=0 z=100 t=dog.
-   W x=329 s=0 z=100 t=The
-   W x=365 s=0 z=100 t=quick
-   W x=413 s=0 z=100 t=brown
+   W x=143 s=0 z=100 t=over
+   W x=193 s=0 z=100 t=the
+   W x=234 s=0 z=100 t=lazy
+   W x=281 s=0 z=100 t=dog.
+   W x=332 s=0 z=100 t=The
+   W x=368 s=0 z=100 t=quick
+   W x=417 s=0 z=100 t=brown
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=fox
    W x=40 s=0 z=100 t=jumps
@@ -898,13 +898,13 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=jumps
    W x=52 s=0 z=100 t=over
    W x=102 s=0 z=100 t=the
-   W x=142 s=0 z=100 t=lazy
-   W x=189 s=0 z=100 t=dog.
-   W x=239 s=0 z=100 t=The
-   W x=275 s=0 z=100 t=quick
-   W x=323 s=0 z=100 t=brown
-   W x=375 s=0 z=100 t=fox
-   W x=413 s=0 z=100 t=jumps
+   W x=143 s=0 z=100 t=lazy
+   W x=190 s=0 z=100 t=dog.
+   W x=241 s=0 z=100 t=The
+   W x=277 s=0 z=100 t=quick
+   W x=326 s=0 z=100 t=brown
+   W x=378 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=over
    W x=47 s=0 z=100 t=the
@@ -915,18 +915,18 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=This
    W x=39 s=0 z=100 t=paragraph
    W x=132 s=0 z=100 t=flows
-   W x=184 s=0 z=100 t=beside
-   W x=237 s=0 z=100 t=the
-   W x=274 s=0 z=100 t=striped
-   W x=336 s=0 z=100 t=image.
+   W x=185 s=0 z=100 t=beside
+   W x=238 s=0 z=100 t=the
+   W x=275 s=0 z=100 t=striped
+   W x=338 s=0 z=100 t=image.
   LINE y=216 x=64 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=Lines
    W x=58 s=0 z=100 t=overlapping
-   W x=171 s=0 z=100 t=the
-   W x=213 s=0 z=100 t=image
-   W x=272 s=0 z=100 t=tile
-   W x=317 s=0 z=100 t=on
-   W x=351 s=0 z=100 t=each
+   W x=172 s=0 z=100 t=the
+   W x=215 s=0 z=100 t=image
+   W x=275 s=0 z=100 t=tile
+   W x=321 s=0 z=100 t=on
+   W x=356 s=0 z=100 t=each
   LINE y=240 x=64 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=page
    W x=54 s=0 z=100 t=are
@@ -934,16 +934,16 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=196 s=0 z=100 t=lines
    W x=256 s=0 z=100 t=below
    W x=314 s=0 z=100 t=the
-   W x=361 s=0 z=100 t=tile
+   W x=362 s=0 z=100 t=tile
   LINE y=264 x=64 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=bottom
    W x=67 s=0 z=100 t=resume
    W x=130 s=0 z=100 t=full
    W x=176 s=0 z=100 t=width.
-   W x=235 s=0 z=100 t=The
-   W x=269 s=0 z=100 t=quick
-   W x=315 s=0 z=100 t=brown
-   W x=365 s=0 z=100 t=fox
+   W x=236 s=0 z=100 t=The
+   W x=270 s=0 z=100 t=quick
+   W x=316 s=0 z=100 t=brown
+   W x=367 s=0 z=100 t=fox
   LINE y=288 x=64 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=jumps
    W x=51 s=0 z=100 t=over
@@ -958,35 +958,35 @@ SPINE 6 href=OEBPS/ch7.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=jumps
    W x=52 s=0 z=100 t=over
    W x=102 s=0 z=100 t=the
-   W x=142 s=0 z=100 t=lazy
-   W x=189 s=0 z=100 t=dog.
-   W x=239 s=0 z=100 t=The
-   W x=275 s=0 z=100 t=quick
-   W x=323 s=0 z=100 t=brown
-   W x=375 s=0 z=100 t=fox
-   W x=413 s=0 z=100 t=jumps
+   W x=143 s=0 z=100 t=lazy
+   W x=190 s=0 z=100 t=dog.
+   W x=241 s=0 z=100 t=The
+   W x=277 s=0 z=100 t=quick
+   W x=326 s=0 z=100 t=brown
+   W x=378 s=0 z=100 t=fox
+   W x=417 s=0 z=100 t=jumps
   LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=over
    W x=50 s=0 z=100 t=the
-   W x=90 s=0 z=100 t=lazy
-   W x=137 s=0 z=100 t=dog.
-   W x=187 s=0 z=100 t=The
-   W x=223 s=0 z=100 t=quick
-   W x=271 s=0 z=100 t=brown
-   W x=323 s=0 z=100 t=fox
-   W x=361 s=0 z=100 t=jumps
-   W x=413 s=0 z=100 t=over
+   W x=91 s=0 z=100 t=lazy
+   W x=139 s=0 z=100 t=dog.
+   W x=189 s=0 z=100 t=The
+   W x=226 s=0 z=100 t=quick
+   W x=275 s=0 z=100 t=brown
+   W x=327 s=0 z=100 t=fox
+   W x=366 s=0 z=100 t=jumps
+   W x=419 s=0 z=100 t=over
   LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=41 s=0 z=100 t=lazy
-   W x=89 s=0 z=100 t=dog.
-   W x=140 s=0 z=100 t=The
-   W x=177 s=0 z=100 t=quick
-   W x=226 s=0 z=100 t=brown
-   W x=279 s=0 z=100 t=fox
-   W x=318 s=0 z=100 t=jumps
-   W x=371 s=0 z=100 t=over
-   W x=422 s=0 z=100 t=the
+   W x=90 s=0 z=100 t=dog.
+   W x=142 s=0 z=100 t=The
+   W x=180 s=0 z=100 t=quick
+   W x=229 s=0 z=100 t=brown
+   W x=283 s=0 z=100 t=fox
+   W x=323 s=0 z=100 t=jumps
+   W x=377 s=0 z=100 t=over
+   W x=429 s=0 z=100 t=the
   LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=lazy
    W x=48 s=0 z=100 t=dog.

@@ -30,12 +30,12 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
    W x=95 s=0 z=100 f=5 ls=0 t=become
    W x=156 s=0 z=100 f=5 ls=0 t=a
    W x=176 s=0 z=100 f=5 ls=0 t=grid,
-   W x=225 s=0 z=100 f=5 ls=0 t=so
-   W x=254 s=0 z=100 f=5 ls=0 t=it
-   W x=278 s=0 z=100 f=5 ls=0 t=streams
-   W x=353 s=0 z=100 f=5 ls=0 t=its
-   W x=386 s=0 z=100 f=5 ls=0 t=cells
-   W x=437 s=0 z=100 f=5 ls=0 t=as
+   W x=226 s=0 z=100 f=5 ls=0 t=so
+   W x=255 s=0 z=100 f=5 ls=0 t=it
+   W x=279 s=0 z=100 f=5 ls=0 t=streams
+   W x=354 s=0 z=100 f=5 ls=0 t=its
+   W x=387 s=0 z=100 f=5 ls=0 t=cells
+   W x=439 s=0 z=100 f=5 ls=0 t=as
   LINE y=212 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 f=5 ls=0 t=paragraphs.
   TABLE y=249 x=0 w=460 h=84 cols=2 border=1 rows=1
@@ -45,12 +45,12 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
       W x=18 s=0 z=100 f=5 ls=0 t=Outer
       W x=76 s=0 z=100 f=5 ls=0 t=cell
       W x=122 s=0 z=100 f=5 ls=0 t=before
-      W x=188 s=0 z=100 f=5 ls=0 t=the
+      W x=189 s=0 z=100 f=5 ls=0 t=the
      LN words=4
       W x=0 s=0 z=100 f=5 ls=0 t=nesting
       W x=76 s=0 z=100 f=5 ls=0 t=point.
-      W x=140 s=0 z=100 f=5 ls=0 t=This
-      W x=182 s=0 z=100 f=5 ls=0 t=text
+      W x=141 s=0 z=100 f=5 ls=0 t=This
+      W x=184 s=0 z=100 f=5 ls=0 t=text
      LN words=3
       W x=0 s=0 z=100 f=5 ls=0 t=is
       W x=21 s=0 z=100 f=5 ls=0 t=buffered
@@ -59,12 +59,12 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
      LN words=3
       W x=18 s=0 z=100 f=5 ls=0 t=Second
       W x=102 s=0 z=100 f=5 ls=0 t=outer
-      W x=177 s=0 z=100 f=5 ls=0 t=cell,
+      W x=178 s=0 z=100 f=5 ls=0 t=cell,
      LN words=4
       W x=0 s=0 z=100 f=5 ls=0 t=also
       W x=49 s=0 z=100 f=5 ls=0 t=buffered
       W x=127 s=0 z=100 f=5 ls=0 t=before
-      W x=188 s=0 z=100 f=5 ls=0 t=the
+      W x=189 s=0 z=100 f=5 ls=0 t=the
      LN words=3
       W x=0 s=0 z=100 f=5 ls=0 t=inner
       W x=51 s=0 z=100 f=5 ls=0 t=table
@@ -86,12 +86,12 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=371 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 f=5 ls=0 t=Final
    W x=69 s=0 z=100 f=5 ls=0 t=outer
-   W x=126 s=0 z=100 f=5 ls=0 t=row,
-   W x=167 s=0 z=100 f=5 ls=0 t=first
-   W x=217 s=0 z=100 f=5 ls=0 t=cell,
-   W x=266 s=0 z=100 f=5 ls=0 t=streamed
-   W x=348 s=0 z=100 f=5 ls=0 t=straight
-   W x=433 s=0 z=100 f=5 ls=0 t=to
+   W x=127 s=0 z=100 f=5 ls=0 t=row,
+   W x=169 s=0 z=100 f=5 ls=0 t=first
+   W x=219 s=0 z=100 f=5 ls=0 t=cell,
+   W x=269 s=0 z=100 f=5 ls=0 t=streamed
+   W x=352 s=0 z=100 f=5 ls=0 t=straight
+   W x=438 s=0 z=100 f=5 ls=0 t=to
   LINE y=390 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 f=5 ls=0 t=a
    W x=18 s=0 z=100 f=5 ls=0 t=paragraph.
@@ -111,7 +111,7 @@ SPINE 2 href=EPUB/text/ch001.xhtml pages=1 truncated=0 cssFallback=0
    W x=224 s=0 z=100 f=5 ls=0 t=table,
    W x=292 s=0 z=100 f=5 ls=0 t=which
    W x=349 s=0 z=100 f=5 ls=0 t=must
-   W x=403 s=0 z=100 f=5 ls=0 t=resume
+   W x=404 s=0 z=100 f=5 ls=0 t=resume
   LINE y=447 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 f=5 ls=0 t=normal
    W x=68 s=0 z=100 f=5 ls=0 t=block
@@ -128,12 +128,12 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 f=5 ls=0 t=A
    W x=14 s=0 z=100 f=5 ls=0 t=rowspan
    W x=84 s=0 z=100 f=5 ls=0 t=makes
-   W x=138 s=0 z=100 f=5 ls=0 t=grid
-   W x=177 s=0 z=100 f=5 ls=0 t=layout
-   W x=245 s=0 z=100 f=5 ls=0 t=impossible,
-   W x=341 s=0 z=100 f=5 ls=0 t=so
-   W x=368 s=0 z=100 f=5 ls=0 t=this
-   W x=411 s=0 z=100 f=5 ls=0 t=table
+   W x=139 s=0 z=100 f=5 ls=0 t=grid
+   W x=178 s=0 z=100 f=5 ls=0 t=layout
+   W x=246 s=0 z=100 f=5 ls=0 t=impossible,
+   W x=343 s=0 z=100 f=5 ls=0 t=so
+   W x=370 s=0 z=100 f=5 ls=0 t=this
+   W x=414 s=0 z=100 f=5 ls=0 t=table
   LINE y=241 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=streams
    W x=73 s=0 z=100 f=5 ls=0 t=from
@@ -152,8 +152,8 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
      LN words=4
       W x=0 s=0 z=100 f=5 ls=0 t=before
       W x=72 s=0 z=100 f=5 ls=0 t=the
-      W x=121 s=0 z=100 f=5 ls=0 t=rowspan
-      W x=203 s=0 z=100 f=5 ls=0 t=is
+      W x=122 s=0 z=100 f=5 ls=0 t=rowspan
+      W x=205 s=0 z=100 f=5 ls=0 t=is
      LN words=1
       W x=0 s=0 z=100 f=5 ls=0 t=seen.
     CELL 1 hdr=0 span=1 lines=2
@@ -161,7 +161,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
       W x=18 s=0 z=100 f=5 ls=0 t=Another
       W x=100 s=0 z=100 f=5 ls=0 t=plain
       W x=156 s=0 z=100 f=5 ls=0 t=cell
-      W x=202 s=0 z=100 f=5 ls=0 t=in
+      W x=203 s=0 z=100 f=5 ls=0 t=in
      LN words=3
       W x=0 s=0 z=100 f=5 ls=0 t=the
       W x=37 s=0 z=100 f=5 ls=0 t=first
@@ -169,14 +169,14 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=362 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 f=5 ls=0 t=This
    W x=57 s=0 z=100 f=5 ls=0 t=cell
-   W x=97 s=0 z=100 f=5 ls=0 t=spans
-   W x=150 s=0 z=100 f=5 ls=0 t=two
-   W x=184 s=0 z=100 f=5 ls=0 t=rows
-   W x=225 s=0 z=100 f=5 ls=0 t=and
-   W x=262 s=0 z=100 f=5 ls=0 t=triggers
-   W x=340 s=0 z=100 f=5 ls=0 t=the
-   W x=377 s=0 z=100 f=5 ls=0 t=switch
-   W x=433 s=0 z=100 f=5 ls=0 t=to
+   W x=98 s=0 z=100 f=5 ls=0 t=spans
+   W x=151 s=0 z=100 f=5 ls=0 t=two
+   W x=186 s=0 z=100 f=5 ls=0 t=rows
+   W x=227 s=0 z=100 f=5 ls=0 t=and
+   W x=265 s=0 z=100 f=5 ls=0 t=triggers
+   W x=343 s=0 z=100 f=5 ls=0 t=the
+   W x=381 s=0 z=100 f=5 ls=0 t=switch
+   W x=438 s=0 z=100 f=5 ls=0 t=to
   LINE y=381 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 f=5 ls=0 t=streaming.
   LINE y=400 x=0 align=0 mult=1.000 hfid=0 words=5
@@ -205,7 +205,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
    W x=267 s=0 z=100 f=5 ls=0 t=than
    W x=319 s=0 z=100 f=5 ls=0 t=the
    W x=357 s=0 z=100 f=5 ls=0 t=grid
-   W x=397 s=0 z=100 f=5 ls=0 t=layout
+   W x=398 s=0 z=100 f=5 ls=0 t=layout
   LINE y=457 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 f=5 ls=0 t=supports.
   LINE y=494 x=0 align=0 mult=1.000 hfid=0 words=1
@@ -236,7 +236,7 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
    W x=236 s=0 z=100 f=5 ls=0 t=which
    W x=291 s=0 z=100 f=5 ls=0 t=arrives
    W x=367 s=0 z=100 f=5 ls=0 t=after
-   W x=428 s=0 z=100 f=5 ls=0 t=the
+   W x=429 s=0 z=100 f=5 ls=0 t=the
   LINE y=703 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 f=5 ls=0 t=column
    W x=66 s=0 z=100 f=5 ls=0 t=limit
@@ -293,14 +293,14 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=151 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 f=5 ls=0 t=A
    W x=14 s=0 z=100 f=5 ls=0 t=colspan
-   W x=86 s=0 z=100 f=5 ls=0 t=table
-   W x=138 s=0 z=100 f=5 ls=0 t=that
-   W x=188 s=0 z=100 f=5 ls=0 t=still
-   W x=237 s=0 z=100 f=5 ls=0 t=fits
-   W x=278 s=0 z=100 f=5 ls=0 t=the
-   W x=315 s=0 z=100 f=5 ls=0 t=grid,
-   W x=362 s=0 z=100 f=5 ls=0 t=to
-   W x=390 s=0 z=100 f=5 ls=0 t=confirm
+   W x=87 s=0 z=100 f=5 ls=0 t=table
+   W x=140 s=0 z=100 f=5 ls=0 t=that
+   W x=190 s=0 z=100 f=5 ls=0 t=still
+   W x=240 s=0 z=100 f=5 ls=0 t=fits
+   W x=282 s=0 z=100 f=5 ls=0 t=the
+   W x=319 s=0 z=100 f=5 ls=0 t=grid,
+   W x=367 s=0 z=100 f=5 ls=0 t=to
+   W x=396 s=0 z=100 f=5 ls=0 t=confirm
   LINE y=170 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 f=5 ls=0 t=the
    W x=37 s=0 z=100 f=5 ls=0 t=non-streaming

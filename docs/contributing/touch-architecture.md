@@ -110,13 +110,31 @@ light-slept between polls (T5S3, 2026-09).
 
 One loop tick handles touch in this order:
 
-1. `main.cpp`: `GestureEventManager::consumeAction()`. A bound gesture runs through the same
-   `runAction()` as buttons and suppresses the contact.
+1. `main.cpp`: `ActivityManager::handleReaderWordHold()` first offers an EPUB hold to its
+   exact word geometry. A hit opens the dictionary and suppresses the contact; a miss
+   leaves it to `GestureEventManager::consumeAction()`. A bound zone gesture runs through
+   the same `runAction()` as buttons and suppresses the contact.
 2. The activity's own `loop()`: reader page turns, FreeInkUI routing, screen-specific hit tests.
 3. `ActivityManager::loop()`, on touch builds only: `dispatchLightPanelGesture()`,
    `dispatchListSwipe()`, `dispatchListTap()`, `dispatchHintStripTap()`.
 
 The dispatchers in step 3 are fallbacks: a screen that handles a tap itself claims it first.
+
+EPUB word holds use the live tap-candidate age, not `wasScreenTouchPressed()`: the
+latter reads a raw sampler edge that may disappear during a slow loop tick. The
+candidate age proves the contact started after the current page appeared, and
+`ReaderWordHold` cancels it when page, repaint timestamp or held orientation changes.
+The long-press edge remains the SDK's single classifier for timing and motion.
+Word preflight waits for exclusive render access before using the shared font cache;
+`DictionaryWordSelectActivity` supplies the same exact fragment boxes (including table-cell padding, spans and line advances) and word joining
+as its menu-driven selection path. The direct path has no persistent per-page index
+and does not allocate the selector's 2 KB cursor snapshot.
+
+`test/dictionary_touch/run.py --out <build-dir> --sanitize` compiles the production
+routing, hit-test, word assembly and direct-lookup lifecycle methods with host I/O.
+It checks all orientations, delayed sampling, word misses, gesture precedence,
+page/reflow cancellation, single activation, dictionary switching and return-to-book.
+Physical digitiser accuracy, latency and rendering remain on-device checks.
 
 A screen becomes tappable in one of three ways.
 

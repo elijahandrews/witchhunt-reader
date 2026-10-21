@@ -951,8 +951,9 @@ static void renderGlyphFast2Bit(uint8_t* const frameBuffer, const uint8_t* const
 template <TextRotation rotation>
 static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                            const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                           const bool pixelState, const EpdFontFamily::Style style) {
-  const EpdGlyphRef glyph = fontFamily.getGlyph(cp, style);
+                           const bool pixelState, const EpdFontFamily::Style style,
+                           const EpdRasterGlyph* raster = nullptr) {
+  const EpdGlyphRef glyph = raster ? raster->metrics : fontFamily.getGlyph(cp, style);
   if (!glyph) {
     LOG_ERR("GFX", "No glyph for codepoint %d", cp);
     return;
@@ -982,7 +983,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
     }
   }
 
-  const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
+  const uint8_t* bitmap = raster ? raster->bitmap : renderer.getGlyphBitmap(fontData, glyph);
 
   if (bitmap != nullptr) {
     // For Normal:  outer loop advances screenY, inner loop advances screenX
@@ -1156,6 +1157,49 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   }
 }
 
+// Balance rounding across varying glyph edges without dithering flat gray bars.
+// One pending sample identifies both ends of an equal-coverage plateau. Such
+// plateaus keep independent nearest-even rounding and reset the carry; elsewhere
+// the bounded remainder prevents a stem gaining ink merely from its x phase.
+// Scalar state only, local to one glyph row; no additional cache/allocation.
+template <typename Area>
+class GlyphCoverageRow {
+  const Area area;
+  Area error = 0, pending = 0;
+  bool havePending = false, sameBefore = false;
+
+ public:
+  explicit GlyphCoverageRow(Area area) : area(area) {}
+  // Returns the previous pixel, or -1 for the first sample. Push -1 once at
+  // row end to flush; real coverages are always in [0, 3*area].
+  int push(Area coverage) {
+    if (!havePending) {
+      pending = coverage;
+      havePending = true;
+      return -1;
+    }
+    const bool sameAfter = pending == coverage;
+    int raw;
+    if (pending == 0 || pending == area || pending == 2 * area || pending == 3 * area) {
+      // Exact levels keep the carry and need no per-pixel division.
+      raw = pending == 0 ? 0 : pending == area ? 1 : pending == 2 * area ? 2 : 3;
+    } else if (sameBefore || sameAfter) {
+      // A repeated fractional value describes a flat edge, not independent
+      // noisy samples. Error diffusion would texture it (e.g. .5,.5 -> 0,1).
+      raw = static_cast<int>((pending + area / 2) / area);
+      if ((raw & 1) && !(area & 1) && raw * area - pending == area / 2) --raw;
+      error = 0;
+    } else {
+      const Area value = pending + error;
+      raw = static_cast<int>((value + (area - 1) / 2) / area);
+      error = value - raw * area;
+    }
+    pending = coverage;
+    sameBefore = sameAfter;
+    return raw;
+  }
+};
+
 // Resample one glyph to `scale`, reporting every destination pixel that must be drawn to
 // `emit(dstX, dstY)`. Single source of truth for both consumers: the cache builder (which
 // records the pixels into a 1-bit mask) and the uncached fallback (which draws them
@@ -1174,7 +1218,6 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
   // hardware divider for the one division per destination pixel).
   constexpr int FP_SHIFT = 16;
   constexpr int32_t FP_ONE = 1 << FP_SHIFT;
-  const int32_t invScaleFP = static_cast<int32_t>(FP_ONE / scale + 0.5f);
 
   // Per-source-pixel raw ink level: 2-bit fonts carry 4 AA levels (0..3); 1-bit fonts map
   // to 0 or 3. Used by the coverage integrator below.
@@ -1189,21 +1232,22 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
   };
 
   // At native bitmap size a horizontal phase only mixes two neighboring
-  // columns. Preserve the same coverage/tie rule without the general 64-bit
-  // area loop for every character of ordinary body text.
+  // columns. Carry the same row-coverage remainder as the general path below,
+  // without its 64-bit area loop for every character of ordinary body text.
   if (scale == 1.0f && srcYOriginFP == 0) {
     const int first = static_cast<int>(srcXOriginFP >> 20);
     const int fraction = static_cast<int>((srcXOriginFP - static_cast<int64_t>(first) * (1 << 20)) >> 16);
     for (int y = 0; y < dstH; ++y) {
+      GlyphCoverageRow<int> row(16);
       for (int x = 0; x < dstW; ++x) {
         const int sx = first + x;
         const int a = sx >= 0 && sx < srcW && y < srcH ? srcRaw(sx, y) : 0;
         const int b = sx + 1 >= 0 && sx + 1 < srcW && y < srcH ? srcRaw(sx + 1, y) : 0;
-        const int value = a * (16 - fraction) + b * fraction;
-        const int lower = value >> 4, remainder = value & 15;
-        const uint8_t raw = lower + (remainder > 8 || (remainder == 8 && (lower & 1)));
-        if ((drawMask >> raw) & 1) emit(x, y, raw);
+        const int raw = row.push(a * (16 - fraction) + b * fraction);
+        if (raw >= 0 && ((drawMask >> raw) & 1)) emit(x - 1, y, raw);
       }
+      const int raw = row.push(-1);
+      if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstW - 1, y, raw);
     }
     return;
   }
@@ -1220,6 +1264,7 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
   // Keep four extra horizontal fractional bits: rounding phase*step/16
   // before integration can move an exact half-coverage tie to the wrong shade.
   // Vertical coordinates remain 16.16; horizontal coordinates are 12.20.
+  const int32_t invScaleFP = static_cast<int32_t>(FP_ONE / scale + 0.5f);
   constexpr int X_SHIFT = FP_SHIFT + 4;
   const int64_t xStep = static_cast<int64_t>(invScaleFP) * 16;
   const int64_t dstPixelAreaFP = xStep * invScaleFP;
@@ -1229,6 +1274,7 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
     const int sy0 = std::max(0, static_cast<int>(srcY0FP >> FP_SHIFT));
     const int sy1 = std::min(static_cast<int>((srcY1FP - 1) >> FP_SHIFT), srcH - 1);
     int64_t srcX0FP = srcXOriginFP;
+    GlyphCoverageRow<int64_t> row(dstPixelAreaFP);
     for (int dstX = 0; dstX < dstW; dstX++, srcX0FP += xStep) {
       const int64_t srcX1FP = srcX0FP + xStep;
       const int sx0 = std::max(0, static_cast<int>(srcX0FP >> X_SHIFT));
@@ -1248,20 +1294,12 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
           covered += static_cast<int64_t>(raw) * hOverlapFP * wOverlapFP;
         }
       }
-      // covered / dstPixelArea is 3x the ink fraction (raw already carries the x3 of the
-      // source encoding). Exact half levels occur frequently when reducing an HD
-      // font's already-quantized 2-bit raster. Always rounding them upward adds
-      // extra ink along stems. Use nearest-even ties without another division;
-      // non-ties retain the same nearest-level result and every draw path shares it.
-      int64_t rounded = (covered + dstPixelAreaFP / 2) / dstPixelAreaFP;
-      if ((rounded & 1) && !(dstPixelAreaFP & 1) && rounded * dstPixelAreaFP - covered == dstPixelAreaFP / 2) {
-        --rounded;
-      }
-      const uint8_t raw = static_cast<uint8_t>(std::min<int64_t>(3, rounded));
-      if ((drawMask >> raw) & 0x01) {
-        emit(dstX, dstY, raw);
-      }
+      // Quantize before clipping/masking so cached, direct and AA passes agree.
+      const int raw = row.push(covered);
+      if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstX - 1, dstY, raw);
     }
+    const int raw = row.push(-1);
+    if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstW - 1, dstY, raw);
   }
 }
 
@@ -1307,6 +1345,16 @@ static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMo
                               const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
                               const bool pixelState, const EpdFontFamily::Style style, const float scale,
                               const int8_t phase = 0) {
+  EpdRasterGlyph raster;
+  if (fontFamily.rasterGlyph(cp, style, scale, phase, raster)) {
+    renderCharImpl<TextRotation::None>(renderer, renderMode, fontFamily, cp, cursorX, cursorY, pixelState, style,
+                                       &raster);
+    return;
+  }
+  if (scale == 1.0f && phase == 0) {
+    renderCharImpl<TextRotation::None>(renderer, renderMode, fontFamily, cp, cursorX, cursorY, pixelState, style);
+    return;
+  }
   const EpdGlyphRef glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) return;
 
@@ -1533,17 +1581,11 @@ bool GfxRenderer::getTextInkMetrics(const int fontId, const char* text, const Ep
   const EpdFontFamily* const family = findFontFamily(fontId);
   if (!family) return false;
 
-  bool any = false;
-  const auto& font = *family;
-  textRun::walk(font, text, style, fontBaseScale(fontId), 0, [&](uint32_t cp, int, int y, float scale, bool, int8_t) {
-    const auto glyph = font.getGlyph(cp, style);
-    if (!glyph || glyph.width == 0 || glyph.height == 0) return;
-    const auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, scale);
-    *aboveBaseline = std::max(*aboveBaseline, -(y + bounds.top));
-    *belowBaseline = std::max(*belowBaseline, y + bounds.top + bounds.height);
-    any = true;
-  });
-  return any;
+  const auto metrics =
+      textRun::walk(*family, text, style, fontBaseScale(fontId), 0, [](uint32_t, int, int, float, bool, int8_t) {});
+  *aboveBaseline = std::max(0, -metrics.top);
+  *belowBaseline = std::max(0, metrics.bottom);
+  return metrics.hasInk;
 }
 
 void GfxRenderer::drawCenteredText(const int fontId, const int y, const char* text, const bool black,
@@ -1710,11 +1752,7 @@ void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, co
   textRun::walk(
       *family, text, style, scale, tracking,
       [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/, int8_t phase) {
-        if (glyphScale == 1.0f && phase == 0) {
-          renderCharImpl<TextRotation::None>(*this, mode, *family, cp, x + dx, baseline + dy, black, style);
-        } else {
-          renderCharAtScale(*this, mode, *family, cp, x + dx, baseline + dy, black, style, glyphScale, phase);
-        }
+        renderCharAtScale(*this, mode, *family, cp, x + dx, baseline + dy, black, style, glyphScale, phase);
       },
       nullptr, ligatures);
 }
@@ -3364,7 +3402,8 @@ int GfxRenderer::getKerning(const int fontId, const uint32_t leftCp, const uint3
 int GfxRenderer::scaledTextAdvanceX(const EpdFontFamily& font, const char* text, const EpdFontFamily::Style style,
                                     const float scale) const {
   if (!text) return 0;
-  return textRun::walk(font, text, style, scale, 0, [](uint32_t, int, int, float, bool, int8_t) {}).advance;
+  return textRun::walk<false, false>(font, text, style, scale, 0, [](uint32_t, int, int, float, bool, int8_t) {})
+      .advance;
 }
 
 int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFamily::Style style) const {
@@ -3969,9 +4008,9 @@ int GfxRenderer::getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFami
     fontCacheManager_->recordText(text, fontId, style);
     return 0;
   }
-  return textRun::walk(
-             *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
-             nullptr, ligatures)
+  return textRun::walk<false, false>(
+             *family, text, style, scale * fontBaseScale(fontId), tracking,
+             [](uint32_t, int, int, float, bool, int8_t) {}, nullptr, ligatures)
       .advance;
 }
 int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
@@ -3983,8 +4022,8 @@ int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily:
     return 0;
   }
   const auto m = textRun::walk(
-      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {}, nullptr,
-      ligatures);
+      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
+      nullptr, ligatures);
   return std::max(m.advance, m.right) - std::min(0, m.left);
 }
 GfxRenderer::TextRange GfxRenderer::getTextRangeSpaced(int fontId, const char* text, EpdFontFamily::Style style,
@@ -3998,8 +4037,8 @@ GfxRenderer::TextRange GfxRenderer::getTextRangeSpaced(int fontId, const char* t
   }
   textRun::CharacterRange range{first, last};
   textRun::walk<true>(
-      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {}, &range,
-      ligatures);
+      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
+      &range, ligatures);
   return {range.x, range.left, range.right};
 }
 void GfxRenderer::drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,

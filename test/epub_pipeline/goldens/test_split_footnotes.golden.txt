@@ -9,31 +9,31 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=60 s=0 z=100 t=city
    W x=106 s=0 z=100 t=watch
    W x=168 s=0 z=100 t=had
-   W x=215 s=0 z=100 t=a
-   W x=242 s=0 z=100 t=proud
-   W x=302 s=0 z=100 t=tradition
-   W x=385 s=4 z=100 t=[1]
-   W x=420 s=2 z=100 t=(The
+   W x=216 s=0 z=100 t=a
+   W x=243 s=0 z=100 t=proud
+   W x=303 s=0 z=100 t=tradition
+   W x=386 s=4 z=100 t=[1]
+   W x=422 s=2 z=100 t=(The
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=2 z=100 t=Patrician
    W x=98 s=2 z=100 t=had
-   W x=147 s=2 z=100 t=a
-   W x=176 s=2 z=100 t=broad
-   W x=239 s=2 z=100 t=and
-   W x=287 s=2 z=100 t=comprehensive
-   W x=424 s=2 z=100 t=view
+   W x=148 s=2 z=100 t=a
+   W x=177 s=2 z=100 t=broad
+   W x=241 s=2 z=100 t=and
+   W x=289 s=2 z=100 t=comprehensive
+   W x=427 s=2 z=100 t=view
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=2 z=100 t=of
    W x=32 s=2 z=100 t=the
-   W x=73 s=2 z=100 t=world,
-   W x=134 s=2 z=100 t=which
-   W x=187 s=2 z=100 t=is
-   W x=212 s=2 z=100 t=to
-   W x=244 s=2 z=100 t=say
-   W x=283 s=2 z=100 t=a
-   W x=305 s=2 z=100 t=short
-   W x=366 s=2 z=100 t=one.)
-   W x=430 s=0 z=100 t=of
+   W x=74 s=2 z=100 t=world,
+   W x=136 s=2 z=100 t=which
+   W x=190 s=2 z=100 t=is
+   W x=216 s=2 z=100 t=to
+   W x=248 s=2 z=100 t=say
+   W x=288 s=2 z=100 t=a
+   W x=311 s=2 z=100 t=short
+   W x=373 s=2 z=100 t=one.)
+   W x=438 s=0 z=100 t=of
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=arriving
    W x=83 s=0 z=100 t=shortly
@@ -42,35 +42,35 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=258 s=0 z=100 t=event,
    W x=326 s=0 z=100 t=which
    W x=378 s=0 z=100 t=the
-   W x=418 s=0 z=100 t=Guild
+   W x=419 s=0 z=100 t=Guild
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=of
    W x=37 s=0 z=100 t=Thieves
    W x=100 s=4 z=100 t=[2]
-   W x=136 s=2 z=100 t=(Or
-   W x=178 s=2 z=100 t=would
-   W x=239 s=2 z=100 t=have
-   W x=299 s=2 z=100 t=done,
-   W x=362 s=2 z=100 t=if
-   W x=393 s=2 z=100 t=anyone
+   W x=137 s=2 z=100 t=(Or
+   W x=179 s=2 z=100 t=would
+   W x=241 s=2 z=100 t=have
+   W x=301 s=2 z=100 t=done,
+   W x=365 s=2 z=100 t=if
+   W x=397 s=2 z=100 t=anyone
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=2 z=100 t=had
    W x=43 s=2 z=100 t=thought
    W x=132 s=2 z=100 t=to
    W x=165 s=2 z=100 t=ask
-   W x=205 s=2 z=100 t=him
-   W x=244 s=2 z=100 t=first.)
-   W x=320 s=0 z=100 t=considered
-   W x=418 s=0 z=100 t=only
+   W x=206 s=2 z=100 t=him
+   W x=245 s=2 z=100 t=first.)
+   W x=321 s=0 z=100 t=considered
+   W x=420 s=0 z=100 t=only
   LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=sporting.
    W x=92 s=0 z=100 t=Dwarfs
    W x=157 s=0 z=100 t=were
-   W x=198 s=0 z=100 t=of
-   W x=229 s=0 z=100 t=course
-   W x=294 s=0 z=100 t=another
-   W x=377 s=0 z=100 t=matter
-   W x=436 s=4 z=100 t=[3]
+   W x=199 s=0 z=100 t=of
+   W x=230 s=0 z=100 t=course
+   W x=295 s=0 z=100 t=another
+   W x=379 s=0 z=100 t=matter
+   W x=438 s=4 z=100 t=[3]
   LINE y=206 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=2 z=100 t=(This
    W x=55 s=2 z=100 t=is
@@ -80,7 +80,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=207 s=2 z=100 t=dwarfs,
    W x=279 s=2 z=100 t=who
    W x=320 s=2 z=100 t=measure
-   W x=399 s=2 z=100 t=height
+   W x=400 s=2 z=100 t=height
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=2 z=100 t=from
    W x=46 s=2 z=100 t=the
@@ -109,39 +109,39 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=2 z=100 t=(Assassins
    W x=107 s=2 z=100 t=are,
    W x=158 s=2 z=100 t=however,
-   W x=248 s=2 z=100 t=extremely
-   W x=341 s=2 z=100 t=polite
-   W x=407 s=2 z=100 t=about
+   W x=249 s=2 z=100 t=extremely
+   W x=342 s=2 z=100 t=polite
+   W x=409 s=2 z=100 t=about
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=2 z=100 t=it.)
    W x=52 s=0 z=100 t=in
-   W x=83 s=0 z=100 t=Ankh-Morpork,
-   W x=213 s=0 z=100 t=and
-   W x=258 s=0 z=100 t=the
-   W x=303 s=0 z=100 t=Patrician
-   W x=384 s=4 z=100 t=[1]
-   W x=418 s=2 z=100 t=(The
+   W x=84 s=0 z=100 t=Ankh-Morpork,
+   W x=215 s=0 z=100 t=and
+   W x=260 s=0 z=100 t=the
+   W x=306 s=0 z=100 t=Patrician
+   W x=387 s=4 z=100 t=[1]
+   W x=422 s=2 z=100 t=(The
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=2 z=100 t=Patrician
    W x=87 s=2 z=100 t=had
-   W x=125 s=2 z=100 t=a
-   W x=143 s=2 z=100 t=broad
-   W x=195 s=2 z=100 t=and
-   W x=232 s=2 z=100 t=comprehensive
-   W x=358 s=2 z=100 t=view
-   W x=397 s=2 z=100 t=of
-   W x=425 s=2 z=100 t=the
+   W x=126 s=2 z=100 t=a
+   W x=144 s=2 z=100 t=broad
+   W x=197 s=2 z=100 t=and
+   W x=234 s=2 z=100 t=comprehensive
+   W x=361 s=2 z=100 t=view
+   W x=400 s=2 z=100 t=of
+   W x=429 s=2 z=100 t=the
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=2 z=100 t=world,
    W x=60 s=2 z=100 t=which
-   W x=112 s=2 z=100 t=is
-   W x=136 s=2 z=100 t=to
-   W x=167 s=2 z=100 t=say
-   W x=205 s=2 z=100 t=a
-   W x=226 s=2 z=100 t=short
-   W x=286 s=2 z=100 t=one.)
-   W x=349 s=0 z=100 t=approved
-   W x=431 s=0 z=100 t=of
+   W x=113 s=2 z=100 t=is
+   W x=138 s=2 z=100 t=to
+   W x=170 s=2 z=100 t=say
+   W x=208 s=2 z=100 t=a
+   W x=230 s=2 z=100 t=short
+   W x=291 s=2 z=100 t=one.)
+   W x=355 s=0 z=100 t=approved
+   W x=438 s=0 z=100 t=of
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=licences.
   FN n=4 href=note4.xhtml#note_4
@@ -153,12 +153,12 @@ SPINE 2 href=OEBPS/note1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=34 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=The
    W x=53 s=0 z=100 t=Patrician
-   W x=142 s=0 z=100 t=had
-   W x=182 s=0 z=100 t=a
-   W x=202 s=0 z=100 t=broad
-   W x=256 s=0 z=100 t=and
-   W x=295 s=0 z=100 t=comprehensive
-   W x=423 s=0 z=100 t=view
+   W x=143 s=0 z=100 t=had
+   W x=183 s=0 z=100 t=a
+   W x=204 s=0 z=100 t=broad
+   W x=258 s=0 z=100 t=and
+   W x=298 s=0 z=100 t=comprehensive
+   W x=427 s=0 z=100 t=view
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=of
    W x=28 s=0 z=100 t=the
@@ -179,13 +179,13 @@ SPINE 3 href=OEBPS/note2.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=34 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Or
    W x=43 s=0 z=100 t=would
-   W x=98 s=0 z=100 t=have
-   W x=152 s=0 z=100 t=done,
-   W x=209 s=0 z=100 t=if
-   W x=234 s=0 z=100 t=anyone
-   W x=306 s=0 z=100 t=had
-   W x=347 s=0 z=100 t=thought
-   W x=434 s=0 z=100 t=to
+   W x=99 s=0 z=100 t=have
+   W x=153 s=0 z=100 t=done,
+   W x=211 s=0 z=100 t=if
+   W x=236 s=0 z=100 t=anyone
+   W x=309 s=0 z=100 t=had
+   W x=350 s=0 z=100 t=thought
+   W x=438 s=0 z=100 t=to
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=ask
    W x=35 s=0 z=100 t=him
@@ -201,11 +201,11 @@ SPINE 4 href=OEBPS/note3.xhtml pages=1 truncated=0 cssFallback=0
    W x=61 s=0 z=100 t=is
    W x=86 s=0 z=100 t=not
    W x=129 s=0 z=100 t=true
-   W x=177 s=0 z=100 t=of
-   W x=209 s=0 z=100 t=dwarfs,
-   W x=280 s=0 z=100 t=who
-   W x=320 s=0 z=100 t=measure
-   W x=398 s=0 z=100 t=height
+   W x=178 s=0 z=100 t=of
+   W x=210 s=0 z=100 t=dwarfs,
+   W x=281 s=0 z=100 t=who
+   W x=321 s=0 z=100 t=measure
+   W x=400 s=0 z=100 t=height
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=from
    W x=46 s=0 z=100 t=the
@@ -223,11 +223,11 @@ SPINE 5 href=OEBPS/note4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=34 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Assassins
    W x=106 s=0 z=100 t=are,
-   W x=149 s=0 z=100 t=however,
-   W x=231 s=0 z=100 t=extremely
-   W x=316 s=0 z=100 t=polite
-   W x=374 s=0 z=100 t=about
-   W x=431 s=0 z=100 t=it.
+   W x=150 s=0 z=100 t=however,
+   W x=232 s=0 z=100 t=extremely
+   W x=318 s=0 z=100 t=polite
+   W x=376 s=0 z=100 t=about
+   W x=434 s=0 z=100 t=it.
   LINE y=58 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=4 z=100 t=note_4
   FN n=note_4 href=chapter2.xhtml#note_4_back

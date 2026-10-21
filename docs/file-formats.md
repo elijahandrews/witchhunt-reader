@@ -490,3 +490,20 @@ Fractional glyph positioning invalidates previously rounded ink bounds (main v91
 integration v92). Advances retain their precision, but an antialiased edge can
 extend the measured word box by one pixel. The section payload is unchanged.
 Separate versions preserve the branches' existing layout compatibility boundary.
+
+### Final-grid outline geometry (v93)
+
+Section layout version 93 invalidates ink extents measured from earlier density-2
+outline bitmaps. Runtime TTF/CFF glyphs may now be hinted and rasterized at the
+final em and fractional origin. Advances and kerning retain their existing units;
+word, selection and line ink bounds follow the final raster. Converted bitmap
+fonts keep their existing projection. Progress remains anchored to source text.
+
+
+### Precise advances and authored spacing (v94)
+
+Section layout version 94 rebuilds line positions after retaining scaled glyph
+advances in a 16.16 pen, selecting authored small capitals for native SD TrueType
+fonts, applying variable-font GPOS kerning deltas, and distributing the complete
+justification remainder. The section payload and source-based progress anchors
+are unchanged. Existing glyph and raster stores retain their format and budgets.

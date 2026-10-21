@@ -5,13 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "GlyphScale.h"
 
 // One glyph walk for the EPUB draw and metric paths. Tracking is in display-pixel
 // sixteenths, already computed at the CSS declaration (it does not scale again).
-// All positions accumulate in fixed point; measurement never rounds per word and
-// then scales a second time. The callback receives baseline-relative integer
+// Scaled advances accumulate in 16.16 fixed point, retaining sub-sixteenth
+// precision until drawing or measuring the final width. The callback receives baseline-relative integer
 // coordinates plus a signed horizontal phase in display-pixel sixteenths.
 // Coverage and bounds use that phase; advances retain the authored precision.
 namespace textRun {
@@ -19,6 +20,8 @@ struct Metrics {
   int advance = 0;
   int left = 0;
   int right = 0;
+  int top = 0, bottom = 0;  // baseline-relative final ink bounds
+  bool hasInk = false;
 };
 // Inclusive source-character interval; ligatures retain the complete glyph when any
 // constituent character is selected. Empty/missing glyph ranges stay not found.
@@ -27,17 +30,19 @@ struct CharacterRange {
   int x = 0, left = 0, right = 0;
   bool found = false;
 };
-template <bool TrackRange = false, typename Emit>
+template <bool TrackRange = false, bool RasterBounds = true, typename Emit>
 Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style style, float scale, int16_t tracking,
              Emit emit, CharacterRange* range = nullptr, bool ligatures = true) {
   Metrics result;
-  int32_t cursor = 0;
+  // Metrics and tracking arrive in sixteenths. Keep twelve more fractional bits
+  // while summing: density-2 odd advances otherwise round up at every glyph.
+  constexpr int64_t metricToPen = 1 << 12;
+  const auto pixel = [](int64_t pen) { return static_cast<int>((pen + (1 << 15)) >> 16); };
+  int64_t cursor = 0;
   uint32_t previous = 0;
   int lastX = 0, lastLeft = 0, lastWidth = 0, lastTop = 0;
   int8_t lastPhase = 0;
   const bool fractional = font.getData(style)->is2Bit;
-  bool hasInk = false;
-  const auto round = [](float value) { return static_cast<int>(std::lround(value)); };
   uint32_t character = 0;
   uint32_t cp;
   const char* glyphStart = text;
@@ -55,52 +60,68 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
     if (!combining) cp = font.resolveCaps(cp, style, capsScale);
     const bool folded = capsScale != 1.0f;
     const float glyphScale = scale * capsScale;
+    const float penScale = glyphScale * metricToPen;
     const auto glyph = font.getGlyph(cp, style);
     if (!glyph) {
       if (!combining) previous = 0;
       continue;
     }
-    auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale);
-    const int left = bounds.left, width = bounds.width, top = -bounds.top;
     int x, y = 0;
-    int8_t phase = 0;
+    int8_t phase;
     if (combining) {
-      x = lastX + lastLeft + (lastWidth - width) / 2 - left;
       phase = lastPhase;
-      const int height = bounds.height;
-      if (top - height < lastTop) y -= lastTop - (top - height);
+      x = lastX;
     } else {
-      if (previous) cursor += tracking + round(font.getKerning(previous, cp, style) * glyphScale);
-      x = (cursor + 8) >> 4;
-      phase = fractional ? static_cast<int8_t>(cursor - x * 16) : 0;
-      lastPhase = phase;
-      lastX = x;
-      lastLeft = left;
-      lastWidth = width;
-      lastTop = top;
-      cursor += round(glyph.advanceX * glyphScale);
+      if (previous) cursor += tracking * metricToPen + std::llround(font.getKerning(previous, cp, style) * penScale);
+      const int64_t phasePen = (cursor + metricToPen / 2) >> 12;
+      x = fractional ? static_cast<int>((phasePen + 8) >> 4) : pixel(cursor);
+      phase = fractional ? static_cast<int8_t>(phasePen - static_cast<int64_t>(x) * 16) : 0;
+      cursor += std::llround(glyph.advanceX * penScale);
       previous = cp;
     }
-    if (phase) bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale, phase);
+    auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale, phase);
+    auto positioning = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale);
+    if constexpr (RasterBounds) {
+      EpdRasterGlyph raster;
+      if (font.rasterGlyph(cp, style, glyphScale, phase, raster)) {
+        const auto& ink = raster.metrics;
+        bounds = {ink.left, -ink.top, ink.width, ink.height};
+        positioning = bounds;
+      }
+    }
+    if (combining) {
+      x += lastLeft + (lastWidth - positioning.width) / 2 - positioning.left;
+      const int bottom = -positioning.top - positioning.height;
+      if (bottom < lastTop) y -= lastTop - bottom;
+    } else {
+      lastPhase = phase;
+      lastX = x;
+      lastLeft = positioning.left;
+      lastWidth = positioning.width;
+      lastTop = -positioning.top;
+    }
     emit(cp, x, y, glyphScale, folded, phase);
     if constexpr (TrackRange) {
       if (range && firstCharacter <= range->last && character > range->first) {
         const int a = std::min(x, x + bounds.left);
-        const int b = std::max<int>(x + bounds.left + bounds.width, (cursor + 8) >> 4);
+        const int b = std::max<int>(x + bounds.left + bounds.width, pixel(cursor));
         if (!range->found) range->x = x;
         range->left = range->found ? std::min(range->left, a) : a;
         range->right = range->found ? std::max(range->right, b) : b;
         range->found = true;
       }
     }
-    if (width > 0 && glyph.height > 0) {
+    if (bounds.width > 0 && bounds.height > 0) {
       const int a = x + bounds.left, b = a + bounds.width;
-      result.left = hasInk ? std::min(result.left, a) : a;
-      result.right = hasInk ? std::max(result.right, b) : b;
-      hasInk = true;
+      result.left = result.hasInk ? std::min(result.left, a) : a;
+      result.right = result.hasInk ? std::max(result.right, b) : b;
+      const int top = y + bounds.top, bottom = top + bounds.height;
+      result.top = result.hasInk ? std::min(result.top, top) : top;
+      result.bottom = result.hasInk ? std::max(result.bottom, bottom) : bottom;
+      result.hasInk = true;
     }
   }
-  result.advance = std::max<int32_t>(0, (cursor + 8) >> 4);
+  result.advance = std::max(0, pixel(cursor));
   return result;
 }
 }  // namespace textRun

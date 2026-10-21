@@ -1,8 +1,8 @@
 #pragma once
 
 // Ported from crosspoint-reader (PR #2583 by Uri Tauber, with #2706 by William
-// Floyd and #2749 by Thiago Kenji Okada). Adapted to this device: no touch
-// input, geometry from TextBlock::wordBox, and speculative resolve.
+// Floyd and #2749 by Thiago Kenji Okada). Geometry comes from TextBlock::wordBox;
+// both button selection and a direct touch hold share the same word assembly.
 
 #include <Epub/Page.h>
 #include <I18n.h>
@@ -29,6 +29,12 @@ class DictionaryWordSelectActivity final : public Activity {
         fontId(fontId),
         marginLeft(marginLeft),
         marginTop(marginTop) {}
+
+  // Called before onEnter, under exclusive render access. Prewarm and measure the
+  // page without drawing, so a hold on blank space never opens a selection screen.
+  // A hit arms one lookup; closing its definition returns directly to the reader.
+  bool prepareLookupAt(int x, int y);
+  bool suppressesBusyIndicator() const override { return directLookup; }
 
   void onEnter() override;
   void loop() override;
@@ -96,7 +102,12 @@ class DictionaryWordSelectActivity final : public Activity {
 
   enum class Popup : uint8_t { None, Busy, NotFound, Error };
 
+  using WordLineVisitor = void (*)(void*, const TextBlock&, int, int, bool);
+  // Walk the line positions the page renderer uses, including padded table
+  // cells. The boundary flag prevents joining a hyphen across unrelated cells.
+  void visitWordLines(void* context, WordLineVisitor visitor) const;
   void extractWords();
+  void extractLineWords(const TextBlock& text, int x, int y, bool boundary);
   void drawSelectionRange(int first, int last);
   // Exact-ish capacity for the two arrays, counted before anything is allocated. Growing them
   // mid-scan would hold the old and the new block at once, which is what actually destroys the
@@ -157,6 +168,7 @@ class DictionaryWordSelectActivity final : public Activity {
   };
   WordTouch consumeWordTouch();
   void performLookup();
+  void handleDefinitionResult(const ActivityResult& result);
   bool drawHighlightWithSnapshot(int index = -1);
   void drawHints() const;
 
@@ -169,9 +181,11 @@ class DictionaryWordSelectActivity final : public Activity {
   std::vector<Fragment> fragments;
   std::vector<Word> words;
   // Word boxes are measured once the font cache has been prewarmed for this
-  // page, which only happens inside render(); onEnter() has no framebuffer to
-  // scan against. Until then there is nothing to highlight.
+  // page, either in render() or the direct hold's preflight. onEnter() does not
+  // measure or draw. Until extraction there is nothing to highlight.
   bool wordsExtracted = false;
+  bool directLookup = false;
+  bool lookupPending = false;
   int selected = 0;
   uint16_t rowCount = 0;
 

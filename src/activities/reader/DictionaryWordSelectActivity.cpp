@@ -93,8 +93,28 @@ void DictionaryWordSelectActivity::onEnter() {
   Activity::onEnter();
   // No null check: a failed allocation just disables the differential fast path
   // (drawHighlightWithSnapshot skips the read), leaving the full repaint.
-  snapshot = makeUniqueNoThrow<uint8_t[]>(SNAPSHOT_CAPACITY);
-  requestUpdate();
+  if (!directLookup) {
+    snapshot = makeUniqueNoThrow<uint8_t[]>(SNAPSHOT_CAPACITY);
+    requestUpdate();
+  }
+  // Direct lookup paints its busy state from loop(), then opens the definition.
+  // It never needs the 2 KB cursor-movement snapshot or an initial selector repaint.
+}
+
+bool DictionaryWordSelectActivity::prepareLookupAt(const int x, const int y) {
+  if (!page) return false;
+  auto* fcm = renderer.getFontCacheManager();
+  if (!fcm) return false;
+  auto scope = fcm->createPrewarmScope();
+  page->renderTextOnly(renderer, fontId, marginLeft, marginTop);
+  scope.endScanAndPrewarm();
+  if (!wordsExtracted) extractWords();
+  const int index = wordAt(x, y);
+  if (index < 0) return false;
+  selected = index;
+  directLookup = true;
+  lookupPending = true;
+  return true;
 }
 
 // Collect the selectable words and their screen boxes. Called from render()
@@ -116,22 +136,63 @@ uint8_t DictionaryWordSelectActivity::internDrawStyle(const TextBlock::WordBox& 
   return static_cast<uint8_t>(drawStyles.size() - 1);
 }
 
-size_t DictionaryWordSelectActivity::countPageTokens(size_t& wordEstimate) const {
-  size_t tokens = 0;
-  wordEstimate = 0;
+void DictionaryWordSelectActivity::visitWordLines(void* context, const WordLineVisitor visitor) const {
+  bool afterTable = false;
   for (const auto& element : page->elements) {
-    if (element->getTag() != TAG_PageLine) continue;
-    const auto& block = static_cast<const PageLine*>(element.get())->getBlock();
-    if (!block || !block->valid()) continue;
-    const uint16_t count = block->wordCount();
-    tokens += count;
-    // One group per token that does not continue the one before it. Reading the continuation
-    // bits costs a byte each -- no text scan, no measurement.
-    for (uint16_t i = 0; i < count; i++) {
-      if (i == 0 || !block->wordContinues(i)) wordEstimate++;
+    if (element->getTag() == TAG_PageLine) {
+      const auto& line = static_cast<const PageLine&>(*element);
+      if (const auto* block = line.getBlock(); block && block->valid()) {
+        visitor(context, *block, line.xPos + marginLeft, line.yPos + marginTop, afterTable);
+        afterTable = false;
+      }
+    } else if (element->getTag() == TAG_PageTable) {
+      const auto& table = static_cast<const PageTableFragment&>(*element);
+      const uint8_t columns = table.getColumnCount();
+      if (columns == 0) continue;
+      int rowY = table.yPos + marginTop;
+      // Same column division, padding and persisted advance as
+      // PageTableFragment::render. Only this fragment's stored lines exist here;
+      // text clipped/truncated by layout is not reconstructed from source HTML.
+      const int lineHeight = renderer.getLineHeight(fontId);
+      for (const auto& row : table.getRows()) {
+        uint8_t col = 0;
+        for (const auto& cell : row.cells) {
+          if (col >= columns) break;
+          const uint8_t span = std::min<uint8_t>(cell.colSpan ? cell.colSpan : 1, columns - col);
+          const int cellX = table.xPos + marginLeft +
+                            static_cast<int>((static_cast<uint32_t>(table.getTotalWidth()) * col) / columns);
+          int lineY = rowY + TABLE_CELL_PADDING;
+          bool boundary = true;
+          for (const auto& line : cell.lines) {
+            if (line && line->valid()) {
+              visitor(context, *line, cellX + TABLE_CELL_PADDING, lineY, boundary);
+              boundary = false;
+            }
+            lineY += cell.lineAdvance ? cell.lineAdvance : lineHeight;
+          }
+          col = static_cast<uint8_t>(col + span);
+        }
+        rowY += row.height;
+      }
+      afterTable = true;
     }
   }
-  return tokens;
+}
+
+size_t DictionaryWordSelectActivity::countPageTokens(size_t& wordEstimate) const {
+  struct Counts {
+    size_t tokens = 0;
+    size_t words = 0;
+  } counts;
+  visitWordLines(&counts, [](void* context, const TextBlock& block, int, int, bool) {
+    auto& count = *static_cast<Counts*>(context);
+    count.tokens += block.wordCount();
+    for (uint16_t i = 0; i < block.wordCount(); i++) {
+      if (i == 0 || !block.wordContinues(i)) count.words++;
+    }
+  });
+  wordEstimate = counts.words;
+  return counts.tokens;
 }
 
 void DictionaryWordSelectActivity::extractWords() {
@@ -149,122 +210,9 @@ void DictionaryWordSelectActivity::extractWords() {
   words.reserve(wordEstimate + wordEstimate / 16 + 4);
   rowCount = 0;
 
-  for (const auto& element : page->elements) {
-    if (element->getTag() != TAG_PageLine) continue;
-    const auto* line = static_cast<const PageLine*>(element.get());
-    const auto& block = line->getBlock();
-    if (!block || !block->valid()) continue;
-
-    bool rowHasWords = false;
-    bool openGroup = false;           // words.back() is a group still being extended
-    bool openSelectable = false;      // ...and it holds at least one selectable token
-    bool previousEmitted = false;     // the previous block word produced a fragment
-    uint16_t fragmentSourceWord = 0;  // block word the piece being added came from
-
-    // A group with nothing selectable in it -- a lone dash, a run of quotes -- is dropped.
-    // Both it and its fragments are the tail of their vectors, so this is a pop, not a gap.
-    auto closeGroup = [&] {
-      if (!openGroup) return;
-      if (openSelectable) {
-        rowHasWords = true;
-      } else {
-        fragments.resize(words.back().firstFragment);
-        words.pop_back();
-      }
-      openGroup = false;
-      openSelectable = false;
-    };
-
-    // Adds one piece of a token. `mayGlue` is false for every piece after a dash cut: a dash
-    // between two words is a word boundary even though layout kept the pair in one token.
-    auto addFragment = [&](const char* text, const size_t length, const int x, const int width,
-                           const TextBlock::WordBox& geometry, const bool mayGlue) {
-      const bool glued = mayGlue && openGroup && previousEmitted && fragmentSourceWord > 0 &&
-                         block->wordContinues(fragmentSourceWord) && words.back().fragmentCount < UINT8_MAX;
-      if (!glued) closeGroup();
-
-      Fragment fragment;
-      fragment.x = static_cast<int16_t>(x);
-      fragment.y = geometry.y;
-      fragment.width = static_cast<int16_t>(width);
-      fragment.text = text;
-      fragment.length = static_cast<uint16_t>(length);
-      fragment.style = geometry.style;
-      fragment.drawStyle = internDrawStyle(geometry);
-      fragments.push_back(fragment);
-      previousEmitted = true;
-
-      if (glued) {
-        Word& word = words.back();
-        word.fragmentCount++;
-        word.width = static_cast<int16_t>(fragment.x + fragment.width - word.x);
-      } else {
-        Word word;
-        word.firstFragment = static_cast<uint16_t>(fragments.size() - 1);
-        word.fragmentCount = 1;
-        word.hyphenFragment = NO_HYPHEN;
-        word.row = rowCount;
-        word.x = fragment.x;
-        word.width = fragment.width;
-        words.push_back(word);
-        openGroup = true;
-      }
-      // Punctuation glued to a word rides along -- the dictionary strips a word's edges
-      // anyway -- but it never makes a group selectable on its own.
-      openSelectable = openSelectable || isSelectableToken(text, length);
-    };
-
-    for (uint16_t i = 0; i < block->wordCount(); i++) {
-      fragmentSourceWord = i;
-      const char* text = block->wordText(i);
-      const size_t textLength = block->wordTextLen(i);
-      const TextBlock::WordBox geometry =
-          block->wordBox(renderer, i, fontId, line->xPos + marginLeft, line->yPos + marginTop);
-      // A token with no ink of its own -- the visible space that holds a no-break group
-      // together -- is not part of any word, and it separates the words on either side of it.
-      if (geometry.width <= 0 || geometry.height <= 0) {
-        previousEmitted = false;
-        continue;
-      }
-      // A bare dash between two words is a boundary, not a piece of either of them.
-      if (isDashSeparatorToken(text, textLength)) {
-        previousEmitted = false;
-        continue;
-      }
-
-      // The common case: one whole token, measured once by wordBox and used in place.
-      // Keep oversized tokens whole so their repaint can use the original NUL-terminated
-      // arena string instead of truncating a cut piece to the bounded repaint scratch buffer.
-      if (textLength >= WORD_TEXT_CAPACITY || nextDashSplit(text, textLength, 0) == 0) {
-        addFragment(text, textLength, geometry.x, geometry.width, geometry, /*mayGlue=*/true);
-        continue;
-      }
-
-      size_t partStart = 0;
-      uint16_t characterStart = 0;
-      bool firstPart = true;
-      while (partStart < textLength) {
-        size_t partEnd = nextDashSplit(text, textLength, partStart);
-        if (partEnd == 0) partEnd = textLength;
-        const size_t partLength = partEnd - partStart;
-
-        uint16_t characterEnd = characterStart;
-        for (size_t c = partStart; c < partEnd; ++c)
-          if ((static_cast<uint8_t>(text[c]) & 0xc0) != 0x80) ++characterEnd;
-        const auto range = renderer.getTextRangeSpaced(
-            geometry.fontId, text, geometry.style, geometry.scale, wordTypography::tracking(block->wordTypography(i)),
-            characterStart, characterEnd - 1, wordTypography::ligatures(block->wordTypography(i)));
-        if (range.right > range.x) {
-          addFragment(text + partStart, partLength, geometry.x + range.x, range.right - range.x, geometry, firstPart);
-          firstPart = false;
-        }
-        characterStart = characterEnd;
-        partStart = partEnd;
-      }
-    }
-    closeGroup();
-    if (rowHasWords) rowCount++;
-  }
+  visitWordLines(this, [](void* context, const TextBlock& text, const int x, const int y, const bool boundary) {
+    static_cast<DictionaryWordSelectActivity*>(context)->extractLineWords(text, x, y, boundary);
+  });
 
   joinHyphenatedWords();
 
@@ -275,6 +223,120 @@ void DictionaryWordSelectActivity::extractWords() {
     const int initial = closestInRow(rowCount / 2, renderer.getScreenWidth() / 2);
     if (initial >= 0) selected = initial;
   }
+}
+
+void DictionaryWordSelectActivity::extractLineWords(const TextBlock& text, const int x, const int y,
+                                                    const bool boundary) {
+  if (boundary && rowCount > 0) ++rowCount;  // a gap blocks cross-cell hyphen joining
+  const TextBlock* block = &text;
+  bool rowHasWords = false;
+  bool openGroup = false;           // words.back() is a group still being extended
+  bool openSelectable = false;      // ...and it holds at least one selectable token
+  bool previousEmitted = false;     // the previous block word produced a fragment
+  uint16_t fragmentSourceWord = 0;  // block word the piece being added came from
+
+  // A group with nothing selectable in it -- a lone dash, a run of quotes -- is dropped.
+  // Both it and its fragments are the tail of their vectors, so this is a pop, not a gap.
+  auto closeGroup = [&] {
+    if (!openGroup) return;
+    if (openSelectable) {
+      rowHasWords = true;
+    } else {
+      fragments.resize(words.back().firstFragment);
+      words.pop_back();
+    }
+    openGroup = false;
+    openSelectable = false;
+  };
+
+  // Adds one piece of a token. `mayGlue` is false for every piece after a dash cut: a dash
+  // between two words is a word boundary even though layout kept the pair in one token.
+  auto addFragment = [&](const char* text, const size_t length, const int x, const int width,
+                         const TextBlock::WordBox& geometry, const bool mayGlue) {
+    const bool glued = mayGlue && openGroup && previousEmitted && fragmentSourceWord > 0 &&
+                       block->wordContinues(fragmentSourceWord) && words.back().fragmentCount < UINT8_MAX;
+    if (!glued) closeGroup();
+
+    Fragment fragment;
+    fragment.x = static_cast<int16_t>(x);
+    fragment.y = geometry.y;
+    fragment.width = static_cast<int16_t>(width);
+    fragment.text = text;
+    fragment.length = static_cast<uint16_t>(length);
+    fragment.style = geometry.style;
+    fragment.drawStyle = internDrawStyle(geometry);
+    fragments.push_back(fragment);
+    previousEmitted = true;
+
+    if (glued) {
+      Word& word = words.back();
+      word.fragmentCount++;
+      word.width = static_cast<int16_t>(fragment.x + fragment.width - word.x);
+    } else {
+      Word word;
+      word.firstFragment = static_cast<uint16_t>(fragments.size() - 1);
+      word.fragmentCount = 1;
+      word.hyphenFragment = NO_HYPHEN;
+      word.row = rowCount;
+      word.x = fragment.x;
+      word.width = fragment.width;
+      words.push_back(word);
+      openGroup = true;
+    }
+    // Punctuation glued to a word rides along -- the dictionary strips a word's edges
+    // anyway -- but it never makes a group selectable on its own.
+    openSelectable = openSelectable || isSelectableToken(text, length);
+  };
+
+  for (uint16_t i = 0; i < block->wordCount(); i++) {
+    fragmentSourceWord = i;
+    const char* text = block->wordText(i);
+    const size_t textLength = block->wordTextLen(i);
+    const TextBlock::WordBox geometry = block->wordBox(renderer, i, fontId, x, y);
+    // A token with no ink of its own -- the visible space that holds a no-break group
+    // together -- is not part of any word, and it separates the words on either side of it.
+    if (geometry.width <= 0 || geometry.height <= 0) {
+      previousEmitted = false;
+      continue;
+    }
+    // A bare dash between two words is a boundary, not a piece of either of them.
+    if (isDashSeparatorToken(text, textLength)) {
+      previousEmitted = false;
+      continue;
+    }
+
+    // The common case: one whole token, measured once by wordBox and used in place.
+    // Keep oversized tokens whole so their repaint can use the original NUL-terminated
+    // arena string instead of truncating a cut piece to the bounded repaint scratch buffer.
+    if (textLength >= WORD_TEXT_CAPACITY || nextDashSplit(text, textLength, 0) == 0) {
+      addFragment(text, textLength, geometry.x, geometry.width, geometry, /*mayGlue=*/true);
+      continue;
+    }
+
+    size_t partStart = 0;
+    uint16_t characterStart = 0;
+    bool firstPart = true;
+    while (partStart < textLength) {
+      size_t partEnd = nextDashSplit(text, textLength, partStart);
+      if (partEnd == 0) partEnd = textLength;
+      const size_t partLength = partEnd - partStart;
+
+      uint16_t characterEnd = characterStart;
+      for (size_t c = partStart; c < partEnd; ++c)
+        if ((static_cast<uint8_t>(text[c]) & 0xc0) != 0x80) ++characterEnd;
+      const auto range = renderer.getTextRangeSpaced(
+          geometry.fontId, text, geometry.style, geometry.scale, wordTypography::tracking(block->wordTypography(i)),
+          characterStart, characterEnd - 1, wordTypography::ligatures(block->wordTypography(i)));
+      if (range.right > range.x) {
+        addFragment(text + partStart, partLength, geometry.x + range.x, range.right - range.x, geometry, firstPart);
+        firstPart = false;
+      }
+      characterStart = characterEnd;
+      partStart = partEnd;
+    }
+  }
+  closeGroup();
+  if (rowHasWords) rowCount++;
 }
 
 void DictionaryWordSelectActivity::joinHyphenatedWords() {
@@ -340,6 +402,7 @@ int DictionaryWordSelectActivity::closestInRow(const uint16_t row, const int cen
 }
 
 int DictionaryWordSelectActivity::wordAt(const int px, const int py) const {
+  if (px < 0 || py < 0 || px >= renderer.getScreenWidth() || py >= renderer.getScreenHeight()) return -1;
   for (int index = 0; index < static_cast<int>(words.size()); index++) {
     const Word& word = words[index];
     for (uint8_t f = 0; f < word.fragmentCount; f++) {
@@ -545,14 +608,7 @@ void DictionaryWordSelectActivity::performLookup() {
     startActivityForResult(std::make_unique<DictionaryDefinitionActivity>(
                                renderer, mappedInput, std::move(headword), std::move(definition), html,
                                multiple ? std::string(SETTINGS.dictionaryName) : std::string()),
-                           [this](const ActivityResult& result) {
-                             // The child overdrew the page; the snapshot no longer matches.
-                             snapshotIdx = -1;
-                             if (const auto* switchRequest = std::get_if<DictionarySwitchResult>(&result.data)) {
-                               pendingDictionarySwitch = switchRequest->direction;
-                             }
-                             requestUpdate();
-                           });
+                           [this](const ActivityResult& result) { handleDefinitionResult(result); });
     return;
   }
 
@@ -600,7 +656,25 @@ void DictionaryWordSelectActivity::performLookup() {
   requestUpdate();
 }
 
+void DictionaryWordSelectActivity::handleDefinitionResult(const ActivityResult& result) {
+  snapshotIdx = -1;  // the child overdrew the page
+  if (const auto* switchRequest = std::get_if<DictionarySwitchResult>(&result.data)) {
+    pendingDictionarySwitch = switchRequest->direction;
+  } else if (directLookup) {
+    // finish() only queues the next pop. ActivityManager processes it after this
+    // callback returns, without repainting the selector between book and definition.
+    finish();
+    return;
+  }
+  requestUpdate();
+}
+
 void DictionaryWordSelectActivity::loop() {
+  if (lookupPending) {
+    lookupPending = false;
+    performLookup();
+    return;
+  }
   // Acted on here rather than in the result handler that set it: that handler
   // runs while the activity stack is being popped, and starting another
   // activity from inside it would re-enter the manager mid-transition.
@@ -612,9 +686,14 @@ void DictionaryWordSelectActivity::loop() {
   }
 
   if (popup == Popup::NotFound || popup == Popup::Error) {
-    if (millis() - popupTime >= POPUP_DURATION_MS) {
+    if (millis() - popupTime >= POPUP_DURATION_MS ||
+        (directLookup && mappedInput.wasReleased(MappedInputManager::Button::Back))) {
       popup = Popup::None;
-      requestUpdate();
+      if (directLookup) {
+        finish();
+      } else {
+        requestUpdate();
+      }
     }
     return;
   }
@@ -776,6 +855,7 @@ bool DictionaryWordSelectActivity::drawHighlightWithSnapshot(int index) {
 // side-button hints: the full-bleed reader page has no spare gutter for them,
 // so a hint box there would hide text.
 void DictionaryWordSelectActivity::drawHints() const {
+  if (directLookup) return;
   // No selectable word on this page: Confirm and navigation are all no-ops
   // (guarded by words.empty() in loop()), so only Back is hinted.
   if (words.empty()) {
@@ -793,6 +873,11 @@ void DictionaryWordSelectActivity::drawHints() const {
 }
 
 void DictionaryWordSelectActivity::render(RenderLock&&) {
+  // Direct lookup only paints progress or errors, never the idle word selector.
+  // This also covers a queued repaint while switching dictionaries or between clearing
+  // a deferred action flag and setting the busy state in performLookup().
+  if (directLookup && popup == Popup::None) return;
+
   // Differential fast path: only the highlight moved and the framebuffer still
   // holds a clean page (no popup or sub-activity since the last full repaint).
   // Restore the pixels under the old highlight, draw the new one, and push --

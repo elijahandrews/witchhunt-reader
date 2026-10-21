@@ -56,7 +56,7 @@
                                 FT_Face          face )
   {
     /* scan the array of segments in each direction */
-    AF_GlyphHintsRec  hints[1];
+    AF_GlyphHints  hints = &metrics->root.globals->module->scratch->metrics_hints;
 
 
     FT_TRACE5(( "\n" ));
@@ -74,7 +74,7 @@
       FT_Error            error;
       FT_ULong            glyph_index;
       int                 dim;
-      AF_LatinMetricsRec  dummy[1];
+      AF_LatinMetrics  dummy = &metrics->root.globals->module->scratch->metrics.latin;
       AF_Scaler           scaler = &dummy->root.scaler;
 
       AF_StyleClass   style_class  = metrics->root.style_class;
@@ -3600,7 +3600,8 @@
     FT_TRACE4(( "Entering"
                 " af_glyph_hints_apply_vertical_separation_adjustments\n" ));
 
-    if ( dim != AF_DIMENSION_VERT )
+    /* The optional reverse map is NULL when its allocation failed. */
+    if ( dim != AF_DIMENSION_VERT || !reverse_charmap )
       return;
 
     val = ft_hash_num_lookup( (FT_Int)glyph_index, reverse_charmap );
@@ -4907,8 +4908,10 @@
       FT_Pos  y_offset;
 
 
-      val = ft_hash_num_lookup( (FT_Int)glyph_index,
-                                metrics->root.reverse_charmap );
+      val = metrics->root.reverse_charmap
+              ? ft_hash_num_lookup( (FT_Int)glyph_index,
+                                    metrics->root.reverse_charmap )
+              : NULL;
       if ( val )
       {
         FT_UInt    codepoint = *val;

@@ -18,11 +18,11 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Tests
    W x=73 s=0 z=100 t=baseline
-   W x=156 s=0 z=100 t=JPEG,
-   W x=214 s=0 z=100 t=progressive
-   W x=325 s=0 z=100 t=JPEG,
-   W x=383 s=0 z=100 t=PNG,
-   W x=426 s=0 z=100 t=and
+   W x=157 s=0 z=100 t=JPEG,
+   W x=215 s=0 z=100 t=progressive
+   W x=327 s=0 z=100 t=JPEG,
+   W x=385 s=0 z=100 t=PNG,
+   W x=429 s=0 z=100 t=and
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=mixed
    W x=46 s=0 z=100 t=rendering.

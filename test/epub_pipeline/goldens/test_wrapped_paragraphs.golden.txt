@@ -28,13 +28,13 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -44,19 +44,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -66,42 +66,42 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=206 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=254 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=278 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -109,7 +109,7 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=326 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -118,29 +118,29 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=350 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=374 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -159,19 +159,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=470 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=494 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=518 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -200,13 +200,13 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=614 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -216,19 +216,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=638 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=662 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=686 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -238,17 +238,17 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=710 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=734 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
@@ -256,25 +256,25 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -282,7 +282,7 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -291,29 +291,29 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -332,19 +332,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -373,13 +373,13 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -389,19 +389,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -411,38 +411,38 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=were
    W x=45 s=0 z=100 t=for.
    W x=98 s=0 z=100 t=A
    W x=119 s=0 z=100 t=disputed
-   W x=199 s=0 z=100 t=figure
-   W x=254 s=4 z=100 t=1
-   W x=273 s=2 z=100 t=(Estimates
-   W x=384 s=2 z=100 t=for
-   W x=427 s=2 z=100 t=the
+   W x=200 s=0 z=100 t=figure
+   W x=255 s=4 z=100 t=1
+   W x=274 s=2 z=100 t=(Estimates
+   W x=385 s=2 z=100 t=for
+   W x=429 s=2 z=100 t=the
   LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=2 z=100 t=period
    W x=56 s=2 z=100 t=vary
-   W x=103 s=2 z=100 t=by
-   W x=124 s=2 z=100 t=an
-   W x=154 s=2 z=100 t=order
-   W x=206 s=2 z=100 t=of
-   W x=235 s=2 z=100 t=magnitude
-   W x=330 s=2 z=100 t=and
-   W x=368 s=2 z=100 t=every
-   W x=421 s=2 z=100 t=one
+   W x=104 s=2 z=100 t=by
+   W x=126 s=2 z=100 t=an
+   W x=157 s=2 z=100 t=order
+   W x=209 s=2 z=100 t=of
+   W x=239 s=2 z=100 t=magnitude
+   W x=335 s=2 z=100 t=and
+   W x=374 s=2 z=100 t=every
+   W x=428 s=2 z=100 t=one
   LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=2 z=100 t=of
    W x=28 s=2 z=100 t=them
@@ -456,25 +456,25 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -482,7 +482,7 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -491,29 +491,29 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -534,19 +534,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -575,13 +575,13 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -591,19 +591,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -613,42 +613,42 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -656,7 +656,7 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -665,29 +665,29 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -706,19 +706,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -747,13 +747,13 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -763,19 +763,19 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
  PAGE 3 elements=11 footnotes=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
@@ -786,42 +786,42 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -829,7 +829,7 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -838,29 +838,29 @@ SPINE 0 href=OEBPS/wrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -896,13 +896,13 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -912,19 +912,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -934,42 +934,42 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=206 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=254 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=278 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -977,7 +977,7 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=326 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -986,29 +986,29 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=350 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=374 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -1027,19 +1027,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=470 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=494 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=518 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -1068,13 +1068,13 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=614 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -1084,19 +1084,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=638 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=662 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=686 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -1106,17 +1106,17 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=710 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=734 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
@@ -1124,25 +1124,25 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -1150,7 +1150,7 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -1159,29 +1159,29 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -1200,19 +1200,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -1241,13 +1241,13 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -1257,19 +1257,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -1279,38 +1279,38 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=were
    W x=45 s=0 z=100 t=for.
    W x=98 s=0 z=100 t=A
    W x=119 s=0 z=100 t=disputed
-   W x=199 s=0 z=100 t=figure
-   W x=254 s=4 z=100 t=1
-   W x=273 s=2 z=100 t=(Estimates
-   W x=384 s=2 z=100 t=for
-   W x=427 s=2 z=100 t=the
+   W x=200 s=0 z=100 t=figure
+   W x=255 s=4 z=100 t=1
+   W x=274 s=2 z=100 t=(Estimates
+   W x=385 s=2 z=100 t=for
+   W x=429 s=2 z=100 t=the
   LINE y=504 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=2 z=100 t=period
    W x=56 s=2 z=100 t=vary
-   W x=103 s=2 z=100 t=by
-   W x=124 s=2 z=100 t=an
-   W x=154 s=2 z=100 t=order
-   W x=206 s=2 z=100 t=of
-   W x=235 s=2 z=100 t=magnitude
-   W x=330 s=2 z=100 t=and
-   W x=368 s=2 z=100 t=every
-   W x=421 s=2 z=100 t=one
+   W x=104 s=2 z=100 t=by
+   W x=126 s=2 z=100 t=an
+   W x=157 s=2 z=100 t=order
+   W x=209 s=2 z=100 t=of
+   W x=239 s=2 z=100 t=magnitude
+   W x=335 s=2 z=100 t=and
+   W x=374 s=2 z=100 t=every
+   W x=428 s=2 z=100 t=one
   LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=2 z=100 t=of
    W x=28 s=2 z=100 t=them
@@ -1324,25 +1324,25 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -1350,7 +1350,7 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=624 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -1359,29 +1359,29 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=648 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -1402,19 +1402,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -1443,13 +1443,13 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -1459,19 +1459,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=day
@@ -1481,42 +1481,42 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=336 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=360 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -1524,7 +1524,7 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=384 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -1533,29 +1533,29 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=408 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=432 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=456 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=480 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -1574,19 +1574,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=528 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=the
    W x=49 s=0 z=100 t=ground
-   W x=128 s=0 z=100 t=called
-   W x=200 s=0 z=100 t=weather:
-   W x=292 s=0 z=100 t=something
-   W x=400 s=0 z=100 t=to
-   W x=440 s=0 z=100 t=be
+   W x=129 s=0 z=100 t=called
+   W x=202 s=0 z=100 t=weather:
+   W x=295 s=0 z=100 t=something
+   W x=404 s=0 z=100 t=to
+   W x=445 s=0 z=100 t=be
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=endured,
    W x=82 s=0 z=100 t=occasionally
    W x=206 s=0 z=100 t=exploited,
-   W x=300 s=0 z=100 t=and
-   W x=341 s=0 z=100 t=never
-   W x=400 s=0 z=100 t=in
-   W x=427 s=0 z=100 t=any
+   W x=301 s=0 z=100 t=and
+   W x=342 s=0 z=100 t=never
+   W x=401 s=0 z=100 t=in
+   W x=429 s=0 z=100 t=any
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=meaningful
    W x=106 s=0 z=100 t=sense
@@ -1615,13 +1615,13 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=sums
    W x=86 s=0 z=100 t=in
-   W x=111 s=0 z=100 t=them
-   W x=160 s=0 z=100 t=were
-   W x=200 s=0 z=100 t=larger
-   W x=265 s=0 z=100 t=than
-   W x=318 s=0 z=100 t=the
-   W x=357 s=0 z=100 t=revenue
-   W x=434 s=0 z=100 t=of
+   W x=112 s=0 z=100 t=them
+   W x=161 s=0 z=100 t=were
+   W x=202 s=0 z=100 t=larger
+   W x=267 s=0 z=100 t=than
+   W x=321 s=0 z=100 t=the
+   W x=360 s=0 z=100 t=revenue
+   W x=438 s=0 z=100 t=of
   LINE y=672 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=several
    W x=74 s=0 z=100 t=European
@@ -1631,19 +1631,19 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=696 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=Nobody
    W x=88 s=0 z=100 t=in
-   W x=122 s=0 z=100 t=the
-   W x=170 s=0 z=100 t=Founders'
-   W x=271 s=0 z=100 t=Hall
-   W x=326 s=0 z=100 t=that
-   W x=387 s=0 z=100 t=morning
+   W x=123 s=0 z=100 t=the
+   W x=172 s=0 z=100 t=Founders'
+   W x=273 s=0 z=100 t=Hall
+   W x=329 s=0 z=100 t=that
+   W x=391 s=0 z=100 t=morning
   LINE y=720 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=imagined
    W x=84 s=0 z=100 t=that
-   W x=139 s=0 z=100 t=the
-   W x=181 s=0 z=100 t=subscription
-   W x=293 s=0 z=100 t=being
-   W x=347 s=0 z=100 t=raised
-   W x=410 s=0 z=100 t=would
+   W x=140 s=0 z=100 t=the
+   W x=183 s=0 z=100 t=subscription
+   W x=295 s=0 z=100 t=being
+   W x=350 s=0 z=100 t=raised
+   W x=414 s=0 z=100 t=would
  PAGE 3 elements=11 footnotes=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=one
@@ -1654,42 +1654,42 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=249 s=0 z=100 t=but
    W x=286 s=0 z=100 t=the
    W x=327 s=0 z=100 t=notaries
-   W x=414 s=0 z=100 t=wrote
+   W x=415 s=0 z=100 t=wrote
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=it
    W x=23 s=0 z=100 t=all
-   W x=60 s=0 z=100 t=down
-   W x=104 s=0 z=100 t=anyway,
-   W x=176 s=0 z=100 t=because
-   W x=246 s=0 z=100 t=that
-   W x=297 s=0 z=100 t=was
-   W x=331 s=0 z=100 t=what
-   W x=378 s=0 z=100 t=notaries
+   W x=61 s=0 z=100 t=down
+   W x=105 s=0 z=100 t=anyway,
+   W x=178 s=0 z=100 t=because
+   W x=249 s=0 z=100 t=that
+   W x=300 s=0 z=100 t=was
+   W x=335 s=0 z=100 t=what
+   W x=383 s=0 z=100 t=notaries
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=were
    W x=38 s=0 z=100 t=for.
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=A
    W x=38 s=0 z=100 t=monsoon
-   W x=127 s=0 z=100 t=was
-   W x=166 s=0 z=100 t=late,
-   W x=226 s=0 z=100 t=a
-   W x=250 s=0 z=100 t=treaty
-   W x=319 s=0 z=100 t=was
-   W x=358 s=0 z=100 t=early,
-   W x=424 s=0 z=100 t=and
+   W x=128 s=0 z=100 t=was
+   W x=167 s=0 z=100 t=late,
+   W x=228 s=0 z=100 t=a
+   W x=253 s=0 z=100 t=treaty
+   W x=322 s=0 z=100 t=was
+   W x=362 s=0 z=100 t=early,
+   W x=429 s=0 z=100 t=and
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=between
    W x=66 s=0 z=100 t=the
    W x=103 s=0 z=100 t=two
    W x=137 s=0 z=100 t=of
    W x=165 s=0 z=100 t=them
-   W x=212 s=0 z=100 t=a
-   W x=230 s=0 z=100 t=great
-   W x=286 s=0 z=100 t=many
-   W x=333 s=0 z=100 t=people
-   W x=390 s=0 z=100 t=who
-   W x=426 s=0 z=100 t=had
+   W x=213 s=0 z=100 t=a
+   W x=231 s=0 z=100 t=great
+   W x=287 s=0 z=100 t=many
+   W x=334 s=0 z=100 t=people
+   W x=391 s=0 z=100 t=who
+   W x=428 s=0 z=100 t=had
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=never
    W x=61 s=0 z=100 t=heard
@@ -1697,7 +1697,7 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
    W x=156 s=0 z=100 t=either
    W x=222 s=0 z=100 t=found
    W x=286 s=0 z=100 t=their
-   W x=343 s=0 z=100 t=circumstances
+   W x=344 s=0 z=100 t=circumstances
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=rearranged
    W x=102 s=0 z=100 t=without
@@ -1706,29 +1706,29 @@ SPINE 1 href=OEBPS/unwrapped.xhtml pages=4 truncated=0 cssFallback=0
   LINE y=168 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=55 s=0 z=100 t=correspondence
-   W x=191 s=0 z=100 t=took
-   W x=243 s=0 z=100 t=eight
-   W x=301 s=0 z=100 t=months
-   W x=375 s=0 z=100 t=to
-   W x=407 s=0 z=100 t=reach
+   W x=192 s=0 z=100 t=took
+   W x=245 s=0 z=100 t=eight
+   W x=304 s=0 z=100 t=months
+   W x=379 s=0 z=100 t=to
+   W x=412 s=0 z=100 t=reach
   LINE y=192 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=London
    W x=72 s=0 z=100 t=and
-   W x=109 s=0 z=100 t=eight
-   W x=163 s=0 z=100 t=months
-   W x=233 s=0 z=100 t=to
-   W x=261 s=0 z=100 t=come
-   W x=305 s=0 z=100 t=back,
-   W x=352 s=0 z=100 t=which
-   W x=401 s=0 z=100 t=meant
+   W x=110 s=0 z=100 t=eight
+   W x=165 s=0 z=100 t=months
+   W x=236 s=0 z=100 t=to
+   W x=265 s=0 z=100 t=come
+   W x=310 s=0 z=100 t=back,
+   W x=358 s=0 z=100 t=which
+   W x=408 s=0 z=100 t=meant
   LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=that
    W x=55 s=0 z=100 t=every
-   W x=112 s=0 z=100 t=instruction
-   W x=224 s=0 z=100 t=arrived
-   W x=298 s=0 z=100 t=describing
-   W x=390 s=0 z=100 t=a
-   W x=413 s=0 z=100 t=world
+   W x=113 s=0 z=100 t=instruction
+   W x=226 s=0 z=100 t=arrived
+   W x=300 s=0 z=100 t=describing
+   W x=393 s=0 z=100 t=a
+   W x=417 s=0 z=100 t=world
   LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=that
    W x=50 s=0 z=100 t=had
@@ -1740,23 +1740,23 @@ SPINE 2 href=OEBPS/notes.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Estimates
    W x=117 s=0 z=100 t=for
-   W x=159 s=0 z=100 t=the
-   W x=202 s=0 z=100 t=period
-   W x=263 s=0 z=100 t=vary
-   W x=315 s=0 z=100 t=by
-   W x=341 s=0 z=100 t=an
-   W x=376 s=0 z=100 t=order
-   W x=433 s=0 z=100 t=of
+   W x=160 s=0 z=100 t=the
+   W x=203 s=0 z=100 t=period
+   W x=265 s=0 z=100 t=vary
+   W x=318 s=0 z=100 t=by
+   W x=344 s=0 z=100 t=an
+   W x=380 s=0 z=100 t=order
+   W x=438 s=0 z=100 t=of
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=magnitude
    W x=99 s=0 z=100 t=and
    W x=141 s=0 z=100 t=every
    W x=198 s=0 z=100 t=one
-   W x=241 s=0 z=100 t=of
-   W x=274 s=0 z=100 t=them
-   W x=326 s=0 z=100 t=was
-   W x=364 s=0 z=100 t=produced
-   W x=444 s=0 z=100 t=by
+   W x=242 s=0 z=100 t=of
+   W x=275 s=0 z=100 t=them
+   W x=327 s=0 z=100 t=was
+   W x=365 s=0 z=100 t=produced
+   W x=446 s=0 z=100 t=by
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=somebody
    W x=80 s=0 z=100 t=with

@@ -72,6 +72,9 @@ class Activity {
   // while the host still owns the sectors.
   virtual bool requiresExclusiveStorageLoop() const { return false; }
   virtual bool isReaderActivity() const { return false; }
+  // Specific content targets precede broad gesture zones. A reader may claim a
+  // held word; false leaves the same contact to the configured zone action.
+  virtual bool handleReaderWordHold() { return false; }
   virtual bool usesWifi() const { return false; }
 
   // What a tap on the row at `index` should do, moving this screen's selection if it lands on a

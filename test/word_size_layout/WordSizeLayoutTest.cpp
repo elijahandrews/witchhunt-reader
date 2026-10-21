@@ -22,6 +22,27 @@
 #include "Epub/blocks/TextBlock.h"
 #include "GfxRenderer.h"
 
+// Force line membership only for signed-compression and zero-width CJK boundaries.
+// The ordinary public layout path chooses its own breaks and cannot directly construct
+// those boundary states. All placement still runs through production extractLine.
+struct ParsedTextTestAccess {
+  static void cjkBoundary(ParsedText& text) { text.wordBoundaries.back() = {false, true}; }
+  static std::unique_ptr<TextBlock> forcedLine(ParsedText& text, const GfxRenderer& renderer, int width, size_t count) {
+    std::vector<uint16_t> widths;
+    text.calculateWordWidths(renderer, 1, widths);
+    std::unique_ptr<TextBlock> out;
+    const std::vector<size_t> breaks{count, text.size()};
+    text.extractLine(
+        0, width, widths, text.wordBoundaries, breaks,
+        [&](std::unique_ptr<TextBlock> line, bool, bool) {
+          out = std::move(line);
+          return ParsedText::LineProcessResult::Accepted;
+        },
+        renderer, 1, false, false, 0, 0, GfxRenderer::LINE_HEIGHT);
+    return out;
+  }
+};
+
 namespace {
 
 constexpr int kFontId = 1;
@@ -309,7 +330,120 @@ TEST(WordContinuation, JustifiedNonBreakingSpaceStretchesLikeAWordGap) {
   EXPECT_GT(wordGapStretch, 0);
   EXPECT_EQ(line.wordXpos(2) - line.wordXpos(1), kWord);  // bbbb is glued to the space
   EXPECT_EQ(line.wordXpos(3) - line.wordXpos(2) - GfxRenderer::SPACE_W, wordGapStretch);
-  EXPECT_EQ(line.wordXpos(4) - line.wordXpos(3) - kWord - GfxRenderer::SPACE_W, wordGapStretch);
+  EXPECT_EQ(line.wordXpos(4) - line.wordXpos(3) - kWord - GfxRenderer::SPACE_W, wordGapStretch + 1);
+  EXPECT_EQ(line.wordXpos(4) + kWord, 200);
+}
+
+TEST(WordJustification, RemainderReachesTheRightEdgeAndStaysEven) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  ParsedText text(false, false, style);
+  for (const char* word : {"aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh"})
+    text.addWord(word, EpdFontFamily::REGULAR);
+  const auto result = layout(text, renderer, 329);
+  ASSERT_EQ(result.lines.size(), 2u);
+  const auto& line = *result.lines[0];
+  ASSERT_EQ(line.wordCount(), 7);
+  // Seven 40px words + six natural 5px spaces leave 19px. Old integer
+  // division spread only18px; cumulative distribution uses all19 without bias.
+  for (int i = 0; i < 7; ++i) EXPECT_EQ(line.wordXpos(i), i * 45 + (i * 19) / 6);
+  EXPECT_EQ(line.wordXpos(6) + 40, 329);
+  EXPECT_EQ(result.lines[1]->wordXpos(0), 0);  // last line remains unstretched
+}
+
+TEST(WordJustification, ClosingPunctuationKeepsItsNaturalGap) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  ParsedText text(false, false, style);
+  for (const char* word : {"aaaa", "bbbb", ")", "cccc", "dddd", "eeee"}) text.addWord(word, EpdFontFamily::REGULAR);
+  const auto result = layout(text, renderer, 207);
+  ASSERT_GE(result.lines.size(), 2u);
+  const auto& line = *result.lines[0];
+  ASSERT_EQ(line.wordCount(), 5);
+  EXPECT_EQ(line.wordXpos(2) - line.wordXpos(1) - 40, GfxRenderer::SPACE_W);
+  EXPECT_EQ(line.wordXpos(4) + 40, 207);
+}
+
+TEST(WordJustification, CjkZeroWidthRemainderReachesEdgeWithoutInventingSpaces) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  for (int spare = 0; spare < 42; ++spare) {
+    ParsedText text(false, false, style);
+    for (int i = 0; i < 8; ++i) {
+      text.addWord("甲", EpdFontFamily::REGULAR);
+      ParsedTextTestAccess::cjkBoundary(text);
+    }
+    const auto line = ParsedTextTestAccess::forcedLine(text, renderer, 70 + spare, 7);
+    ASSERT_TRUE(line);
+    ASSERT_EQ(7, line->wordCount());
+    int smallest = 1000, largest = -1000;
+    for (int i = 0; i < 7; ++i) {
+      EXPECT_EQ(i * 10 + (i * spare) / 6, line->wordXpos(i));
+      if (i) {
+        const int gap = line->wordXpos(i) - line->wordXpos(i - 1) - 10;
+        smallest = std::min(smallest, gap);
+        largest = std::max(largest, gap);
+      }
+    }
+    EXPECT_EQ(70 + spare, line->wordXpos(6) + 10);
+    EXPECT_LE(largest - smallest, 1);
+  }
+}
+
+TEST(WordJustification, NegativeRemainderCompressionUsesAllPixelsEvenly) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  for (int deficit = 0; deficit < 12; ++deficit) {
+    ParsedText text(false, false, style);
+    for (int i = 0; i < 5; ++i) text.addWord("aaaa", EpdFontFamily::REGULAR);
+    // Four 40px words plus three 5px spaces exceed this forced line's width.
+    // Check the signed remainder independently of the breaker's choice of words.
+    const auto line = ParsedTextTestAccess::forcedLine(text, renderer, 175 - deficit, 4);
+    ASSERT_TRUE(line);
+    ASSERT_EQ(4, line->wordCount());
+    EXPECT_EQ(0, line->wordXpos(0));
+    EXPECT_EQ(175 - deficit, line->wordXpos(3) + 40);
+    int smallest = 1000, largest = -1000;
+    for (int i = 1; i < 4; ++i) {
+      const int gap = line->wordXpos(i) - line->wordXpos(i - 1) - 40;
+      smallest = std::min(smallest, gap);
+      largest = std::max(largest, gap);
+    }
+    EXPECT_LE(largest - smallest, 1);
+  }
+}
+
+TEST(WordJustification, AttachedFragmentsWithoutGapsDoNotStretch) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  ParsedText text(false, false, style);
+  text.addWord("a", EpdFontFamily::REGULAR);
+  text.addWord("b", EpdFontFamily::REGULAR, false, true);
+  text.addWord("c", EpdFontFamily::REGULAR);
+  const auto line = ParsedTextTestAccess::forcedLine(text, renderer, 80, 2);
+  ASSERT_TRUE(line);
+  ASSERT_EQ(2, line->wordCount());
+  EXPECT_EQ(0, line->wordXpos(0));
+  EXPECT_EQ(10, line->wordXpos(1));
+}
+
+TEST(WordJustification, RemainderDoesNotExceedTheStretchCeiling) {
+  GfxRenderer renderer;
+  BlockStyle style = noIndentStyle();
+  style.alignment = CssTextAlign::Justify;
+  ParsedText text(false, false, style);
+  for (const char* word : {"a", "b", "c", "averylongunbreakableword"}) text.addWord(word, EpdFontFamily::REGULAR);
+  const auto result = layout(text, renderer, 53);
+  ASSERT_GE(result.lines.size(), 2u);
+  const auto& line = *result.lines[0];
+  ASSERT_EQ(line.wordCount(), 3);
+  for (int i = 1; i < 3; ++i)
+    EXPECT_EQ(line.wordXpos(i) - line.wordXpos(i - 1) - GfxRenderer::GLYPH_W - GfxRenderer::SPACE_W, 53 / 8);
 }
 
 // At a page bottom the parser refuses a line that ends hyphenated; layout re-lays that line without

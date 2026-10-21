@@ -8,9 +8,9 @@ SPINE 0 href=OEBPS/chapter.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=The
    W x=65 s=0 z=100 t=paragraph
    W x=172 s=0 z=100 t=before
-   W x=246 s=0 z=100 t=the
-   W x=297 s=0 z=100 t=photograph
-   W x=418 s=0 z=100 t=must
+   W x=247 s=0 z=100 t=the
+   W x=298 s=0 z=100 t=photograph
+   W x=420 s=0 z=100 t=must
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=survive.
   IMG y=86 x=198 w=64 h=48 src=<cache>/epub_<hash>/img_cfb74c32da802915.jpg
@@ -18,8 +18,8 @@ SPINE 0 href=OEBPS/chapter.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=The
    W x=66 s=0 z=100 t=paragraph
    W x=174 s=0 z=100 t=after
-   W x=244 s=0 z=100 t=the
-   W x=296 s=0 z=100 t=photograph
-   W x=418 s=0 z=100 t=must
+   W x=245 s=0 z=100 t=the
+   W x=297 s=0 z=100 t=photograph
+   W x=420 s=0 z=100 t=must
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=survive.

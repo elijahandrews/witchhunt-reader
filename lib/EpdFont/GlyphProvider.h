@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "EpdFontData.h"
+#include "EpdRasterGlyph.h"
 
 /// Supplies what a font's own tables do not hold.
 ///
@@ -33,6 +34,16 @@ class GlyphProvider {
     (void)leftCp;
     (void)rightCp;
     return 0;
+  }
+
+  /// Optional final-grid outline raster. The caller consumes the borrowed pixels before
+  /// another glyph request. False preserves the existing bitmap fallback.
+  virtual bool rasterGlyph(uint32_t codepoint, float scale, int8_t phase, EpdRasterGlyph& out) {
+    (void)codepoint;
+    (void)scale;
+    (void)phase;
+    (void)out;
+    return false;
   }
 
   /// `utf8Text` is about to be measured or drawn in this provider's style: a provider that renders glyphs

@@ -474,6 +474,18 @@
    * Unimplemented opcodes are ignored.
    *
    */
+  /* Witch-hunt: these four hint maps require about 16 KiB on a 32-bit */
+  /* target.  Keep them off small RTOS stacks and reuse their bounded, */
+  /* per-instance FT_Memory allocation between glyphs.  The allocator */
+  /* is the outline face's budgeted PSRAM allocator on the reader.    */
+  typedef struct  CF2_InterpStorageRec_
+  {
+    CF2_GlyphPathRec  glyphPath;
+    CF2_HintMapRec    counterHintMap;
+
+  } CF2_InterpStorageRec, *CF2_InterpStorage;
+
+
   FT_LOCAL_DEF( void )
   cf2_interpT2CharString( CF2_Font              font,
                           const CF2_Buffer      buf,
@@ -532,8 +544,25 @@
     CF2_ArrStackRec  vStemHintArray;
 
     CF2_HintMaskRec   hintMask;
-    CF2_GlyphPathRec  glyphPath;
+    CF2_InterpStorage  interpStorage;
+    CF2_GlyphPath      glyphPath;
 
+
+    interpStorage = (CF2_InterpStorage)font->interpStorage[doingSeac ? 1 : 0];
+    if ( !interpStorage )
+    {
+      interpStorage = (CF2_InterpStorage)ft_mem_alloc(
+                        memory, sizeof ( *interpStorage ), &lastError );
+      if ( !interpStorage )
+      {
+        /* No local resources have been initialized or allocated yet. */
+        *width = cf2_getDefaultWidthX( decoder );
+        cf2_setError( error, lastError );
+        return;
+      }
+      font->interpStorage[doingSeac ? 1 : 0] = interpStorage;
+    }
+    glyphPath = &interpStorage->glyphPath;
 
     FT_ZERO( &storage );
     FT_ZERO( &results );
@@ -561,7 +590,7 @@
     /* Note: last 4 params are used to handle `MoveToPermissive', which */
     /*       may need to call `hintMap.Build'                           */
     /* TODO: MoveToPermissive is gone; are these still needed?          */
-    cf2_glyphpath_init( &glyphPath,
+    cf2_glyphpath_init( glyphPath,
                         font,
                         callbacks,
                         scaleY,
@@ -863,7 +892,7 @@
         curY = ADD_INT32( curY, cf2_stack_popFixed( opStack ) );
 
         if ( !decoder->flex_state )
-          cf2_glyphpath_moveTo( &glyphPath, curX, curY );
+          cf2_glyphpath_moveTo( glyphPath, curX, curY );
 
         break;
 
@@ -882,7 +911,7 @@
             curY = ADD_INT32( curY, cf2_stack_getReal( opStack,
                                                        idx + 1 ) );
 
-            cf2_glyphpath_lineTo( &glyphPath, curX, curY );
+            cf2_glyphpath_lineTo( glyphPath, curX, curY );
           }
 
           cf2_stack_clear( opStack );
@@ -912,7 +941,7 @@
 
             isX = !isX;
 
-            cf2_glyphpath_lineTo( &glyphPath, curX, curY );
+            cf2_glyphpath_lineTo( glyphPath, curX, curY );
           }
 
           cf2_stack_clear( opStack );
@@ -941,7 +970,7 @@
             x3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 4 ), x2 );
             y3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 5 ), y2 );
 
-            cf2_glyphpath_curveTo( &glyphPath, x1, y1, x2, y2, x3, y3 );
+            cf2_glyphpath_curveTo( glyphPath, x1, y1, x2, y2, x3, y3 );
 
             curX  = x3;
             curY  = y3;
@@ -955,7 +984,7 @@
             curY = ADD_INT32( curY, cf2_stack_getReal( opStack,
                                                        idx + 1 ) );
 
-            cf2_glyphpath_lineTo( &glyphPath, curX, curY );
+            cf2_glyphpath_lineTo( glyphPath, curX, curY );
           }
 
           cf2_stack_clear( opStack );
@@ -970,7 +999,7 @@
           FT_TRACE4(( " closepath\n" ));
 
           /* if there is no path, `closepath' is a no-op */
-          cf2_glyphpath_closeOpenPath( &glyphPath );
+          cf2_glyphpath_closeOpenPath( glyphPath );
 
           haveWidth = TRUE;
         }
@@ -1093,7 +1122,7 @@
               cf2_doFlex( opStack,
                           &curX,
                           &curY,
-                          &glyphPath,
+                          glyphPath,
                           readFromStack,
                           FALSE /* doConditionalLastRead */ );
             }
@@ -1117,7 +1146,7 @@
               cf2_doFlex( opStack,
                           &curX,
                           &curY,
-                          &glyphPath,
+                          glyphPath,
                           readFromStack,
                           FALSE /* doConditionalLastRead */ );
             }
@@ -1141,7 +1170,7 @@
               cf2_doFlex( opStack,
                           &curX,
                           &curY,
-                          &glyphPath,
+                          glyphPath,
                           readFromStack,
                           FALSE /* doConditionalLastRead */ );
             }
@@ -1165,7 +1194,7 @@
               cf2_doFlex( opStack,
                           &curX,
                           &curY,
-                          &glyphPath,
+                          glyphPath,
                           readFromStack,
                           TRUE /* doConditionalLastRead */ );
             }
@@ -1791,7 +1820,7 @@
                           flexStore[idx2 - 1] = curY;
 
                           if ( idx == 3 || idx == 6 )
-                            cf2_glyphpath_curveTo( &glyphPath,
+                            cf2_glyphpath_curveTo( glyphPath,
                                                    flexStore[0],
                                                    flexStore[1],
                                                    flexStore[2],
@@ -2460,7 +2489,7 @@
                       "Build initial hintmap, rewinding...\n" ));
 
           /* trigger initial hintmap build */
-          cf2_glyphpath_moveTo( &glyphPath, curX, curY );
+          cf2_glyphpath_moveTo( glyphPath, curX, curY );
 
           initial_map_ready = TRUE;
 
@@ -2506,7 +2535,7 @@
           goto exit;
 
         /* close path if still open */
-        cf2_glyphpath_closeOpenPath( &glyphPath );
+        cf2_glyphpath_closeOpenPath( glyphPath );
 
         /* disable seac for CFF2 and Type1        */
         /* (charstring ending with args on stack) */
@@ -2617,14 +2646,14 @@
            * discard `counterMask' and `counterHintMap'.
            *
            */
-          CF2_HintMapRec   counterHintMap;
+          CF2_HintMap      counterHintMap = &interpStorage->counterHintMap;
           CF2_HintMaskRec  counterMask;
 
 
-          cf2_hintmap_init( &counterHintMap,
+          cf2_hintmap_init( counterHintMap,
                             font,
-                            &glyphPath.initialHintMap,
-                            &glyphPath.hintMoves,
+                            &glyphPath->initialHintMap,
+                            &glyphPath->hintMoves,
                             scaleY );
           cf2_hintmask_init( &counterMask, error );
 
@@ -2632,7 +2661,7 @@
                              charstring,
                              cf2_arrstack_size( &hStemHintArray ) +
                                cf2_arrstack_size( &vStemHintArray ) );
-          cf2_hintmap_build( &counterHintMap,
+          cf2_hintmap_build( counterHintMap,
                              &hStemHintArray,
                              &vStemHintArray,
                              &counterMask,
@@ -2662,7 +2691,7 @@
         curX = ADD_INT32( curX, cf2_stack_popFixed( opStack ) );
 
         if ( !decoder->flex_state )
-          cf2_glyphpath_moveTo( &glyphPath, curX, curY );
+          cf2_glyphpath_moveTo( glyphPath, curX, curY );
 
         break;
 
@@ -2686,7 +2715,7 @@
         curX = ADD_INT32( curX, cf2_stack_popFixed( opStack ) );
 
         if ( !decoder->flex_state )
-          cf2_glyphpath_moveTo( &glyphPath, curX, curY );
+          cf2_glyphpath_moveTo( glyphPath, curX, curY );
 
         break;
 
@@ -2705,7 +2734,7 @@
             curY = ADD_INT32( curY, cf2_stack_getReal( opStack,
                                                        idx + 1 ) );
 
-            cf2_glyphpath_lineTo( &glyphPath, curX, curY );
+            cf2_glyphpath_lineTo( glyphPath, curX, curY );
             idx += 2;
           }
 
@@ -2721,7 +2750,7 @@
             x3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 4 ), x2 );
             y3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 5 ), y2 );
 
-            cf2_glyphpath_curveTo( &glyphPath, x1, y1, x2, y2, x3, y3 );
+            cf2_glyphpath_curveTo( glyphPath, x1, y1, x2, y2, x3, y3 );
 
             curX  = x3;
             curY  = y3;
@@ -2766,7 +2795,7 @@
             x3 = x2;
             y3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 3 ), y2 );
 
-            cf2_glyphpath_curveTo( &glyphPath, x1, y1, x2, y2, x3, y3 );
+            cf2_glyphpath_curveTo( glyphPath, x1, y1, x2, y2, x3, y3 );
 
             curX  = x3;
             curY  = y3;
@@ -2811,7 +2840,7 @@
             x3 = ADD_INT32( cf2_stack_getReal( opStack, idx + 3 ), x2 );
             y3 = y2;
 
-            cf2_glyphpath_curveTo( &glyphPath, x1, y1, x2, y2, x3, y3 );
+            cf2_glyphpath_curveTo( glyphPath, x1, y1, x2, y2, x3, y3 );
 
             curX  = x3;
             curY  = y3;
@@ -2884,7 +2913,7 @@
               alternate = TRUE;
             }
 
-            cf2_glyphpath_curveTo( &glyphPath, x1, y1, x2, y2, x3, y3 );
+            cf2_glyphpath_curveTo( glyphPath, x1, y1, x2, y2, x3, y3 );
 
             curX  = x3;
             curY  = y3;
@@ -3035,7 +3064,7 @@
       FT_TRACE4(( "charstring error %d\n", *error ));
 
     /* free resources from objects we've used */
-    cf2_glyphpath_finalize( &glyphPath );
+    cf2_glyphpath_finalize( glyphPath );
     cf2_arrstack_finalize( &vStemHintArray );
     cf2_arrstack_finalize( &hStemHintArray );
     cf2_arrstack_finalize( &subrStack );

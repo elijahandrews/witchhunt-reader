@@ -4,7 +4,18 @@ from pathlib import Path
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, ZIP_STORED
 import struct
 import zlib
+import sys
+from tempfile import TemporaryDirectory
 from typography_font_fixture import static_font
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "outline_font"))
+from make_variation_fixture import make as make_variation_font
+
+def variation_font():
+    with TemporaryDirectory(prefix="epub-variable-spacing-") as directory:
+        path = Path(directory) / "spacing.ttf"
+        make_variation_font(path)
+        return path.read_bytes()
 
 def png():
     width, height = 80, 24
@@ -194,6 +205,68 @@ CHAPTERS += [("Small text spacing", """<p>Compare these samples at a small reade
 <p style="letter-spacing:.03125em">Fine positive spacing: still little letters.</p>
 <p style="letter-spacing:-.03125em">Fine negative spacing: still little letters.</p>""")]
 
+
+# These specimens exercise final-grid outlines and word holds without borrowed text.
+CHAPTERS += [
+    ("Outline edges at small sizes", """<p>Select a native outline font to compare these rows. Keep darkness at Normal and antialiasing enabled.</p>
+<p style="font-size:80%">still ill minimum little HNT AVATAR To 0123456789</p>
+<p>still ill minimum little HNT AVATAR To 0123456789</p>
+<p style="font-size:120%">still ill minimum little HNT AVATAR To 0123456789</p>
+<p style="font-variant:small-caps">Still little letters and tall trees</p>
+<p><em>Italic edges: final office quiet fj.</em></p>
+<p>Accents: café e&#x301; A&#x308;.</p>
+<p style="letter-spacing:.03125em">Fine phases: still little minimum.</p>
+<p class="outline-sample">Hh Nn Tt Hh Nn Tt</p>
+<p>The last row uses the original embedded diagnostic font.</p>"""),
+    ("Hold a word for its definition", """<p>Press and hold garden, lantern, or quiet to open its dictionary definition. Return to this page with Back.</p>
+<p>A <em>quiet</em> garden has a brass lantern beside the gate.</p>
+<p>Try a word split across styles: gar<strong>den</strong>.</p>
+<p>Try a word with a discretionary break: extra&#173;ordinary.</p>
+<p style="font-variant:small-caps">Small capitals preserve the selected word.</p>
+<p>Short taps and swipes still turn pages. Blank space keeps its configured long-press action.</p>
+<p><img src="../icon.svg" width="45" height="45" alt="Original ring specimen"/></p>"""),
+]
+
+
+# Original specimens for retained fractional advances and authored small caps.
+CHAPTERS += [
+    ("Precise spacing and authored caps", """<p>Compare long runs at a small reading size. Regular, HD, and native outline fonts should keep even advances without cumulative rounding drift.</p>
+<p style="font-size:80%">iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii</p>
+<p>iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii</p>
+<p style="font-size:120%">iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii</p>
+<p style="letter-spacing:.03125em">minimum still little minimum still little</p>
+<p style="letter-spacing:-.03125em">minimum still little minimum still little</p>
+<p>Select a native font with authored small capitals to compare the next two rows. A font without them uses reduced uppercase letters.</p>
+<p style="font-variant-caps:small-caps">Thin Hints And Fine Things</p>
+<p style="font-variant-caps:all-small-caps">Thin Hints And Fine Things</p>
+<p>The following original embedded design has deliberately strong small-cap stems.</p>
+<p class="authored-caps" style="font-variant-caps:small-caps">Hh Nn Tt Ii Ff</p>
+<p class="authored-caps" style="font-variant-caps:all-small-caps">Hh Nn Tt Ii Ff</p>"""),
+    ("Justified line edges", """<p>With embedded styles enabled, complete justified lines should share a right edge. The last line stays at natural spacing; a sparse line may stop short to avoid oversized gaps.</p>
+<div style="width:90%;text-align:justify"><p>Four calm winds move past tall trees near quiet ponds. Five soft clouds drift over open fields where small birds rest beside low walls. A brass lantern marks the narrow path. Each full line distributes its remaining space across the available word gaps.</p>
+<p>Keep these paired words together: north&#160;gate, south&#160;wall, quiet&#160;pond. Attached punctuation should stay with its word while ordinary spaces share the remaining line width.</p>
+<p>Short final line.</p></div>"""),
+]
+
+
+CHAPTERS += [("Variable kerning pairs", """<p>Enable embedded fonts. These two rows use an original variable diagnostic font. Its outlines deliberately stay the same; the selected weight changes pair spacing.</p>
+<p class="variable-pairs" style="font-weight:400">HT TH HTHT THTH</p>
+<p class="variable-pairs" style="font-weight:700">HT TH HTHT THTH</p>
+<p>The second row should have tighter H-T and T-H pairs. Compare at several reader sizes, then reopen the chapter to check the cached layout.</p>""")]
+
+# Original repeated-stem and flat-edge specimens for bitmap coverage rounding.
+CHAPTERS += [("Repeated stems and smooth edges", """<p>Use a 12pt reading font, Normal darkness and antialiasing. Compare the repeated stems, then inspect the flat serif and crossbar edges.</p>
+<p>will still fill little tall hill</p>
+<p>We will visit the little mill. A tall willow stands beside it.</p>
+<p style="font-size:75%">will still fill little tall hill TILT HINT</p>
+<p style="font-size:125%">will still fill little tall hill</p>
+<p><em>will still fill little tall hill</em></p>
+<p><strong>will still fill little tall hill</strong></p>
+<p style="font-variant:small-caps">Tilt Hint Little Tall</p>
+<p style="letter-spacing:.03125em">will still fill little tall hill</p>
+<p style="letter-spacing:-.03125em">will still fill little tall hill</p>
+<p>Flat tops and bars: T I H E F L. Curves and counters: B P O e a. Diagonals: W N V A.</p>""")]
+
 def build(output):
     files = {
       "mimetype":"application/epub+zip",
@@ -205,9 +278,11 @@ def build(output):
 
       "OPS/alternate-device.css":".media-check {text-transform:uppercase;font-size:60%;margin-left:0}",
       "OPS/Fonts/One.ttf":static_font(), "OPS/Fonts/Two.ttf":static_font(wide=True),
+      "OPS/Fonts/VariableSpacing.ttf":variation_font(),
     }
     manifest='<item id="css" href="style.css" media-type="text/css"/><item id="image" href="equation.png" media-type="image/png"/><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
     manifest += '<item id="font1" href="Fonts/One.ttf" media-type="font/ttf"/><item id="font2" href="Fonts/Two.ttf" media-type="font/ttf"/>'
+    manifest += '<item id="variable-spacing" href="Fonts/VariableSpacing.ttf" media-type="font/ttf"/>'
     manifest += '<item id="marker" href="marker.png" media-type="image/png"/><item id="alternate" href="alternate-device.css" media-type="text/css"/>'
     manifest += '<item id="ornament" href="ornament.svg" media-type="image/svg+xml"/><item id="icon" href="icon.svg" media-type="image/svg+xml"/>'
     spine='';nav=''
@@ -232,6 +307,18 @@ def build(output):
         if i == 10:
             head = '''<style>.scaled-heading {font-size:170%;margin-bottom:2em;text-align:center}
               .plain-link {text-decoration:none}</style>'''
+        if title == "Variable kerning pairs":
+            head = """<style>
+              @font-face {font-family:'Variable Pairs';src:url('../Fonts/VariableSpacing.ttf') format('truetype');font-weight:400}
+              @font-face {font-family:'Variable Pairs';src:url('../Fonts/VariableSpacing.ttf') format('truetype');font-weight:700}
+              .variable-pairs {font-family:'Variable Pairs',serif}
+              </style>"""
+        if title == "Precise spacing and authored caps":
+            head = """<style>@font-face {font-family:'Caps Fixture';src:url('../Fonts/One.ttf') format('truetype')}
+              .authored-caps {font-family:'Caps Fixture',serif}</style>"""
+        if title == "Outline edges at small sizes":
+            head = """<style>@font-face {font-family:'Edge Fixture';src:url('../Fonts/One.ttf') format('truetype')}
+              .outline-sample {font-family:'Edge Fixture',serif;font-size:80%}</style>"""
         files[f"OPS/{path}"]=f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{title}</title><link rel="stylesheet" type="text/css" href="{sheet}"/>{head}</head><body>{body}</body></html>'
         manifest+=f'<item id="c{i}" href="{path}" media-type="application/xhtml+xml"/>'
         spine+=f'<itemref idref="c{i}"/>'

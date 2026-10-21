@@ -8,11 +8,11 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=This
    W x=69 s=0 z=100 t=opening
-   W x=153 s=0 z=100 t=paragraph
-   W x=258 s=0 z=100 t=is
-   W x=291 s=0 z=100 t=visible
-   W x=366 s=0 z=100 t=and
-   W x=415 s=0 z=100 t=must
+   W x=154 s=0 z=100 t=paragraph
+   W x=260 s=0 z=100 t=is
+   W x=294 s=0 z=100 t=visible
+   W x=370 s=0 z=100 t=and
+   W x=420 s=0 z=100 t=must
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=survive.
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=7
@@ -77,7 +77,7 @@ SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
    W x=300 s=0 z=100 t=rule
    W x=343 s=0 z=100 t=that
    W x=393 s=0 z=100 t=asks
-   W x=437 s=0 z=100 t=to
+   W x=438 s=0 z=100 t=to
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=show
    W x=45 s=0 z=100 t=the
@@ -85,14 +85,14 @@ SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 t=This
    W x=57 s=0 z=100 t=one
-   W x=95 s=0 z=100 t=has
-   W x=134 s=0 z=100 t=the
-   W x=171 s=0 z=100 t=same
-   W x=217 s=0 z=100 t=class
-   W x=269 s=0 z=100 t=and
-   W x=306 s=0 z=100 t=no
-   W x=335 s=0 z=100 t=attribute,
-   W x=431 s=0 z=100 t=so
+   W x=96 s=0 z=100 t=has
+   W x=136 s=0 z=100 t=the
+   W x=174 s=0 z=100 t=same
+   W x=221 s=0 z=100 t=class
+   W x=274 s=0 z=100 t=and
+   W x=312 s=0 z=100 t=no
+   W x=342 s=0 z=100 t=attribute,
+   W x=439 s=0 z=100 t=so
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=it
    W x=22 s=0 z=100 t=stays.
@@ -105,14 +105,14 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 t=A
    W x=33 s=0 z=100 t=control
-   W x=109 s=0 z=100 t=chapter:
-   W x=188 s=0 z=100 t=every
-   W x=241 s=0 z=100 t=word
-   W x=282 s=0 z=100 t=in
-   W x=306 s=0 z=100 t=it
-   W x=329 s=0 z=100 t=must
-   W x=376 s=0 z=100 t=appear
-   W x=436 s=0 z=100 t=in
+   W x=110 s=0 z=100 t=chapter:
+   W x=190 s=0 z=100 t=every
+   W x=244 s=0 z=100 t=word
+   W x=285 s=0 z=100 t=in
+   W x=310 s=0 z=100 t=it
+   W x=334 s=0 z=100 t=must
+   W x=382 s=0 z=100 t=appear
+   W x=443 s=0 z=100 t=in
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=the
    W x=37 s=0 z=100 t=golden.
@@ -123,7 +123,7 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=236 s=2 z=100 t=note,
    W x=302 s=2 z=100 t=which
    W x=361 s=2 z=100 t=carries
-   W x=436 s=2 z=100 t=no
+   W x=437 s=2 z=100 t=no
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=2 z=100 t=attribute
    W x=88 s=2 z=100 t=at

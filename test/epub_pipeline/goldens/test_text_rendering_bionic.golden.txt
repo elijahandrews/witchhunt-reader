@@ -84,11 +84,11 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=•
    W x=54 s=1 z=100 t=supers
    W x=112 s=0 z=100 t=cript
-   W x=178 s=0 z=100 t=and
-   W x=238 s=1 z=100 t=subsc
-   W x=285 s=0 z=100 t=ript
-   W x=344 s=1 z=100 t=rende
-   W x=394 s=0 z=100 t=ring
+   W x=179 s=0 z=100 t=and
+   W x=240 s=1 z=100 t=subsc
+   W x=287 s=0 z=100 t=ript
+   W x=347 s=1 z=100 t=rende
+   W x=397 s=0 z=100 t=ring
   LINE y=206 x=27 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=(<
    W x=21 s=0 z=100 t=sup
@@ -106,7 +106,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=235 s=1 z=100 t=subsc
    W x=282 s=0 z=100 t=ript
    W x=340 s=0 z=100 t=via
-   W x=398 s=0 z=100 t=CSS
+   W x=399 s=0 z=100 t=CSS
   LINE y=254 x=27 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=1 z=100 t=vert
    W x=43 s=0 z=100 t=ical
@@ -119,16 +119,16 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=•
    W x=55 s=1 z=100 t=li
    W x=72 s=0 z=100 t=st
-   W x=121 s=1 z=100 t=rende
-   W x=171 s=0 z=100 t=ring
-   W x=207 s=0 z=100 t=:
-   W x=245 s=0 z=100 t=ul
-   W x=265 s=0 z=100 t=,
-   W x=303 s=0 z=100 t=ol
-   W x=324 s=0 z=100 t=,
-   W x=362 s=1 z=100 t=nes
-   W x=394 s=0 z=100 t=ted
-   W x=421 s=0 z=100 t=,
+   W x=122 s=1 z=100 t=rende
+   W x=172 s=0 z=100 t=ring
+   W x=208 s=0 z=100 t=:
+   W x=247 s=0 z=100 t=ul
+   W x=267 s=0 z=100 t=,
+   W x=306 s=0 z=100 t=ol
+   W x=327 s=0 z=100 t=,
+   W x=366 s=1 z=100 t=nes
+   W x=398 s=0 z=100 t=ted
+   W x=425 s=0 z=100 t=,
   LINE y=302 x=27 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=1 z=100 t=sta
    W x=34 s=0 z=100 t=rt
@@ -156,20 +156,20 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=The
    W x=53 s=1 z=100 t=blo
    W x=83 s=0 z=100 t=ck
-   W x=106 s=1 z=100 t=bel
-   W x=133 s=0 z=100 t=ow
-   W x=159 s=0 z=100 t=is
-   W x=182 s=0 z=100 t=a
-   W x=202 s=1 z=100 t=sin
-   W x=231 s=0 z=100 t=gle
-   W x=268 s=0 z=100 t=<
-   W x=278 s=0 z=100 t=pre
-   W x=301 s=0 z=100 t=>
-   W x=321 s=1 z=100 t=elem
-   W x=362 s=0 z=100 t=ent
-   W x=392 s=0 z=100 t=.
-   W x=410 s=1 z=100 t=Ea
-   W x=436 s=0 z=100 t=ch
+   W x=107 s=1 z=100 t=bel
+   W x=134 s=0 z=100 t=ow
+   W x=160 s=0 z=100 t=is
+   W x=184 s=0 z=100 t=a
+   W x=205 s=1 z=100 t=sin
+   W x=234 s=0 z=100 t=gle
+   W x=271 s=0 z=100 t=<
+   W x=281 s=0 z=100 t=pre
+   W x=304 s=0 z=100 t=>
+   W x=325 s=1 z=100 t=elem
+   W x=366 s=0 z=100 t=ent
+   W x=396 s=0 z=100 t=.
+   W x=415 s=1 z=100 t=Ea
+   W x=441 s=0 z=100 t=ch
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=14
    W x=0 s=1 z=100 t=sou
    W x=35 s=0 z=100 t=rce
@@ -199,15 +199,15 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=48 s=0 z=100 t=mal
    W x=94 s=1 z=100 t=parag
    W x=148 s=0 z=100 t=raph
-   W x=201 s=1 z=100 t=aft
-   W x=236 s=0 z=100 t=er
-   W x=268 s=0 z=100 t=the
-   W x=314 s=0 z=100 t=pre
-   W x=352 s=1 z=100 t=blo
-   W x=382 s=0 z=100 t=ck
-   W x=397 s=0 z=100 t=.
-   W x=422 s=1 z=100 t=Te
-   W x=439 s=0 z=100 t=xt
+   W x=202 s=1 z=100 t=aft
+   W x=237 s=0 z=100 t=er
+   W x=270 s=0 z=100 t=the
+   W x=316 s=0 z=100 t=pre
+   W x=355 s=1 z=100 t=blo
+   W x=385 s=0 z=100 t=ck
+   W x=400 s=0 z=100 t=.
+   W x=426 s=1 z=100 t=Te
+   W x=443 s=0 z=100 t=xt
   LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=1 z=100 t=resu
    W x=41 s=0 z=100 t=mes
@@ -232,16 +232,16 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=12
    W x=18 s=0 z=100 t=The
    W x=54 s=0 z=100 t=pre
-   W x=86 s=1 z=100 t=blo
-   W x=116 s=0 z=100 t=ck
-   W x=140 s=1 z=100 t=bel
-   W x=167 s=0 z=100 t=ow
-   W x=194 s=1 z=100 t=cont
-   W x=238 s=0 z=100 t=ains
-   W x=285 s=1 z=100 t=intent
-   W x=348 s=0 z=100 t=ional
-   W x=407 s=1 z=100 t=bla
-   W x=437 s=0 z=100 t=nk
+   W x=87 s=1 z=100 t=blo
+   W x=117 s=0 z=100 t=ck
+   W x=142 s=1 z=100 t=bel
+   W x=169 s=0 z=100 t=ow
+   W x=196 s=1 z=100 t=cont
+   W x=240 s=0 z=100 t=ains
+   W x=288 s=1 z=100 t=intent
+   W x=351 s=0 z=100 t=ional
+   W x=411 s=1 z=100 t=bla
+   W x=441 s=0 z=100 t=nk
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=1 z=100 t=lin
    W x=29 s=0 z=100 t=es
@@ -276,17 +276,17 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
    W x=44 s=0 z=100 t=ch
    W x=69 s=1 z=100 t=bla
    W x=99 s=0 z=100 t=nk
-   W x=124 s=1 z=100 t=li
-   W x=141 s=0 z=100 t=ne
-   W x=167 s=0 z=100 t=in
-   W x=190 s=0 z=100 t=the
-   W x=227 s=1 z=100 t=sou
-   W x=262 s=0 z=100 t=rce
-   W x=292 s=1 z=100 t=sho
-   W x=328 s=0 z=100 t=uld
-   W x=362 s=1 z=100 t=prod
-   W x=400 s=0 z=100 t=uce
-   W x=433 s=0 z=100 t=an
+   W x=125 s=1 z=100 t=li
+   W x=142 s=0 z=100 t=ne
+   W x=168 s=0 z=100 t=in
+   W x=192 s=0 z=100 t=the
+   W x=229 s=1 z=100 t=sou
+   W x=264 s=0 z=100 t=rce
+   W x=295 s=1 z=100 t=sho
+   W x=331 s=0 z=100 t=uld
+   W x=365 s=1 z=100 t=prod
+   W x=403 s=0 z=100 t=uce
+   W x=437 s=0 z=100 t=an
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=1 z=100 t=emp
    W x=28 s=0 z=100 t=ty
@@ -420,16 +420,16 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=75 s=0 z=100 t=raph
    W x=123 s=1 z=100 t=bef
    W x=151 s=0 z=100 t=ore
-   W x=190 s=0 z=100 t=the
-   W x=231 s=1 z=100 t=fir
-   W x=258 s=0 z=100 t=st
-   W x=287 s=1 z=100 t=ru
-   W x=308 s=0 z=100 t=le
-   W x=326 s=0 z=100 t=.
-   W x=346 s=1 z=100 t=Lor
-   W x=381 s=0 z=100 t=em
-   W x=410 s=1 z=100 t=ips
-   W x=434 s=0 z=100 t=um
+   W x=191 s=0 z=100 t=the
+   W x=233 s=1 z=100 t=fir
+   W x=260 s=0 z=100 t=st
+   W x=290 s=1 z=100 t=ru
+   W x=311 s=0 z=100 t=le
+   W x=329 s=0 z=100 t=.
+   W x=350 s=1 z=100 t=Lor
+   W x=385 s=0 z=100 t=em
+   W x=415 s=1 z=100 t=ips
+   W x=439 s=0 z=100 t=um
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=13
    W x=0 s=1 z=100 t=dol
    W x=32 s=0 z=100 t=or
@@ -508,19 +508,19 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=Two
    W x=48 s=1 z=100 t=rul
    W x=79 s=0 z=100 t=es
-   W x=103 s=1 z=100 t=appe
-   W x=140 s=0 z=100 t=ared
-   W x=183 s=1 z=100 t=abo
-   W x=216 s=0 z=100 t=ve
-   W x=237 s=0 z=100 t=.
-   W x=253 s=0 z=100 t=Now
-   W x=284 s=0 z=100 t=a
-   W x=302 s=1 z=100 t=ru
-   W x=323 s=0 z=100 t=le
-   W x=347 s=1 z=100 t=rig
-   W x=375 s=0 z=100 t=ht
-   W x=403 s=1 z=100 t=aft
-   W x=438 s=0 z=100 t=er
+   W x=104 s=1 z=100 t=appe
+   W x=141 s=0 z=100 t=ared
+   W x=184 s=1 z=100 t=abo
+   W x=217 s=0 z=100 t=ve
+   W x=238 s=0 z=100 t=.
+   W x=255 s=0 z=100 t=Now
+   W x=287 s=0 z=100 t=a
+   W x=305 s=1 z=100 t=ru
+   W x=326 s=0 z=100 t=le
+   W x=351 s=1 z=100 t=rig
+   W x=379 s=0 z=100 t=ht
+   W x=408 s=1 z=100 t=aft
+   W x=443 s=0 z=100 t=er
   LINE y=354 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=the
    W x=37 s=1 z=100 t=head
@@ -539,9 +539,9 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=260 s=0 z=100 t=the
    W x=297 s=1 z=100 t=parag
    W x=351 s=0 z=100 t=raph
-   W x=395 s=1 z=100 t=abo
-   W x=428 s=0 z=100 t=ve
-   W x=449 s=0 z=100 t=.
+   W x=396 s=1 z=100 t=abo
+   W x=429 s=0 z=100 t=ve
+   W x=450 s=0 z=100 t=.
   LINE y=427 x=0 align=0 mult=1.000 hfid=0 words=17
    W x=0 s=1 z=100 t=Fina
    W x=39 s=0 z=100 t=lly
@@ -549,17 +549,17 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=79 s=0 z=100 t=a
    W x=97 s=1 z=100 t=ru
    W x=118 s=0 z=100 t=le
-   W x=142 s=1 z=100 t=ne
-   W x=164 s=0 z=100 t=ar
-   W x=190 s=0 z=100 t=the
-   W x=227 s=0 z=100 t=end
-   W x=261 s=0 z=100 t=of
-   W x=289 s=0 z=100 t=the
-   W x=326 s=1 z=100 t=pa
-   W x=346 s=0 z=100 t=ge
-   W x=372 s=0 z=100 t=to
-   W x=400 s=1 z=100 t=ver
-   W x=432 s=0 z=100 t=ify
+   W x=143 s=1 z=100 t=ne
+   W x=165 s=0 z=100 t=ar
+   W x=191 s=0 z=100 t=the
+   W x=229 s=0 z=100 t=end
+   W x=263 s=0 z=100 t=of
+   W x=291 s=0 z=100 t=the
+   W x=329 s=1 z=100 t=pa
+   W x=349 s=0 z=100 t=ge
+   W x=375 s=0 z=100 t=to
+   W x=404 s=1 z=100 t=ver
+   W x=436 s=0 z=100 t=ify
   LINE y=451 x=0 align=0 mult=1.000 hfid=0 words=17
    W x=0 s=0 z=100 t=it
    W x=22 s=1 z=100 t=do
@@ -576,8 +576,8 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=336 s=0 z=100 t=ak
    W x=362 s=1 z=100 t=wh
    W x=382 s=0 z=100 t=en
-   W x=408 s=1 z=100 t=the
-   W x=442 s=0 z=100 t=re
+   W x=409 s=1 z=100 t=the
+   W x=443 s=0 z=100 t=re
   LINE y=475 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=is
    W x=21 s=1 z=100 t=sti
@@ -596,23 +596,23 @@ SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
    W x=278 s=1 z=100 t=am
    W x=302 s=0 z=100 t=et
    W x=321 s=0 z=100 t=,
-   W x=350 s=1 z=100 t=consec
-   W x=411 s=0 z=100 t=tetur
+   W x=351 s=1 z=100 t=consec
+   W x=412 s=0 z=100 t=tetur
   LINE y=523 x=0 align=0 mult=1.000 hfid=0 words=14
    W x=0 s=1 z=100 t=adipi
    W x=43 s=0 z=100 t=scing
    W x=93 s=1 z=100 t=el
    W x=113 s=0 z=100 t=it
    W x=129 s=0 z=100 t=,
-   W x=143 s=0 z=100 t=sed
-   W x=175 s=0 z=100 t=do
-   W x=201 s=1 z=100 t=eius
-   W x=240 s=0 z=100 t=mod
-   W x=276 s=1 z=100 t=tem
-   W x=308 s=0 z=100 t=por
-   W x=340 s=1 z=100 t=incid
-   W x=383 s=0 z=100 t=idunt
-   W x=435 s=0 z=100 t=ut
+   W x=144 s=0 z=100 t=sed
+   W x=176 s=0 z=100 t=do
+   W x=203 s=1 z=100 t=eius
+   W x=242 s=0 z=100 t=mod
+   W x=278 s=1 z=100 t=tem
+   W x=310 s=0 z=100 t=por
+   W x=343 s=1 z=100 t=incid
+   W x=386 s=0 z=100 t=idunt
+   W x=439 s=0 z=100 t=ut
   LINE y=547 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=1 z=100 t=lab
    W x=30 s=0 z=100 t=ore
@@ -897,34 +897,34 @@ SPINE 5 href=OEBPS/chapter6.xhtml pages=2 truncated=0 cssFallback=0
    W x=127 s=0 z=100 t=ow
    W x=154 s=0 z=100 t=is
    W x=178 s=0 z=100 t=a
-   W x=199 s=1 z=100 t=ba
-   W x=219 s=0 z=100 t=re
-   W x=245 s=0 z=100 t=<
-   W x=255 s=0 z=100 t=li
-   W x=270 s=0 z=100 t=>
-   W x=291 s=1 z=100 t=wi
-   W x=305 s=0 z=100 t=th
-   W x=336 s=0 z=100 t=no
-   W x=368 s=1 z=100 t=enclo
-   W x=421 s=0 z=100 t=sing
+   W x=200 s=1 z=100 t=ba
+   W x=220 s=0 z=100 t=re
+   W x=246 s=0 z=100 t=<
+   W x=256 s=0 z=100 t=li
+   W x=271 s=0 z=100 t=>
+   W x=292 s=1 z=100 t=wi
+   W x=306 s=0 z=100 t=th
+   W x=337 s=0 z=100 t=no
+   W x=370 s=1 z=100 t=enclo
+   W x=423 s=0 z=100 t=sing
   LINE y=328 x=0 align=0 mult=1.000 hfid=0 words=17
    W x=0 s=0 z=100 t=<
    W x=10 s=0 z=100 t=ul
    W x=30 s=0 z=100 t=>
    W x=50 s=0 z=100 t=or
-   W x=78 s=0 z=100 t=<
-   W x=88 s=0 z=100 t=ol
-   W x=109 s=0 z=100 t=>.
-   W x=139 s=0 z=100 t=No
-   W x=166 s=1 z=100 t=bul
-   W x=195 s=0 z=100 t=let
-   W x=231 s=0 z=100 t=or
-   W x=259 s=1 z=100 t=num
-   W x=294 s=0 z=100 t=ber
-   W x=325 s=1 z=100 t=sho
-   W x=361 s=0 z=100 t=uld
-   W x=397 s=1 z=100 t=app
-   W x=424 s=0 z=100 t=ear
+   W x=79 s=0 z=100 t=<
+   W x=89 s=0 z=100 t=ol
+   W x=110 s=0 z=100 t=>.
+   W x=141 s=0 z=100 t=No
+   W x=169 s=1 z=100 t=bul
+   W x=198 s=0 z=100 t=let
+   W x=235 s=0 z=100 t=or
+   W x=264 s=1 z=100 t=num
+   W x=299 s=0 z=100 t=ber
+   W x=331 s=1 z=100 t=sho
+   W x=367 s=0 z=100 t=uld
+   W x=404 s=1 z=100 t=app
+   W x=431 s=0 z=100 t=ear
   LINE y=352 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=1 z=100 t=bef
    W x=28 s=0 z=100 t=ore
@@ -1134,14 +1134,14 @@ SPINE 6 href=OEBPS/chapter7.xhtml pages=1 truncated=0 cssFallback=0
    W x=115 s=1 z=100 t=refer
    W x=164 s=0 z=100 t=ence
    W x=200 s=16 z=50 t=1
-   W x=211 s=0 z=100 t=and
-   W x=253 s=1 z=100 t=anot
-   W x=302 s=0 z=100 t=her
-   W x=331 s=16 z=50 t=2
-   W x=343 s=0 z=100 t=in
-   W x=371 s=0 z=100 t=the
-   W x=413 s=1 z=100 t=sa
-   W x=436 s=0 z=100 t=me
+   W x=212 s=0 z=100 t=and
+   W x=255 s=1 z=100 t=anot
+   W x=304 s=0 z=100 t=her
+   W x=333 s=16 z=50 t=2
+   W x=346 s=0 z=100 t=in
+   W x=375 s=0 z=100 t=the
+   W x=418 s=1 z=100 t=sa
+   W x=441 s=0 z=100 t=me
   LINE y=380 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=1 z=100 t=sent
    W x=43 s=0 z=100 t=ence
@@ -1244,19 +1244,19 @@ SPINE 6 href=OEBPS/chapter7.xhtml pages=1 truncated=0 cssFallback=0
    W x=64 s=1 z=100 t=wo
    W x=84 s=0 z=100 t=rd
    W x=100 s=16 z=50 t=has
-   W x=125 s=16 z=50 t=a
-   W x=139 s=17 z=50 t=rat
-   W x=156 s=16 z=50 t=her
-   W x=179 s=17 z=50 t=lo
-   W x=191 s=16 z=50 t=ng
-   W x=210 s=17 z=50 t=supers
-   W x=239 s=16 z=50 t=cript
-   W x=266 s=17 z=50 t=atta
-   W x=290 s=16 z=50 t=ched
-   W x=316 s=16 z=50 t=to
-   W x=335 s=16 z=50 t=it
-   W x=351 s=1 z=100 t=conti
-   W x=402 s=0 z=100 t=nuing
+   W x=126 s=16 z=50 t=a
+   W x=141 s=17 z=50 t=rat
+   W x=158 s=16 z=50 t=her
+   W x=182 s=17 z=50 t=lo
+   W x=194 s=16 z=50 t=ng
+   W x=214 s=17 z=50 t=supers
+   W x=243 s=16 z=50 t=cript
+   W x=271 s=17 z=50 t=atta
+   W x=295 s=16 z=50 t=ched
+   W x=322 s=16 z=50 t=to
+   W x=342 s=16 z=50 t=it
+   W x=359 s=1 z=100 t=conti
+   W x=410 s=0 z=100 t=nuing
   LINE y=650 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=1 z=100 t=norm
    W x=45 s=0 z=100 t=ally
@@ -1267,19 +1267,19 @@ SPINE 6 href=OEBPS/chapter7.xhtml pages=1 truncated=0 cssFallback=0
    W x=65 s=1 z=100 t=wo
    W x=85 s=0 z=100 t=rd
    W x=101 s=32 z=50 t=has
-   W x=127 s=32 z=50 t=a
-   W x=142 s=33 z=50 t=rat
-   W x=159 s=32 z=50 t=her
-   W x=183 s=33 z=50 t=lo
-   W x=195 s=32 z=50 t=ng
-   W x=215 s=33 z=50 t=subsc
-   W x=239 s=32 z=50 t=ript
-   W x=263 s=33 z=50 t=atta
-   W x=287 s=32 z=50 t=ched
-   W x=314 s=32 z=50 t=to
-   W x=334 s=32 z=50 t=it
-   W x=351 s=1 z=100 t=conti
-   W x=402 s=0 z=100 t=nuing
+   W x=128 s=32 z=50 t=a
+   W x=144 s=33 z=50 t=rat
+   W x=161 s=32 z=50 t=her
+   W x=186 s=33 z=50 t=lo
+   W x=198 s=32 z=50 t=ng
+   W x=219 s=33 z=50 t=subsc
+   W x=243 s=32 z=50 t=ript
+   W x=268 s=33 z=50 t=atta
+   W x=292 s=32 z=50 t=ched
+   W x=320 s=32 z=50 t=to
+   W x=341 s=32 z=50 t=it
+   W x=359 s=1 z=100 t=conti
+   W x=410 s=0 z=100 t=nuing
   LINE y=698 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=1 z=100 t=norm
    W x=45 s=0 z=100 t=ally
@@ -1634,17 +1634,17 @@ SPINE 7 href=OEBPS/chapter8.xhtml pages=2 truncated=0 cssFallback=0
    W x=69 s=1 z=100 t=wo
    W x=89 s=0 z=100 t=rd
    W x=105 s=16 z=50 t=has
-   W x=135 s=16 z=50 t=a
-   W x=154 s=17 z=50 t=rat
-   W x=171 s=16 z=50 t=her
-   W x=199 s=17 z=50 t=lo
-   W x=211 s=16 z=50 t=ng
-   W x=235 s=17 z=50 t=supers
-   W x=264 s=16 z=50 t=cript
-   W x=296 s=16 z=50 t=via
-   W x=324 s=16 z=50 t=CSS
-   W x=354 s=1 z=100 t=conti
-   W x=405 s=0 z=100 t=nuing
+   W x=136 s=16 z=50 t=a
+   W x=155 s=17 z=50 t=rat
+   W x=172 s=16 z=50 t=her
+   W x=201 s=17 z=50 t=lo
+   W x=213 s=16 z=50 t=ng
+   W x=238 s=17 z=50 t=supers
+   W x=267 s=16 z=50 t=cript
+   W x=299 s=16 z=50 t=via
+   W x=328 s=16 z=50 t=CSS
+   W x=359 s=1 z=100 t=conti
+   W x=410 s=0 z=100 t=nuing
   LINE y=382 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=1 z=100 t=norm
    W x=45 s=0 z=100 t=ally
@@ -1655,17 +1655,17 @@ SPINE 7 href=OEBPS/chapter8.xhtml pages=2 truncated=0 cssFallback=0
    W x=70 s=1 z=100 t=wo
    W x=90 s=0 z=100 t=rd
    W x=106 s=32 z=50 t=has
-   W x=137 s=32 z=50 t=a
-   W x=157 s=33 z=50 t=rat
-   W x=174 s=32 z=50 t=her
-   W x=203 s=33 z=50 t=lo
-   W x=215 s=32 z=50 t=ng
-   W x=240 s=33 z=50 t=subsc
-   W x=264 s=32 z=50 t=ript
-   W x=293 s=32 z=50 t=via
-   W x=322 s=32 z=50 t=CSS
-   W x=353 s=1 z=100 t=conti
-   W x=404 s=0 z=100 t=nuing
+   W x=138 s=32 z=50 t=a
+   W x=159 s=33 z=50 t=rat
+   W x=176 s=32 z=50 t=her
+   W x=206 s=33 z=50 t=lo
+   W x=218 s=32 z=50 t=ng
+   W x=243 s=33 z=50 t=subsc
+   W x=267 s=32 z=50 t=ript
+   W x=297 s=32 z=50 t=via
+   W x=327 s=32 z=50 t=CSS
+   W x=359 s=1 z=100 t=conti
+   W x=410 s=0 z=100 t=nuing
   LINE y=430 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=1 z=100 t=norm
    W x=45 s=0 z=100 t=ally

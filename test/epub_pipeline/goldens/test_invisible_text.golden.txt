@@ -10,10 +10,10 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=VISIBLECAPTION
    W x=156 s=0 z=100 t=the
    W x=197 s=0 z=100 t=caption
-   W x=271 s=0 z=100 t=under
-   W x=328 s=0 z=100 t=the
-   W x=369 s=0 z=100 t=scan
-   W x=418 s=0 z=100 t=must
+   W x=272 s=0 z=100 t=under
+   W x=329 s=0 z=100 t=the
+   W x=370 s=0 z=100 t=scan
+   W x=420 s=0 z=100 t=must
   LINE y=122 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=survive.
 SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
@@ -50,7 +50,7 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
    W x=334 s=0 z=100 t=00
    W x=364 s=0 z=100 t=but
    W x=397 s=0 z=100 t=has
-   W x=436 s=0 z=100 t=no
+   W x=437 s=0 z=100 t=no
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=alpha.
 SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
@@ -122,14 +122,14 @@ SPINE 7 href=OEBPS/chapter8.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 t=A
    W x=33 s=0 z=100 t=control
-   W x=109 s=0 z=100 t=chapter:
-   W x=188 s=0 z=100 t=every
-   W x=241 s=0 z=100 t=word
-   W x=282 s=0 z=100 t=in
-   W x=306 s=0 z=100 t=it
-   W x=329 s=0 z=100 t=must
-   W x=376 s=0 z=100 t=appear
-   W x=436 s=0 z=100 t=in
+   W x=110 s=0 z=100 t=chapter:
+   W x=190 s=0 z=100 t=every
+   W x=244 s=0 z=100 t=word
+   W x=285 s=0 z=100 t=in
+   W x=310 s=0 z=100 t=it
+   W x=334 s=0 z=100 t=must
+   W x=382 s=0 z=100 t=appear
+   W x=443 s=0 z=100 t=in
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=the
    W x=37 s=0 z=100 t=golden.
@@ -137,10 +137,10 @@ SPINE 7 href=OEBPS/chapter8.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=Including
    W x=112 s=0 z=100 t=this
    W x=160 s=0 z=100 t=red
-   W x=196 s=0 z=100 t=paragraph,
-   W x=302 s=0 z=100 t=which
-   W x=356 s=0 z=100 t=is
-   W x=382 s=0 z=100 t=coloured
+   W x=197 s=0 z=100 t=paragraph,
+   W x=303 s=0 z=100 t=which
+   W x=357 s=0 z=100 t=is
+   W x=384 s=0 z=100 t=coloured
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=but
    W x=33 s=0 z=100 t=visible.

@@ -64,7 +64,7 @@
                               FT_Face        face )
   {
     /* scan the array of segments in each direction */
-    AF_GlyphHintsRec  hints[1];
+    AF_GlyphHints  hints = &metrics->root.globals->module->scratch->metrics_hints;
 
 
     FT_TRACE5(( "\n" ));
@@ -82,7 +82,7 @@
       FT_Error          error;
       FT_ULong          glyph_index;
       int               dim;
-      AF_CJKMetricsRec  dummy[1];
+      AF_CJKMetrics  dummy = &metrics->root.globals->module->scratch->metrics.cjk;
       AF_Scaler         scaler = &dummy->root.scaler;
 
       AF_StyleClass   style_class  = metrics->root.style_class;

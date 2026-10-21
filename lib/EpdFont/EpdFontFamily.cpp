@@ -30,6 +30,10 @@ const EpdFontData* EpdFontFamily::getData(const Style style) const { return getF
 
 EpdGlyphRef EpdFontFamily::getGlyph(const uint32_t cp, const Style style) const { return getFont(style)->getGlyph(cp); }
 
+bool EpdFontFamily::rasterGlyph(uint32_t cp, Style style, float scale, int8_t phase, EpdRasterGlyph& out) const {
+  return getFont(style)->rasterGlyph(cp, scale, phase, out);
+}
+
 uint32_t EpdFontFamily::resolveCaps(uint32_t cp, Style style, float& scale) const {
   return getFont(style)->resolveCaps(cp, (style & ALL_SMALL_CAPS) ? 2 : (style & SMALL_CAPS) ? 1 : 0, scale);
 }

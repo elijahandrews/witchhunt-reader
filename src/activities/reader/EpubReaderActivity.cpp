@@ -1343,6 +1343,7 @@ Section::BuildParams EpubReaderActivity::makeSectionBuildParams() const {
 
 void EpubReaderActivity::startActivityForResult(std::unique_ptr<Activity>&& activity,
                                                 ActivityResultHandler resultHandler) {
+  dictionaryHold_.reset();
   // See the header: B's borrow must not outlive the reader being the top activity, or every
   // redraw the child makes runs a HALF waveform. No-op unless B currently holds the block.
   //
@@ -2346,53 +2347,103 @@ void EpubReaderActivity::jumpToPercent(int percent) {
   }
 }
 
-void EpubReaderActivity::openDictionary() {
+ReaderWordHold::Page EpubReaderActivity::dictionaryTouchPage() const {
+  return {currentSpineIndex, section ? section->currentPage : -1, static_cast<uint32_t>(lastPageOnScreenMs_),
+          static_cast<uint8_t>(renderer.getHeldOrientation())};
+}
+
+bool EpubReaderActivity::handleReaderWordHold() {
+#if !CP_TOUCH_UI
+  return false;
+#else
+  unsigned long heldMs = 0;
+  if (!mappedInput.hasTouch() || !mappedInput.screenTouchCandidateHeldMs(heldMs)) {
+    dictionaryHold_.reset();
+    return false;
+  }
+  int x = 0;
+  int y = 0;
+  const auto orientation = static_cast<touchtransform::Orientation>(renderer.getHeldOrientation());
+  const bool longPress = mappedInput.peekScreenLongPressIn(orientation, x, y);
   {
-    RenderLock lock(*this);
-    if (!section) return;
+    // A completed hold must not fall through to a chapter shortcut merely
+    // because a background render currently owns the mutex.
+    RenderLock lock(longPress ? RenderLock::Mode::Blocking : RenderLock::Mode::Try);
+    if (!lock.ownsLock()) return false;
+    // The wait may outlive the finger or a page refresh. Sample the age again
+    // alongside the page stamp rather than compare an old duration to new time.
+    if (!mappedInput.screenTouchCandidateHeldMs(heldMs)) {
+      dictionaryHold_.reset();
+      if (longPress) mappedInput.suppressTouchContact();
+      return longPress;
+    }
+    const bool ready = section && section->currentPage >= 0 && section->currentPage < section->pageCount &&
+                       lastRenderedSpineIndex_ == currentSpineIndex && lastRenderedPageIndex_ == section->currentPage;
+    dictionaryHold_.observe(true, ready, dictionaryTouchPage(), static_cast<uint32_t>(millis()),
+                            static_cast<uint32_t>(heldMs));
+  }
+  if (!longPress) return false;
+  if (buttonEvents.isGestureInFlight()) {
+    dictionaryHold_.reset();
+    mappedInput.suppressTouchContact();
+    return true;  // an explicit physical button wins over the simultaneous hold
+  }
+  // Revalidate after loading/measuring under exclusive render access. An exact
+  // word hit wins over zone actions; blank space leaves those actions untouched.
+  const bool handled = openDictionary(x, y);
+  if (handled) mappedInput.suppressTouchContact();
+  return handled;
+#endif
+}
+
+bool EpubReaderActivity::openDictionary(const int touchX, const int touchY) {
+  const bool direct = touchX >= 0 && touchY >= 0;
+  std::unique_ptr<DictionaryWordSelectActivity> selection;
+  {
+    // A renderer may yield its mutex while the waveform runs. Wait for that
+    // entire pass before loading/measuring a page through its shared font cache.
+    RenderLock lock{RenderLock::ExclusiveActivityAccess{}};
+    if (!section) return true;
+    unsigned long heldMs = 0;
+    if (direct && (!mappedInput.screenTouchCandidateHeldMs(heldMs) || !dictionaryHold_.consume(dictionaryTouchPage())))
+      return true;
+
+    // The menu still opens dictionary settings even on a page with no words.
+    // A touch hold must first prove there is a word under the finger.
+    if (direct || SETTINGS.dictionaryName[0] != '\0') {
+      const RenderLayout layout = computeRenderLayout();
+      const int effectiveFontId = getEffectiveReaderFontId();
+      auto page = section->hasActiveBuild()
+                      ? section->loadPageFromActiveBuild(static_cast<uint16_t>(section->currentPage))
+                      : section->loadPageFromSectionFile();
+      if (!page) {
+        LOG_ERR("ERS", "Dictionary: could not load the current page");
+        return true;
+      }
+      // Same per-page vectors as menu selection, allocated only after a hold.
+      // Reusing them preserves styled fragments, dash splits and joined hyphens.
+      selection = std::make_unique<DictionaryWordSelectActivity>(renderer, mappedInput, std::move(page),
+                                                                 effectiveFontId, layout.marginLeft, layout.marginTop);
+      if (direct && !selection->prepareLookupAt(touchX, touchY)) return false;
+    }
   }
 
+  suspendBackgroundWork();
   if (SETTINGS.dictionaryName[0] == '\0') {
-    // Send the user somewhere they can act rather than showing a popup that
-    // only tells them what is missing.
-    suspendBackgroundWork();
+    // First-use configuration; repeat the hold after choosing a dictionary.
+    selection.reset();
     startActivityForResult(std::make_unique<DictionarySelectionActivity>(renderer, mappedInput),
                            [this](const ActivityResult&) {
                              resumeBackgroundWork();
                              requestUpdate();
                            });
-    return;
+    return true;
   }
-
-  // During an active build the on-disk LUT is not written yet, so the page has
-  // to come from the in-memory one -- the same choice the pre-render pass makes.
-  std::unique_ptr<Page> page;
-  RenderLayout layout{};
-  int effectiveFontId = 0;
-  {
-    RenderLock lock(*this);
-    if (!section) return;
-    // Capture the page and its geometry from the same locked reader state.
-    layout = computeRenderLayout();
-    effectiveFontId = getEffectiveReaderFontId();
-    page = section->hasActiveBuild() ? section->loadPageFromActiveBuild(static_cast<uint16_t>(section->currentPage))
-                                     : section->loadPageFromSectionFile();
-  }
-  if (!page) {
-    LOG_ERR("ERS", "Dictionary: could not load the current page");
-    return;
-  }
-
-  // Before startActivityForResult, which only hands back the borrowed buffer:
-  // the overlay wants the heap a completed look-ahead section is sitting on.
-  suspendBackgroundWork();
-  startActivityForResult(
-      std::make_unique<DictionaryWordSelectActivity>(renderer, mappedInput, std::move(page), effectiveFontId,
-                                                     layout.marginLeft, layout.marginTop),
-      [this](const ActivityResult&) {
-        resumeBackgroundWork();
-        requestUpdate();
-      });
+  startActivityForResult(std::move(selection), [this](const ActivityResult&) {
+    resumeBackgroundWork();
+    requestUpdate();
+  });
+  return true;
 }
 
 void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action) {
@@ -5913,7 +5964,9 @@ void EpubReaderActivity::displayBuildPage(RenderLock& lock, const Page& page, co
 
 uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int orientedMarginTop,
                                                    const int orientedMarginRight, const int orientedMarginBottom,
-                                                   const int orientedMarginLeft) {
+                                                   const int orientedMarginLeft, const bool forCapture) {
+  // A software capture is a BW reconstruction, never a new panel/gray-plane update.
+  if (forCapture) renderer.setRenderMode(GfxRenderer::BW);
   auto* fcm = renderer.getFontCacheManager();
   fcm->resetStats();
 
@@ -5939,7 +5992,8 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
   // before it returns and the display consumes them at the page turn.
   preRenderedPlanesStaged_ = false;
   std::unique_ptr<uint8_t[]> capLsb, capMsb;
-  const bool wantCapture = renderer.supportsGrayFrame() && getEffectiveTextAntiAliasing() && !page.hasImages();
+  const bool wantCapture =
+      !forCapture && renderer.supportsGrayFrame() && getEffectiveTextAntiAliasing() && !page.hasImages();
   if (wantCapture) {
     const size_t planeBytes = static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight();
     capLsb = makeUniqueNoThrow<uint8_t[]>(planeBytes);
@@ -5955,7 +6009,16 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
   }
 
   renderer.clearScreen();
-  page.render(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop);
+  if (forCapture && section->hasActiveBuild()) {
+    // Match displayBuildPage: cached images are cheap, but an active build must not decode.
+    ImageBlock::PlaceholderOnlyScope placeholders;
+    page.render(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop,
+                /*forceLoadLargeImages=*/false, /*monochromeOutput=*/true);
+  } else {
+    const bool effectiveForceLoad = !forCapture || forceLoadLargeImages || !SETTINGS.largeImagePlaceholder;
+    page.render(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop, effectiveForceLoad,
+                /*monochromeOutput=*/true);
+  }
   renderer.endGrayCapture();
   if (capLsb) {
     renderer.copyGrayscaleLsbBuffers(capLsb.get());
@@ -6127,8 +6190,8 @@ void EpubReaderActivity::appendDebugState(std::string& out) const {
   out += " page=" + std::to_string(page) + "/" + std::to_string(pages);
 }
 
-void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered() {
-  if (!preRenderedPage.ready || !section || !epub) {
+void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered(const bool forCapture) {
+  if ((!forCapture && !preRenderedPage.ready) || !section || !epub || !renderer.getFrameBuffer()) {
     return;
   }
 
@@ -6142,18 +6205,31 @@ void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered() {
   orientedMarginRight += SETTINGS.screenMargin;
   orientedMarginBottom += std::max(static_cast<int>(SETTINGS.screenMargin), statusBarBottomHeight);
 
-  auto p = section->loadPageFromSectionFile();
+  if (forCapture) {
+    // The caller already synchronized the write buffer; it no longer owns the next page,
+    // even if the current page cannot be loaded. Never let a later turn trust stale pixels.
+    preRenderedPage.ready = false;
+    preRenderedPlanesStaged_ = false;
+    pendingPreRender = false;
+    usePreRenderedBuffer = false;
+  }
+  auto p = forCapture && section->hasActiveBuild()
+               ? section->loadPageFromActiveBuild(static_cast<uint16_t>(section->currentPage))
+               : section->loadPageFromSectionFile();
   if (!p) {
     return;
   }
-  renderPageContentOnly(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+  renderPageContentOnly(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft,
+                        forCapture);
+  // Capture chrome without marking a clock/battery/page change as physically displayed.
+  if (forCapture) renderStatusBar(/*recordDisplayed=*/false);
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
   pendingPreRender = false;
   usePreRenderedBuffer = false;
 }
 
-void EpubReaderActivity::renderStatusBar() const {
+void EpubReaderActivity::renderStatusBar(const bool recordDisplayed) const {
   // Calculate progress in book. During an active section build pageCount only reflects pages
   // built so far, not the final chapter length, so show a byte-based estimate ("page X of ~Y")
   // instead of the misleading watermark. estimatedTotalPages() returns 0 while it's still too
@@ -6167,8 +6243,10 @@ void EpubReaderActivity::renderStatusBar() const {
   // The page counter and the chapter progress bar count the whole TOC chapter, which can span
   // several spine items (#325). The book percentage above stays per spine.
   const ChapterPageSpan::Display chapter = chapterPageDisplay();
-  lastStatusBarChapterTotal_ = chapter.total;
-  lastStatusBarChapterApprox_ = chapter.approximate;
+  if (recordDisplayed) {
+    lastStatusBarChapterTotal_ = chapter.total;
+    lastStatusBarChapterApprox_ = chapter.approximate;
+  }
 
   std::string title;
 
@@ -6204,13 +6282,15 @@ void EpubReaderActivity::renderStatusBar() const {
   renderBackgroundDebugOverlay();
 #endif
 
-  lastStatusBarPage = currentPage;
-  lastStatusBarBattery = SETTINGS.statusBarBattery ? static_cast<int>(powerManager.getBatteryPercentage()) : -1;
-  if (SETTINGS.useClock && SETTINGS.statusBarClock && HalClock::isSynced()) {
-    const time_t now = HalClock::now();
-    lastStatusBarClockMinute = now > 0 ? static_cast<int>(now / 60) : -1;
-  } else {
-    lastStatusBarClockMinute = -1;
+  if (recordDisplayed) {
+    lastStatusBarPage = currentPage;
+    lastStatusBarBattery = SETTINGS.statusBarBattery ? static_cast<int>(powerManager.getBatteryPercentage()) : -1;
+    if (SETTINGS.useClock && SETTINGS.statusBarClock && HalClock::isSynced()) {
+      const time_t now = HalClock::now();
+      lastStatusBarClockMinute = now > 0 ? static_cast<int>(now / 60) : -1;
+    } else {
+      lastStatusBarClockMinute = -1;
+    }
   }
 }
 

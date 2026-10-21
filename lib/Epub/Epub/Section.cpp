@@ -32,7 +32,9 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 92;  // v92: fractional glyph ink bounds; v90: combined visible/raw source LUT,
+constexpr uint8_t SECTION_FILE_VERSION = 94;  // v94: retained fractional advances, native authored caps, variable kerning,
+                                              // and complete justification remainders; v93: final-grid outline bounds;
+                                              // v92: fractional glyph ink bounds; v90: combined visible/raw source LUT,
                                               // upstream token boundaries and publisher layout v78: a span indent (poem
                                               // line shape) gives way before its line wraps; v77 pages of such poems
                                               // carry the wrapped lines v77: the status byte records a heap-degraded

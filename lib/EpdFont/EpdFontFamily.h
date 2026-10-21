@@ -28,6 +28,7 @@ class EpdFontFamily {
   const EpdFontData* getData(Style style = REGULAR) const;
   EpdGlyphRef getGlyph(uint32_t cp, Style style = REGULAR) const;
   uint32_t resolveCaps(uint32_t cp, Style style, float& scale) const;
+  bool rasterGlyph(uint32_t cp, Style style, float scale, int8_t phase, EpdRasterGlyph& out) const;
   int16_t getKerning(uint32_t leftCp, uint32_t rightCp, Style style = REGULAR) const;
   uint32_t applyLigatures(uint32_t cp, const char*& text, Style style = REGULAR) const;
   /// Asks the provider of each style in `styleMask` (bit i = Style i) to prepare `utf8Text`; each font

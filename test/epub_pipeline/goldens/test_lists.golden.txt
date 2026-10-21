@@ -96,25 +96,25 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=•
    W x=36 s=0 z=100 t=India
    W x=93 s=0 z=100 t=is
-   W x=119 s=0 z=100 t=a
-   W x=142 s=0 z=100 t=list
-   W x=187 s=0 z=100 t=item
-   W x=233 s=0 z=100 t=long
-   W x=287 s=0 z=100 t=enough
-   W x=364 s=0 z=100 t=to
-   W x=397 s=0 z=100 t=wrap
+   W x=120 s=0 z=100 t=a
+   W x=143 s=0 z=100 t=list
+   W x=189 s=0 z=100 t=item
+   W x=235 s=0 z=100 t=long
+   W x=290 s=0 z=100 t=enough
+   W x=367 s=0 z=100 t=to
+   W x=401 s=0 z=100 t=wrap
   LINE y=642 x=27 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=onto
    W x=52 s=0 z=100 t=a
    W x=71 s=0 z=100 t=second
    W x=134 s=0 z=100 t=line,
    W x=184 s=0 z=100 t=and
-   W x=222 s=0 z=100 t=every
-   W x=275 s=0 z=100 t=line
-   W x=317 s=0 z=100 t=of
-   W x=346 s=0 z=100 t=it
-   W x=369 s=0 z=100 t=has
-   W x=409 s=0 z=100 t=to
+   W x=223 s=0 z=100 t=every
+   W x=276 s=0 z=100 t=line
+   W x=318 s=0 z=100 t=of
+   W x=347 s=0 z=100 t=it
+   W x=370 s=0 z=100 t=has
+   W x=411 s=0 z=100 t=to
   LINE y=666 x=27 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=start
    W x=55 s=0 z=100 t=at

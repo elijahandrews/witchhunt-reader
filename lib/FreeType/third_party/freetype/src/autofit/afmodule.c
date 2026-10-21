@@ -424,7 +424,16 @@
   FT_CALLBACK_DEF( void )
   af_autofitter_done( FT_Module  ft_module )      /* AF_Module */
   {
-    FT_UNUSED( ft_module );
+    AF_Module  module = (AF_Module)ft_module;
+    FT_Memory  memory = module->root.memory;
+
+
+    if ( module->scratch )
+    {
+      af_glyph_hints_done( &module->scratch->glyph_hints );
+      af_glyph_hints_done( &module->scratch->metrics_hints );
+      FT_FREE( module->scratch );
+    }
 
 #if defined( FT_CONFIG_OPTION_USE_HARFBUZZ )         && \
     defined( FT_CONFIG_OPTION_USE_HARFBUZZ_DYNAMIC )
@@ -449,6 +458,10 @@
 
     FT_Error   error  = FT_Err_Ok;
     FT_Memory  memory = module->root.memory;
+
+
+    if ( !module->scratch && FT_NEW( module->scratch ) )
+      return error;
 
 #ifdef FT_DEBUG_AUTOFIT
 
@@ -486,8 +499,8 @@
 
 #else /* !FT_DEBUG_AUTOFIT */
 
-    AF_GlyphHintsRec  hints[1];
-    AF_LoaderRec      loader[1];
+    AF_GlyphHints  hints = &module->scratch->glyph_hints;
+    AF_LoaderRec   loader[1];
 
     FT_UNUSED( size );
 

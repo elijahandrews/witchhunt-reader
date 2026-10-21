@@ -113,6 +113,8 @@
       FT_Memory  memory = font->memory;
 
 
+      FT_FREE( font->interpStorage[0] );
+      FT_FREE( font->interpStorage[1] );
       FT_FREE( font->blend.lastNDV );
       FT_FREE( font->blend.BV );
     }

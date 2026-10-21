@@ -7,9 +7,9 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=VISIBLEBEFORE
    W x=169 s=0 z=100 t=the
    W x=222 s=0 z=100 t=sentence
-   W x=319 s=0 z=100 t=goes
-   W x=382 s=0 z=100 t=on
-   W x=427 s=0 z=100 t=and
+   W x=320 s=0 z=100 t=goes
+   W x=383 s=0 z=100 t=on
+   W x=429 s=0 z=100 t=and
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=VISIBLEAFTER
    W x=120 s=0 z=100 t=it
@@ -83,11 +83,11 @@ SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=122 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=VISIBLEEIGHT
    W x=141 s=0 z=100 t=the
-   W x=182 s=0 z=100 t=image
-   W x=240 s=0 z=100 t=above
-   W x=301 s=0 z=100 t=survives
-   W x=387 s=0 z=100 t=its
-   W x=422 s=0 z=100 t=tiny
+   W x=183 s=0 z=100 t=image
+   W x=241 s=0 z=100 t=above
+   W x=303 s=0 z=100 t=survives
+   W x=389 s=0 z=100 t=its
+   W x=425 s=0 z=100 t=tiny
   LINE y=146 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=wrapper.
 SPINE 4 href=OEBPS/chapter5.xhtml pages=1 truncated=0 cssFallback=0
@@ -128,14 +128,14 @@ SPINE 6 href=OEBPS/chapter7.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=18 s=0 z=100 t=A
    W x=33 s=0 z=100 t=control
-   W x=109 s=0 z=100 t=chapter:
-   W x=188 s=0 z=100 t=every
-   W x=241 s=0 z=100 t=word
-   W x=282 s=0 z=100 t=in
-   W x=306 s=0 z=100 t=it
-   W x=329 s=0 z=100 t=must
-   W x=376 s=0 z=100 t=appear
-   W x=436 s=0 z=100 t=in
+   W x=110 s=0 z=100 t=chapter:
+   W x=190 s=0 z=100 t=every
+   W x=244 s=0 z=100 t=word
+   W x=285 s=0 z=100 t=in
+   W x=310 s=0 z=100 t=it
+   W x=334 s=0 z=100 t=must
+   W x=382 s=0 z=100 t=appear
+   W x=443 s=0 z=100 t=in
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=the
    W x=37 s=0 z=100 t=golden.

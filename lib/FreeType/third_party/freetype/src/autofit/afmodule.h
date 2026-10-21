@@ -23,6 +23,8 @@
 #include <freetype/ftmodapi.h>
 
 #include "ft-hb.h"
+#include "aflatin.h"
+#include "afcjk.h"
 
 FT_BEGIN_HEADER
 
@@ -32,9 +34,27 @@ FT_BEGIN_HEADER
    * autofitter's global data.
    */
 
+  /* Witch-hunt: glyph hinting can discover script metrics recursively, */
+  /* so those two operations need distinct bounded hint workspaces.     */
+  /* The metrics union is shared only between sequential writing systems. */
+  typedef struct  AF_ModuleScratchRec_
+  {
+    AF_GlyphHintsRec  glyph_hints;
+    AF_GlyphHintsRec  metrics_hints;
+    union
+    {
+      AF_LatinMetricsRec  latin;
+      AF_CJKMetricsRec    cjk;
+    } metrics;
+
+  } AF_ModuleScratchRec, *AF_ModuleScratch;
+
+
   typedef struct  AF_ModuleRec_
   {
     FT_ModuleRec  root;
+
+    AF_ModuleScratch  scratch;  /* lazy, per-module FT_Memory allocation */
 
     FT_UInt       fallback_style;
     AF_Script     default_script;

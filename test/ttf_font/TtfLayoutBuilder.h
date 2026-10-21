@@ -29,6 +29,7 @@ struct LayoutLookup {
   bool extension = false;  // wrapped in an Extension subtable (GPOS type 9, GSUB type 7)
   std::vector<PairSubtable> pairSubtables;
   std::vector<std::pair<std::vector<uint16_t>, uint16_t>> ligatures;  // GSUB: components (first included), glyph
+  std::vector<std::pair<uint16_t, uint16_t>> substitutions;           // GSUB type 1: original, alternate
 };
 
 struct LayoutFeature {
@@ -179,6 +180,20 @@ inline Bytes layoutTable(const std::vector<LayoutScript>& scripts, const std::ve
     const size_t at = lookupList.size();
     std::vector<Bytes> subtables;
     if (lookup.type == 4 && !lookup.ligatures.empty()) subtables.push_back(detail::ligatureSubtable(lookup.ligatures));
+    if (lookup.type == 1 && !lookup.substitutions.empty()) {
+      Bytes sub;
+      put16(sub, 2);
+      put16(sub, 6 + 2 * lookup.substitutions.size());
+      put16(sub, lookup.substitutions.size());
+      std::vector<uint16_t> originals;
+      for (const auto& pair : lookup.substitutions) {
+        put16(sub, pair.second);
+        originals.push_back(pair.first);
+      }
+      const Bytes cov = detail::coverage(originals);
+      sub.insert(sub.end(), cov.begin(), cov.end());
+      subtables.push_back(std::move(sub));
+    }
     for (const auto& p : lookup.pairSubtables) subtables.push_back(detail::pairSubtable(p));
     put16(lookupList, lookup.extension ? (gsub ? 7 : 9) : lookup.type);
     put16(lookupList, 0);

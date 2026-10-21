@@ -297,6 +297,12 @@ bool MappedInputManager::wasScreenTouchDown(int& x, int& y) const {
   return true;
 }
 
+bool MappedInputManager::screenTouchCandidateHeldMs(unsigned long& heldMs) const {
+  float nx = 0.0f;
+  float ny = 0.0f;
+  return rawTapCandidate(nx, ny, heldMs);
+}
+
 bool MappedInputManager::peekScreenLongPressIn(const touchtransform::Orientation orientation, int& x, int& y) const {
   float nx = 0.0f;
   float ny = 0.0f;

@@ -16,6 +16,8 @@ class GfxRenderer;
 class BuildArena;
 
 class ParsedText {
+  friend struct ParsedTextTestAccess;
+
  public:
   enum class LineProcessResult {
     Accepted,

@@ -9,22 +9,22 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=A
    W x=32 s=0 z=100 t=rule
    W x=75 s=0 z=100 t=on
-   W x=104 s=0 z=100 t=the
-   W x=141 s=0 z=100 t=link
-   W x=181 s=0 z=100 t=alone
-   W x=240 s=0 z=100 t=lifts
-   W x=290 s=0 z=100 t=this
-   W x=333 s=0 z=100 t=reference
-   W x=413 s=20 z=50 t=1
-   W x=419 s=2 z=100 t=(The
+   W x=105 s=0 z=100 t=the
+   W x=142 s=0 z=100 t=link
+   W x=182 s=0 z=100 t=alone
+   W x=242 s=0 z=100 t=lifts
+   W x=292 s=0 z=100 t=this
+   W x=335 s=0 z=100 t=reference
+   W x=415 s=20 z=50 t=1
+   W x=422 s=2 z=100 t=(The
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=2 z=100 t=first
    W x=51 s=2 z=100 t=note,
-   W x=109 s=2 z=100 t=reached
-   W x=182 s=2 z=100 t=from
-   W x=230 s=2 z=100 t=a
-   W x=250 s=2 z=100 t=class-styled
-   W x=366 s=2 z=100 t=superscript
+   W x=110 s=2 z=100 t=reached
+   W x=184 s=2 z=100 t=from
+   W x=233 s=2 z=100 t=a
+   W x=254 s=2 z=100 t=class-styled
+   W x=371 s=2 z=100 t=superscript
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=2 z=100 t=link.)
    W x=64 s=0 z=100 t=clear
@@ -34,16 +34,16 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=1 truncated=0 cssFallback=0
    W x=273 s=0 z=100 t=and
    W x=312 s=0 z=100 t=it
    W x=336 s=0 z=100 t=should
-   W x=405 s=0 z=100 t=shrink
+   W x=406 s=0 z=100 t=shrink
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=the
    W x=40 s=0 z=100 t=way
    W x=75 s=0 z=100 t=a
    W x=96 s=0 z=100 t=sup-wrapped
-   W x=195 s=0 z=100 t=marker
-   W x=259 s=0 z=100 t=does.
-   W x=316 s=0 z=100 t=The
-   W x=352 s=0 z=100 t=surrounding
+   W x=196 s=0 z=100 t=marker
+   W x=260 s=0 z=100 t=does.
+   W x=317 s=0 z=100 t=The
+   W x=354 s=0 z=100 t=surrounding
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=sentence
    W x=87 s=0 z=100 t=must
@@ -87,31 +87,31 @@ SPINE 1 href=OEBPS/chapter2.xhtml pages=1 truncated=0 cssFallback=0
    W x=0 s=2 z=100 t=(The
    W x=52 s=2 z=100 t=second
    W x=122 s=2 z=100 t=note,
-   W x=186 s=2 z=100 t=whose
-   W x=248 s=2 z=100 t=caller
-   W x=316 s=2 z=100 t=carries
-   W x=389 s=2 z=100 t=its
-   W x=428 s=2 z=100 t=own
+   W x=187 s=2 z=100 t=whose
+   W x=249 s=2 z=100 t=caller
+   W x=318 s=2 z=100 t=carries
+   W x=391 s=2 z=100 t=its
+   W x=431 s=2 z=100 t=own
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=2 z=100 t=font-size.)
    W x=113 s=0 z=100 t=so
-   W x=140 s=0 z=100 t=the
-   W x=177 s=0 z=100 t=50%
-   W x=213 s=0 z=100 t=default
-   W x=288 s=0 z=100 t=has
-   W x=327 s=0 z=100 t=to
-   W x=355 s=0 z=100 t=give
-   W x=399 s=0 z=100 t=way
-   W x=431 s=0 z=100 t=to
+   W x=141 s=0 z=100 t=the
+   W x=179 s=0 z=100 t=50%
+   W x=216 s=0 z=100 t=default
+   W x=291 s=0 z=100 t=has
+   W x=331 s=0 z=100 t=to
+   W x=360 s=0 z=100 t=give
+   W x=405 s=0 z=100 t=way
+   W x=438 s=0 z=100 t=to
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=the
    W x=39 s=0 z=100 t=stylesheet
-   W x=141 s=0 z=100 t=rather
-   W x=208 s=0 z=100 t=than
-   W x=261 s=0 z=100 t=override
-   W x=341 s=0 z=100 t=it.
-   W x=375 s=0 z=100 t=Body
-   W x=420 s=0 z=100 t=text
+   W x=142 s=0 z=100 t=rather
+   W x=209 s=0 z=100 t=than
+   W x=263 s=0 z=100 t=override
+   W x=343 s=0 z=100 t=it.
+   W x=378 s=0 z=100 t=Body
+   W x=424 s=0 z=100 t=text
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=either
    W x=60 s=0 z=100 t=side
@@ -129,13 +129,13 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=Subscripted
    W x=117 s=0 z=100 t=callers
-   W x=187 s=0 z=100 t=are
-   W x=223 s=0 z=100 t=rarer
-   W x=275 s=0 z=100 t=but
-   W x=309 s=0 z=100 t=legal
-   W x=359 s=36 z=50 t=3
-   W x=367 s=2 z=100 t=(The
-   W x=412 s=2 z=100 t=third
+   W x=188 s=0 z=100 t=are
+   W x=224 s=0 z=100 t=rarer
+   W x=277 s=0 z=100 t=but
+   W x=311 s=0 z=100 t=legal
+   W x=361 s=36 z=50 t=3
+   W x=370 s=2 z=100 t=(The
+   W x=416 s=2 z=100 t=third
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=2 z=100 t=note,
    W x=61 s=2 z=100 t=reached
@@ -144,18 +144,18 @@ SPINE 2 href=OEBPS/chapter3.xhtml pages=1 truncated=0 cssFallback=0
    W x=211 s=2 z=100 t=subscripted
    W x=311 s=2 z=100 t=link.)
    W x=378 s=0 z=100 t=and
-   W x=420 s=0 z=100 t=take
+   W x=421 s=0 z=100 t=take
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=the
    W x=38 s=0 z=100 t=same
-   W x=85 s=0 z=100 t=path
-   W x=132 s=0 z=100 t=through
-   W x=215 s=0 z=100 t=the
-   W x=253 s=0 z=100 t=parser,
-   W x=320 s=0 z=100 t=so
-   W x=348 s=0 z=100 t=they
-   W x=394 s=0 z=100 t=pin
-   W x=424 s=0 z=100 t=the
+   W x=86 s=0 z=100 t=path
+   W x=133 s=0 z=100 t=through
+   W x=217 s=0 z=100 t=the
+   W x=255 s=0 z=100 t=parser,
+   W x=323 s=0 z=100 t=so
+   W x=351 s=0 z=100 t=they
+   W x=398 s=0 z=100 t=pin
+   W x=429 s=0 z=100 t=the
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=other
    W x=57 s=0 z=100 t=direction
@@ -181,33 +181,33 @@ SPINE 3 href=OEBPS/chapter4.xhtml pages=1 truncated=0 cssFallback=0
    W x=251 s=0 z=100 t=baseline
    W x=330 s=0 z=100 t=inside
    W x=387 s=0 z=100 t=a
-   W x=407 s=0 z=100 t=raised
+   W x=408 s=0 z=100 t=raised
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=15
    W x=0 s=0 z=100 t=run
    W x=30 s=16 z=50 t=lifted
    W x=61 s=4 z=50 t=4
    W x=71 s=18 z=50 t=(The
-   W x=95 s=18 z=50 t=fourth
-   W x=132 s=18 z=50 t=note,
-   W x=162 s=18 z=50 t=whose
-   W x=191 s=18 z=50 t=caller
-   W x=223 s=18 z=50 t=cancels
-   W x=260 s=18 z=50 t=the
-   W x=281 s=18 z=50 t=surrounding
-   W x=339 s=18 z=50 t=sup.)
-   W x=368 s=16 z=50 t=back
-   W x=390 s=16 z=50 t=down
-   W x=414 s=0 z=100 t=must
+   W x=96 s=18 z=50 t=fourth
+   W x=133 s=18 z=50 t=note,
+   W x=164 s=18 z=50 t=whose
+   W x=193 s=18 z=50 t=caller
+   W x=226 s=18 z=50 t=cancels
+   W x=263 s=18 z=50 t=the
+   W x=285 s=18 z=50 t=surrounding
+   W x=343 s=18 z=50 t=sup.)
+   W x=373 s=16 z=50 t=back
+   W x=395 s=16 z=50 t=down
+   W x=420 s=0 z=100 t=must
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=drop
    W x=41 s=0 z=100 t=back
-   W x=81 s=0 z=100 t=to
-   W x=110 s=0 z=100 t=the
-   W x=148 s=0 z=100 t=baseline
-   W x=226 s=0 z=100 t=instead
-   W x=298 s=0 z=100 t=of
-   W x=327 s=0 z=100 t=inheriting
-   W x=424 s=0 z=100 t=the
+   W x=82 s=0 z=100 t=to
+   W x=111 s=0 z=100 t=the
+   W x=150 s=0 z=100 t=baseline
+   W x=229 s=0 z=100 t=instead
+   W x=301 s=0 z=100 t=of
+   W x=331 s=0 z=100 t=inheriting
+   W x=429 s=0 z=100 t=the
   LINE y=110 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=sup,
    W x=40 s=0 z=100 t=which
@@ -227,7 +227,7 @@ SPINE 4 href=OEBPS/notes.xhtml pages=1 truncated=0 cssFallback=0
    W x=186 s=0 z=100 t=reached
    W x=267 s=0 z=100 t=from
    W x=323 s=0 z=100 t=a
-   W x=351 s=0 z=100 t=class-styled
+   W x=352 s=0 z=100 t=class-styled
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=superscript
    W x=95 s=0 z=100 t=link.
@@ -235,11 +235,11 @@ SPINE 4 href=OEBPS/notes.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=The
    W x=58 s=0 z=100 t=second
    W x=127 s=0 z=100 t=note,
-   W x=190 s=0 z=100 t=whose
-   W x=251 s=0 z=100 t=caller
-   W x=318 s=0 z=100 t=carries
-   W x=390 s=0 z=100 t=its
-   W x=428 s=0 z=100 t=own
+   W x=191 s=0 z=100 t=whose
+   W x=252 s=0 z=100 t=caller
+   W x=320 s=0 z=100 t=carries
+   W x=392 s=0 z=100 t=its
+   W x=431 s=0 z=100 t=own
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=font-size.
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=8
@@ -254,11 +254,11 @@ SPINE 4 href=OEBPS/notes.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=The
    W x=62 s=0 z=100 t=fourth
-   W x=142 s=0 z=100 t=note,
-   W x=209 s=0 z=100 t=whose
-   W x=274 s=0 z=100 t=caller
-   W x=345 s=0 z=100 t=cancels
-   W x=426 s=0 z=100 t=the
+   W x=143 s=0 z=100 t=note,
+   W x=210 s=0 z=100 t=whose
+   W x=276 s=0 z=100 t=caller
+   W x=347 s=0 z=100 t=cancels
+   W x=429 s=0 z=100 t=the
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=surrounding
    W x=112 s=0 z=100 t=sup.

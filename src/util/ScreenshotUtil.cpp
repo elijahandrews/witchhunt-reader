@@ -41,11 +41,11 @@ void ScreenshotUtil::service(GfxRenderer& renderer, void (*sendToHost)(const uin
   // until it goes stale (2 s), holding every capture back for nothing.
   if (renderer.isRefreshPending()) return;
   pendingTarget = Target::None;
-  // The write buffer is not the frame on the panel: the reader pre-renders its next page into it, and
-  // after a two-buffer refresh it holds an older frame. The activity first drops what it keeps there
-  // (the reader forgets its pre-render), then the panel's frame is copied in.
-  activityManager.prepareFramebufferForCapture();
+  // Start with the displayed buffer for ordinary screens. The reader repairs it LAST:
+  // background builds can return the secondary seeded from a pre-rendered next page,
+  // so syncing after the activity hook would overwrite its freshly restored current page.
   if (renderer.hasSecondaryBuffer()) renderer.syncWriteBufferFromDisplayed();
+  activityManager.prepareFramebufferForCapture();
   if (target == Target::Host) {
     sendToHost(renderer.getFrameBuffer(), renderer.getBufferSize(), renderer.getDisplayWidth(),
                renderer.getDisplayHeight(), /*busy=*/false);

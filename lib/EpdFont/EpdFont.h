@@ -2,6 +2,7 @@
 #include <algorithm>
 
 #include "EpdFontData.h"
+#include "EpdRasterGlyph.h"
 
 class EpdFont {
   void getTextBounds(const char* string, int startX, int startY, int* minX, int* minY, int* maxX, int* maxY,
@@ -45,6 +46,8 @@ class EpdFont {
     }
     return getGlyphSlow(cp);
   }
+
+  bool rasterGlyph(uint32_t cp, float scale, int8_t phase, EpdRasterGlyph& out) const;
 
   // Applies real small-cap substitutions first. Synthetic fallback returns the
   // uppercase Unicode character and a reduced scale; text itself is unchanged.

@@ -8,13 +8,13 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=1.
    W x=40 s=0 z=100 t=WRAPPER:
-   W x=123 s=0 z=100 t=every
-   W x=175 s=0 z=100 t=line
-   W x=216 s=0 z=100 t=of
-   W x=244 s=0 z=100 t=both
-   W x=290 s=0 z=100 t=stanzas
-   W x=368 s=0 z=100 t=starts
-   W x=432 s=0 z=100 t=at
+   W x=124 s=0 z=100 t=every
+   W x=177 s=0 z=100 t=line
+   W x=219 s=0 z=100 t=of
+   W x=247 s=0 z=100 t=both
+   W x=294 s=0 z=100 t=stanzas
+   W x=373 s=0 z=100 t=starts
+   W x=438 s=0 z=100 t=at
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=the
    W x=40 s=0 z=100 t=same
@@ -62,21 +62,21 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=254 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=2.
    W x=51 s=0 z=100 t=CONTROL:
-   W x=137 s=0 z=100 t=the
-   W x=184 s=0 z=100 t=same
-   W x=240 s=0 z=100 t=indent
-   W x=311 s=0 z=100 t=stated
-   W x=385 s=0 z=100 t=on
-   W x=424 s=0 z=100 t=the
+   W x=138 s=0 z=100 t=the
+   W x=186 s=0 z=100 t=same
+   W x=242 s=0 z=100 t=indent
+   W x=314 s=0 z=100 t=stated
+   W x=389 s=0 z=100 t=on
+   W x=429 s=0 z=100 t=the
   LINE y=278 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=paragraph
    W x=98 s=0 z=100 t=itself,
-   W x=170 s=0 z=100 t=which
-   W x=224 s=0 z=100 t=never
-   W x=284 s=0 z=100 t=lost
-   W x=335 s=0 z=100 t=its
-   W x=371 s=0 z=100 t=inset.
-   W x=437 s=0 z=100 t=It
+   W x=171 s=0 z=100 t=which
+   W x=225 s=0 z=100 t=never
+   W x=286 s=0 z=100 t=lost
+   W x=337 s=0 z=100 t=its
+   W x=374 s=0 z=100 t=inset.
+   W x=441 s=0 z=100 t=It
   LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=must
    W x=46 s=0 z=100 t=still
@@ -105,20 +105,20 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=334 s=0 z=100 t=at
    W x=363 s=0 z=100 t=four,
    W x=419 s=0 z=100 t=so
-   W x=447 s=0 z=100 t=a
+   W x=448 s=0 z=100 t=a
   LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=12
    W x=0 s=0 z=100 t=six
    W x=29 s=0 z=100 t=em
-   W x=55 s=0 z=100 t=hang
-   W x=108 s=0 z=100 t=would
-   W x=161 s=0 z=100 t=put
-   W x=195 s=0 z=100 t=two
-   W x=230 s=0 z=100 t=em
-   W x=256 s=0 z=100 t=of
-   W x=285 s=0 z=100 t=every
-   W x=338 s=0 z=100 t=line
-   W x=380 s=0 z=100 t=off
-   W x=419 s=0 z=100 t=the
+   W x=56 s=0 z=100 t=hang
+   W x=110 s=0 z=100 t=would
+   W x=164 s=0 z=100 t=put
+   W x=199 s=0 z=100 t=two
+   W x=235 s=0 z=100 t=em
+   W x=262 s=0 z=100 t=of
+   W x=292 s=0 z=100 t=every
+   W x=346 s=0 z=100 t=line
+   W x=389 s=0 z=100 t=off
+   W x=429 s=0 z=100 t=the
   LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=panel.
   LINE y=446 x=72 align=0 mult=1.000 hfid=0 words=2
@@ -132,12 +132,12 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=4.
    W x=45 s=0 z=100 t=NEGATIVE
    W x=122 s=0 z=100 t=MARGIN:
-   W x=186 s=0 z=100 t=nothing
-   W x=267 s=0 z=100 t=to
-   W x=297 s=0 z=100 t=pull
-   W x=340 s=0 z=100 t=back
-   W x=381 s=0 z=100 t=into,
-   W x=436 s=0 z=100 t=so
+   W x=187 s=0 z=100 t=nothing
+   W x=268 s=0 z=100 t=to
+   W x=298 s=0 z=100 t=pull
+   W x=342 s=0 z=100 t=back
+   W x=383 s=0 z=100 t=into,
+   W x=439 s=0 z=100 t=so
   LINE y=518 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=this
    W x=43 s=0 z=100 t=line
@@ -156,22 +156,22 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=5.
    W x=48 s=0 z=100 t=BR
    W x=78 s=0 z=100 t=VERSE:
-   W x=151 s=0 z=100 t=one
-   W x=193 s=0 z=100 t=paragraph,
-   W x=298 s=0 z=100 t=so
-   W x=329 s=0 z=100 t=only
-   W x=379 s=0 z=100 t=its
-   W x=414 s=0 z=100 t=first
+   W x=152 s=0 z=100 t=one
+   W x=194 s=0 z=100 t=paragraph,
+   W x=299 s=0 z=100 t=so
+   W x=331 s=0 z=100 t=only
+   W x=381 s=0 z=100 t=its
+   W x=417 s=0 z=100 t=first
   LINE y=590 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=line
    W x=46 s=0 z=100 t=is
    W x=72 s=0 z=100 t=indented
    W x=155 s=0 z=100 t=and
-   W x=197 s=0 z=100 t=the
-   W x=239 s=0 z=100 t=rest
-   W x=286 s=0 z=100 t=keep
-   W x=329 s=0 z=100 t=the
-   W x=371 s=0 z=100 t=paragraph
+   W x=198 s=0 z=100 t=the
+   W x=240 s=0 z=100 t=rest
+   W x=287 s=0 z=100 t=keep
+   W x=330 s=0 z=100 t=the
+   W x=373 s=0 z=100 t=paragraph
   LINE y=614 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=inset.
   LINE y=638 x=36 align=0 mult=1.000 hfid=0 words=2
@@ -189,12 +189,12 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=710 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=6.
    W x=52 s=0 z=100 t=NESTED:
-   W x=133 s=0 z=100 t=the
-   W x=177 s=0 z=100 t=blockquote
-   W x=281 s=0 z=100 t=inset
-   W x=339 s=0 z=100 t=adds
-   W x=389 s=0 z=100 t=to
-   W x=424 s=0 z=100 t=the
+   W x=134 s=0 z=100 t=the
+   W x=179 s=0 z=100 t=blockquote
+   W x=283 s=0 z=100 t=inset
+   W x=342 s=0 z=100 t=adds
+   W x=393 s=0 z=100 t=to
+   W x=429 s=0 z=100 t=the
   LINE y=734 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=stanza
    W x=69 s=0 z=100 t=inset.
@@ -213,18 +213,18 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=180 s=0 z=100 t=paragraph
    W x=277 s=0 z=100 t=follows
    W x=354 s=0 z=100 t=the
-   W x=395 s=0 z=100 t=wrappers
+   W x=396 s=0 z=100 t=wrappers
   LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=above
    W x=60 s=0 z=100 t=and
    W x=100 s=0 z=100 t=must
-   W x=149 s=0 z=100 t=be
-   W x=173 s=0 z=100 t=back
-   W x=215 s=0 z=100 t=at
-   W x=246 s=0 z=100 t=the
-   W x=286 s=0 z=100 t=text
-   W x=331 s=0 z=100 t=edge,
-   W x=385 s=0 z=100 t=indented
+   W x=150 s=0 z=100 t=be
+   W x=174 s=0 z=100 t=back
+   W x=216 s=0 z=100 t=at
+   W x=248 s=0 z=100 t=the
+   W x=288 s=0 z=100 t=text
+   W x=333 s=0 z=100 t=edge,
+   W x=388 s=0 z=100 t=indented
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=only
    W x=46 s=0 z=100 t=by
@@ -235,13 +235,13 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=8.
    W x=41 s=0 z=100 t=BEFORE
-   W x=106 s=0 z=100 t=A
-   W x=121 s=0 z=100 t=WRAPPER:
-   W x=205 s=0 z=100 t=this
-   W x=249 s=0 z=100 t=paragraph
-   W x=343 s=0 z=100 t=is
-   W x=365 s=0 z=100 t=still
-   W x=415 s=0 z=100 t=open
+   W x=107 s=0 z=100 t=A
+   W x=123 s=0 z=100 t=WRAPPER:
+   W x=208 s=0 z=100 t=this
+   W x=253 s=0 z=100 t=paragraph
+   W x=348 s=0 z=100 t=is
+   W x=371 s=0 z=100 t=still
+   W x=422 s=0 z=100 t=open
   LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=when
    W x=51 s=0 z=100 t=the

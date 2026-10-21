@@ -19,11 +19,11 @@ SPINE 0 href=OEBPS/text/chapter1.xhtml pages=2 truncated=0 cssFallback=0
       W x=137 s=0 z=100 t=the
       W x=176 s=0 z=100 t=well
       W x=217 s=0 z=100 t=was
-      W x=252 s=0 z=100 t=very
-      W x=297 s=0 z=100 t=deep,
-      W x=345 s=0 z=100 t=or
-      W x=373 s=0 z=100 t=she
-      W x=411 s=0 z=100 t=fell
+      W x=253 s=0 z=100 t=very
+      W x=298 s=0 z=100 t=deep,
+      W x=346 s=0 z=100 t=or
+      W x=374 s=0 z=100 t=she
+      W x=413 s=0 z=100 t=fell
      LN words=2
       W x=0 s=0 z=100 t=very
       W x=43 s=0 z=100 t=slowly.
@@ -33,11 +33,11 @@ SPINE 0 href=OEBPS/text/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=80 s=0 z=100 t=A
    W x=101 s=0 z=100 t=boxed
    W x=156 s=0 z=100 t=passage
-   W x=237 s=0 z=100 t=with
-   W x=284 s=0 z=100 t=room
-   W x=339 s=0 z=100 t=left
-   W x=390 s=0 z=100 t=for
-   W x=433 s=0 z=100 t=its
+   W x=238 s=0 z=100 t=with
+   W x=285 s=0 z=100 t=room
+   W x=340 s=0 z=100 t=left
+   W x=391 s=0 z=100 t=for
+   W x=435 s=0 z=100 t=its
   LINE y=392 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=picture.
   LINE y=416 x=0 align=0 mult=1.000 hfid=0 words=6

@@ -65,6 +65,10 @@ FT_BEGIN_HEADER
     FT_Memory  memory;
     FT_Error   error;     /* shared error for this instance */
 
+    /* Witch-hunt: bounded interpreter scratch, allocated through FT_Memory. */
+    /* A glyph plus its seac component can coexist; nested seac is rejected. */
+    void*  interpStorage[2];
+
     FT_Bool             isT1;
     FT_Bool             isCFF2;
     CF2_RenderingFlags  renderingFlags;

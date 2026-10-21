@@ -4,6 +4,7 @@
 #include <Gsub.h>
 #include <KernTable.h>
 #include <Memory.h>
+#include <OpenTypeCaps.h>
 
 namespace ttf {
 
@@ -45,10 +46,25 @@ int32_t Kerning::pair(FontBytes& bytes, const Face& face, const uint16_t left, c
 }
 
 uint16_t Ligatures::glyphFor(FontBytes& bytes, const Face& face, const uint32_t codepoint) const {
+  if (codepoint >= EPD_ALTERNATE_GLYPH_BASE) {
+    const uint32_t gid = codepoint - EPD_ALTERNATE_GLYPH_BASE;
+    return gid < face.numGlyphs ? static_cast<uint16_t>(gid) : 0;
+  }
   if (codepoint >= kFirst && codepoint < kFirst + 5 && glyphs[codepoint - kFirst] != 0) {
     return glyphs[codepoint - kFirst];
   }
   return glyphIndex(bytes, face, codepoint);
+}
+
+uint16_t capsGlyph(FontBytes& bytes, const Face& face, const uint32_t codepoint, const uint8_t mode) {
+  if ((mode != 1 && mode != 2) || codepoint >= EPD_ALTERNATE_GLYPH_BASE || !face.gsub || !bytes.data() ||
+      face.gsub > bytes.size() || face.gsubLength > bytes.size() - face.gsub)
+    return 0;
+  const uint16_t original = glyphIndex(bytes, face, codepoint);
+  if (!original) return 0;
+  const uint16_t alternate = outlineCapsSubstitution(bytes.data() + face.gsub, face.gsubLength, original,
+                                                     mode == 1 ? 0x736D6370 : 0x63327363);  // smcp / c2sc
+  return alternate < face.numGlyphs ? alternate : 0;
 }
 
 bool resolveLigatures(FontBytes& bytes, const Face& face, Ligatures* out) {

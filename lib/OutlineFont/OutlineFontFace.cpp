@@ -11,6 +11,7 @@
 #include FT_FREETYPE_H
 #include FT_MODULE_H
 #include FT_MULTIPLE_MASTERS_H
+#include FT_SIZES_H
 #include FT_TRUETYPE_TABLES_H
 #include <algorithm>
 #include <cmath>
@@ -40,13 +41,20 @@ struct alignas(std::max_align_t) Allocation {
   size_t size;
   bool internal;
 };
-int32_t toRasterFp4(FT_Pos x) { return x >= 0 ? int32_t((x + 2) / 4) : -int32_t((-x + 2) / 4); }
+int16_t toRasterFp4(int64_t x) {
+  // Clamp before narrowing or negating: malformed variation deltas can occupy
+  // the full int32 range, and scaling them can exceed FT_Long on the device.
+  x = std::clamp(x, int64_t(INT16_MIN) * 4, int64_t(INT16_MAX) * 4);
+  return x >= 0 ? int16_t((x + 2) / 4) : int16_t(-((-x + 2) / 4));
+}
 }  // namespace
 struct OutlineFontFace::Impl {
   Options options{};
   FT_MemoryRec_ memory{};
   FT_Library library = nullptr;
   FT_Face face = nullptr;
+  FT_Size legacySize = nullptr, rasterSize = nullptr;
+  FT_F26Dot6 rasterEm = 0;
   FT_StreamRec stream{};
   ReadFn read = nullptr;
   void* readCtx = nullptr;
@@ -55,8 +63,10 @@ struct OutlineFontFace::Impl {
   bool allocationFailed = false;
   bool opsz = false, weightAxis = false, italicAxis = false;
   float optical = 0;
-  uint8_t *gsub = nullptr, *gpos = nullptr, *packed = nullptr;
-  size_t gsubSize = 0, gposSize = 0, packedCapacity = 0, packedSize = 0;
+  uint8_t *gsub = nullptr, *gpos = nullptr, *gdef = nullptr, *packed = nullptr;
+  size_t gsubSize = 0, gposSize = 0, gdefSize = 0, packedCapacity = 0, packedSize = 0;
+  int32_t* normalizedCoordinates = nullptr;
+  size_t variationAxisCount = 0;
   uint16_t loaded = 0;
   EpdGlyphRef last{};
   LineMetrics line{};
@@ -66,6 +76,22 @@ struct OutlineFontFace::Impl {
   };
   Cached cache[96]{};
   unsigned next = 0;
+  static constexpr size_t RASTER_BYTES = 32768;
+  static constexpr size_t RASTER_ENTRIES = 512;
+  struct RasterEntry {
+    EpdGlyphRef metrics{};
+    uint16_t gid = 0, em = 0;
+    uint16_t offset = 0, bytes = 0;
+    uint8_t phase = 0;
+  };
+  // One lazy PSRAM allocation avoids per-glyph allocations/fragmentation and is
+  // charged against the same face/shared budget as FreeType and layout tables.
+  struct RasterCache {
+    RasterEntry entries[RASTER_ENTRIES];
+    uint8_t pixels[RASTER_BYTES];
+    size_t count = 0, used = 0;
+  };
+  RasterCache* rasters = nullptr;
   void* allocate(size_t n) {
     if (!n) return nullptr;
     if (n > options.memoryLimit - used || n > SIZE_MAX - sizeof(Allocation)) {
@@ -142,7 +168,10 @@ struct OutlineFontFace::Impl {
     peak = 0;
     if (!std::isfinite(o.logicalPx) || o.logicalPx < 1 || o.logicalPx > 120 || !std::isfinite(o.opticalPoints) ||
         o.opticalPoints < 0 || o.opticalPoints > 512 || bool(o.claimMemory) != bool(o.releaseMemory) ||
-        o.memoryLimit < 16384 || o.memoryLimit > 8 * 1024 * 1024) {
+        o.memoryLimit < 16384 || o.memoryLimit > 8 * 1024 * 1024 ||
+        (o.phaseSteps != 4 && o.phaseSteps != 8 && o.phaseSteps != 16) ||
+        (o.rasterPolicy != RasterPolicy::LegacyBitmap && o.rasterPolicy != RasterPolicy::Oversample2x &&
+         o.rasterPolicy != RasterPolicy::FinalSize)) {
       error = FT_Err_Invalid_Argument;
       return false;
     }
@@ -153,8 +182,9 @@ struct OutlineFontFace::Impl {
     error = FT_New_Library(&memory, &library);
     if (error) return false;
     FT_Add_Default_Modules(library);
-    // This void API ignores individual module allocation failures. In particular,
-    // native CFF without PSHinter can scale its outline twice while keeping advances.
+    // This void API ignores individual module allocation failures. In
+    // particular, native CFF without PSHinter can scale its outline twice while
+    // keeping advances.
     for (const char* module : {"sfnt", "truetype", "cff", "psaux", "psnames", "pshinter", "smooth"
 #if defined(WITCH_FONT_AUTOHINT) && WITCH_FONT_AUTOHINT
                                ,
@@ -181,7 +211,8 @@ struct OutlineFontFace::Impl {
       return false;
     }
     if (!n) return true;
-    if (n > options.tableLimit || gsubSize > options.tableLimit || n > options.tableLimit - gsubSize) {
+    const size_t retained = gsubSize + gposSize + gdefSize;
+    if (retained > options.tableLimit || n > options.tableLimit - retained) {
       error = FT_Err_Array_Too_Large;
       return false;
     }
@@ -201,13 +232,49 @@ struct OutlineFontFace::Impl {
     length = n;
     return true;
   }
+  bool loadGposVariations() {
+    // Static faces and the native adapter's layout-disabled path pay nothing.
+    if (!gpos || !FT_HAS_MULTIPLE_MASTERS(face)) return true;
+    if (!table(FT_MAKE_TAG('G', 'D', 'E', 'F'), gdef, gdefSize)) return false;
+    if (!gdef) return true;
+    FT_MM_Var* axes = nullptr;
+    error = FT_Get_MM_Var(face, &axes);
+    if (error) return false;
+    const unsigned count = axes->num_axis;
+    FT_Done_MM_Var(library, axes);
+    if (!count || count > witchoutline::font::gpos::kMaxVariationAxes) {
+      error = FT_Err_Array_Too_Large;
+      return false;
+    }
+    // FT_Fixed is long (64-bit on some hosts); convert explicitly to our
+    // portable 16.16 context. Both allocations use the face/shared budget.
+    auto* coordinates = static_cast<FT_Fixed*>(allocate(size_t(count) * sizeof(FT_Fixed)));
+    if (!coordinates) {
+      error = FT_Err_Out_Of_Memory;
+      return false;
+    }
+    error = FT_Get_Var_Blend_Coordinates(face, count, coordinates);
+    if (!error) {
+      normalizedCoordinates = static_cast<int32_t*>(allocate(size_t(count) * sizeof(int32_t)));
+      if (!normalizedCoordinates) error = FT_Err_Out_Of_Memory;
+    }
+    if (!error) {
+      // The getter returns the exact instance FreeType uses, including avar
+      // mapping; re-normalizing the requested design values would disagree.
+      for (unsigned axis = 0; axis < count; ++axis)
+        normalizedCoordinates[axis] = int32_t(std::clamp<FT_Fixed>(coordinates[axis], -65536, 65536));
+      variationAxisCount = count;
+    }
+    release(coordinates);
+    return !error;
+  }
   bool finish() {
     if (face->num_glyphs < 1 || face->num_glyphs > 65535 || !FT_IS_SCALABLE(face) ||
         FT_Select_Charmap(face, FT_ENCODING_UNICODE)) {
       error = FT_Err_Invalid_Face_Handle;
       return false;
     }
-    if (FT_HAS_MULTIPLE_MASTERS(face)) {
+    if (options.applyVariations && FT_HAS_MULTIPLE_MASTERS(face)) {
       FT_MM_Var* v = nullptr;
       error = FT_Get_MM_Var(face, &v);
       if (error) return false;
@@ -246,6 +313,7 @@ struct OutlineFontFace::Impl {
     }
     error = FT_Set_Char_Size(face, 0, FT_F26Dot6(std::lround(options.logicalPx * 2 * 64)), 72, 72);
     if (error) return false;
+    legacySize = face->size;
     line.ascender = int((face->size->metrics.ascender + 63) / 64);
     line.descender = int((-face->size->metrics.descender + 63) / 64);
     const int64_t lineHeight = (int64_t(face->size->metrics.height) + 63) / 64;
@@ -255,8 +323,9 @@ struct OutlineFontFace::Impl {
       error = FT_Err_Invalid_Pixel_Size;
       return false;
     }
-    return table(FT_MAKE_TAG('G', 'S', 'U', 'B'), gsub, gsubSize) &&
-           table(FT_MAKE_TAG('G', 'P', 'O', 'S'), gpos, gposSize);
+    return !options.loadLayoutTables ||
+           (table(FT_MAKE_TAG('G', 'S', 'U', 'B'), gsub, gsubSize) &&
+            table(FT_MAKE_TAG('G', 'P', 'O', 'S'), gpos, gposSize) && loadGposVariations());
   }
   FT_Int32 flags() const {
     FT_Int32 f = FT_LOAD_NO_BITMAP | FT_LOAD_RENDER;
@@ -272,8 +341,9 @@ struct OutlineFontFace::Impl {
     if (error) return false;
     auto* g = face->glyph;
     auto& b = g->bitmap;
-    // FreeType linear advances are 16.16 raster pixels. Keep fractional authored
-    // spacing even when native/light hinting snaps the bitmap to pixels.
+    // FreeType linear advances are 16.16 raster pixels. Keep fractional
+    // authored spacing even when native/light hinting snaps the bitmap to
+    // pixels.
     const int64_t linear = g->linearHoriAdvance;
     int32_t adv = linear >= 0 ? int32_t((linear + 2048) / 4096) : -int32_t((-linear + 2048) / 4096);
     if (adv < 0 || adv > 65535 || b.width > 65535 || b.rows > 65535 || g->bitmap_left < INT16_MIN ||
@@ -312,13 +382,21 @@ void OutlineFontFace::close() {
   auto& i = *impl_;
   if (i.face) FT_Done_Face(i.face);
   i.face = nullptr;
+  i.legacySize = i.rasterSize = nullptr;
+  i.rasterEm = 0;
   if (i.library) FT_Done_Library(i.library);
   i.library = nullptr;
   i.release(i.gsub);
   i.release(i.gpos);
+  i.release(i.gdef);
+  i.release(i.normalizedCoordinates);
   i.release(i.packed);
-  i.gsub = i.gpos = i.packed = nullptr;
-  i.gsubSize = i.gposSize = i.packedSize = i.packedCapacity = 0;
+  i.release(i.rasters);
+  i.rasters = nullptr;
+  i.gsub = i.gpos = i.gdef = i.packed = nullptr;
+  i.normalizedCoordinates = nullptr;
+  i.variationAxisCount = 0;
+  i.gsubSize = i.gposSize = i.gdefSize = i.packedSize = i.packedCapacity = 0;
   i.loaded = 0;
   i.last = {};
   i.opsz = i.weightAxis = i.italicAxis = false;
@@ -429,18 +507,162 @@ const uint8_t* OutlineFontFace::bitmap(uint16_t gid, size_t* bytes) {
   if (bytes) *bytes = n;
   return n ? i.packed : nullptr;
 }
+bool OutlineFontFace::rasterAtPpem(uint16_t gid, uint32_t ppem, float scale, int8_t phase, EpdRasterGlyph* out) {
+  if (!ready()) {
+    if (out) *out = {};
+    return false;
+  }
+  // Keep FreeType's float conversion outside the integer-only native TTF
+  // engine.
+  return raster(gid, float(double(ppem) / (double(impl_->options.logicalPx) * 128.0)) * scale, phase, out);
+}
+bool OutlineFontFace::raster(uint16_t gid, float scale, int8_t phase, EpdRasterGlyph* out) {
+  if (out) *out = {};
+  if (!out || !ready() || !gid || gid >= impl_->face->num_glyphs || !std::isfinite(scale) || scale <= 0 || phase < -8 ||
+      phase > 7 || impl_->options.rasterPolicy == RasterPolicy::LegacyBitmap) {
+    return false;
+  }
+  auto& i = *impl_;
+  // Key the actual FreeType size, not a float approximation. The explicit size
+  // ceiling also bounds malicious CSS inputs before any FreeType allocation.
+  const double requestedEm = double(i.options.logicalPx) * 128.0 * scale;
+  if (requestedEm < 64 || requestedEm > 240 * 64) return false;
+  const uint16_t em = uint16_t(std::lround(requestedEm));
+  const int step = 16 / i.options.phaseSteps;
+  const int rounded = phase < 0 ? -((-int(phase) + step / 2) / step) * step : ((int(phase) + step / 2) / step) * step;
+  // Canonical phases are nonnegative. Negative positions reuse the same bitmap
+  // with a one-pixel bearing adjustment, so eight phases really means eight.
+  const uint8_t canonical = uint8_t(rounded < 0 ? rounded + 16 : rounded);
+  const int originShift = rounded < 0 ? -1 : 0;
+  const auto result = [&](const Impl::RasterEntry& c) {
+    out->metrics = c.metrics;
+    if (c.bytes) out->metrics.left = int16_t(out->metrics.left + originShift);
+    out->bytes = c.bytes;
+    out->bitmap = c.bytes ? i.rasters->pixels + c.offset : nullptr;
+  };
+  if (i.rasters) {
+    for (size_t at = 0; at < i.rasters->count; ++at) {
+      const auto& c = i.rasters->entries[at];
+      if (c.gid == gid && c.em == em && c.phase == canonical) {
+        result(c);
+        return true;
+      }
+    }
+  }
+  // A separate FT_Size retains both hinting states while glyph slots stay
+  // shared. Restore the original size and transform on *every* exit; legacy
+  // bitmap()/kerning() must never observe a phase or a different hinting size.
+  struct Restore {
+    Impl& i;
+    ~Restore() {
+      FT_Set_Transform(i.face, nullptr, nullptr);
+      FT_Activate_Size(i.legacySize);
+      i.loaded = 0;
+    }
+  } restore{i};
+  if (!i.rasterSize) {
+    i.error = FT_New_Size(i.face, &i.rasterSize);
+    if (i.error) return false;
+  }
+  i.error = FT_Activate_Size(i.rasterSize);
+  if (i.error) return false;
+  const int density = i.options.rasterPolicy == RasterPolicy::Oversample2x ? 2 : 1;
+  const FT_F26Dot6 sourceEm = FT_F26Dot6(em) * density;
+  if (sourceEm != i.rasterEm) {
+    i.error = FT_Set_Char_Size(i.face, 0, sourceEm, 72, 72);
+    if (i.error) return false;
+    i.rasterEm = sourceEm;
+  }
+  FT_Vector delta{FT_Pos(canonical) * 4 * density, 0};
+  FT_Set_Transform(i.face, nullptr, &delta);
+  i.error = FT_Load_Glyph(i.face, gid, i.flags());
+  if (i.error) return false;
+  auto* g = i.face->glyph;
+  const auto& b = g->bitmap;
+  if (b.pixel_mode != FT_PIXEL_MODE_GRAY || b.num_grays != 256 || b.width > 2048 || b.rows > 2048 ||
+      uint64_t(b.width) * b.rows > 262140 || g->bitmap_left < INT16_MIN || g->bitmap_left > INT16_MAX ||
+      g->bitmap_top < INT16_MIN || g->bitmap_top > INT16_MAX) {
+    i.error = FT_Err_Invalid_Glyph_Format;
+    return false;
+  }
+  // Cover complete final pixels, including source bearings on odd coordinates.
+  // Integer division is explicitly floor/ceil for negative italic overhangs.
+  const auto floorBy = [density](int n) { return n >= 0 ? n / density : -((-n + density - 1) / density); };
+  const auto ceilBy = [density](int n) { return n >= 0 ? (n + density - 1) / density : -((-n) / density); };
+  const int left = floorBy(g->bitmap_left);
+  const int upper = floorBy(-g->bitmap_top);
+  const int width = b.width ? ceilBy(g->bitmap_left + int(b.width)) - left : 0;
+  const int height = b.rows ? ceilBy(-g->bitmap_top + int(b.rows)) - upper : 0;
+  const size_t bytes = (size_t(width) * height + 3) / 4;
+  if (bytes > Impl::RASTER_BYTES || left < INT16_MIN + 1 || left > INT16_MAX || -upper < INT16_MIN ||
+      -upper > INT16_MAX) {
+    i.error = FT_Err_Array_Too_Large;
+    return false;
+  }
+  if (!i.rasters) {
+    void* p = i.allocate(sizeof(Impl::RasterCache));
+    if (!p) {
+      i.error = FT_Err_Out_Of_Memory;
+      return false;
+    }
+    i.rasters = new (p) Impl::RasterCache;
+  }
+  auto& cache = *i.rasters;
+  // Whole-generation eviction is bounded, allocation-free, and preserves the
+  // documented borrowed lifetime (until the next raster request).
+  if (cache.count == Impl::RASTER_ENTRIES || bytes > Impl::RASTER_BYTES - cache.used) {
+    cache.count = cache.used = 0;
+  }
+  auto& c = cache.entries[cache.count++];
+  c.metrics = {nullptr, 0, gid, uint16_t(width), uint16_t(height), int16_t(left), int16_t(-upper), true};
+  c.gid = gid;
+  c.em = em;
+  c.phase = canonical;
+  c.offset = uint16_t(cache.used);
+  c.bytes = uint16_t(bytes);
+  uint8_t* dst = cache.pixels + cache.used;
+  if (bytes) std::memset(dst, 0, bytes);
+  const unsigned denominator = 255 * density * density;
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      unsigned coverage = 0;
+      for (int dy = 0; dy < density; ++dy) {
+        const int sy = (upper + y) * density + dy + g->bitmap_top;
+        if (sy < 0 || unsigned(sy) >= b.rows) continue;
+        const uint8_t* row =
+            b.pitch >= 0 ? b.buffer + size_t(sy) * b.pitch : b.buffer + size_t(b.rows - 1 - sy) * size_t(-b.pitch);
+        for (int dx = 0; dx < density; ++dx) {
+          const int sx = (left + x) * density + dx - g->bitmap_left;
+          if (sx >= 0 && unsigned(sx) < b.width) coverage += row[sx];
+        }
+      }
+      // Preserve all eight coverage bits until the one final 2bpp quantization.
+      const unsigned value = (coverage * 3 + denominator / 2) / denominator;
+      const size_t at = size_t(y) * width + x;
+      dst[at / 4] |= uint8_t(value << (6 - 2 * (at % 4)));
+    }
+  }
+  cache.used += bytes;
+  result(c);
+  return true;
+}
 int16_t OutlineFontFace::kerning(uint16_t l, uint16_t r) {
   if (!ready() || !l || !r) return 0;
   auto& i = *impl_;
-  FT_Pos value = 0;
+  int64_t value = 0;
   if (i.gpos) {
-    int32_t units = witchoutline::font::gpos::PairKernAdjustment(i.gpos, i.gposSize, l, r);
-    value = FT_MulFix(units, i.face->size->metrics.x_scale);
+    const witchoutline::font::gpos::VariationContext variation{i.gdef, i.gdefSize, i.normalizedCoordinates,
+                                                               i.variationAxisCount};
+    int32_t units = witchoutline::font::gpos::PairKernAdjustment(i.gpos, i.gposSize, l, r, &variation);
+    // Match FT_MulFix rounding but retain the wide intermediate through the
+    // final FP4 clamp. Both operands are signed 32-bit fixed-point values.
+    const int64_t product = int64_t(units) * i.face->size->metrics.x_scale;
+    value = product >= 0 ? (product + 32768) / 65536 : -((-product + 32768) / 65536);
   } else {
     FT_Vector delta{};
     if (!FT_Get_Kerning(i.face, l, r, FT_KERNING_UNFITTED, &delta)) value = delta.x;
   }
-  return int16_t(std::clamp(toRasterFp4(value), int32_t(INT16_MIN), int32_t(INT16_MAX)));
+  return toRasterFp4(value);
 }
 uint16_t OutlineFontFace::ligature(const uint16_t* gids, size_t n) {
   if (!ready() || !gids || n < 2 || n > 3) return 0;
@@ -455,6 +677,9 @@ const EpdOutlineFontCallbacks& OutlineFontFace::callbacks() {
       [](void* p, uint16_t g) { return ((OutlineFontFace*)p)->metrics(g); },
       [](void* p, uint16_t g, size_t* n) { return ((OutlineFontFace*)p)->bitmap(g, n); },
       [](void* p, uint16_t l, uint16_t r) { return ((OutlineFontFace*)p)->kerning(l, r); },
-      [](void* p, const uint16_t* g, size_t n) { return ((OutlineFontFace*)p)->ligature(g, n); }};
+      [](void* p, const uint16_t* g, size_t n) { return ((OutlineFontFace*)p)->ligature(g, n); },
+      [](void* p, uint16_t g, float scale, int8_t phase, EpdRasterGlyph* out) {
+        return ((OutlineFontFace*)p)->raster(g, scale, phase, out);
+      }};
   return c;
 }

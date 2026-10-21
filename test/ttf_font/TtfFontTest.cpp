@@ -898,3 +898,15 @@ TEST_F(TtfFontTest, ALigatureKernsAsTheGlyphGsubNames) {
   EXPECT_EQ(-47, ttf->font(kRegular)->getKerning(0xFB01, 'x'));
   EXPECT_EQ(0, ttf->kerning(kRegular, 'i', 'x'));
 }
+
+TEST_F(TtfFontTest, BookerlyKeepsSyntheticSmallCapsInEveryStyle) {
+  const auto native = open();
+  ASSERT_TRUE(native);
+  for (uint8_t style = 0; style < 4; ++style) {
+    float scale = 0;
+    EXPECT_EQ(uint32_t('A'), native->font(style)->resolveCaps('a', 1, scale));
+    EXPECT_FLOAT_EQ(.75f, scale);
+    EXPECT_EQ(uint32_t('A'), native->font(style)->resolveCaps('A', 2, scale));
+    EXPECT_FLOAT_EQ(.75f, scale);
+  }
+}

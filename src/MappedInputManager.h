@@ -164,6 +164,9 @@ class MappedInputManager {
   // wasScreenTouchDown() below, whose deliberate delay avoids wasteful e-paper refreshes.
   bool wasScreenTouchPressed(int& x, int& y) const;
   bool wasScreenTouchDown(int& x, int& y) const;
+  // Live stationary single-contact age; unlike the sampler's press edge this
+  // remains available across slow loop ticks. False after movement/suppression.
+  bool screenTouchCandidateHeldMs(unsigned long& heldMs) const;
   bool peekScreenLongPressIn(touchtransform::Orientation orientation, int& x, int& y) const;
   // Ignore the rest of this contact — its continued hold and its release edge.
   // For a caller that has acted on a tap or swipe and must stop the same contact

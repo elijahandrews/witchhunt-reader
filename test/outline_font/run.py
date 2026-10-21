@@ -9,6 +9,7 @@ parser=argparse.ArgumentParser()
 parser.add_argument("fonts",nargs="+",help="TTF/CFF/CFF2 fixtures with Latin smcp, c2sc and fi ligature")
 parser.add_argument("--out",type=Path)
 parser.add_argument("--sanitize",action="store_true")
+parser.add_argument("--raster-only",action="store_true",help="Allow arbitrary fixtures without layout-table requirements")
 args=parser.parse_args()
 repo=Path(__file__).resolve().parents[2]
 out=args.out or Path(tempfile.mkdtemp(prefix="witch-outline-"))
@@ -29,6 +30,7 @@ for src in sorted(backend.glob("*.cpp")):
  obj=out/(src.stem+".o")
  subprocess.run(["clang++","-std=c++17",*flags,"-c",str(src),"-o",str(obj)],check=True)
  objects.append(str(obj))
-exe=out/"OutlineFontTest"
-subprocess.run(["clang++","-std=c++17",*flags,str(repo/"test/outline_font/OutlineFontTest.cpp"),*objects,"-o",str(exe)],check=True)
-subprocess.run([str(exe),*[str(Path(f).resolve()) for f in args.fonts]],check=True)
+for name in (["RasterFontTest"] if args.raster_only else ["OutlineFontTest", "RasterFontTest"]):
+ exe=out/name
+ subprocess.run(["clang++","-std=c++17",*flags,str(repo/"test/outline_font"/(name+".cpp")),*objects,"-o",str(exe)],check=True)
+ subprocess.run([str(exe),*[str(Path(f).resolve()) for f in args.fonts]],check=True)

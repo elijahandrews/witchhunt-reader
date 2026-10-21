@@ -9,22 +9,22 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=38 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 t=CONTROL:
    W x=94 s=0 z=100 t=This
-   W x=133 s=0 z=100 t=whole
-   W x=187 s=0 z=100 t=paragraph
-   W x=280 s=0 z=100 t=is
-   W x=301 s=0 z=100 t=plain
-   W x=351 s=0 z=100 t=body
-   W x=391 s=0 z=100 t=text
-   W x=433 s=0 z=100 t=at
+   W x=134 s=0 z=100 t=whole
+   W x=188 s=0 z=100 t=paragraph
+   W x=282 s=0 z=100 t=is
+   W x=304 s=0 z=100 t=plain
+   W x=354 s=0 z=100 t=body
+   W x=395 s=0 z=100 t=text
+   W x=438 s=0 z=100 t=at
   LINE y=62 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=one
    W x=41 s=0 z=100 t=hundred
-   W x=117 s=0 z=100 t=percent.
-   W x=196 s=0 z=100 t=Every
-   W x=254 s=0 z=100 t=other
-   W x=314 s=0 z=100 t=section
-   W x=387 s=0 z=100 t=on
-   W x=419 s=0 z=100 t=this
+   W x=118 s=0 z=100 t=percent.
+   W x=197 s=0 z=100 t=Every
+   W x=256 s=0 z=100 t=other
+   W x=316 s=0 z=100 t=section
+   W x=390 s=0 z=100 t=on
+   W x=423 s=0 z=100 t=this
   LINE y=86 x=0 align=0 mult=1.000 hfid=0 words=6
    W x=0 s=0 z=100 t=page
    W x=44 s=0 z=100 t=is
@@ -39,39 +39,39 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=237 s=0 z=100 t=(the
    W x=290 s=0 z=100 t=real-world
    W x=391 s=0 z=100 t=case:
-   W x=447 s=0 z=100 t=a
+   W x=448 s=0 z=100 t=a
   LINE y=134 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=whole
    W x=55 s=0 z=100 t=paragraph
-   W x=149 s=0 z=100 t=wrapped
-   W x=211 s=0 z=100 t=in
-   W x=235 s=0 z=100 t=a
-   W x=254 s=0 z=100 t=near-body
-   W x=344 s=0 z=100 t=span).
-   W x=411 s=0 z=100 t=Under
+   W x=150 s=0 z=100 t=wrapped
+   W x=213 s=0 z=100 t=in
+   W x=238 s=0 z=100 t=a
+   W x=258 s=0 z=100 t=near-body
+   W x=349 s=0 z=100 t=span).
+   W x=417 s=0 z=100 t=Under
   LINE y=158 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=OFF
    W x=28 s=0 z=100 t=each
-   W x=76 s=0 z=100 t=keeps
-   W x=125 s=0 z=100 t=its
-   W x=158 s=0 z=100 t=own
-   W x=195 s=0 z=100 t=size;
-   W x=245 s=0 z=100 t=under
-   W x=300 s=0 z=100 t=ON
-   W x=323 s=0 z=100 t=all
-   W x=361 s=0 z=100 t=three
-   W x=417 s=0 z=100 t=snap
+   W x=77 s=0 z=100 t=keeps
+   W x=126 s=0 z=100 t=its
+   W x=160 s=0 z=100 t=own
+   W x=197 s=0 z=100 t=size;
+   W x=248 s=0 z=100 t=under
+   W x=303 s=0 z=100 t=ON
+   W x=327 s=0 z=100 t=all
+   W x=365 s=0 z=100 t=three
+   W x=422 s=0 z=100 t=snap
   LINE y=182 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=to
    W x=28 s=0 z=100 t=body.
   LINE y=206 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=This
    W x=59 s=0 z=100 t=entire
-   W x=120 s=0 z=100 t=paragraph
-   W x=215 s=0 z=100 t=sits
-   W x=257 s=0 z=100 t=at
-   W x=287 s=0 z=100 t=ninety-two
-   W x=387 s=0 z=100 t=percent,
+   W x=121 s=0 z=100 t=paragraph
+   W x=217 s=0 z=100 t=sits
+   W x=260 s=0 z=100 t=at
+   W x=291 s=0 z=100 t=ninety-two
+   W x=392 s=0 z=100 t=percent,
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=the
    W x=42 s=0 z=100 t=classic
@@ -88,7 +88,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=186 s=0 z=100 t=threshold
    W x=283 s=0 z=100 t=yet
    W x=318 s=0 z=100 t=forces
-   W x=381 s=0 z=100 t=per-glyph
+   W x=382 s=0 z=100 t=per-glyph
   LINE y=278 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=resampling
    W x=97 s=0 z=100 t=across
@@ -97,11 +97,11 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=302 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=This
    W x=59 s=0 z=100 t=entire
-   W x=120 s=0 z=100 t=paragraph
-   W x=215 s=0 z=100 t=sits
-   W x=257 s=0 z=100 t=at
-   W x=287 s=0 z=100 t=ninety-five
-   W x=396 s=0 z=100 t=percent
+   W x=121 s=0 z=100 t=paragraph
+   W x=217 s=0 z=100 t=sits
+   W x=259 s=0 z=100 t=at
+   W x=290 s=0 z=100 t=ninety-five
+   W x=400 s=0 z=100 t=percent
   LINE y=326 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=and
    W x=37 s=0 z=100 t=is
@@ -118,32 +118,32 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=This
    W x=60 s=0 z=100 t=entire
    W x=122 s=0 z=100 t=paragraph
-   W x=218 s=0 z=100 t=sits
-   W x=261 s=0 z=100 t=at
-   W x=292 s=0 z=100 t=one
-   W x=333 s=0 z=100 t=hundred
-   W x=409 s=0 z=100 t=eight
+   W x=219 s=0 z=100 t=sits
+   W x=262 s=0 z=100 t=at
+   W x=294 s=0 z=100 t=one
+   W x=335 s=0 z=100 t=hundred
+   W x=412 s=0 z=100 t=eight
   LINE y=374 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=percent,
    W x=79 s=0 z=100 t=the
    W x=121 s=0 z=100 t=same
-   W x=172 s=0 z=100 t=case
-   W x=220 s=0 z=100 t=on
-   W x=254 s=0 z=100 t=the
-   W x=296 s=0 z=100 t=upper
-   W x=347 s=0 z=100 t=side
-   W x=390 s=0 z=100 t=of
-   W x=423 s=0 z=100 t=body
+   W x=173 s=0 z=100 t=case
+   W x=221 s=0 z=100 t=on
+   W x=255 s=0 z=100 t=the
+   W x=298 s=0 z=100 t=upper
+   W x=349 s=0 z=100 t=side
+   W x=392 s=0 z=100 t=of
+   W x=426 s=0 z=100 t=body
   LINE y=398 x=0 align=0 mult=1.000 hfid=0 words=1
    W x=0 s=0 z=100 t=size.
   LINE y=422 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=2.
    W x=52 s=0 z=100 t=BOTH
-   W x=100 s=0 z=100 t=BANDS:
-   W x=172 s=0 z=100 t=normal,
-   W x=259 s=0 z=100 t=ninety-eight
-   W x=388 s=0 z=100 t=percent
-   W x=448 s=0 z=100 t=,
+   W x=101 s=0 z=100 t=BANDS:
+   W x=174 s=0 z=100 t=normal,
+   W x=262 s=0 z=100 t=ninety-eight
+   W x=392 s=0 z=100 t=percent
+   W x=452 s=0 z=100 t=,
   LINE y=446 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=normal,
    W x=83 s=0 z=100 t=one
@@ -189,12 +189,12 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=569 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=18 s=0 z=100 t=4.
    W x=50 s=0 z=100 t=DISTINCT:
-   W x=141 s=0 z=100 t=normal,
-   W x=224 s=0 z=80 t=eighty
-   W x=281 s=0 z=80 t=percent
-   W x=341 s=0 z=80 t=footnote
-   W x=422 s=0 z=80 t=size
-   W x=448 s=0 z=100 t=,
+   W x=142 s=0 z=100 t=normal,
+   W x=226 s=0 z=80 t=eighty
+   W x=283 s=0 z=80 t=percent
+   W x=344 s=0 z=80 t=footnote
+   W x=426 s=0 z=80 t=size
+   W x=452 s=0 z=100 t=,
   LINE y=593 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=normal,
    W x=86 s=0 z=70 t=seventy
@@ -203,7 +203,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=263 s=0 z=70 t=size
    W x=286 s=0 z=100 t=,
    W x=310 s=0 z=100 t=normal.
-   W x=398 s=0 z=100 t=Neither
+   W x=399 s=0 z=100 t=Neither
   LINE y=617 x=0 align=0 mult=1.000 hfid=0 words=4
    W x=0 s=0 z=100 t=setting
    W x=72 s=0 z=100 t=may
@@ -212,11 +212,11 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=641 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=18 s=0 z=100 t=5.
    W x=52 s=0 z=100 t=MID-LINE:
-   W x=149 s=0 z=100 t=plain
-   W x=207 s=0 z=100 t=words,
-   W x=272 s=0 z=100 t=then
-   W x=328 s=0 z=100 t=a
-   W x=354 s=0 z=100 t=ninety-five
+   W x=150 s=0 z=100 t=plain
+   W x=209 s=0 z=100 t=words,
+   W x=275 s=0 z=100 t=then
+   W x=332 s=0 z=100 t=a
+   W x=359 s=0 z=100 t=ninety-five
   LINE y=665 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=percent
    W x=70 s=0 z=100 t=run
@@ -233,14 +233,14 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=0 s=0 z=100 t=words
    W x=50 s=0 z=100 t=again
    W x=108 s=0 z=100 t=—
-   W x=122 s=0 z=100 t=under
-   W x=176 s=0 z=100 t=ON
-   W x=198 s=0 z=100 t=the
-   W x=236 s=0 z=100 t=middle
-   W x=293 s=0 z=100 t=run
-   W x=330 s=0 z=100 t=joins
-   W x=382 s=0 z=100 t=the
-   W x=420 s=0 z=100 t=body
+   W x=123 s=0 z=100 t=under
+   W x=178 s=0 z=100 t=ON
+   W x=200 s=0 z=100 t=the
+   W x=239 s=0 z=100 t=middle
+   W x=297 s=0 z=100 t=run
+   W x=334 s=0 z=100 t=joins
+   W x=387 s=0 z=100 t=the
+   W x=426 s=0 z=100 t=body
   LINE y=713 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 t=baseline
    W x=77 s=0 z=100 t=without
@@ -258,16 +258,16 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=227 s=0 z=100 t=one
    W x=271 s=0 z=100 t=hundred
    W x=350 s=0 z=100 t=five
-   W x=399 s=0 z=100 t=percent
+   W x=400 s=0 z=100 t=percent
   LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=inner
    W x=54 s=0 z=100 t=composes
-   W x=137 s=0 z=100 t=to
-   W x=168 s=0 z=100 t=ninety-four
-   W x=282 s=0 z=100 t=and
-   W x=322 s=0 z=100 t=a
-   W x=343 s=0 z=100 t=half
-   W x=395 s=0 z=100 t=percent
+   W x=138 s=0 z=100 t=to
+   W x=170 s=0 z=100 t=ninety-four
+   W x=284 s=0 z=100 t=and
+   W x=325 s=0 z=100 t=a
+   W x=347 s=0 z=100 t=half
+   W x=400 s=0 z=100 t=percent
   LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=back
    W x=39 s=0 z=100 t=to
@@ -278,12 +278,12 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=7.
    W x=46 s=0 z=100 t=GRADIENT
    W x=123 s=0 z=100 t=(steps
-   W x=183 s=0 z=100 t=inside
-   W x=238 s=0 z=100 t=the
-   W x=275 s=0 z=100 t=ON
-   W x=296 s=0 z=100 t=band
-   W x=339 s=0 z=100 t=collapse,
-   W x=426 s=0 z=100 t=the
+   W x=184 s=0 z=100 t=inside
+   W x=239 s=0 z=100 t=the
+   W x=276 s=0 z=100 t=ON
+   W x=298 s=0 z=100 t=band
+   W x=341 s=0 z=100 t=collapse,
+   W x=429 s=0 z=100 t=the
   LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 t=wide
    W x=35 s=0 z=100 t=ones
@@ -304,21 +304,21 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=8.
    W x=49 s=0 z=100 t=BLOCK
    W x=114 s=0 z=100 t=LEVEL:
-   W x=193 s=0 z=100 t=the
-   W x=239 s=0 z=100 t=font-size
-   W x=339 s=0 z=100 t=sits
-   W x=388 s=0 z=100 t=on
-   W x=426 s=0 z=100 t=the
+   W x=194 s=0 z=100 t=the
+   W x=240 s=0 z=100 t=font-size
+   W x=341 s=0 z=100 t=sits
+   W x=390 s=0 z=100 t=on
+   W x=429 s=0 z=100 t=the
   LINE y=273 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=paragraph
    W x=94 s=0 z=100 t=itself
    W x=154 s=0 z=100 t=rather
    W x=220 s=0 z=100 t=than
-   W x=272 s=0 z=100 t=on
-   W x=302 s=0 z=100 t=an
-   W x=332 s=0 z=100 t=inner
-   W x=384 s=0 z=100 t=span,
-   W x=437 s=0 z=100 t=so
+   W x=273 s=0 z=100 t=on
+   W x=303 s=0 z=100 t=an
+   W x=333 s=0 z=100 t=inner
+   W x=385 s=0 z=100 t=span,
+   W x=439 s=0 z=100 t=so
   LINE y=297 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=this
    W x=43 s=0 z=100 t=travels
@@ -335,7 +335,7 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=272 s=0 z=100 t=percent
    W x=325 s=0 z=100 t=block,
    W x=370 s=0 z=100 t=outside
-   W x=427 s=0 z=100 t=both
+   W x=428 s=0 z=100 t=both
   LINE y=340 x=0 align=0 mult=0.800 hfid=0 words=8
    W x=0 s=0 z=100 t=bands,
    W x=48 s=0 z=100 t=which
@@ -359,24 +359,24 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=383 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 t=one
    W x=42 s=0 z=100 t=hundred
-   W x=119 s=0 z=100 t=ten
-   W x=159 s=0 z=100 t=percent
-   W x=229 s=0 z=100 t=on
-   W x=262 s=0 z=100 t=the
-   W x=303 s=0 z=100 t=paragraph
-   W x=400 s=0 z=100 t=class,
+   W x=120 s=0 z=100 t=ten
+   W x=161 s=0 z=100 t=percent
+   W x=232 s=0 z=100 t=on
+   W x=266 s=0 z=100 t=the
+   W x=308 s=0 z=100 t=paragraph
+   W x=406 s=0 z=100 t=class,
   LINE y=407 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=which
    W x=52 s=0 z=100 t=is
-   W x=76 s=0 z=100 t=exactly
-   W x=147 s=0 z=100 t=the
-   W x=187 s=0 z=100 t=upper
-   W x=236 s=0 z=100 t=edge
-   W x=282 s=0 z=100 t=of
-   W x=313 s=0 z=100 t=the
-   W x=353 s=0 z=100 t=ON
-   W x=377 s=0 z=100 t=band.
-   W x=433 s=0 z=100 t=It
+   W x=77 s=0 z=100 t=exactly
+   W x=149 s=0 z=100 t=the
+   W x=190 s=0 z=100 t=upper
+   W x=240 s=0 z=100 t=edge
+   W x=286 s=0 z=100 t=of
+   W x=318 s=0 z=100 t=the
+   W x=359 s=0 z=100 t=ON
+   W x=384 s=0 z=100 t=band.
+   W x=441 s=0 z=100 t=It
   LINE y=431 x=0 align=0 mult=1.000 hfid=0 words=11
    W x=0 s=0 z=100 t=must
    W x=46 s=0 z=100 t=snap
@@ -392,14 +392,14 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
   LINE y=455 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=80 t=run
    W x=31 s=0 z=100 t=must
-   W x=79 s=0 z=100 t=then
-   W x=129 s=0 z=100 t=measure
-   W x=205 s=0 z=100 t=eighty
-   W x=269 s=0 z=100 t=percent
-   W x=337 s=0 z=100 t=of
-   W x=367 s=0 z=100 t=body
-   W x=407 s=0 z=100 t=—
-   W x=422 s=0 z=100 t=not
+   W x=80 s=0 z=100 t=then
+   W x=130 s=0 z=100 t=measure
+   W x=207 s=0 z=100 t=eighty
+   W x=272 s=0 z=100 t=percent
+   W x=340 s=0 z=100 t=of
+   W x=371 s=0 z=100 t=body
+   W x=411 s=0 z=100 t=—
+   W x=427 s=0 z=100 t=not
   LINE y=479 x=0 align=0 mult=1.000 hfid=0 words=5
    W x=0 s=0 z=100 t=of
    W x=28 s=0 z=100 t=the
@@ -418,34 +418,34 @@ SPINE 0 href=OEBPS/chapter1.xhtml pages=2 truncated=0 cssFallback=0
    W x=18 s=0 z=100 t=A
    W x=36 s=0 z=100 t=heading
    W x=115 s=0 z=100 t=sized
-   W x=166 s=0 z=100 t=inside
-   W x=225 s=0 z=100 t=the
-   W x=266 s=0 z=100 t=ON
-   W x=291 s=0 z=100 t=band
-   W x=338 s=0 z=100 t=keeps
-   W x=389 s=0 z=100 t=its
-   W x=424 s=0 z=100 t=size
+   W x=167 s=0 z=100 t=inside
+   W x=226 s=0 z=100 t=the
+   W x=267 s=0 z=100 t=ON
+   W x=293 s=0 z=100 t=band
+   W x=340 s=0 z=100 t=keeps
+   W x=391 s=0 z=100 t=its
+   W x=427 s=0 z=100 t=size
   LINE y=552 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 t=under
    W x=57 s=0 z=100 t=both
    W x=107 s=0 z=100 t=settings
    W x=188 s=0 z=100 t=—
    W x=205 s=0 z=100 t=the
-   W x=246 s=0 z=100 t=band
-   W x=293 s=0 z=100 t=spares
-   W x=356 s=0 z=100 t=body
-   W x=400 s=0 z=100 t=text
-   W x=446 s=0 z=100 t=a
+   W x=247 s=0 z=100 t=band
+   W x=294 s=0 z=100 t=spares
+   W x=357 s=0 z=100 t=body
+   W x=401 s=0 z=100 t=text
+   W x=448 s=0 z=100 t=a
   LINE y=576 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 t=scale
    W x=56 s=0 z=100 t=nobody
-   W x=123 s=0 z=100 t=asked
-   W x=179 s=0 z=100 t=for,
-   W x=227 s=0 z=100 t=it
-   W x=253 s=0 z=100 t=does
-   W x=301 s=0 z=100 t=not
-   W x=344 s=0 z=100 t=flatten
-   W x=425 s=0 z=100 t=the
+   W x=124 s=0 z=100 t=asked
+   W x=180 s=0 z=100 t=for,
+   W x=229 s=0 z=100 t=it
+   W x=255 s=0 z=100 t=does
+   W x=304 s=0 z=100 t=not
+   W x=347 s=0 z=100 t=flatten
+   W x=429 s=0 z=100 t=the
   LINE y=600 x=0 align=0 mult=1.000 hfid=0 words=2
    W x=0 s=0 z=100 t=page's
    W x=63 s=0 z=100 t=hierarchy.

@@ -54,6 +54,10 @@ struct Ligatures {
   uint16_t glyphFor(FontBytes& bytes, const Face& face, uint32_t codepoint) const;
 };
 
+/// Authored smcp (mode 1) or c2sc (mode 2), as a glyph ID; zero when absent/unsupported.
+/// Reads the mapped GSUB in place, with the shared caps reader's bounded work and no allocations.
+uint16_t capsGlyph(FontBytes& bytes, const Face& face, uint32_t codepoint, uint8_t mode);
+
 /// Resolves the ligatures; false (none) for a font without them.
 bool resolveLigatures(FontBytes& bytes, const Face& face, Ligatures* out);
 

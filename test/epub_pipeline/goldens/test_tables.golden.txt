@@ -82,14 +82,14 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=18 s=0 z=100 f=5 ls=0 t=This
    W x=58 s=0 z=100 f=5 ls=0 t=is
    W x=80 s=0 z=100 f=5 ls=0 t=one
-   W x=119 s=0 z=100 f=5 ls=0 t=very
-   W x=163 s=0 z=100 f=5 ls=0 t=long
-   W x=213 s=0 z=100 f=5 ls=0 t=sentence.
-   W x=305 s=0 z=100 f=5 ls=0 t=It
-   W x=331 s=0 z=100 f=5 ls=0 t=is
-   W x=353 s=0 z=100 f=5 ls=0 t=part
-   W x=396 s=0 z=100 f=5 ls=0 t=of
-   W x=425 s=0 z=100 f=5 ls=0 t=the
+   W x=120 s=0 z=100 f=5 ls=0 t=very
+   W x=164 s=0 z=100 f=5 ls=0 t=long
+   W x=215 s=0 z=100 f=5 ls=0 t=sentence.
+   W x=307 s=0 z=100 f=5 ls=0 t=It
+   W x=333 s=0 z=100 f=5 ls=0 t=is
+   W x=356 s=0 z=100 f=5 ls=0 t=part
+   W x=399 s=0 z=100 f=5 ls=0 t=of
+   W x=429 s=0 z=100 f=5 ls=0 t=the
   LINE y=230 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=first
    W x=49 s=0 z=100 f=5 ls=0 t=cell
@@ -103,13 +103,13 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
   LINE y=249 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=18 s=0 z=100 f=5 ls=0 t=This
    W x=59 s=0 z=100 f=5 ls=0 t=is
-   W x=82 s=0 z=100 f=5 ls=0 t=the
-   W x=121 s=0 z=100 f=5 ls=0 t=second
-   W x=185 s=0 z=100 f=5 ls=0 t=cell.
-   W x=237 s=0 z=100 f=5 ls=0 t=It
-   W x=264 s=0 z=100 f=5 ls=0 t=will
-   W x=302 s=0 z=100 f=5 ls=0 t=probably
-   W x=377 s=0 z=100 f=5 ls=0 t=overflow
+   W x=83 s=0 z=100 f=5 ls=0 t=the
+   W x=122 s=0 z=100 f=5 ls=0 t=second
+   W x=187 s=0 z=100 f=5 ls=0 t=cell.
+   W x=240 s=0 z=100 f=5 ls=0 t=It
+   W x=267 s=0 z=100 f=5 ls=0 t=will
+   W x=306 s=0 z=100 f=5 ls=0 t=probably
+   W x=382 s=0 z=100 f=5 ls=0 t=overflow
   LINE y=268 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=into
    W x=50 s=0 z=100 f=5 ls=0 t=the
@@ -119,101 +119,101 @@ SPINE 3 href=EPUB/text/ch002.xhtml pages=1 truncated=0 cssFallback=0
    W x=261 s=0 z=100 f=5 ls=0 t=ipsum
    W x=314 s=0 z=100 f=5 ls=0 t=dolor
    W x=374 s=0 z=100 f=5 ls=0 t=sit
-   W x=410 s=0 z=100 f=5 ls=0 t=amet,
+   W x=411 s=0 z=100 f=5 ls=0 t=amet,
   LINE y=287 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=consetetur
    W x=104 s=0 z=100 f=5 ls=0 t=sadipscing
-   W x=197 s=0 z=100 f=5 ls=0 t=elitr,
-   W x=255 s=0 z=100 f=5 ls=0 t=sed
-   W x=289 s=0 z=100 f=5 ls=0 t=diam
-   W x=333 s=0 z=100 f=5 ls=0 t=nonumy
-   W x=404 s=0 z=100 f=5 ls=0 t=eirmod
+   W x=198 s=0 z=100 f=5 ls=0 t=elitr,
+   W x=256 s=0 z=100 f=5 ls=0 t=sed
+   W x=291 s=0 z=100 f=5 ls=0 t=diam
+   W x=335 s=0 z=100 f=5 ls=0 t=nonumy
+   W x=407 s=0 z=100 f=5 ls=0 t=eirmod
   LINE y=306 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=5 ls=0 t=tempor
    W x=61 s=0 z=100 f=5 ls=0 t=invidunt
    W x=142 s=0 z=100 f=5 ls=0 t=ut
-   W x=169 s=0 z=100 f=5 ls=0 t=labore
-   W x=231 s=0 z=100 f=5 ls=0 t=et
-   W x=256 s=0 z=100 f=5 ls=0 t=dolore
-   W x=320 s=0 z=100 f=5 ls=0 t=magna
-   W x=382 s=0 z=100 f=5 ls=0 t=aliquyam
+   W x=170 s=0 z=100 f=5 ls=0 t=labore
+   W x=232 s=0 z=100 f=5 ls=0 t=et
+   W x=258 s=0 z=100 f=5 ls=0 t=dolore
+   W x=322 s=0 z=100 f=5 ls=0 t=magna
+   W x=385 s=0 z=100 f=5 ls=0 t=aliquyam
   LINE y=325 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=erat,
    W x=57 s=0 z=100 f=5 ls=0 t=sed
    W x=93 s=0 z=100 f=5 ls=0 t=diam
    W x=139 s=0 z=100 f=5 ls=0 t=voluptua.
-   W x=242 s=0 z=100 f=5 ls=0 t=At
-   W x=270 s=0 z=100 f=5 ls=0 t=vero
-   W x=321 s=0 z=100 f=5 ls=0 t=eos
-   W x=361 s=0 z=100 f=5 ls=0 t=et
-   W x=390 s=0 z=100 f=5 ls=0 t=accusam
+   W x=243 s=0 z=100 f=5 ls=0 t=At
+   W x=271 s=0 z=100 f=5 ls=0 t=vero
+   W x=322 s=0 z=100 f=5 ls=0 t=eos
+   W x=362 s=0 z=100 f=5 ls=0 t=et
+   W x=392 s=0 z=100 f=5 ls=0 t=accusam
   LINE y=344 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 f=5 ls=0 t=et
    W x=27 s=0 z=100 f=5 ls=0 t=justo
-   W x=84 s=0 z=100 f=5 ls=0 t=duo
-   W x=123 s=0 z=100 f=5 ls=0 t=dolores
-   W x=198 s=0 z=100 f=5 ls=0 t=et
-   W x=225 s=0 z=100 f=5 ls=0 t=ea
-   W x=254 s=0 z=100 f=5 ls=0 t=rebum.
-   W x=316 s=0 z=100 f=5 ls=0 t=Stet
-   W x=365 s=0 z=100 f=5 ls=0 t=clita
-   W x=417 s=0 z=100 f=5 ls=0 t=kasd
+   W x=85 s=0 z=100 f=5 ls=0 t=duo
+   W x=125 s=0 z=100 f=5 ls=0 t=dolores
+   W x=200 s=0 z=100 f=5 ls=0 t=et
+   W x=228 s=0 z=100 f=5 ls=0 t=ea
+   W x=258 s=0 z=100 f=5 ls=0 t=rebum.
+   W x=320 s=0 z=100 f=5 ls=0 t=Stet
+   W x=370 s=0 z=100 f=5 ls=0 t=clita
+   W x=423 s=0 z=100 f=5 ls=0 t=kasd
   LINE y=363 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=gubergren,
    W x=106 s=0 z=100 f=5 ls=0 t=no
-   W x=143 s=0 z=100 f=5 ls=0 t=sea
-   W x=187 s=0 z=100 f=5 ls=0 t=takimata
-   W x=281 s=0 z=100 f=5 ls=0 t=sanctus
-   W x=364 s=0 z=100 f=5 ls=0 t=est
-   W x=406 s=0 z=100 f=5 ls=0 t=Lorem
+   W x=144 s=0 z=100 f=5 ls=0 t=sea
+   W x=188 s=0 z=100 f=5 ls=0 t=takimata
+   W x=283 s=0 z=100 f=5 ls=0 t=sanctus
+   W x=366 s=0 z=100 f=5 ls=0 t=est
+   W x=409 s=0 z=100 f=5 ls=0 t=Lorem
   LINE y=382 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=ipsum
    W x=51 s=0 z=100 f=5 ls=0 t=dolor
-   W x=109 s=0 z=100 f=5 ls=0 t=sit
-   W x=143 s=0 z=100 f=5 ls=0 t=amet.
-   W x=203 s=0 z=100 f=5 ls=0 t=Lorem
-   W x=263 s=0 z=100 f=5 ls=0 t=ipsum
-   W x=314 s=0 z=100 f=5 ls=0 t=dolor
-   W x=372 s=0 z=100 f=5 ls=0 t=sit
-   W x=406 s=0 z=100 f=5 ls=0 t=amet,
+   W x=110 s=0 z=100 f=5 ls=0 t=sit
+   W x=144 s=0 z=100 f=5 ls=0 t=amet.
+   W x=205 s=0 z=100 f=5 ls=0 t=Lorem
+   W x=266 s=0 z=100 f=5 ls=0 t=ipsum
+   W x=317 s=0 z=100 f=5 ls=0 t=dolor
+   W x=376 s=0 z=100 f=5 ls=0 t=sit
+   W x=411 s=0 z=100 f=5 ls=0 t=amet,
   LINE y=401 x=0 align=0 mult=1.000 hfid=0 words=7
    W x=0 s=0 z=100 f=5 ls=0 t=consetetur
    W x=104 s=0 z=100 f=5 ls=0 t=sadipscing
-   W x=197 s=0 z=100 f=5 ls=0 t=elitr,
-   W x=255 s=0 z=100 f=5 ls=0 t=sed
-   W x=289 s=0 z=100 f=5 ls=0 t=diam
-   W x=333 s=0 z=100 f=5 ls=0 t=nonumy
-   W x=404 s=0 z=100 f=5 ls=0 t=eirmod
+   W x=198 s=0 z=100 f=5 ls=0 t=elitr,
+   W x=256 s=0 z=100 f=5 ls=0 t=sed
+   W x=291 s=0 z=100 f=5 ls=0 t=diam
+   W x=335 s=0 z=100 f=5 ls=0 t=nonumy
+   W x=407 s=0 z=100 f=5 ls=0 t=eirmod
   LINE y=420 x=0 align=0 mult=1.000 hfid=0 words=8
    W x=0 s=0 z=100 f=5 ls=0 t=tempor
    W x=61 s=0 z=100 f=5 ls=0 t=invidunt
    W x=142 s=0 z=100 f=5 ls=0 t=ut
-   W x=169 s=0 z=100 f=5 ls=0 t=labore
-   W x=231 s=0 z=100 f=5 ls=0 t=et
-   W x=256 s=0 z=100 f=5 ls=0 t=dolore
-   W x=320 s=0 z=100 f=5 ls=0 t=magna
-   W x=382 s=0 z=100 f=5 ls=0 t=aliquyam
+   W x=170 s=0 z=100 f=5 ls=0 t=labore
+   W x=232 s=0 z=100 f=5 ls=0 t=et
+   W x=258 s=0 z=100 f=5 ls=0 t=dolore
+   W x=322 s=0 z=100 f=5 ls=0 t=magna
+   W x=385 s=0 z=100 f=5 ls=0 t=aliquyam
   LINE y=439 x=0 align=0 mult=1.000 hfid=0 words=9
    W x=0 s=0 z=100 f=5 ls=0 t=erat,
    W x=57 s=0 z=100 f=5 ls=0 t=sed
    W x=93 s=0 z=100 f=5 ls=0 t=diam
    W x=139 s=0 z=100 f=5 ls=0 t=voluptua.
-   W x=242 s=0 z=100 f=5 ls=0 t=At
-   W x=270 s=0 z=100 f=5 ls=0 t=vero
-   W x=321 s=0 z=100 f=5 ls=0 t=eos
-   W x=361 s=0 z=100 f=5 ls=0 t=et
-   W x=390 s=0 z=100 f=5 ls=0 t=accusam
+   W x=243 s=0 z=100 f=5 ls=0 t=At
+   W x=271 s=0 z=100 f=5 ls=0 t=vero
+   W x=322 s=0 z=100 f=5 ls=0 t=eos
+   W x=362 s=0 z=100 f=5 ls=0 t=et
+   W x=392 s=0 z=100 f=5 ls=0 t=accusam
   LINE y=458 x=0 align=0 mult=1.000 hfid=0 words=10
    W x=0 s=0 z=100 f=5 ls=0 t=et
    W x=27 s=0 z=100 f=5 ls=0 t=justo
-   W x=84 s=0 z=100 f=5 ls=0 t=duo
-   W x=123 s=0 z=100 f=5 ls=0 t=dolores
-   W x=198 s=0 z=100 f=5 ls=0 t=et
-   W x=225 s=0 z=100 f=5 ls=0 t=ea
-   W x=254 s=0 z=100 f=5 ls=0 t=rebum.
-   W x=316 s=0 z=100 f=5 ls=0 t=Stet
-   W x=365 s=0 z=100 f=5 ls=0 t=clita
-   W x=417 s=0 z=100 f=5 ls=0 t=kasd
+   W x=85 s=0 z=100 f=5 ls=0 t=duo
+   W x=125 s=0 z=100 f=5 ls=0 t=dolores
+   W x=200 s=0 z=100 f=5 ls=0 t=et
+   W x=228 s=0 z=100 f=5 ls=0 t=ea
+   W x=258 s=0 z=100 f=5 ls=0 t=rebum.
+   W x=320 s=0 z=100 f=5 ls=0 t=Stet
+   W x=370 s=0 z=100 f=5 ls=0 t=clita
+   W x=423 s=0 z=100 f=5 ls=0 t=kasd
   LINE y=477 x=0 align=0 mult=1.000 hfid=0 words=3
    W x=0 s=0 z=100 f=5 ls=0 t=gubergren,
    W x=98 s=0 z=100 f=5 ls=0 t=no

@@ -3,6 +3,9 @@
 #include <Logging.h>
 #include <Memory.h>
 #include <Utf8.h>
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+#include <OutlineFontFace.h>
+#endif
 
 #include <algorithm>
 #include <cstdint>
@@ -47,6 +50,13 @@ ttf::Status placeable(const ttf::Status loaded, const EpdGlyph& metrics) {
 void TtfFont::setHooks(const Hooks& newHooks) { hooks = newHooks; }
 
 TtfFont::TtfFont(NorFlash& flash) : flash_(flash), store_(flash) {}
+TtfFont::~TtfFont() {
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+  // Allocation callbacks still reference this family's budget; release faces
+  // while every member and the flash mapping source are alive.
+  for (auto& outline : outlines_) outline.reset();
+#endif
+}
 
 void TtfFont::checkLock() const {
   static bool logged = false;
@@ -58,6 +68,10 @@ void TtfFont::checkLock() const {
 
 bool TtfFont::load(const ttf::FileSource (&files)[4], const uint8_t identity[kIdentityBytes],
                    const std::function<void()>& onBusy) {
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+  for (auto& outline : outlines_) outline.reset();
+  for (auto& failed : outlineFailed_) failed = false;
+#endif
   if (files[0].size == 0) {
     LOG_ERR("TTF", "family has no regular style");
     return false;
@@ -208,6 +222,11 @@ bool TtfFont::configure(Size& size, const uint32_t ppem) {
     style.data.is2Bit = true;
     style.data.bitmap = store_.logBase();
     style.data.provider = &style.provider;
+    style.data.glyphFeatureCtx = &style.provider;
+    style.data.capsGlyph = [](void* ctx, uint32_t cp, uint8_t mode) {
+      auto* provider = static_cast<StyleProvider*>(ctx);
+      return provider->owner->capsGlyph(provider->style, cp, mode);
+    };
     const ttf::Ligatures& ligatures = styles_[s].ligatures;
     style.data.ligaturePairs = ligatures.count != 0 ? ligatures.pairs : nullptr;
     style.data.ligaturePairCount = ligatures.count;
@@ -300,6 +319,15 @@ bool TtfFont::storeKey(Size& size, const uint8_t style, const uint32_t codepoint
   return true;
 }
 
+uint32_t TtfFont::capsGlyph(const uint8_t style, const uint32_t codepoint, const uint8_t mode) {
+  if (style >= 4 || !styles_[style].present || !styles_[style].face.gsub) return 0;
+  checkLock();
+  FontBytes bytes;
+  if (!fontBytes(style, &bytes)) return 0;
+  const uint16_t gid = ttf::capsGlyph(bytes, styles_[style].face, codepoint, mode);
+  return gid ? EPD_ALTERNATE_GLYPH_BASE + gid : 0;
+}
+
 bool TtfFont::fontBytes(const uint8_t style, FontBytes* bytes) {
   // Flash mode maps one style at a time, so the pointer is fetched again for every render.
   const uint8_t* mapped = store_.mapStyle(styles_[style].block);
@@ -311,10 +339,75 @@ bool TtfFont::fontBytes(const uint8_t style, FontBytes* bytes) {
   return true;
 }
 
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+size_t TtfFont::readOutline(void* ctx, const uint32_t offset, uint8_t* buffer, const size_t count) {
+  const auto& source = *static_cast<OutlineSource*>(ctx);
+  FontBytes bytes;
+  return count <= UINT32_MAX && source.owner->fontBytes(source.style, &bytes) &&
+                 bytes.read(offset, static_cast<uint32_t>(count), buffer)
+             ? count
+             : 0;
+}
+#endif
+
+bool TtfFont::rasterGlyph(const Size& size, const uint8_t style, const uint32_t cp, const float scale,
+                          const int8_t phase, EpdRasterGlyph& out) {
+#if defined(FREEINK_DEVICE_X4PRO) || defined(WITCH_TEST_NATIVE_OUTLINE)
+  if (style >= 4 || !styles_[style].present || size.ppem == 0 || outlineFailed_[style] || utf8IsDefaultIgnorable(cp))
+    return false;
+  checkLock();
+  FontBytes bytes;
+  if (!fontBytes(style, &bytes)) return false;
+  // Retain the existing Unicode/GSUB mapping, authored advances and kerning. Raster
+  // improvement must not quietly switch the font's variable axes or reflow a book.
+  const uint16_t gid = styles_[style].ligatures.glyphFor(bytes, styles_[style].face, cp);
+  if (!gid) return false;
+  if (!outlines_[style]) {
+    // Four small wrappers live for the loaded family. Their FreeType allocations,
+    // source tables and bounded glyph caches live in PSRAM, capped together at 1 MiB.
+    auto face = makeUniqueNoThrow<OutlineFontFace>();
+    OutlineFontFace::Options options;
+    options.logicalPx = 14;  // reference density-2 em; actual raster size is supplied below
+    options.applyVariations = false;
+    options.loadLayoutTables = false;
+    options.memoryLimit = 512 * 1024;
+    options.allocationContext = this;
+    options.claimMemory = [](void* ctx, const size_t n) {
+      auto* owner = static_cast<TtfFont*>(ctx);
+      if (n > kOutlineMemoryLimit - owner->outlineMemory_) return false;
+      owner->outlineMemory_ += n;
+      return true;
+    };
+    options.releaseMemory = [](void* ctx, const size_t n) { static_cast<TtfFont*>(ctx)->outlineMemory_ -= n; };
+    outlineSources_[style] = {this, style};
+    if (!face || !face->openStream(readOutline, &outlineSources_[style], styles_[style].bytes, options)) {
+      outlineFailed_[style] = true;  // do not repeatedly allocate on every glyph after OOM
+      LOG_ERR("TTF", "Outline face unavailable; retaining stored glyphs");
+      return false;
+    }
+    outlines_[style] = std::move(face);
+  }
+  return outlines_[style]->rasterAtPpem(gid, size.ppem, scale, phase, &out);
+#else
+  (void)size;
+  (void)style;
+  (void)cp;
+  (void)scale;
+  (void)phase;
+  (void)out;
+  return false;
+#endif
+}
+
 uint32_t TtfFont::batchCapacity() const { return rasterizer_.plan().outputBytes; }
 
 const EpdGlyph* TtfFont::glyph(Size& size, const uint8_t style, const uint32_t codepoint) {
   if (style >= 4 || !styles_[style].present || size.ppem == 0) return nullptr;
+  // Opaque caps keys fit the store's 21-bit codepoint field. Reject invalid IDs before
+  // makeKey masks its input; a hostile key must never alias a real cached glyph.
+  if (codepoint >= EPD_ALTERNATE_GLYPH_BASE &&
+      (codepoint == EPD_ALTERNATE_GLYPH_BASE || codepoint - EPD_ALTERNATE_GLYPH_BASE >= styles_[style].face.numGlyphs))
+    return nullptr;
   if (utf8IsDefaultIgnorable(codepoint)) return &kIgnorable;
   uint32_t key = 0;
   const bool haveKey = storeKey(size, style, codepoint, &key);

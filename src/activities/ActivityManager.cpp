@@ -741,6 +741,11 @@ bool ActivityManager::isReaderActivity() const {
 
 bool ActivityManager::currentIsReaderActivity() const { return currentActivity && currentActivity->isReaderActivity(); }
 
+bool ActivityManager::handleReaderWordHold() {
+  if (drainInput || pendingAction != PendingAction::None || !currentIsReaderActivity()) return false;
+  return currentActivity->handleReaderWordHold();
+}
+
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }
 
 bool ActivityManager::currentOwnsSerialInput() const { return currentActivity && currentActivity->ownsSerialInput(); }

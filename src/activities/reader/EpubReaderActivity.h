@@ -27,6 +27,7 @@
 #include "KOReaderSyncWorker.h"
 #include "ProgressMapper.h"
 #include "ReaderUtils.h"
+#include "ReaderWordHold.h"
 #include "activities/Activity.h"
 #include "components/themes/BaseTheme.h"
 #include "components/themes/TapTargets.h"
@@ -904,7 +905,7 @@ class EpubReaderActivity final : public Activity {
   // at display time with live values (clock, battery). Returns the number of glyphs the font
   // decompressor could not find memory for -- they drew nothing, so the page is incomplete.
   uint16_t renderPageContentOnly(const Page& page, int orientedMarginTop, int orientedMarginRight,
-                                 int orientedMarginBottom, int orientedMarginLeft);
+                                 int orientedMarginBottom, int orientedMarginLeft, bool forCapture = false);
   // Draws a single text-only page from an in-progress Background-C build (no AA, no pre-render
   // arming). Releases the lock before the waveform wait (like renderContents) so a C build
   // slice can run on the loop task during the refresh.
@@ -940,8 +941,8 @@ class EpubReaderActivity final : public Activity {
   // If the frame buffer currently holds a pre-rendered next page, redraw the current page
   // into it (no status bar, no flush). Restores the invariant other activities — notably
   // SleepActivity's OVERLAY mode — rely on when transitioning out of the reader.
-  void restoreCurrentPageToBufferIfPreRendered();
-  void renderStatusBar() const;
+  void restoreCurrentPageToBufferIfPreRendered(bool forCapture = false);
+  void renderStatusBar(bool recordDisplayed = true) const;
   // The status bar's chapter page counter: the current file's page and total, widened to the
   // whole TOC chapter when that spans several spine items (#325; see ChapterPageSpan).
   ChapterPageSpan::Display chapterPageDisplay() const;
@@ -1003,7 +1004,10 @@ class EpubReaderActivity final : public Activity {
 
   // Open word selection over the current page, or the dictionary picker when no
   // dictionary is configured. Both suspend background work for their duration.
-  void openDictionary();
+  // For a touch point, false means a valid page with no word there (zone fallback).
+  bool openDictionary(int touchX = -1, int touchY = -1);
+  ReaderWordHold::Page dictionaryTouchPage() const;
+  ReaderWordHold dictionaryHold_;
 
   // Quiesce background work and hold it quiesced until resumeBackgroundWork(),
   // so a lookup does not compete with the look-ahead for a heap that is already
@@ -1180,6 +1184,7 @@ class EpubReaderActivity final : public Activity {
   // DISP log now says so out loud.
   void startActivityForResult(std::unique_ptr<Activity>&& activity, ActivityResultHandler resultHandler) override;
   bool isReaderActivity() const override { return true; }
+  bool handleReaderWordHold() override;
   // Polled by main.cpp's loop without the render lock; see refreshLoopHints().
   bool preventAutoSleep() override;
   // Auto page turn is reading with no hands on the device: no input arrives, so without this the
@@ -1197,9 +1202,9 @@ class EpubReaderActivity final : public Activity {
   // remedy as HomeActivity's cover decoding (see its skipLoopDelay). Polled by main.cpp's loop
   // without the render lock; see refreshLoopHints().
   bool skipLoopDelay() override;
-  // A pending pre-render leaves the *next* page in the frame buffer; redraw the current page
-  // so a screenshot (or any raw frame-buffer capture) matches what the user sees.
-  void prepareFramebufferForCapture() override { restoreCurrentPageToBufferIfPreRendered(); }
+  // Capture explicitly redraws the current page: a returned secondary buffer can hold
+  // the next page even after an earlier capture has consumed the pre-render marker.
+  void prepareFramebufferForCapture() override { restoreCurrentPageToBufferIfPreRendered(true); }
   // " book=<path> spine=<i>/<count> page=<n>/<count>" (1-based page; 0/0 while no section is loaded).
   void appendDebugState(std::string& out) const override;
   bool shouldSkipPeriodicUpdate() const override;
