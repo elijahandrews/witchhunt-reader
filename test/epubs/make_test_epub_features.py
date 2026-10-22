@@ -267,6 +267,20 @@ CHAPTERS += [("Repeated stems and smooth edges", """<p>Use a 12pt reading font, 
 <p style="letter-spacing:-.03125em">will still fill little tall hill</p>
 <p>Flat tops and bars: T I H E F L. Curves and counters: B P O e a. Diagonals: W N V A.</p>""")]
 
+# Original curved-edge specimens: no private text or font assets.
+CHAPTERS += [("Curves and faint edges", """<p>Use 10pt and 12pt, Normal darkness and antialiasing. Compare rounded bowls, descenders and upright stems before and after the gray overlay.</p>
+<p>A dog digs in the green garden.</p>
+<p>edge curves stay smooth.</p>
+<p>g d g d g d g d g d g d</p>
+<p>will still fill little tall hill</p>
+<p style="font-size:80%">A dog digs in the green garden.</p>
+<p style="font-size:120%">A dog digs in the green garden.</p>
+<p style="letter-spacing:.03125em">A dog digs in the green garden.</p>
+<p style="letter-spacing:-.03125em">A dog digs in the green garden.</p>
+<p><em>A dog digs in the green garden.</em></p>
+<p><strong>A dog digs in the green garden.</strong></p>
+<p><strong><em>A dog digs in the green garden.</em></strong></p>""")]
+
 def build(output):
     files = {
       "mimetype":"application/epub+zip",

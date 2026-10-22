@@ -10,35 +10,27 @@
 #include <iostream>
 #include <vector>
 
-// Test-only reference quantizer. Partition a row into constant-coverage runs,
-// preserving fractional plateaus uniformly. Between plateaus, round cumulative
-// area totals; this is independent of production's one-sample delay and carry.
+// Round the exact forward-projected coverage to the nearest representable
+// shade. Equal-distance ties choose the even shade. No neighbor can alter a
+// pixel's value: aggregate row-ink conservation must not create edge noise.
 std::vector<uint8_t> quantizeReferenceCoverage(const std::vector<int64_t>& coverage, int w, int h, int64_t area) {
   assert(area > 0 && coverage.size() == static_cast<size_t>(w * h));
-  std::vector<uint8_t> result(coverage.size());
-  for (int y = 0; y < h; ++y) {
-    int64_t prefix = 0, previous = 0;
-    for (int x = 0; x < w;) {
-      const int64_t value = coverage[y * w + x];
-      assert(value >= 0 && value <= 3 * area);
-      int end = x + 1;
-      while (end < w && coverage[y * w + end] == value) ++end;
-      if (end - x > 1 && value % area) {
-        const int64_t lower = value / area, remainder = value % area;
-        const uint8_t raw = lower + (remainder * 2 > area || (remainder * 2 == area && (lower & 1)));
-        std::fill(result.begin() + y * w + x, result.begin() + y * w + end, raw);
-        prefix = previous = 0;
-      } else {
-        for (int next = x; next < end; ++next) {
-          prefix += value;
-          const int64_t total = (prefix + (area - 1) / 2) / area;
-          assert(total >= previous && total - previous <= 3);
-          result[y * w + next] = total - previous;
-          previous = total;
-        }
+  std::vector<uint8_t> result;
+  result.reserve(coverage.size());
+  for (const auto value : coverage) {
+    assert(value >= 0 && value <= 3 * area);
+    // Choose by distance to all four shades, independently of production's
+    // quotient/remainder implementation.
+    int best = 0;
+    int64_t distance = value;
+    for (int shade = 1; shade <= 3; ++shade) {
+      const int64_t candidate = std::abs(value - shade * area);
+      if (candidate < distance || (candidate == distance && !(shade & 1))) {
+        best = shade;
+        distance = candidate;
       }
-      x = end;
     }
+    result.push_back(best);
   }
   return result;
 }
@@ -163,12 +155,15 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
   expect({1, 1, 1, 1}, 2, {0, 0, 0, 0});
   expect({3, 3, 5, 5}, 2, {2, 2, 2, 2});
   expect({6, 5, 5, 6}, 10, {1, 0, 0, 1});
-  expect({1, 6, 1, 0, 1, 6, 1}, 2, {0, 3, 1, 0, 0, 3, 1});
-  expect({1, 2, 2, 1}, 2, {0, 1, 1, 1});
+  expect({1, 6, 1, 0, 1, 6, 1}, 2, {0, 3, 0, 0, 0, 3, 0});
+  expect({1, 2, 2, 1}, 2, {0, 1, 1, 0});
   expect({1, 6, 2}, 2, {0, 3, 1});
-  expect({29, 48, 41, 2}, 16, {2, 3, 2, 0});
+  expect({29, 48, 41, 2}, 16, {2, 3, 3, 0});
   expect({23, 48, 43, 6}, 16, {1, 3, 3, 0});
   expect({1, 9, 2}, 3, {0, 3, 1});
+  // A rounded bowl taper: row diffusion previously made the .25 fringe
+  // visible and reduced the adjacent 1.75 stroke to 1 (both .75-level errors).
+  expect({5, 10, 12, 7, 1}, 4, {1, 2, 3, 2, 0});
   const auto orientation = g.getOrientation();
   const std::vector<int> source{0, 1, 3, 0, 0, 1, 3, 2, 0, 0, 3, 3, 3, 2, 1, 0, 1, 3, 0, 0};
   std::array<uint8_t, 6> bits{};

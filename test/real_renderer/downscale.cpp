@@ -221,11 +221,10 @@ void checkFamily(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily& fam
 }
 
 // Thirteen 2x2 tiles cover every quarter-level average from 0 through 3.
-// Literal differences of rounded cumulative areas fix row-ink conservation,
-// exact half ties, neighbors and endpoints. Individual pixels can round either
-// way as the preceding fractional coverage is carried into the next pixel.
+// Each must choose its closest shade, independently of preceding samples.
+// Exact half ties choose even, preserving uniform flat edges without drift.
 void checkCoverageTies(GfxRenderer& g, HalDisplay& d) {
-  constexpr uint8_t expected[] = {0, 0, 1, 0, 1, 2, 1, 2, 2, 2, 3, 2, 3};
+  constexpr uint8_t expected[] = {0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3};
   constexpr int width = 26, height = 2;
   std::array<uint8_t, width * height / 4> bitmap{};
   for (int total = 0; total <= 12; ++total)

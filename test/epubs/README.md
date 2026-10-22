@@ -141,7 +141,7 @@ the existing per-gap stretch cap instead of introducing oversized spaces.
 T–H spacing while deliberately retaining identical geometric outlines. Enable
 embedded fonts; the 700-weight row should be tighter than the 400-weight row.
 The non-linear axis mapping and variation deltas also have independent FontTools
-oracle tests. All 25 chapters, font outlines and metadata are original specimens.
+oracle tests. All 26 chapters, font outlines and metadata are original specimens.
 
 
 **Repeated stems and smooth edges** checks the repeated l/i stems in original
@@ -149,3 +149,11 @@ short phrases at 75%, 100%, and 125%, with italics, bold, small caps and trackin
 At 12pt and Normal darkness, inspect both repeated-stem weight and smooth flat
 serifs/crossbars. The production-renderer tests also cover the geometric stem
 areas and preserve flat gray runs without dithering.
+
+
+**Curves and faint edges** checks original g/d-heavy phrases at 80%, 100%, and
+120%, with tracking and all four styles. At 10pt and 12pt, Normal darkness and
+antialiasing on, inspect both the initial BW page and settled gray edges. Faint
+fringes must not become isolated spurs because of other ink in the same row.
+The earlier row-total stem equality check was replaced by local coverage accuracy;
+forcing equal total ink at every fractional phase can damage curved letters.

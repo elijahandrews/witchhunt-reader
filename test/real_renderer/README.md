@@ -69,27 +69,26 @@ Scaled entry-point tests cover ligatures, combining accents, kerning and scale
 cancellation; drawing and measurement use the same glyph walk. Scan-mode tests
 also ensure measurement continues to request the needed font glyphs.
 
-Bitmap resampling balances rounding across varying edges within each glyph row.
-Previously, independent per-pixel rounding could give the first l in “will” more
-ink than the second at small HD sizes. A bounded scalar remainder now prevents
-that phase-dependent weight difference in isolated stems. No additional heap or
-cache storage is used; spacing and source font weights stay unchanged.
+Bitmap resampling integrates source coverage and selects each pixel's nearest
+available shade independently, with exact half ties choosing the even shade.
+Carrying rounding error across a glyph row was removed: it could promote faint
+curve fringes into visible spurs and weaken stronger edges, depending on unrelated
+pixels to their left. Repeated or flat coverage must always produce the same shade.
 
-Equal fractional-coverage runs retain uniform nearest-even rounding, resetting
-the remainder across the run. This protects flat gray serifs and crossbars from
-error-diffusion texture. Between protected plateaus, integrated totals round to
-the nearest shade unit with exact halves toward less ink (at most 1/6 display
-pixel of total coverage). This is not universal ink conservation: uniform flat
-hairlines retain their original quantization, and physical e-ink shades may be
-nonlinear. Native outline rasterization is unchanged by this bitmap fix.
+The exact-area source-forward oracle checks every output pixel. Independent
+geometric tests cover stem error bounds, uniform flat edges, and permutations
+and reflections of all quarter-shade coverages in captured/staged, cached/direct,
+and rotated paths. Each output must be within half a shade of its own coverage.
+Each independently rounded two-edge stem has at most one shade unit of total
+error; totals can differ across phases. Forcing identical totals sacrificed edge
+accuracy. The earlier
+“will” total-ink equality is intentionally not a quality requirement. Native
+outline rendering and fractional advances are unchanged by this correction.
 
-Independent integer-area forward projections check every pixel, including exact
-Q16 reciprocal boundaries. Hardcoded mixed-plateau examples and 1,027 geometric
-stem/flat-edge cases cover all phases, scales, orientations, cached/uncached and
-staged/captured paths. Original word specimens include “will still fill little
-tall hill”; the synthetic EPUB's **Repeated stems and smooth edges** chapter
-adds matching device checks at several sizes/styles. Inspect both stem weight
-and smooth horizontal edges with Normal darkness and antialiasing enabled.
+Use the synthetic EPUB's **Repeated stems and smooth edges** and **Curves and faint
+edges** chapters at 10pt and 12pt, Normal darkness and antialiasing enabled. Inspect
+curved letters as well as upright stems, both before and after the gray overlay.
+Host images model logical shades, not the physical panel waveform.
 
 ## Outline references and quality criteria
 

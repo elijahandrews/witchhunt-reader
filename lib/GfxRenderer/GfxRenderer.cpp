@@ -1157,49 +1157,6 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   }
 }
 
-// Balance rounding across varying glyph edges without dithering flat gray bars.
-// One pending sample identifies both ends of an equal-coverage plateau. Such
-// plateaus keep independent nearest-even rounding and reset the carry; elsewhere
-// the bounded remainder prevents a stem gaining ink merely from its x phase.
-// Scalar state only, local to one glyph row; no additional cache/allocation.
-template <typename Area>
-class GlyphCoverageRow {
-  const Area area;
-  Area error = 0, pending = 0;
-  bool havePending = false, sameBefore = false;
-
- public:
-  explicit GlyphCoverageRow(Area area) : area(area) {}
-  // Returns the previous pixel, or -1 for the first sample. Push -1 once at
-  // row end to flush; real coverages are always in [0, 3*area].
-  int push(Area coverage) {
-    if (!havePending) {
-      pending = coverage;
-      havePending = true;
-      return -1;
-    }
-    const bool sameAfter = pending == coverage;
-    int raw;
-    if (pending == 0 || pending == area || pending == 2 * area || pending == 3 * area) {
-      // Exact levels keep the carry and need no per-pixel division.
-      raw = pending == 0 ? 0 : pending == area ? 1 : pending == 2 * area ? 2 : 3;
-    } else if (sameBefore || sameAfter) {
-      // A repeated fractional value describes a flat edge, not independent
-      // noisy samples. Error diffusion would texture it (e.g. .5,.5 -> 0,1).
-      raw = static_cast<int>((pending + area / 2) / area);
-      if ((raw & 1) && !(area & 1) && raw * area - pending == area / 2) --raw;
-      error = 0;
-    } else {
-      const Area value = pending + error;
-      raw = static_cast<int>((value + (area - 1) / 2) / area);
-      error = value - raw * area;
-    }
-    pending = coverage;
-    sameBefore = sameAfter;
-    return raw;
-  }
-};
-
 // Resample one glyph to `scale`, reporting every destination pixel that must be drawn to
 // `emit(dstX, dstY)`. Single source of truth for both consumers: the cache builder (which
 // records the pixels into a 1-bit mask) and the uncached fallback (which draws them
@@ -1207,6 +1164,10 @@ class GlyphCoverageRow {
 // drifting apart — the cached and uncached paths must produce identical pixels.
 //
 // Every scale uses the same coverage and per-plane mask, including reduced text.
+// Quantize each pixel independently to its nearest shade (ties to even). Carrying
+// rounding error across a row can turn a faint fringe into a spur, or remove a
+// stronger edge, according to unrelated pixels earlier in that row. Preserving
+// local coverage takes priority over forcing a fixed total ink count per stem.
 template <typename Emit>
 static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool is2Bit, const int srcW, const int srcH,
                                          const int dstW, const int dstH, const float scale, const int64_t srcXOriginFP,
@@ -1232,22 +1193,21 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
   };
 
   // At native bitmap size a horizontal phase only mixes two neighboring
-  // columns. Carry the same row-coverage remainder as the general path below,
-  // without its 64-bit area loop for every character of ordinary body text.
+  // columns. Preserve the same coverage/tie rule without the general 64-bit
+  // area loop for every character of ordinary body text.
   if (scale == 1.0f && srcYOriginFP == 0) {
     const int first = static_cast<int>(srcXOriginFP >> 20);
     const int fraction = static_cast<int>((srcXOriginFP - static_cast<int64_t>(first) * (1 << 20)) >> 16);
     for (int y = 0; y < dstH; ++y) {
-      GlyphCoverageRow<int> row(16);
       for (int x = 0; x < dstW; ++x) {
         const int sx = first + x;
         const int a = sx >= 0 && sx < srcW && y < srcH ? srcRaw(sx, y) : 0;
         const int b = sx + 1 >= 0 && sx + 1 < srcW && y < srcH ? srcRaw(sx + 1, y) : 0;
-        const int raw = row.push(a * (16 - fraction) + b * fraction);
-        if (raw >= 0 && ((drawMask >> raw) & 1)) emit(x - 1, y, raw);
+        const int value = a * (16 - fraction) + b * fraction;
+        const int lower = value >> 4, remainder = value & 15;
+        const uint8_t raw = lower + (remainder > 8 || (remainder == 8 && (lower & 1)));
+        if ((drawMask >> raw) & 1) emit(x, y, raw);
       }
-      const int raw = row.push(-1);
-      if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstW - 1, y, raw);
     }
     return;
   }
@@ -1274,7 +1234,6 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
     const int sy0 = std::max(0, static_cast<int>(srcY0FP >> FP_SHIFT));
     const int sy1 = std::min(static_cast<int>((srcY1FP - 1) >> FP_SHIFT), srcH - 1);
     int64_t srcX0FP = srcXOriginFP;
-    GlyphCoverageRow<int64_t> row(dstPixelAreaFP);
     for (int dstX = 0; dstX < dstW; dstX++, srcX0FP += xStep) {
       const int64_t srcX1FP = srcX0FP + xStep;
       const int sx0 = std::max(0, static_cast<int>(srcX0FP >> X_SHIFT));
@@ -1294,12 +1253,20 @@ static inline void emitScaledGlyphPixels(const uint8_t* const bitmap, const bool
           covered += static_cast<int64_t>(raw) * hOverlapFP * wOverlapFP;
         }
       }
-      // Quantize before clipping/masking so cached, direct and AA passes agree.
-      const int raw = row.push(covered);
-      if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstX - 1, dstY, raw);
+      // covered / dstPixelArea is 3x the ink fraction (raw already carries the x3 of the
+      // source encoding). Exact half levels occur frequently when reducing an HD
+      // font's already-quantized 2-bit raster. Always rounding them upward adds
+      // extra ink along stems. Use nearest-even ties without another division;
+      // non-ties retain the same nearest-level result and every draw path shares it.
+      int64_t rounded = (covered + dstPixelAreaFP / 2) / dstPixelAreaFP;
+      if ((rounded & 1) && !(dstPixelAreaFP & 1) && rounded * dstPixelAreaFP - covered == dstPixelAreaFP / 2) {
+        --rounded;
+      }
+      const uint8_t raw = static_cast<uint8_t>(std::min<int64_t>(3, rounded));
+      if ((drawMask >> raw) & 0x01) {
+        emit(dstX, dstY, raw);
+      }
     }
-    const int raw = row.push(-1);
-    if (raw >= 0 && ((drawMask >> raw) & 1)) emit(dstW - 1, dstY, raw);
   }
 }
 

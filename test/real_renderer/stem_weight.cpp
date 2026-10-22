@@ -63,8 +63,10 @@ int runStemWeightChecks(GfxRenderer& g, HalDisplay& d) {
   const auto originalOrientation = g.getOrientation();
   g.setTextDarkness(0);
   // Original rectangular stems: complete middle rows have known area, with
-  // varying edges separated by a solid core. Their weight must not depend on
-  // placement. A five-source-pixel stem at 2x is the reported 2.5px case.
+  // varying edges separated by a solid core. Independent rounding bounds total
+  // error to one shade unit for the two edges. Equal totals at every phase are
+  // not representable without moving pixels away from their closest shade. A
+  // five-source-pixel stem at 2x is the reported 2.5px case.
   for (int width : {5, 6, 7, 8}) {
     std::vector<uint8_t> bitmap((width * 16 + 3) / 4, 255);
     const EpdGlyph glyphs[] = {{0, 0, 64, 0, 0, 0, 0},
@@ -88,7 +90,7 @@ int runStemWeightChecks(GfxRenderer& g, HalDisplay& d) {
         // The resampler uses a Q16 reciprocal; compute its exact geometric
         // area, independently of its sampling or quantization implementation.
         const int step = int(std::lround(65536.0 / scale));
-        const int expected = (3 * width * 65536 + (step - 1) / 2) / step;
+        const int exactInkNumerator = 3 * width * 65536;
         for (int phase = -8; phase < 8; ++phase) {
           g.invalidateScaledGlyphCache();
           auto draw = [&] { g.drawTextSpaced(23, 32, 40, " A", true, EpdFontFamily::REGULAR, scale, phase); };
@@ -101,12 +103,12 @@ int runStemWeightChecks(GfxRenderer& g, HalDisplay& d) {
           for (int y = baseline - int(8 * scale); y < baseline - int(4 * scale); ++y) {
             int total = 0;
             for (int x = 20; x < 65; ++x) total += ink(first, x, y, orientation);
-            ok &= total == expected;
+            ok &= std::abs(total * step - exactInkNumerator) <= step;
           }
           ++checks;
           if (!ok && ++failures <= 5)
-            std::cerr << "Stem weight changes with phase: width=" << width << " scale=" << scale << " phase=" << phase
-                      << " orientation=" << int(orientation) << '\n';
+            std::cerr << "Stem coverage exceeds two-edge error bound: width=" << width << " scale=" << scale
+                      << " phase=" << phase << " orientation=" << int(orientation) << '\n';
         }
       }
     }
@@ -147,8 +149,61 @@ int runStemWeightChecks(GfxRenderer& g, HalDisplay& d) {
     }
     g.removeFont(23);
   }
+  // Original 2x2 coverage tiles, permuted and reflected. A pixel with the
+  // same exact coverage must retain the same shade wherever it appears in a
+  // row. This catches both faint spurs and holes introduced by row diffusion.
+  constexpr std::array<int, 13> nearest{0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3};
+  for (bool reversed : {false, true}) {
+    for (int shift = 0; shift < 13; ++shift) {
+      constexpr int width = 26, height = 2;
+      std::array<uint8_t, width * height / 4> bitmap{};
+      std::array<int, 13> totals{};
+      for (int x = 0; x < 13; ++x) {
+        const int total = (shift + (reversed ? 12 - x : x)) % 13;
+        totals[x] = total;
+        for (int p = 0; p < 4; ++p) {
+          const int raw = std::clamp(total - p * 3, 0, 3), i = (p / 2) * width + 2 * x + p % 2;
+          bitmap[i / 4] |= raw << (6 - 2 * (i % 4));
+        }
+      }
+      const EpdGlyph glyph{width, height, 256, 0, height, uint16_t(bitmap.size()), 0};
+      const EpdGlyph glyphs[]{glyph, glyph};
+      const EpdUnicodeInterval intervals[]{{'A', 'A', 0}, {0x1f130, 0x1f130, 1}};
+      EpdFontData data{};
+      data.bitmap = bitmap.data();
+      data.glyph = glyphs;
+      data.intervals = intervals;
+      data.intervalCount = 2;
+      data.is2Bit = true;
+      data.ascender = 2;
+      data.advanceY = 4;
+      EpdFont font(&data);
+      g.insertFont(23, EpdFontFamily(&font));
+      for (auto orientation : {GfxRenderer::Portrait, GfxRenderer::PortraitInverted, GfxRenderer::LandscapeClockwise,
+                               GfxRenderer::LandscapeCounterClockwise}) {
+        g.setOrientation(orientation);
+        g.invalidateScaledGlyphCache();
+        auto draw = [&] { g.drawTextSpaced(23, 30, 30, "A", true, EpdFontFamily::REGULAR, .5f, 0); };
+        const auto f = capture(g, d, draw);
+        bool ok = f == capture(g, d, draw) && f == capture(g, d, draw, true);
+        ok &= f == capture(g, d, [&] {
+                g.drawTextSpaced(23, 30, 30, "\xf0\x9f\x84\xb0", true, EpdFontFamily::REGULAR, .5f, 0);
+              });
+        for (int x = 0; x < 13; ++x) {
+          const int raw = ink(f, 30 + x, 30, orientation);
+          ok &= raw == nearest[totals[x]];
+          // Independent quality bound: never more than half a shade from
+          // actual coverage, including a faint edge near unrelated ink.
+          ok &= std::abs(raw * 4 - totals[x]) <= 2;
+        }
+        ++checks;
+        if (!ok && ++failures <= 5) std::cerr << "Pixel coverage depends on neighboring ink\n";
+      }
+      g.removeFont(23);
+    }
+  }
   g.setOrientation(originalOrientation);
   g.setRenderMode(GfxRenderer::BW);
-  std::cout << "Stem phase-weight and flat-edge checks=" << checks << " failures=" << failures << '\n';
+  std::cout << "Stem bounds, flat-edge and coverage-locality checks=" << checks << " failures=" << failures << '\n';
   return failures ? 1 : 0;
 }

@@ -1,4 +1,4 @@
-BOOK title=EPUB Feature Specimens lang=en spine=25 toc=25 reliableToc=1
+BOOK title=EPUB Feature Specimens lang=en spine=26 toc=26 reliableToc=1
 SPINE 0 href=OPS/ch0.xhtml pages=1 truncated=0 cssFallback=0
  PAGE 0 elements=7 footnotes=0
   LINE y=0 x=0 align=1 mult=1.000 hfid=0 words=3
@@ -4685,3 +4685,118 @@ SPINE 24 href=OPS/Heads/ch24.xhtml pages=1 truncated=0 cssFallback=0
    W x=209 s=0 z=100 t=N
    W x=222 s=0 z=100 t=V
    W x=236 s=0 z=100 t=A.
+SPINE 25 href=OPS/Heads/ch25.xhtml pages=1 truncated=0 cssFallback=0
+ PAGE 0 elements=14 footnotes=0
+  LINE y=0 x=0 align=0 mult=1.000 hfid=0 words=8
+   W x=0 s=0 z=100 t=Use
+   W x=31 s=0 z=100 t=10pt
+   W x=71 s=0 z=100 t=and
+   W x=109 s=0 z=100 t=12pt,
+   W x=152 s=0 z=100 t=Normal
+   W x=217 s=0 z=100 t=darkness
+   W x=297 s=0 z=100 t=and
+   W x=335 s=0 z=100 t=antialiasing.
+  LINE y=24 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=Compare
+   W x=74 s=0 z=100 t=rounded
+   W x=149 s=0 z=100 t=bowls,
+   W x=207 s=0 z=100 t=descenders
+   W x=302 s=0 z=100 t=and
+   W x=341 s=0 z=100 t=upright
+   W x=413 s=0 z=100 t=stems
+  LINE y=48 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=before
+   W x=60 s=0 z=100 t=and
+   W x=97 s=0 z=100 t=after
+   W x=152 s=0 z=100 t=the
+   W x=189 s=0 z=100 t=gray
+   W x=234 s=0 z=100 t=overlay.
+  LINE y=72 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 t=A
+   W x=14 s=0 z=100 t=dog
+   W x=51 s=0 z=100 t=digs
+   W x=91 s=0 z=100 t=in
+   W x=114 s=0 z=100 t=the
+   W x=151 s=0 z=100 t=green
+   W x=205 s=0 z=100 t=garden.
+  LINE y=96 x=0 align=0 mult=1.000 hfid=0 words=4
+   W x=0 s=0 z=100 t=edge
+   W x=43 s=0 z=100 t=curves
+   W x=105 s=0 z=100 t=stay
+   W x=150 s=0 z=100 t=smooth.
+  LINE y=120 x=0 align=0 mult=1.000 hfid=0 words=12
+   W x=0 s=0 z=100 t=g
+   W x=17 s=0 z=100 t=d
+   W x=31 s=0 z=100 t=g
+   W x=48 s=0 z=100 t=d
+   W x=62 s=0 z=100 t=g
+   W x=79 s=0 z=100 t=d
+   W x=93 s=0 z=100 t=g
+   W x=110 s=0 z=100 t=d
+   W x=124 s=0 z=100 t=g
+   W x=141 s=0 z=100 t=d
+   W x=155 s=0 z=100 t=g
+   W x=172 s=0 z=100 t=d
+  LINE y=144 x=0 align=0 mult=1.000 hfid=0 words=6
+   W x=0 s=0 z=100 t=will
+   W x=36 s=0 z=100 t=still
+   W x=85 s=0 z=100 t=fill
+   W x=125 s=0 z=100 t=little
+   W x=184 s=0 z=100 t=tall
+   W x=230 s=0 z=100 t=hill
+  LINE y=168 x=0 align=0 mult=0.800 hfid=0 words=7
+   W x=0 s=0 z=100 t=A
+   W x=11 s=0 z=100 t=dog
+   W x=41 s=0 z=100 t=digs
+   W x=73 s=0 z=100 t=in
+   W x=92 s=0 z=100 t=the
+   W x=122 s=0 z=100 t=green
+   W x=165 s=0 z=100 t=garden.
+  LINE y=187 x=0 align=0 mult=1.200 hfid=0 words=7
+   W x=0 s=0 z=100 t=A
+   W x=17 s=0 z=100 t=dog
+   W x=61 s=0 z=100 t=digs
+   W x=109 s=0 z=100 t=in
+   W x=136 s=0 z=100 t=the
+   W x=180 s=0 z=100 t=green
+   W x=245 s=0 z=100 t=garden.
+  LINE y=216 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 f=0 ls=9 t=A
+   W x=15 s=0 z=100 f=0 ls=9 t=dog
+   W x=54 s=0 z=100 f=0 ls=9 t=digs
+   W x=97 s=0 z=100 f=0 ls=9 t=in
+   W x=122 s=0 z=100 f=0 ls=9 t=the
+   W x=161 s=0 z=100 f=0 ls=9 t=green
+   W x=218 s=0 z=100 f=0 ls=9 t=garden.
+  LINE y=240 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=0 z=100 f=0 ls=-9 t=A
+   W x=13 s=0 z=100 f=0 ls=-9 t=dog
+   W x=48 s=0 z=100 f=0 ls=-9 t=digs
+   W x=85 s=0 z=100 f=0 ls=-9 t=in
+   W x=106 s=0 z=100 f=0 ls=-9 t=the
+   W x=141 s=0 z=100 f=0 ls=-9 t=green
+   W x=192 s=0 z=100 f=0 ls=-9 t=garden.
+  LINE y=264 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=2 z=100 t=A
+   W x=14 s=2 z=100 t=dog
+   W x=51 s=2 z=100 t=digs
+   W x=91 s=2 z=100 t=in
+   W x=114 s=2 z=100 t=the
+   W x=151 s=2 z=100 t=green
+   W x=205 s=2 z=100 t=garden.
+  LINE y=288 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=1 z=100 t=A
+   W x=15 s=1 z=100 t=dog
+   W x=55 s=1 z=100 t=digs
+   W x=99 s=1 z=100 t=in
+   W x=124 s=1 z=100 t=the
+   W x=164 s=1 z=100 t=green
+   W x=223 s=1 z=100 t=garden.
+  LINE y=312 x=0 align=0 mult=1.000 hfid=0 words=7
+   W x=0 s=3 z=100 t=A
+   W x=15 s=3 z=100 t=dog
+   W x=55 s=3 z=100 t=digs
+   W x=99 s=3 z=100 t=in
+   W x=124 s=3 z=100 t=the
+   W x=164 s=3 z=100 t=green
+   W x=223 s=3 z=100 t=garden.
