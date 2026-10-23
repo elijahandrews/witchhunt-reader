@@ -64,7 +64,7 @@ TEST(FontFeatures, AuthoredCapsUseFullScaleAndAlternateKerning) {
   Font f;
   std::vector<uint32_t> keys;
   const auto m = textRun::walk(f.family, "Aa", EpdFontFamily::SMALL_CAPS, 1, 0,
-                               [&](uint32_t cp, int, int, float scale, bool synthetic, int8_t) {
+                               [&](uint32_t cp, int, int, float scale, bool synthetic, int8_t, const EpdRasterGlyph*) {
                                  keys.push_back(cp);
                                  EXPECT_FLOAT_EQ(scale, 1);
                                  EXPECT_FALSE(synthetic);
@@ -152,11 +152,19 @@ TEST(FontFeatures, SyntheticCapsPreserveNegativeFractionalKerning) {
   Font f;
   int width = 0, height = 0;
   f.font.getTextDimensions("nn", &width, &height, 1);
-  // Each capital is20px wide, reduced to15px. Pair kerning is -12/16
-  // sourcepx, reduced to -9/16. The legacy native path snaps to14px;
-  // the fractional text walk places it at14+7/16 and includes its edge coverage.
+  // Each 20px capital reduces to 15px. Kerning -12/16 source pixels
+  // becomes -9/16: the second bitmap origin rounds 14+7/16 to 14.
+  // This mock has outline metrics but no final raster, so it must grid-fit.
   EXPECT_EQ(width, 29);
-  EXPECT_EQ(textRun::walk(f.family, "nn", EpdFontFamily::SMALL_CAPS, 1, 0, [](auto...) {}).right, 30);
+  int count = 0;
+  const auto m = textRun::walk(f.family, "nn", EpdFontFamily::SMALL_CAPS, 1, 0,
+                               [&](uint32_t, int x, int, float, bool, int8_t phase, const EpdRasterGlyph*) {
+                                 EXPECT_EQ(x, count++ * 14);
+                                 EXPECT_EQ(phase, 0);
+                               });
+  EXPECT_EQ(count, 2);
+  EXPECT_EQ(m.advance, 29);  // round(15 + 15 - 9/16)
+  EXPECT_EQ(m.right, 29);
 }
 
 TEST(FontFeatures, SelectedSuffixUsesExactTrackedScaledGlyphPositions) {
@@ -210,7 +218,7 @@ TEST(FontFeatures, SelectedRangeUsesUnicodeCharactersAndSmallCapsKerning) {
 TEST(FontFeatures, DisabledLigaturesKeepIndividualGlyphsAndCharacterRanges) {
   Font font;
   std::vector<uint32_t> keys;
-  auto collect = [&](uint32_t cp, int, int, float, bool, int8_t) { keys.push_back(cp); };
+  auto collect = [&](uint32_t cp, int, int, float, bool, int8_t, const EpdRasterGlyph*) { keys.push_back(cp); };
   const auto joined = textRun::walk(font.family, "ffi", EpdFontFamily::REGULAR, 1, 0, collect);
   EXPECT_EQ(keys, (std::vector<uint32_t>{EPD_ALTERNATE_GLYPH_BASE + 5}));
   EXPECT_EQ(joined.advance, 20);
@@ -222,4 +230,38 @@ TEST(FontFeatures, DisabledLigaturesKeepIndividualGlyphsAndCharacterRanges) {
   ASSERT_TRUE(range.found);
   EXPECT_EQ(range.left, 20);
   EXPECT_EQ(range.right, 40);
+}
+
+TEST(FontFeatures, FractionalPhaseRequiresSuccessfulFinalRaster) {
+  struct State {
+    bool accept;
+    int calls;
+  } state{};
+  auto rasterCallbacks = callbacks;
+  rasterCallbacks.raster = [](void* ctx, uint16_t gid, float, int8_t, EpdRasterGlyph* out) {
+    auto& state = *static_cast<State*>(ctx);
+    ++state.calls;
+    if (!state.accept) return false;
+    out->metrics = metrics(nullptr, gid);
+    return true;
+  };
+  Font f;
+  f.data.outline = &rasterCallbacks;
+  f.data.outlineCtx = &state;
+  for (bool accept : {false, true}) {
+    state = {accept, 0};
+    int count = 0;
+    const auto m = textRun::walk(f.family, "AAA", EpdFontFamily::REGULAR, 1, 3,
+                                 [&](uint32_t, int x, int, float, bool, int8_t phase, const EpdRasterGlyph*) {
+                                   EXPECT_EQ(x, count * 20);
+                                   EXPECT_EQ(phase, accept ? count * 3 : 0);
+                                   ++count;
+                                 });
+    EXPECT_EQ(count, 3);
+    EXPECT_EQ(state.calls, 3);
+    EXPECT_EQ(m.advance, 60);
+    // The layout-only advance path must not rasterize or allocate glyphs.
+    EXPECT_EQ((textRun::walk<false, false>(f.family, "AAA", EpdFontFamily::REGULAR, 1, 3, [](auto...) {}).advance), 60);
+    EXPECT_EQ(state.calls, 3);
+  }
 }

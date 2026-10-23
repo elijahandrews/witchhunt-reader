@@ -14,7 +14,10 @@
 // Scaled advances accumulate in 16.16 fixed point, retaining sub-sixteenth
 // precision until drawing or measuring the final width. The callback receives baseline-relative integer
 // coordinates plus a signed horizontal phase in display-pixel sixteenths.
-// Coverage and bounds use that phase; advances retain the authored precision.
+// Only final-grid outline rasters use that phase. Stored bitmaps are grid-fitted
+// to avoid changing edge shades between identical letters. Advances retain the
+// authored precision in both paths. The final callback argument borrows the
+// resolved outline raster for this emission only; nullptr selects bitmap fallback.
 namespace textRun {
 struct Metrics {
   int advance = 0;
@@ -67,23 +70,31 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
       continue;
     }
     int x, y = 0;
-    int8_t phase;
+    int8_t phase = 0, rasterPhase = 0;
+    int rasterX;
     if (combining) {
-      phase = lastPhase;
-      x = lastX;
+      rasterPhase = lastPhase;
+      x = rasterX = lastX;
     } else {
       if (previous) cursor += tracking * metricToPen + std::llround(font.getKerning(previous, cp, style) * penScale);
       const int64_t phasePen = (cursor + metricToPen / 2) >> 12;
-      x = fractional ? static_cast<int>((phasePen + 8) >> 4) : pixel(cursor);
-      phase = fractional ? static_cast<int8_t>(phasePen - static_cast<int64_t>(x) * 16) : 0;
+      x = pixel(cursor);
+      rasterX = fractional ? static_cast<int>((phasePen + 8) >> 4) : x;
+      rasterPhase = fractional ? static_cast<int8_t>(phasePen - static_cast<int64_t>(rasterX) * 16) : 0;
       cursor += std::llround(glyph.advanceX * penScale);
       previous = cp;
     }
     auto bounds = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale, phase);
-    auto positioning = glyphScale::bounds(glyph.left, glyph.top, glyph.width, glyph.height, glyphScale);
+    auto positioning = bounds;
+    EpdRasterGlyph raster;
+    const EpdRasterGlyph* resolvedRaster = nullptr;
     if constexpr (RasterBounds) {
-      EpdRasterGlyph raster;
-      if (font.rasterGlyph(cp, style, glyphScale, phase, raster)) {
+      // A provider may decline (legacy backend, missing glyph, memory limit).
+      // Use its success, not font type or 2-bit encoding, to enable phase.
+      if (font.rasterGlyph(cp, style, glyphScale, rasterPhase, raster)) {
+        resolvedRaster = &raster;
+        x = rasterX;
+        phase = rasterPhase;
         const auto& ink = raster.metrics;
         bounds = {ink.left, -ink.top, ink.width, ink.height};
         positioning = bounds;
@@ -100,7 +111,7 @@ Metrics walk(const EpdFontFamily& font, const char* text, EpdFontFamily::Style s
       lastWidth = positioning.width;
       lastTop = -positioning.top;
     }
-    emit(cp, x, y, glyphScale, folded, phase);
+    emit(cp, x, y, glyphScale, folded, phase, resolvedRaster);
     if constexpr (TrackRange) {
       if (range && firstCharacter <= range->last && character > range->first) {
         const int a = std::min(x, x + bounds.left);

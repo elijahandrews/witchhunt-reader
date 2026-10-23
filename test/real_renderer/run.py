@@ -84,7 +84,11 @@ def main():
     parser.add_argument("--native-fonts", nargs=4, type=Path, metavar=("REGULAR", "BOLD", "ITALIC", "BOLD_ITALIC"),
                         help="Four local TTF files tested through the actual flash-store/native outline adapter")
     parser.add_argument("--sanitize", action="store_true", help="Run with AddressSanitizer and UndefinedBehaviorSanitizer")
+    parser.add_argument("--bitmap-stem-consistency", action="store_true",
+                        help="Run the repeated-bitmap stem regression in isolation")
     args = parser.parse_args()
+    if args.bitmap_stem_consistency and (args.cpfont or args.outline or args.native_fonts):
+        parser.error("--bitmap-stem-consistency uses original synthetic glyphs; omit external font options")
     sanitizers = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if args.sanitize else []
     repo = args.repo_root.resolve()
     source = Path(__file__).parent.resolve()
@@ -113,7 +117,10 @@ def main():
         "clang", *sanitizers, "-c", str(repo / "lib/uzlib/src/tinflate.c"),
         "-o", str(output / "tinflate.o"),
     ]
-    files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "fractional.cpp", source / "stem_weight.cpp", output / "GfxRenderer.cpp"]
+    if args.bitmap_stem_consistency:
+        files = [source / "bitmap_stem_main.cpp", source / "support.cpp", source / "stem_weight.cpp", output / "GfxRenderer.cpp"]
+    else:
+        files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "fractional.cpp", source / "stem_weight.cpp", source / "raster_fallback.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (
@@ -175,6 +182,8 @@ def main():
 
     export_images(output, failed=render.returncode != 0)
     render.check_returncode()
+    if args.bitmap_stem_consistency:
+        return
     import driver_audit
     driver_audit.run(repo, output / "driver-audit", sanitize=args.sanitize)
 

@@ -19,6 +19,8 @@
 #include "../../src/util/SelectionPixels.h"
 int runFractionalChecks(GfxRenderer&, HalDisplay&);
 int runStemWeightChecks(GfxRenderer&, HalDisplay&);
+int runRepeatedBitmapStemChecks(GfxRenderer&, HalDisplay&);
+int runRasterFallbackChecks(GfxRenderer&, HalDisplay&);
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
@@ -86,8 +88,7 @@ int main(int argc, char** argv) {
           for (const char* sample : {"AV office fi", "e\xcc\x81 cafe", "abc 123", "Sample", "jfj fffi"}) {
             d.fb.fill(255);
             const auto& family = id == 1 ? bookFamily : sansFamily;
-            const auto m =
-                textRun::walk(family, sample, style, scale, tracking, [](uint32_t, int, int, float, bool, int8_t) {});
+            const auto m = textRun::walk(family, sample, style, scale, tracking, [](auto...) {});
             g.drawTextSpaced(id, 30, 100, sample, true, style, scale, tracking);
             int minx = 480, maxx = -1;
             for (int yy = 0; yy < 800; ++yy)
@@ -208,6 +209,8 @@ int main(int argc, char** argv) {
       runDownscaleChecks(g, d, bookFamily, sansFamily, argc > 1 && std::string(argv[1]) != "-" ? argv[1] : nullptr);
   result |= runFractionalChecks(g, d);
   result |= runStemWeightChecks(g, d);
+  result |= runRepeatedBitmapStemChecks(g, d);
+  result |= runRasterFallbackChecks(g, d);
 #ifdef WITCH_TEST_OUTLINE
   if (argc > 2 && std::string(argv[2]) != "-") {
     result |= runOutlineChecks(g, d, argv[2]);

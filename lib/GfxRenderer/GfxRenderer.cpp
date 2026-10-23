@@ -1311,14 +1311,16 @@ static void captureScaledGlyph(const GfxRenderer& renderer, const uint8_t* bitma
 static void renderCharAtScale(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                               const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
                               const bool pixelState, const EpdFontFamily::Style style, const float scale,
-                              const int8_t phase = 0) {
-  EpdRasterGlyph raster;
-  if (fontFamily.rasterGlyph(cp, style, scale, phase, raster)) {
+                              const EpdRasterGlyph* raster) {
+  if (raster) {
     renderCharImpl<TextRotation::None>(renderer, renderMode, fontFamily, cp, cursorX, cursorY, pixelState, style,
-                                       &raster);
+                                       raster);
     return;
   }
-  if (scale == 1.0f && phase == 0) {
+  // Use the exact raster decision made by the walk: retrying a declined phase
+  // at zero could select a different glyph/bounds under memory pressure.
+  constexpr int8_t phase = 0;
+  if (scale == 1.0f) {
     renderCharImpl<TextRotation::None>(renderer, renderMode, fontFamily, cp, cursorX, cursorY, pixelState, style);
     return;
   }
@@ -1548,8 +1550,7 @@ bool GfxRenderer::getTextInkMetrics(const int fontId, const char* text, const Ep
   const EpdFontFamily* const family = findFontFamily(fontId);
   if (!family) return false;
 
-  const auto metrics =
-      textRun::walk(*family, text, style, fontBaseScale(fontId), 0, [](uint32_t, int, int, float, bool, int8_t) {});
+  const auto metrics = textRun::walk(*family, text, style, fontBaseScale(fontId), 0, [](auto...) {});
   *aboveBaseline = std::max(0, -metrics.top);
   *belowBaseline = std::max(0, metrics.bottom);
   return metrics.hasInk;
@@ -1677,7 +1678,10 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
     }
 
     if (folded) {
-      renderCharAtScale(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style, smallCaps::SCALE);
+      EpdRasterGlyph raster;
+      const auto* resolvedRaster = font.rasterGlyph(cp, style, smallCaps::SCALE, 0, raster) ? &raster : nullptr;
+      renderCharAtScale(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style, smallCaps::SCALE,
+                        resolvedRaster);
     } else {
       renderCharImpl<TextRotation::None>(*this, renderModeSnapshot, font, cp, lastBaseX, yPos, black, style);
     }
@@ -1718,8 +1722,8 @@ void GfxRenderer::drawTextAtScale(const int fontId, const int x, const int y, co
   const auto mode = getRenderMode();
   textRun::walk(
       *family, text, style, scale, tracking,
-      [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/, int8_t phase) {
-        renderCharAtScale(*this, mode, *family, cp, x + dx, baseline + dy, black, style, glyphScale, phase);
+      [&](uint32_t cp, int dx, int dy, float glyphScale, bool /*folded*/, int8_t, const EpdRasterGlyph* raster) {
+        renderCharAtScale(*this, mode, *family, cp, x + dx, baseline + dy, black, style, glyphScale, raster);
       },
       nullptr, ligatures);
 }
@@ -3369,8 +3373,7 @@ int GfxRenderer::getKerning(const int fontId, const uint32_t leftCp, const uint3
 int GfxRenderer::scaledTextAdvanceX(const EpdFontFamily& font, const char* text, const EpdFontFamily::Style style,
                                     const float scale) const {
   if (!text) return 0;
-  return textRun::walk<false, false>(font, text, style, scale, 0, [](uint32_t, int, int, float, bool, int8_t) {})
-      .advance;
+  return textRun::walk<false, false>(font, text, style, scale, 0, [](auto...) {}).advance;
 }
 
 int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFamily::Style style) const {
@@ -3976,8 +3979,7 @@ int GfxRenderer::getTextAdvanceXSpaced(int fontId, const char* text, EpdFontFami
     return 0;
   }
   return textRun::walk<false, false>(
-             *family, text, style, scale * fontBaseScale(fontId), tracking,
-             [](uint32_t, int, int, float, bool, int8_t) {}, nullptr, ligatures)
+             *family, text, style, scale * fontBaseScale(fontId), tracking, [](auto...) {}, nullptr, ligatures)
       .advance;
 }
 int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily::Style style, float scale,
@@ -3988,9 +3990,8 @@ int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, EpdFontFamily:
     fontCacheManager_->recordText(text, fontId, style);
     return 0;
   }
-  const auto m = textRun::walk(
-      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
-      nullptr, ligatures);
+  const auto m =
+      textRun::walk(*family, text, style, scale * fontBaseScale(fontId), tracking, [](auto...) {}, nullptr, ligatures);
   return std::max(m.advance, m.right) - std::min(0, m.left);
 }
 GfxRenderer::TextRange GfxRenderer::getTextRangeSpaced(int fontId, const char* text, EpdFontFamily::Style style,
@@ -4003,9 +4004,7 @@ GfxRenderer::TextRange GfxRenderer::getTextRangeSpaced(int fontId, const char* t
     return {};
   }
   textRun::CharacterRange range{first, last};
-  textRun::walk<true>(
-      *family, text, style, scale * fontBaseScale(fontId), tracking, [](uint32_t, int, int, float, bool, int8_t) {},
-      &range, ligatures);
+  textRun::walk<true>(*family, text, style, scale * fontBaseScale(fontId), tracking, [](auto...) {}, &range, ligatures);
   return {range.x, range.left, range.right};
 }
 void GfxRenderer::drawTextSpaced(int fontId, int x, int y, const char* text, bool black, EpdFontFamily::Style style,

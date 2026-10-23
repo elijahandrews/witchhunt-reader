@@ -207,3 +207,72 @@ int runStemWeightChecks(GfxRenderer& g, HalDisplay& d) {
   std::cout << "Stem bounds, flat-edge and coverage-locality checks=" << checks << " failures=" << failures << '\n';
   return failures ? 1 : 0;
 }
+
+// Regression: repeated bitmap letters must keep the same edge profile.
+// Original rectangular glyphs avoid external fonts and distinguish identical
+// letter shapes from font-design differences. The four instances have authored
+// fractional advances, so their positions visit different raster phases.
+int runRepeatedBitmapStemChecks(GfxRenderer& g, HalDisplay& d) {
+  int checks = 0, failures = 0;
+  const auto originalOrientation = g.getOrientation();
+  g.setTextDarkness(0);
+  for (int width : {5, 7}) {
+    constexpr int height = 16, advance = 232;
+    std::vector<uint8_t> bitmap((width * height + 3) / 4, 255);
+    const EpdGlyph glyph{uint8_t(width), height, advance, 0, height, uint16_t(bitmap.size()), 0};
+    const EpdUnicodeInterval interval{'l', 'l', 0};
+    EpdFontData data{};
+    data.bitmap = bitmap.data();
+    data.glyph = &glyph;
+    data.intervals = &interval;
+    data.intervalCount = 1;
+    data.is2Bit = true;
+    data.ascender = height;
+    data.advanceY = height + 4;
+    EpdFont font(&data);
+    for (float scale : {.5f, 1.f}) {
+      g.insertScaledFont(23, EpdFontFamily(&font), scale);
+      for (int tracking : {-1, 0, 1}) {
+        // This independent metric assertion forbids fixing weight by discarding
+        // advance precision or tracking. Only the final raster placement differs.
+        const int expectedAdvance = int(std::floor((4 * advance * scale + 3 * tracking) / 16 + .5f));
+        for (auto orientation : {GfxRenderer::Portrait, GfxRenderer::PortraitInverted, GfxRenderer::LandscapeClockwise,
+                                 GfxRenderer::LandscapeCounterClockwise}) {
+          g.setOrientation(orientation);
+          g.invalidateScaledGlyphCache();
+          auto draw = [&] { g.drawTextSpaced(23, 30, 40, "llll", true, EpdFontFamily::REGULAR, 1.f, tracking); };
+          const auto first = capture(g, d, draw);
+          bool ok = first == capture(g, d, draw) && first == capture(g, d, draw, true);
+          ok &= g.getTextAdvanceXSpaced(23, "llll", EpdFontFamily::REGULAR, 1.f, tracking) == expectedAdvance;
+          const int baseline = 40 + int(std::lround(height * scale));
+          const int y = baseline - int(height * scale / 2);
+          std::array<int, 4> totals{};
+          // Compare the full cross-section, including white padding, after
+          // integer translation. Equal total ink alone allowed the earlier
+          // row-diffusion workaround to damage local edges.
+          for (int letter = 0; letter < 4; ++letter) {
+            const int x = 30 + int(std::floor(letter * (advance * scale + tracking) / 16 + .5f));
+            for (int dx = -2; dx <= int(std::ceil(width * scale)) + 2; ++dx) {
+              const int actual = ink(first, x + dx, y, orientation);
+              totals[letter] += actual;
+              ok &= actual == ink(first, 30 + dx, y, orientation);
+            }
+          }
+          // Reject blank rendering even if all four blank profiles match.
+          ok &= totals[0] > 0;
+          ++checks;
+          if (!ok && ++failures <= 8) {
+            std::cerr << "Repeated bitmap stem changes with position: width=" << width << " scale=" << scale
+                      << " tracking=" << tracking << " orientation=" << int(orientation) << " ink=" << totals[0] << ','
+                      << totals[1] << ',' << totals[2] << ',' << totals[3] << '\n';
+          }
+        }
+      }
+      g.removeFont(23);
+    }
+  }
+  g.setOrientation(originalOrientation);
+  g.setRenderMode(GfxRenderer::BW);
+  std::cout << "Repeated bitmap stem consistency checks=" << checks << " failures=" << failures << '\n';
+  return failures ? 1 : 0;
+}

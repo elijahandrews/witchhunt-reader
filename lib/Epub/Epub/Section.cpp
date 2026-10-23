@@ -32,33 +32,33 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 94;  // v94: retained fractional advances, native authored caps, variable kerning,
-                                              // and complete justification remainders; v93: final-grid outline bounds;
-                                              // v92: fractional glyph ink bounds; v90: combined visible/raw source LUT,
-                                              // upstream token boundaries and publisher layout v78: a span indent (poem
-                                              // line shape) gives way before its line wraps; v77 pages of such poems
-                                              // carry the wrapped lines v77: the status byte records a heap-degraded
-                                              // image build (kStatusImageHeaderDegraded); a v76 cache may be image-less
-                                              // without saying so v76: a percentage wrapper (<div style="width:60%">)
-                                              // no longer shrinks a block image below min(native, column), so image
-                                              // sizes baked into v75 pages are stale v75: the reader ladder gained
-                                              // rungs above 18 pt (20/22/24/26), so a heading snaps to a different face
-                                              // and residual than it did under v74 and breaks across lines differently.
-                                              // The ladder is derived from the body fontId and so is deliberately
-                                              // absent from the property hash; the hash therefore still MATCHES, and
-                                              // this version is the only thing that rejects a v74 cache v74: the HTML
-                                              // `hidden` attribute now suppresses an element, so a v73 cache still
-                                              // holds the laid-out text it should have hidden v73: an internal link
-                                              // honours CSS vertical-align, so footnote references marked `a {
-                                              // vertical-align: super }` are raised and shrunk. Word size/position are
-                                              // baked into layout v72: `!important` is now stripped from every CSS
-                                              // declaration value, so margins, text-align and text-indent that carry
-                                              // the marker take effect. Those feed layout, so a v71 cache holds the old
-                                              // geometry v71: the packed word style byte now carries a per-word
-                                              // "continues the previous word" bit, so the dictionary overlay can select
-                                              // a bionic-split or hyphenated word as one word. A v70 cache reads the
-                                              // bit as clear everywhere, i.e. keeps the old split
-                                              // selection, so it has to be rebuilt
+constexpr uint8_t SECTION_FILE_VERSION = 95;  // v95: grid-fitted bitmap ink bounds; v94: retained fractional advances,
+                                              // native authored caps, variable kerning, and complete justification
+                                              // remainders; v93: final-grid outline bounds; v92: fractional glyph ink
+                                              // bounds; v90: combined visible/raw source LUT, upstream token boundaries
+                                              // and publisher layout v78: a span indent (poem line shape) gives way
+                                              // before its line wraps; v77 pages of such poems carry the wrapped lines
+                                              // v77: the status byte records a heap-degraded image build
+                                              // (kStatusImageHeaderDegraded); a v76 cache may be image-less without
+                                              // saying so v76: a percentage wrapper (<div style="width:60%">) no longer
+                                              // shrinks a block image below min(native, column), so image sizes baked
+                                              // into v75 pages are stale v75: the reader ladder gained rungs above 18
+                                              // pt (20/22/24/26), so a heading snaps to a different face and residual
+                                              // than it did under v74 and breaks across lines differently. The ladder
+                                              // is derived from the body fontId and so is deliberately absent from the
+                                              // property hash; the hash therefore still MATCHES, and this version is
+                                              // the only thing that rejects a v74 cache v74: the HTML `hidden`
+                                              // attribute now suppresses an element, so a v73 cache still holds the
+                                              // laid-out text it should have hidden v73: an internal link honours CSS
+                                              // vertical-align, so footnote references marked `a { vertical-align:
+                                              // super }` are raised and shrunk. Word size/position are baked into
+                                              // layout v72: `!important` is now stripped from every CSS declaration
+                                              // value, so margins, text-align and text-indent that carry the marker
+                                              // take effect. Those feed layout, so a v71 cache holds the old geometry
+                                              // v71: the packed word style byte now carries a per-word "continues the
+                                              // previous word" bit, so the dictionary overlay can select a bionic-split
+                                              // or hyphenated word as one word. A v70 cache reads the bit as clear
+                                              // everywhere, i.e. keeps the old split selection, so it has to be rebuilt
                                               // v70: a wrapper's horizontal inset reaches every
                                               // child block, and insets/hanging indents are clamped to
                                               // the panel. Layout bakes insets into word xpos (see v61),

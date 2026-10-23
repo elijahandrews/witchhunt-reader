@@ -189,12 +189,12 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
         for (bool clipped : {false, true}) {
           g.setTextDarkness(dark);
           g.invalidateScaledGlyphCache();
-          // Interleave phases sharing the same dimensions: a missing phase in
-          // the cache key must fail even though all cold glyphs look correct.
+          // Fractional advances must change placement without resampling a stored
+          // bitmap at a different phase. Exercise both sides of pixel boundaries.
           for (int phase : {0, 7, -8, -1, 3, -5, 6, -7, 1, -3, 5, -6, 2, -4, 4, -2}) {
             const int tracking = clipped ? phase - 96 : phase;
             const int x = clipped ? 0 : 20, y = clipped ? -6 : 20;
-            const double pen = x + (std::lround(64 * scale) + tracking) / 16.0;
+            const double pen = x + std::floor((64 * scale + tracking) / 16.0 + .5);
             const int baseline = y + int(std::lround(8 * scale));
             auto draw = [&] { g.drawTextSpaced(21, x, y, " A", true, EpdFontFamily::REGULAR, scale, tracking); };
             const Frame expected = project(source, 5, 4, -1, 3, scale, pen, baseline, dark, dir);
@@ -226,8 +226,8 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
     data.kernLeftEntryCount = data.kernRightEntryCount = kerned ? 1 : 0;
     data.kernLeftClassCount = data.kernRightClassCount = kerned ? 1 : 0;
     data.kernMatrix = kerned ? kernValue : nullptr;
-    for (bool fractional : {false, true}) {
-      data.is2Bit = fractional;
+    for (bool twoBit : {false, true}) {
+      data.is2Bit = twoBit;
       for (float scale : {.5f, .75f, 1.0f, 1.25f})
         for (int tracking : {-49, -3, 0, 3})
           for (auto style : {EpdFontFamily::REGULAR, EpdFontFamily::SMALL_CAPS}) {
@@ -238,14 +238,11 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
             textRun::CharacterRange range{31, 31};
             const auto measured = textRun::walk<true, false>(
                 family, run.c_str(), style, scale, tracking,
-                [&](uint32_t cp, int x, int, float, bool, int8_t phase) {
+                [&](uint32_t cp, int x, int, float, bool, int8_t phase, const EpdRasterGlyph*) {
                   assert(cp == 'A');
                   if (count) pen += (tracking + (kerned ? -3 * actualScale : 0)) / 16;
-                  const int sixteenths = int(std::floor(pen * 16 + .5));
-                  const int expectedX =
-                      fractional ? int(std::floor(sixteenths / 16.0 + .5)) : int(std::floor(pen + .5));
-                  const int expectedPhase = fractional ? sixteenths - expectedX * 16 : 0;
-                  assert(x == expectedX && phase == expectedPhase);
+                  const int expectedX = int(std::floor(pen + .5));
+                  assert(x == expectedX && phase == 0);
                   assert(phase >= -8 && phase < 8);
                   lastX = x;
                   pen += 91 * actualScale / 16;
@@ -265,13 +262,12 @@ int runFractionalChecks(GfxRenderer& g, HalDisplay& d) {
   EpdFont book(&bookerly_10_regular);
   EpdFontFamily bookFamily(&book);
   g.insertFont(21, bookFamily);
-  // The reported word: check full fractional origins against the original
-  // font's advances, rather than rounding an expected answer through TextRun.
-  const int expected[] = {0, 160, 297, 407, 515};
+  // Fixed grid-fitted origins from the original font advances for this word.
+  const int expected[] = {0, 10, 19, 25, 32};
   int count = 0;
   textRun::walk(bookFamily, "still", EpdFontFamily::REGULAR, 1, 0,
-                [&](uint32_t, int x, int, float, bool, int8_t phase) {
-                  assert(count < 5 && x * 16 + phase == expected[count++]);
+                [&](uint32_t, int x, int, float, bool, int8_t phase, const EpdRasterGlyph*) {
+                  assert(count < 5 && phase == 0 && x == expected[count++]);
                 });
   assert(count == 5);
   auto specimen = [&] {

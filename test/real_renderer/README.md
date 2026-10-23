@@ -80,10 +80,10 @@ geometric tests cover stem error bounds, uniform flat edges, and permutations
 and reflections of all quarter-shade coverages in captured/staged, cached/direct,
 and rotated paths. Each output must be within half a shade of its own coverage.
 Each independently rounded two-edge stem has at most one shade unit of total
-error; totals can differ across phases. Forcing identical totals sacrificed edge
-accuracy. The earlier
-“will” total-ink equality is intentionally not a quality requirement. Native
-outline rendering and fractional advances are unchanged by this correction.
+error. Equal aggregate ink alone is insufficient: row-error diffusion equalized
+stem totals while damaging local edges. Repeated bitmap letters must now retain
+their entire translated edge profile as well, through stable whole-pixel origins.
+Native outline phases and fractional advances remain supported.
 
 Use the synthetic EPUB's **Repeated stems and smooth edges** and **Curves and faint
 edges** chapters at 10pt and 12pt, Normal darkness and antialiasing enabled. Inspect
@@ -171,30 +171,25 @@ preserves the exact original raster instead of repainting a suffix at a rounded
 pen position. `selection.png` shows a synthetic dash-separated dictionary word selection.
 
 
-## Fractional glyph positioning
+## Fractional advances and stable bitmap placement
 
-Two-bit text in the EPUB/scaled glyph walk retains horizontal positions to 1/16
-of a display pixel. The area filter combines the origin with the scaled bearing
-before quantization. Native-size glyphs use an equivalent two-column filter.
-This shifts stored coverage; it does not invent higher-resolution outlines for
-legacy bitmap fonts or change their hinting. HD bitmap fonts retain their existing denser rasters. Runtime outline fonts can
-rasterize at the final size and phase as described below. Native one-bit UI fonts
-keep grid fitting.
-
-The bounded scaled-glyph cache includes the horizontal phase in an existing
-padding byte; its allocation budget is unchanged. Measuring, selection bounds,
-BW, captured AA and staged AA all use the same position. Font advances and
-kerning data are unchanged. Fractional word-edge coverage can add one pixel to
-an ink box, so section caches are versioned to rebuild their layout.
+All fonts retain precise advances and kerning. Stored bitmap glyphs, including HD
+fonts, use whole-pixel origins: shifting an already quantized raster by a fraction
+of a pixel changed the edge shades and thickness of identical letters. Final-grid
+outline rasters retain fractional horizontal positioning. A declined outline
+raster request uses the grid-fitted bitmap fallback, including measurement and
+selection bounds. Drawing consumes that same borrowed raster immediately,
+avoiding a second provider request and a potential mismatch after failure.
+No extra allocation or cache storage is needed.
 
 `fractional.cpp` independently projects source-pixel rectangles onto the output
-grid. It tests all 16 horizontal phases, four scales and orientations, all five
-darkness settings, negative tracking/bearings, clipped output, cached/repeated
-and uncached non-BMP glyphs, and both AA workflows. It also checks the original
-Bookerly 10pt advances for “still” and emits `fractional-spacing.png` with original
-sample text at four sizes. It detects cache aliases between phases and premature
-rounding of a fractional source origin at coverage ties. These are host raster
-checks; physical panel quality and page-turn timing still require device testing.
+grid. It tests 16 fractional advance positions, four scales and orientations,
+all five darkness settings, negative tracking/bearings, clipped output,
+cached/repeated and uncached non-BMP glyphs, and both AA workflows. It also checks
+fixed Bookerly 10pt positions for “still” and emits `fractional-spacing.png`.
+The native outline tests below independently verify phase-aware raster placement.
+Section cache version 95 rebuilds layout using the corrected bitmap ink bounds;
+advances and reading-progress records retain their existing representation.
 
 
 Scaled glyph advances and kerning now accumulate in a 16.16 pen before conversion
@@ -272,3 +267,32 @@ would change that budget; run the normal renderer sanitizer suite separately.
 The compiler bound is per function and the pthread is a different ABI, so neither
 is a proof of every device call chain. Both supplement actual hardware navigation
 and stack high-water checks. No private font is copied into the repository.
+
+
+## Repeated bitmap stem consistency regression
+
+The historical renderer comparison found a remaining regression in fractional
+placement of pre-rasterized two-bit fonts: identical letters can acquire different
+edge profiles and total ink depending on position. This regression now runs in
+the default suite and passes with grid-fitted bitmap origins. The focused command
+below also runs it in isolation. Existing per-pixel coverage checks remain active.
+
+```sh
+python3 test/real_renderer/run.py /absolute/path/to/witch-hunt \
+  --bitmap-stem-consistency --sanitize --out /tmp/witch-bitmap-stems
+```
+
+Original rectangular glyphs with fractional advances reproduce the problem
+without private fonts or book text. At 1x and 2x raster density, all four repeated
+letters must have identical translated mid-stem coverage, including surrounding
+white pixels. Tests cover signed tracking, four orientations, cold/warm caches,
+and captured/staged AA. An independent advance assertion preserves fractional
+metrics and tracking. Comparing the complete edge profile, in addition to ink
+totals, prevents row-error diffusion from passing by moving ink between pixels.
+This is a bitmap consistency requirement; native outlines are a separate path.
+
+The test fails on the October 19 fractional-positioning snapshot and current
+outline5, and passes on the pre-integration and initial integration snapshots.
+The corrected production build passes while retaining advance precision and
+phase-aware final-grid outline rendering. The historical comparison and controls
+are host framebuffers, not measurements of physical e-ink reflectance.

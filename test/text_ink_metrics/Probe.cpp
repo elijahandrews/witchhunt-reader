@@ -74,18 +74,20 @@ int main() {
           renderer.scale = scale;
           int refAbove = 0, refBelow = 0;
           bool any = false;
-          textRun::walk(family, text, style, scale, 0, [&](uint32_t cp, int, int y, float size, bool, int8_t phase) {
-            const auto* glyph = provider.shape(cp);
-            auto b = glyphScale::bounds(glyph->left, glyph->top, glyph->width, glyph->height, size, phase);
-            if (raster && b.height) {
-              --b.top;
-              b.height += 2;
-            }
-            if (!b.width || !b.height) return;
-            refAbove = std::max(refAbove, -(y + b.top));
-            refBelow = std::max(refBelow, y + b.top + b.height);
-            any = true;
-          });
+          textRun::walk(family, text, style, scale, 0,
+                        [&](uint32_t cp, int, int y, float size, bool, int8_t phase, const EpdRasterGlyph*) {
+                          const auto* glyph = provider.shape(cp);
+                          auto b =
+                              glyphScale::bounds(glyph->left, glyph->top, glyph->width, glyph->height, size, phase);
+                          if (raster && b.height) {
+                            --b.top;
+                            b.height += 2;
+                          }
+                          if (!b.width || !b.height) return;
+                          refAbove = std::max(refAbove, -(y + b.top));
+                          refBelow = std::max(refBelow, y + b.top + b.height);
+                          any = true;
+                        });
           const bool actual = renderer.getTextInkMetrics(1, text, style, &above, &below);
           check(actual == any && above == refAbove && below == refBelow, "vertical union parity");
         }
