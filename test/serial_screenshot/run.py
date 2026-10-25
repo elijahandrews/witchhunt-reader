@@ -57,6 +57,7 @@ def main():
 #include <memory>
 #include <string>
 #include <ctime>
+#include "components/themes/TapTargets.h"
 
 template<typename T> auto makeUniqueNoThrow(size_t count) { return std::make_unique<T>(count); }
 struct FontDecompressor {
@@ -129,6 +130,7 @@ enum class STATUS_BAR_TITLE { NONE, CHAPTER_TITLE, BOOK_TITLE };
 struct Settings {
   uint8_t screenMargin = 8;
   bool fastAntiAliasing = true, largeImagePlaceholder = true;
+  bool touchReaderControls = true;
   bool statusBarPrintedPage = false, statusBarBattery = true, useClock = true, statusBarClock = true;
   CrossPointSettings::STATUS_BAR_TITLE statusBarTitle = CrossPointSettings::STATUS_BAR_TITLE::NONE;
 } SETTINGS;
@@ -153,15 +155,18 @@ struct Epub {
   TocItem getTocItem(int) const { return {}; }
   std::string getTitle() const { return "book"; }
 } epubInstance;
+struct Rect { int x=0,y=0,width=0,height=0; };
 struct Gui {
   void drawStatusBar(GfxRenderer& r, float, int, int, const std::string&, int, bool,
-                     const std::string&, bool, bool, SyncIndicator) const {
+                     const std::string&, bool, bool, SyncIndicator, Rect* back = nullptr) const {
+    if (back) *back=Rect{4,20,80,30};
     ++r.chromeDraws; r.getFrameBuffer()[3] = 99;
   }
 } GUI;
 namespace UITheme {
 int getStatusBarTopHeight(bool) { return 2; }
 int getStatusBarBottomHeight(bool) { return 3; }
+int getStatusBarItemsHeight() { return 3; }
 }
 struct Page {
   uint8_t id;
@@ -193,6 +198,8 @@ class EpubReaderActivity {
  public:
   GfxRenderer& renderer;
   Section* section;
+  struct { bool enabled=true; bool available() const { return enabled; } } jumpBack_;
+  struct { bool hasTouch() const { return true; } } mappedInput;
   Epub* epub = &epubInstance;
   bool automaticPageTurnActive = false, forceLoadLargeImages = false;
   int currentSpineIndex = 1, pageTurnDuration = 60000;
@@ -316,7 +323,16 @@ int main() {
   check(renderer.redraws == 1 && renderer.chromeDraws == 0, "normal exit behavior preserved");
   check(renderer.grayBegins == 1 && renderer.planeWrites == 2 && renderer.getFrameBuffer()[1] == 1,
         "ordinary content helper retains its pre-render gray/image policy");
+  TapTargets::Recorder::Builder existing; existing.add(1,1,2,2,9);
+  TapTargets::screenActions().record(existing);
+  reader.renderStatusBar(false);
+  check(TapTargets::screenActions().hitTest(1,1)==9 && TapTargets::screenActions().hitTest(5,21)==-1,
+        "screenshot-only chrome does not replace displayed footer targets");
   reader.renderStatusBar();
+  check(TapTargets::screenActions().hitTest(5,21)==0 && TapTargets::screenActions().hitTest(1,1)==-1,
+        "displayed footer records its button");
+  reader.jumpBack_.enabled=false; reader.renderStatusBar();
+  check(!TapTargets::screenActions().hasTargets(), "expired history clears displayed footer targets");
   check(reader.lastStatusBarPage == 2 && reader.lastStatusBarBattery == 86 &&
             reader.lastStatusBarClockMinute == 120 && reader.lastStatusBarChapterTotal_ == 9 &&
             reader.lastStatusBarChapterApprox_, "ordinary status render still records displayed chrome");
@@ -351,7 +367,7 @@ int main() {
     output.mkdir(parents=True, exist_ok=True)
     (output / 'probe.cpp').write_text(code)
     command = ['clang++', '-std=c++20', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-g',
-               str(output / 'probe.cpp'), '-o', str(output / 'probe')]
+               '-I'+str(repo / 'src'), str(output / 'probe.cpp'), '-o', str(output / 'probe')]
     if args.sanitize:
         command[1:1] = ['-fsanitize=address,undefined', '-fno-omit-frame-pointer']
     subprocess.run(command, check=True)

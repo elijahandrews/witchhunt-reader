@@ -69,7 +69,7 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
     const int8_t initialTextAntiAliasingOverride, const int8_t initialHyphenationOverride,
     const int8_t initialFontSizeNormalizationOverride, const int8_t initialInlineFootnotePreviewsOverride,
     const int8_t initialIgnorePublisherPageMarginsOverride, const bool hasStarredPages, const bool isCurrentPageStarred,
-    const bool hasPrintedPages)
+    const bool hasPrintedPages, const bool canGoBack)
     : TabbedUiListActivity("EpubReaderMenu", renderer, mappedInput),
       currentPageStarred(isCurrentPageStarred),
       pendingOrientation(currentOrientation),
@@ -91,15 +91,16 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(
       currentPage(currentPage),
       totalPages(totalPages),
       bookProgressPercent(bookProgressPercent) {
-  buildMenuItems(hasFootnotes, hasStarredPages, hasPrintedPages);
+  buildMenuItems(hasFootnotes, hasStarredPages, hasPrintedPages, canGoBack);
 }
 
-void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPages, bool hasPrintedPages) {
+void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPages, bool hasPrintedPages,
+                                            bool canGoBack) {
   auto& navigationItems = tabMenuItems[static_cast<size_t>(MenuTab::Navigation)];
   auto& settingsItems = tabMenuItems[static_cast<size_t>(MenuTab::Settings)];
   auto& syncItems = tabMenuItems[static_cast<size_t>(MenuTab::Sync)];
   auto& toolsItems = tabMenuItems[static_cast<size_t>(MenuTab::Tools)];
-  navigationItems.reserve(9);
+  navigationItems.reserve(canGoBack ? 10 : 9);
   settingsItems.reserve(14);
   syncItems.reserve(3);
   toolsItems.reserve(8);
@@ -109,6 +110,7 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
   if (KOREADER_STORE.hasCredentials()) visibleTabs[visibleTabCount++] = MenuTab::Sync;
   visibleTabs[visibleTabCount++] = MenuTab::Tools;
 
+  if (canGoBack) navigationItems.push_back(SettingInfo::Action(StrId::STR_GO_BACK, SettingAction::None));
   navigationItems.push_back(SettingInfo::Action(StrId::STR_SELECT_CHAPTER, SettingAction::None));
   navigationItems.push_back(SettingInfo::Action(StrId::STR_FIND_IN_BOOK, SettingAction::None));
   navigationItems.push_back(SettingInfo::Action(StrId::STR_GO_TO_PERCENT, SettingAction::None));
@@ -390,6 +392,8 @@ void EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes, bool hasStarredPa
 
 EpubReaderMenuActivity::MenuAction EpubReaderMenuActivity::actionForNameId(StrId nameId) {
   switch (nameId) {
+    case StrId::STR_GO_BACK:
+      return MenuAction::GO_BACK;
     case StrId::STR_SELECT_CHAPTER:
       return MenuAction::SELECT_CHAPTER;
     case StrId::STR_FIND_IN_BOOK:

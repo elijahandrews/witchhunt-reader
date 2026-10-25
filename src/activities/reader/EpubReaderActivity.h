@@ -20,6 +20,7 @@
 #include "BookmarkStore.h"
 #include "ChapterPageSpan.h"
 #include "CrossPointState.h"
+#include "EpubJumpBack.h"
 #include "EpubLinkBackStack.h"
 #include "EpubProgressRecord.h"
 #include "EpubReaderMenuActivity.h"
@@ -727,15 +728,9 @@ class EpubReaderActivity final : public Activity {
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
-  // Where a footnote jump came FROM, so page-back returns to the caller instead of to the
-  // previous page (objective: a note is a detour, not a place in the reading order). Anchored on
-  // the caller's paragraph rather than its page number: any repagination between the jump and the
-  // return — a font change made from inside the note, a background rebuild — moves page numbers,
-  // and landing a page or two off is exactly the disorientation the return is meant to prevent.
-  // pageNumber/pageCount stay as the proportional fallback for a spine with no paragraph LUT --
-  // and for the far more common case of a book whose <p>s are not direct children of <body>
-  // (`<body><div><p>`, what Calibre emits), where no page has an anchorable paragraph at all and
-  // getParagraphIndexForPage answers nullopt for every one of them.
+  // Exact source word/character on the caller's page, plus its bounded source interval for
+  // recognizing publisher backlinks after reflow. Page/paragraph coordinates remain fallbacks
+  // for old persisted stacks or source-unavailable pages.
   using SavedPosition = EpubLinkBackStack::Entry;
   static constexpr int MAX_FOOTNOTE_DEPTH = EpubLinkBackStack::kMaxDepth;
   SavedPosition savedPositions[MAX_FOOTNOTE_DEPTH] = {};
@@ -744,6 +739,10 @@ class EpubReaderActivity final : public Activity {
   // loaded from linkstack.bin leaves it at 0: Back uses footnoteDepth, but the KOSync push on sleep
   // is skipped only for a link followed this session, as it was before the stack was persisted.
   int sessionLinkDepth_ = 0;
+  // A live build may resolve an id before its page range is complete. Keep that original
+  // destination while ordinary turns update navTarget/currentPage; a new jump cancels it.
+  int pendingFollowedLinkPage_ = -1;
+  int pendingFollowedLinkSpine_ = -1;
   // True while linkstack.bin exists and holds exactly the stack above. The first push or pop after
   // that deletes the file, and the reader's exit writes the stack only while this is false -- so the
   // file is written when the stack changed, never per page turn, and never disagrees with memory.
@@ -751,6 +750,12 @@ class EpubReaderActivity final : public Activity {
   // the reader had already returned from, which would be worse than none: Back would jump from
   // wherever they had read on to an origin they had already left behind.
   bool linkStackOnDisk_ = false;
+
+  // Recent deliberate-jump undo; separate from the persistent footnote stack.
+  EpubJumpBack jumpBack_;
+  void rememberJumpOrigin(bool followedLink = false);  // caller holds RenderLock
+  void clearJumpBack();                                // caller holds RenderLock
+  void returnFromJump();
 
   // --- render() pass dispatch (see RenderPass) ---
   // Opportunistically restore the secondary display buffer if a prior OOM degraded it.
@@ -1120,10 +1125,15 @@ class EpubReaderActivity final : public Activity {
   // way back.
   void navigateToHref(const std::string& href, bool savePosition = false);
   void restoreSavedPosition();
+  // Capture requires RenderLock; restoring takes the lock and requests the new page.
+  bool captureCurrentPosition(SavedPosition& out) const;
+  NavigationTarget savedPositionTarget(const SavedPosition& pos) const;
+  void restorePosition(const SavedPosition& pos);
   // A followed link's anchor has resolved to `page` of the current spine: if that is where an
   // earlier link was followed from, unwinds the Back stack below it (EpubLinkBackStack::returnDepth).
   // Called with the render lock held, wherever an Anchor target resolves.
   void settleFollowedLink(int page);
+  void clearPendingFollowedLink();  // caller holds RenderLock
   // Persistence of savedPositions, in linkstack.bin beside progress.bin (EpubLinkBackStack).
   // Loaded on open; written on exit (and before a heap-recovery reboot, which skips onExit) when
   // it changed; deleted at the first change after it was loaded. See linkStackOnDisk_.
@@ -1152,6 +1162,7 @@ class EpubReaderActivity final : public Activity {
   // A tap on one of those targets, resolved in loop(). Returns true when it claimed the tap, so
   // the reader stops before the page-turn zones -- a marker can sit anywhere on the page,
   // including inside one.
+  bool handleJumpBackTouch();
   bool handleLinkTouch();
 
  public:

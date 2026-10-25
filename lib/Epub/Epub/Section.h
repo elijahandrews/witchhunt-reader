@@ -411,6 +411,9 @@ class Section {
   // Cached ranges are accepted only when exactly one page can contain the target.
   // Overlap (split words, floats) requests a normal rebuild with an exact probe.
   std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t page) const;
+  // Unambiguous raw source interval for link-return matching across layouts. An active build
+  // waits for the following page to rule out a shared split word; no new cache fields.
+  std::optional<SourceRange> getSourceRangeForPage(uint16_t page) const;
   std::optional<uint16_t> getPageForSourceOffset(SourceAnchor target) const;
   void setSourceLookupTarget(SourceAnchor target) {
     sourceLookupTarget_ = target;

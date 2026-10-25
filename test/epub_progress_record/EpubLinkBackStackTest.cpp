@@ -24,6 +24,11 @@ TEST(EpubLinkBackStack, AFullStackRoundTrips) {
   // Above 255 in every field: both bytes of each matter. The middle entry has no paragraph and no
   // page count, as one recorded mid-build on a chapter of wrapped paragraphs is stored.
   Entry stack[kMax] = {entry(1733, 300, 412, 1025), entry(5, 12), entry(1999, 65535, 700, 4096)};
+  stack[0].sourceOffset = 0x12345678;
+  stack[0].sourceCharacterOffset = 513;
+  stack[0].sourceRangeStart = 0x12345600;
+  stack[0].sourceRangeEnd = 0x1234FFFF;
+  stack[2].sourceOffset = 0;
   uint8_t data[EpubLinkBackStack::kMaxSize];
   const size_t size = EpubLinkBackStack::encode(stack, kMax, data);
   ASSERT_EQ(EpubLinkBackStack::kMaxSize, size);
@@ -36,6 +41,10 @@ TEST(EpubLinkBackStack, AFullStackRoundTrips) {
     EXPECT_EQ(stack[i].pageCount, back[i].pageCount) << i;
     EXPECT_EQ(stack[i].hasParagraph, back[i].hasParagraph) << i;
     EXPECT_EQ(stack[i].paragraphIndex, back[i].paragraphIndex) << i;
+    EXPECT_EQ(stack[i].sourceOffset, back[i].sourceOffset) << i;
+    EXPECT_EQ(stack[i].sourceCharacterOffset, back[i].sourceCharacterOffset) << i;
+    EXPECT_EQ(stack[i].sourceRangeStart, back[i].sourceRangeStart) << i;
+    EXPECT_EQ(stack[i].sourceRangeEnd, back[i].sourceRangeEnd) << i;
   }
 }
 
@@ -49,6 +58,31 @@ TEST(EpubLinkBackStack, AShallowStackStoresOnlyItsEntries) {
   ASSERT_EQ(1, EpubLinkBackStack::decode(data, size, kSpines, back));
   EXPECT_EQ(7, back[0].spineIndex);
   EXPECT_EQ(9, back[0].paragraphIndex);
+}
+
+TEST(EpubLinkBackStack, VersionOneStacksKeepTheirPageAndParagraphFallbacks) {
+  const uint8_t legacy[] = {1, 1, 7, 0, 44, 1, 156, 1, 1, 4};
+  Entry stack[kMax];
+  ASSERT_EQ(1, EpubLinkBackStack::decode(legacy, sizeof(legacy), kSpines, stack));
+  EXPECT_EQ(7, stack[0].spineIndex);
+  EXPECT_EQ(300, stack[0].pageNumber);
+  EXPECT_EQ(412, stack[0].pageCount);
+  EXPECT_EQ(1025, stack[0].paragraphIndex);
+  EXPECT_TRUE(stack[0].hasParagraph);
+  EXPECT_EQ(UINT32_MAX, stack[0].sourceOffset);
+  EXPECT_EQ(0, stack[0].sourceCharacterOffset);
+  EXPECT_FALSE(stack[0].hasSourceRange());
+}
+
+TEST(EpubLinkBackStack, ACharacterWithoutASourceIsNotStored) {
+  Entry stack[kMax] = {entry(1, 2)};
+  stack[0].sourceCharacterOffset = 123;
+  uint8_t data[EpubLinkBackStack::kMaxSize];
+  const size_t size = EpubLinkBackStack::encode(stack, 1, data);
+  Entry back[kMax];
+  ASSERT_EQ(1, EpubLinkBackStack::decode(data, size, kSpines, back));
+  EXPECT_EQ(UINT32_MAX, back[0].sourceOffset);
+  EXPECT_EQ(0, back[0].sourceCharacterOffset);
 }
 
 TEST(EpubLinkBackStack, AnEmptyStackIsNoFile) {
@@ -148,11 +182,11 @@ TEST(EpubLinkBackStack, AReturnLinkUnwindsToBelowItsOrigin) {
   EXPECT_EQ(0, session) << "the sleep push is due again";
 }
 
-// The marker's id names the page of a nearby line, so the return can land a page either side.
-TEST(EpubLinkBackStack, AReturnMayLandAPageEitherSideOfItsOrigin) {
+// Correct inline anchors name their marker page; nearby ordinary links must keep their history.
+TEST(EpubLinkBackStack, NearbyPagesAreNotMistakenForReturns) {
   const Entry stack[kMax] = {entry(3, 10), entry(7, 2)};
-  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 2, 3, 9));
-  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 2, 3, 11));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 9));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 11));
   EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 8));
   EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 12));
   EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 4, 10)) << "another spine is a new detour";
@@ -172,8 +206,33 @@ TEST(EpubLinkBackStack, TheEntryPushedForTheLinkItselfIsNeverMatched) {
 TEST(EpubLinkBackStack, TheNewestMatchingOriginIsTheOneReturnedTo) {
   const Entry stack[kMax] = {entry(3, 10), entry(3, 11), entry(7, 2)};
   EXPECT_EQ(1, EpubLinkBackStack::returnDepth(stack, 3, 3, 11));
-  EXPECT_EQ(1, EpubLinkBackStack::returnDepth(stack, 3, 3, 10)) << "within a page of both";
-  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 3, 3, 9));
+  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 3, 3, 10));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 3, 3, 9));
+}
+
+TEST(EpubLinkBackStack, SourceRangesSurviveChangedPageNumbersAndRejectUnrelatedPages) {
+  Entry stack[kMax] = {entry(3, 10), entry(7, 2)};
+  stack[0].sourceRangeStart = 1000;
+  stack[0].sourceRangeEnd = 1400;
+  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 2, 3, 21, 1200, 1350));
+  EXPECT_EQ(0, EpubLinkBackStack::returnDepth(stack, 2, 3, 22, 1350, 1500));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 10, 1400, 1600));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 10, 700, 1000));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 4, 21, 1200, 1350));
+  EXPECT_EQ(-1, EpubLinkBackStack::returnDepth(stack, 2, 3, 10));
+}
+
+TEST(EpubLinkBackStack, InvalidSourceRangesAreNotPersisted) {
+  Entry stack[kMax] = {entry(3, 10)};
+  stack[0].sourceRangeStart = 500;
+  stack[0].sourceRangeEnd = 400;
+  uint8_t data[EpubLinkBackStack::kMaxSize];
+  const auto size = EpubLinkBackStack::encode(stack, 1, data);
+  Entry back[kMax];
+  ASSERT_EQ(1, EpubLinkBackStack::decode(data, size, kSpines, back));
+  EXPECT_FALSE(back[0].hasSourceRange());
+  EXPECT_EQ(UINT32_MAX, back[0].sourceRangeStart);
+  EXPECT_EQ(0u, back[0].sourceRangeEnd);
 }
 
 TEST(EpubLinkBackStack, PopOnAnEmptyStackDoesNothing) {

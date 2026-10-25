@@ -12,6 +12,7 @@
 #include "Epub/parsers/ChapterHtmlSlimParser.h"
 #include "GfxRenderer.h"
 #include "StoredZipWriter.h"
+#include "src/activities/reader/EpubLinkBackStack.h"
 #include "src/activities/reader/EpubProgressRecord.h"
 
 namespace {
@@ -512,4 +513,91 @@ TEST_F(SourceAnchorTest, OptionalBreakDoesNotConsumeWhitespaceOrLeakAcrossParagr
       EXPECT_FALSE(line.wordContinues(word));
     }
   }
+}
+
+TEST_F(SourceAnchorTest, PersistedBackOriginRestoresInsideAMultiPageParagraphAfterReflow) {
+  makeBook("<p>" + numberedWords(1200) + "</p>");
+  auto original = build(320);
+  const uint16_t callerPage = original->pageCount / 2;
+  ASSERT_GT(callerPage, 3);
+  const auto paragraph = original->getParagraphIndexForPage(callerPage);
+  const auto source = original->getSourceAnchorForPage(callerPage);
+  ASSERT_TRUE(paragraph);
+  ASSERT_TRUE(source);
+  // The old unconditional paragraph restoration demonstrably points well before the caller.
+  ASSERT_LT(*original->getPageForParagraphIndex(*paragraph), callerPage);
+  EpubLinkBackStack::Entry stack[EpubLinkBackStack::kMaxDepth] = {};
+  stack[0].pageNumber = callerPage;
+  stack[0].pageCount = original->pageCount;
+  stack[0].paragraphIndex = *paragraph;
+  stack[0].hasParagraph = true;
+  stack[0].sourceOffset = source->sourceOffset;
+  stack[0].sourceCharacterOffset = source->characterOffset;
+  uint8_t data[EpubLinkBackStack::kMaxSize];
+  const size_t size = EpubLinkBackStack::encode(stack, 1, data);
+  EpubLinkBackStack::Entry loaded[EpubLinkBackStack::kMaxDepth];
+  ASSERT_EQ(1, EpubLinkBackStack::decode(data, size, 1, loaded));
+  const SourceAnchor restored{loaded[0].sourceOffset, loaded[0].sourceCharacterOffset};
+  Section reopened(book, 0, renderer);
+  ASSERT_TRUE(reopened.loadSectionFile(params(320)));
+  EXPECT_EQ(reopened.getPageForSourceOffset(restored), std::optional<uint16_t>(callerPage));
+  const auto originalText = textAt(*original, callerPage);
+  const auto firstWord = originalText.substr(0, originalText.find(' '));
+  for (const int width : {190, 470, 320}) {
+    const auto reflowed = build(width, restored);
+    ASSERT_TRUE(reflowed->sourceLookupPage());
+    EXPECT_NE(textAt(*reflowed, *reflowed->sourceLookupPage()).find(firstWord + " "), std::string::npos);
+    if (width == 320) EXPECT_EQ(*reflowed->sourceLookupPage(), callerPage);
+  }
+}
+
+TEST_F(SourceAnchorTest, PageRangesRejectOverlappingSplitWords) {
+  makeBook("<p>" + std::string(600, 'x') + "</p>");
+  auto section = build(65, {}, 48);
+  ASSERT_GT(section->pageCount, 5);
+  for (uint16_t page = 0; page < section->pageCount; ++page) {
+    ASSERT_TRUE(section->getSourceAnchorForPage(page));
+    EXPECT_FALSE(section->getSourceRangeForPage(page)) << page;
+  }
+}
+
+TEST_F(SourceAnchorTest, LivePageRangeWaitsForTheFollowingPageAndMatchesTheCompletedCache) {
+  makeBook("<p>" + numberedWords(1200) + "</p>");
+  Section live(book, 0, renderer);
+  const auto p = params(200);
+  const host_clock::Ticking tick(1);
+  bool checkedPending = false, checkedReady = false, done = false;
+  uint16_t waitingPage = 0;
+  SourceRange savedRange;
+  for (int slice = 0; slice < 2000; ++slice) {
+    const auto step = live.stepSectionBuild(p, 1, {}, true);
+    ASSERT_NE(step, Section::BuildStep::Failed);
+    if (step == Section::BuildStep::Done) {
+      done = true;
+      break;
+    }
+    const auto count = live.activeBuildPageCount();
+    if (!checkedPending && count > 2) {
+      waitingPage = count - 1;
+      ASSERT_TRUE(live.getSourceAnchorForPage(waitingPage));
+      EXPECT_FALSE(live.getSourceRangeForPage(waitingPage));
+      checkedPending = true;
+    } else if (checkedPending && !checkedReady && count > waitingPage + 1) {
+      const auto range = live.getSourceRangeForPage(waitingPage);
+      ASSERT_TRUE(range);
+      savedRange = *range;
+      checkedReady = true;
+    }
+  }
+  ASSERT_TRUE(done);
+  ASSERT_TRUE(checkedPending);
+  ASSERT_TRUE(checkedReady);
+  ASSERT_TRUE(live.loadSectionFile(p));
+  const auto finalRange = live.getSourceRangeForPage(waitingPage);
+  ASSERT_TRUE(finalRange);
+  EXPECT_EQ(finalRange->first, savedRange.first);
+  EXPECT_EQ(finalRange->end, savedRange.end);
+  EXPECT_TRUE(live.getSourceRangeForPage(live.pageCount - 1));
+  HalFile::failReadsFrom = 0;
+  EXPECT_FALSE(live.getSourceRangeForPage(waitingPage));
 }

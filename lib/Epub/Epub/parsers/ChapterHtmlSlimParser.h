@@ -552,16 +552,20 @@ class ChapterHtmlSlimParser final : public Print {
   // BEFORE the note. Held until addLineToPage has placed a line, then recorded against the page
   // that line actually went on.
   //
-  // Small by construction: an entry lives only from an element's start tag to its first line, so
-  // it holds more than one only for id'd elements that produce no text at all. Past
+  // Inline ids wait for their own source line, including several callers in one paragraph.
+  // Each adds four bytes to the existing queued string (at most 64 bytes for 16 entries). Past
   // MAX_ANCHORS_AWAITING_LINE the queue is flushed at the current page rather than grown, which
   // is exactly the old behaviour and no worse.
-  std::vector<std::string> anchorsAwaitingLine_;
-  // Records every queued anchor against `completedPageCount`. Called once a line has been placed
-  // (the page is then known) and again at end of parse for anchors that never got one.
-  void flushAnchorsAwaitingLine();
+  struct PendingLineAnchor {
+    std::string id;
+    uint32_t sourceOffset = UINT32_MAX;  // inline start tag; UINT32_MAX means the next block line
+  };
+  std::vector<PendingLineAnchor> anchorsAwaitingLine_;
+  // Records anchors reached by this line's source interval against its placed page.
+  // UINT32_MAX flushes all, including trailing ids with no following text.
+  void flushAnchorsAwaitingLine(uint32_t sourceEnd, uint16_t page);
   // Holds an anchor until a line settles its page; see anchorsAwaitingLine_.
-  void queueAnchorForNextLine(std::string id);
+  void queueAnchorForNextLine(std::string id, uint32_t sourceOffset = UINT32_MAX);
   // Records the id of a <span>, within MAX_SPAN_ANCHORS_PER_CHAPTER and never counted against the
   // general cap: see the definition.
   void recordSpanAnchor(const std::string& id);

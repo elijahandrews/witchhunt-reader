@@ -281,6 +281,22 @@ CHAPTERS += [("Curves and faint edges", """<p>Use 10pt and 12pt, Normal darkness
 <p><strong>A dog digs in the green garden.</strong></p>
 <p><strong><em>A dog digs in the green garden.</em></strong></p>""")]
 
+
+# Original long-paragraph footnotes: several inline anchors before a block flush,
+# with explicit same-file backlinks, as well as a page-turn grace test for Go back.
+_jump_chapter_index = len(CHAPTERS)
+_jump_body = []
+for _n in range(120):
+    _jump_body.append("A lantern lights the quiet path beside the river. The patient walker watches the water. ")
+    if _n in (25, 65, 100):
+        _number = (25, 65, 100).index(_n) + 1
+        _jump_body.append(f'<sup><a id="caller{_number}" epub:type="noteref" role="doc-noteref" href="ch{_jump_chapter_index}.xhtml#note{_number}">{_number}</a></sup> ')
+_jump_notes = []
+for _number in range(1, 4):
+    _jump_notes.append(f'<li id="note{_number}"><a role="doc-backlink" href="ch{_jump_chapter_index}.xhtml#caller{_number}">Return {_number}</a> This is an original test note. ' + "The note continues so there is room to turn pages before returning. " * 35 + '</li>')
+CHAPTERS += [("Footnote returns and jump back", """<p>Use a small reader font. This long paragraph has three numbered note links on different pages. Follow each note and tap its Return link: the reader should show the page containing that same numbered marker.</p>
+<p>Also follow a note, turn two pages, then tap Go back in the lower-left footer. Keep the status items at the bottom and touch reading controls enabled. The reading menu also offers Navigation, Go back when the footer is hidden. It should restore the page you left. Repeat after changing font size while in a note. A chapter, search, percentage or bookmark jump also offers Go back for five page turns.</p>""" + '<section><p>' + ''.join(_jump_body) + '</p></section><section epub:type="footnotes" style="break-before:page"><h2>Test notes</h2><ol>' + ''.join(_jump_notes) + '</ol></section>')]
+
 def build(output):
     files = {
       "mimetype":"application/epub+zip",
@@ -333,7 +349,8 @@ def build(output):
         if title == "Outline edges at small sizes":
             head = """<style>@font-face {font-family:'Edge Fixture';src:url('../Fonts/One.ttf') format('truetype')}
               .outline-sample {font-family:'Edge Fixture',serif;font-size:80%}</style>"""
-        files[f"OPS/{path}"]=f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{title}</title><link rel="stylesheet" type="text/css" href="{sheet}"/>{head}</head><body>{body}</body></html>'
+        epub_namespace = ' xmlns:epub="http://www.idpf.org/2007/ops"' if title == "Footnote returns and jump back" else ""
+        files[f"OPS/{path}"]=f'<html xmlns="http://www.w3.org/1999/xhtml"{epub_namespace}><head><title>{title}</title><link rel="stylesheet" type="text/css" href="{sheet}"/>{head}</head><body>{body}</body></html>'
         manifest+=f'<item id="c{i}" href="{path}" media-type="application/xhtml+xml"/>'
         spine+=f'<itemref idref="c{i}"/>'
         nav+=f'<navPoint id="c{i}" playOrder="{i+1}"><navLabel><text>{title}</text></navLabel><content src="{path}"/></navPoint>'

@@ -1,6 +1,7 @@
 add_executable(EpubProgressRecordTest
   EpubProgressRecordTest.cpp
   EpubLinkBackStackTest.cpp
+  EpubJumpBackTest.cpp
 )
 
 target_include_directories(EpubProgressRecordTest PRIVATE

@@ -59,7 +59,7 @@ bookmarks included, and `fontprev/` (`ClearCacheActivity`).
 | `images.bin`, `images.pending` | EPUB | `EpubImageManifest::VERSION` (5) | Image sizes, 12 B per image (FNV-1a 64 of its path in the EPUB, width, height), and the queue of images whose size is still to be read |
 | `img_<hash><ext>`, `<image>.1bit.pxc`, `<image>.bayer.pxc` | EPUB | `PixelCache::PXC_MAGIC` | Images extracted from the book (`<hash>` is FNV-1a 64 of the entry), and their dithered pixel caches: `u16` magic, `u16` width, `u16` height, 2-bit pixels |
 | `cover.img` | EPUB | none | The cover image's bytes, extracted once (or copied from a cover sidecar) |
-| `linkstack.bin` | EPUB | `EpubLinkBackStack::kVersion` (1) | The link Back stack: [below](#linkstackbin) |
+| `linkstack.bin` | EPUB | `EpubLinkBackStack::kVersion` (2) | The link Back stack: [below](#linkstackbin) |
 | `kosync_push.bin` | EPUB | `LastPush::kVersion` (1) | Our last KOReader push: [below](#kosync_pushbin) |
 | `koreader_docid.txt`, `koreader_syncmethod.txt` | EPUB | none | The KOReader document id, after the file size and fingerprint it was computed for, and the match method learned for the book |
 | `index.bin` | TXT, Markdown | `CACHE_VERSION`: TXT 2 (magic `TXTI`), Markdown 4 (`MKDI`) | Page offsets under the current layout. `SleepActivity` checks the TXT magic and version too |
@@ -339,12 +339,22 @@ Everything after `percent` is optional. The reader writes the first 7 bytes as p
 The EPUB reader's Back stack of followed links (footnotes and others), beside `progress.bin`, so Back still returns to the link's origin after sleep or a reopen (`EpubLinkBackStack` in `src/activities/reader/EpubLinkBackStack.h`):
 
 ```text
-u8 version              EpubLinkBackStack::kVersion (1)
+u8 version              EpubLinkBackStack::kVersion (2)
 u8 depth                1..3 (kMaxDepth); a full stack drops its oldest entry
-depth x { u16 spine, u16 page, u16 pageCount, u16 paragraph }   oldest first; 0 = unknown / none
+depth x {               oldest first; each entry is 22 bytes
+  u16 spine, u16 page
+  u16 pageCount         0 = unknown (captured during an unfinished build)
+  u16 paragraph         0 = none
+  u32 sourceOffset      raw chapter XHTML byte; UINT32_MAX = none
+  u16 characterOffset   character within a layout-split source word; 0 without a source
+  u32 sourceRangeStart  original page's raw source interval; UINT32_MAX = unavailable
+  u32 sourceRangeEnd    exclusive end of that interval; 0 = unavailable
+}
 ```
 
-An empty stack is stored as no file. The file is written when the reader closes the book (and before a heap-recovery restart), and removed as soon as the stack changes while a copy is on the card, to be written again on the next close. A file of another version, of a size that does not match its depth, or naming a spine item the book no longer has is ignored and deleted. An entry is restored like a saved position: by its paragraph, else by its page rescaled to the page count, so it survives a layout change.
+An empty stack is stored as no file; the largest file is 68 bytes. The file is written when the reader closes the book (and before a heap-recovery restart), and removed as soon as the stack changes while a copy is on the card, to be written again on the next close. A file of an unsupported version, of a size that does not match its depth, or naming a spine item the book no longer has is ignored and deleted.
+
+Version 1 files remain readable: their eight-byte entries contain only spine, page, page count and paragraph. New entries restore the caller's source word/character through the same lookup used by reading progress, retaining position within a multi-page paragraph after reflow. The optional original page interval identifies a returned backlink even when reflow puts the marker on a different page from the original page's first word. Source intervals that overlap a neighboring page (split words or floats) are excluded. A live build defers matching until its destination and the following page are emitted; the original destination is retained across ordinary page turns and canceled by a new jump, reflow, spine change or explicit restore. The bounded page fallback is used when the source cannot be resolved. An entry without source coordinates restores its exact saved page under the same layout; its paragraph is used only when the page count changed, then proportional page fallback if needed.
 
 ## `kosync_push.bin`
 

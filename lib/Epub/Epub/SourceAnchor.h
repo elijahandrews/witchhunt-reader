@@ -12,6 +12,17 @@ struct SourceAnchor {
   bool valid() const { return sourceOffset != UINT32_MAX; }
 };
 
+// Half-open chapter-source interval. Navigation uses only ranges whose neighboring page
+// intervals do not overlap; a split word or out-of-order float is not a unique page range.
+struct SourceRange {
+  uint32_t first = UINT32_MAX;
+  uint32_t end = 0;
+  bool valid() const { return first != UINT32_MAX && first < end; }
+  bool overlaps(const SourceRange& other) const {
+    return valid() && other.valid() && first < other.end && other.first < end;
+  }
+};
+
 // Transient word provenance, bounded by the parser's existing word buffers. Layout splits
 // retain the source interval and adjust characterOffset/probeByte to preserve exact targets.
 // Only page summaries are persisted; this never adds a per-word field to the page cache.

@@ -28,7 +28,29 @@ nav_decl = "  struct NavigationTarget {" + header.split("  struct NavigationTarg
 nav_start = "std::optional<int> EpubReaderActivity::NavigationTarget::relaidOutRestorePage("
 nav_impl = nav_start + extract(nav_start, "// navTarget is the anchor a section (re)build resolves into.")
 
-generated.write_text(shell.replace("// NAVIGATION_DECLARATION", nav_decl)
+# Compile the real link/jump capture and restoration paths, including their locks.
+jump = "void EpubReaderActivity::rememberJumpOrigin(" + extract(
+    "void EpubReaderActivity::rememberJumpOrigin(", "void EpubReaderActivity::jumpToPercent(")
+reflow = "void EpubReaderActivity::captureSourceBeforeReflow() {" + extract(
+    "void EpubReaderActivity::captureSourceBeforeReflow() {", "void EpubReaderActivity::applyOrientation(")
+positions = "bool EpubReaderActivity::captureCurrentPosition(" + extract(
+    "bool EpubReaderActivity::captureCurrentPosition(", "void EpubReaderActivity::loadLinkBackStack()")
+# Any pending-link cleanup helper is defined beside settleFollowedLink.
+pending = ""
+if "void EpubReaderActivity::clearPendingFollowedLink()" in s:
+    pending = "void EpubReaderActivity::clearPendingFollowedLink()" + extract(
+        "void EpubReaderActivity::clearPendingFollowedLink()", "bool EpubReaderActivity::captureCurrentPosition(")
+
+live_start = "    if (navTarget.kind == NavigationTarget::Kind::TocIndex || navTarget.kind == NavigationTarget::Kind::Anchor) {"
+live = live_start + extract(live_start, "    if (navTarget.kind == NavigationTarget::Kind::Source) {")
+
+classifier = "EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {" + extract(
+    "EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {",
+    "void EpubReaderActivity::renderFinishedBookPass(")
+generated.write_text(shell.replace("// LIVE_LINK_STATEMENTS", live)
+                          .replace("// CLASSIFY_IMPLEMENTATION", classifier)
+                          .replace("// JUMP_IMPLEMENTATION", pending + jump + reflow + positions)
+                          .replace("// NAVIGATION_DECLARATION", nav_decl)
                           .replace("// NAVIGATION_IMPLEMENTATION", nav_impl)
                           .replace("// CAPTURE_IMPLEMENTATION", capture)
                           .replace("// RESTORE_STATEMENTS", "currentSpineIndex = record->spineIndex;" + restore)

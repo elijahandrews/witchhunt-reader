@@ -32,7 +32,8 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 95;  // v95: grid-fitted bitmap ink bounds; v94: retained fractional advances,
+// v96: inline ids follow their own source line.
+constexpr uint8_t SECTION_FILE_VERSION = 96;  // v95: grid-fitted bitmap ink bounds; v94: retained fractional advances,
                                               // native authored caps, variable kerning, and complete justification
                                               // remainders; v93: final-grid outline bounds; v92: fractional glyph ink
                                               // bounds; v90: combined visible/raw source LUT, upstream token boundaries
@@ -2666,6 +2667,35 @@ std::optional<SourceAnchor> Section::getSourceAnchorForPage(uint16_t page) const
   const bool ok = readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end);
   f.close();
   return ok && anchor.valid() ? std::optional<SourceAnchor>(anchor) : std::nullopt;
+}
+
+std::optional<SourceRange> Section::getSourceRangeForPage(const uint16_t page) const {
+  if (buildState_ && buildState_->visitor) {
+    const auto& pages = buildState_->visitor->getParagraphLutPerPage();
+    // The next emitted page proves that this interval did not continue with a split word.
+    if (static_cast<size_t>(page) + 1 >= pages.size()) return std::nullopt;
+    const SourceRange range{pages[page].sourceMin, pages[page].sourceEnd};
+    if (!range.valid()) return std::nullopt;
+    if (page > 0 && range.overlaps({pages[page - 1].sourceMin, pages[page - 1].sourceEnd})) return std::nullopt;
+    if (range.overlaps({pages[page + 1].sourceMin, pages[page + 1].sourceEnd})) return std::nullopt;
+    return range;
+  }
+  FsFile f;
+  uint16_t count;
+  uint32_t start;
+  if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
+  SourceAnchor ignored;
+  SourceRange range;
+  bool ok = page < count && readSourceEntry(f, paragraphLutEntryOffset(start, page), ignored, range.first, range.end) &&
+            range.valid();
+  for (int neighbor = static_cast<int>(page) - 1; ok && neighbor <= static_cast<int>(page) + 1; ++neighbor) {
+    if (neighbor < 0 || neighbor >= count || neighbor == page) continue;
+    SourceRange other;
+    ok = readSourceEntry(f, paragraphLutEntryOffset(start, neighbor), ignored, other.first, other.end) &&
+         !range.overlaps(other);
+  }
+  f.close();
+  return ok ? std::optional<SourceRange>(range) : std::nullopt;
 }
 
 std::optional<uint16_t> Section::getPageForSourceOffset(SourceAnchor target) const {

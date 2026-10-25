@@ -1094,7 +1094,9 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                               const int pageCount, std::string title, const int paddingBottom, const bool isStarred,
                               const std::string& printedPageLabel, const bool fillMargin,
-                              const bool pageCountApproximate, const SyncIndicator syncIndicator) const {
+                              const bool pageCountApproximate, const SyncIndicator syncIndicator,
+                              Rect* goBackButton) const {
+  if (goBackButton) *goBackButton = Rect{};
   if (!SETTINGS.statusBarVisible) return;
   // While a section is still being laid out the total page count is a byte-based estimate, shown
   // with a leading "~" so the reader knows it will firm up as the chapter finishes building.
@@ -1201,17 +1203,8 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   // Draw Battery
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage == CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_NEVER;
-  int batterySize = 0;
-  if (SETTINGS.statusBarBattery) {
-    GUI.drawBatteryLeft(renderer,
-                        Rect{metrics.statusBarHorizontalMargin + orientedMarginLeft + 1, textY, metrics.batteryWidth,
-                             metrics.batteryHeight},
-                        showBatteryPercentage);
-    // Measure the drawn footprint instead of estimating it: a three digit percentage ("100%")
-    // is wider than a fixed guess, and the clock/title placed to the right would overlap it.
-    // The leading 1 is the icon's own inset from the horizontal margin, above.
-    batterySize = 1 + statusBarBatteryWidth(renderer, metrics, showBatteryPercentage);
-  }
+  const int batterySize =
+      SETTINGS.statusBarBattery ? 1 + statusBarBatteryWidth(renderer, metrics, showBatteryPercentage) : 0;
 
   // Right cluster, laid out from the right edge inwards: progress text (already drawn), then the
   // star, then the sync indicator, then the clock when it is right-positioned.
@@ -1225,7 +1218,38 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
 
   // Draw Clock at whichever end it was assigned. Left: just past the battery. Right: just past the
   // star / progress text, so it can never land on top of either.
-  int leftClusterWidth = batterySize;
+  const int leftEdge = metrics.statusBarHorizontalMargin + orientedMarginLeft;
+  int leftClusterWidth = 0;
+  // A transient footer action uses the already reserved status band: appearing/expiring must
+  // never repaginate the book. Leave a top-positioned status bar unchanged. The caller publishes
+  // the returned bounds only for a displayed frame, not for screenshots or pre-render work.
+  if (goBackButton && !statusItemsAtTop) {
+    constexpr int buttonPadding = 6;
+    const int arrowWidth = renderer.getTextWidth(SMALL_FONT_ID, "<");
+    const int labelWidth = renderer.getTextWidth(SMALL_FONT_ID, tr(STR_GO_BACK));
+    const int desiredWidth = 2 * buttonPadding + arrowWidth + buttonPadding + labelWidth;
+    const int minimumWidth = std::max(30, 2 * buttonPadding + arrowWidth);
+    const int clockReserve = clockTextWidth > 0 ? clockTextWidth + statusItemGap : 0;
+    const int availableWidth =
+        rightEdge - leftEdge - rightClusterWidth - batterySize - clockReserve - 3 * statusItemGap;
+    const int buttonWidth = availableWidth >= desiredWidth   ? desiredWidth
+                            : availableWidth >= minimumWidth ? minimumWidth
+                                                             : 0;
+    if (buttonWidth > 0) {
+      *goBackButton = Rect{leftEdge, textY - 2, buttonWidth, statusItemsHeight - 4};
+      renderer.drawRect(goBackButton->x, goBackButton->y, goBackButton->width, goBackButton->height);
+      renderer.drawText(SMALL_FONT_ID, leftEdge + buttonPadding, textY, "<");
+      if (buttonWidth == desiredWidth)
+        renderer.drawText(SMALL_FONT_ID, leftEdge + 2 * buttonPadding + arrowWidth, textY, tr(STR_GO_BACK));
+      leftClusterWidth = buttonWidth + statusItemGap;
+    }
+  }
+  if (SETTINGS.statusBarBattery) {
+    GUI.drawBatteryLeft(renderer,
+                        Rect{leftEdge + leftClusterWidth + 1, textY, metrics.batteryWidth, metrics.batteryHeight},
+                        showBatteryPercentage);
+    leftClusterWidth += batterySize;
+  }
   if (clockTextWidth > 0) {
     int clockX;
     if (clockOnRight) {

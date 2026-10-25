@@ -5,6 +5,7 @@
 #include <TouchTransform.h>
 
 #include "TouchUi.h"
+#include "components/themes/TapTargets.h"
 
 namespace {
 using BA = CrossPointSettings::BUTTON_ACTION;
@@ -200,6 +201,9 @@ bool GestureEventManager::consumeAction(BA& action, const bool inReader) {
   }
 
   if (inReader && input.wasScreenTappedIn(touchOrientation, x, y)) {
+    // A painted reader button takes precedence over a configurable page-sized tap zone.
+    // Leave the contact untouched for the activity to validate and handle.
+    if (SETTINGS.touchReaderControls && TapTargets::screenActions().hitTest(x, y) >= 0) return false;
     const Gesture gesture = TouchGestures::tapGestureFor(TapZones::zoneFor(x, y, width, height));
     if (boundAction(gesture, action, inReader)) {
       input.suppressTouchContact();

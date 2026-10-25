@@ -73,6 +73,23 @@ layout in table cells remains a separate layout limitation.
   pages; the selected passage should remain visible. Repeat after a normal page
   turn to check that deliberate navigation updates the reading position.
 
+The **Footnote returns and jump back** chapter puts three note markers in one
+paragraph long enough to span several pages. At a small font size, follow each
+marker and its **Return** link: it should return to the page containing that
+marker. Also follow a note, turn two pages, then tap **Go back** in the lower-left
+footer. Keep status items at the bottom and touch reading controls enabled. The
+button occupies the existing footer space and does not change pagination. When
+the footer is hidden or positioned at the top, use **reader menu → Navigation →
+Go back**. The page you left should return. Repeat with a font-size
+change inside the note; the source passage should stay visible after reflow.
+
+**Go back** also appears after chapter, search, percentage, printed-page,
+bookmark and ten-page jumps. It remains available after five ordinary page
+turns in either direction and disappears on the sixth. A new jump replaces the
+return position; returning consumes it. This short-lived control lasts for the
+current reading session, while the separate footnote Back history survives a
+reopen. Opening menus or changing settings does not consume page turns.
+
 These checks use original synthetic text. No personal library content is included.
 
 ## Publisher page margins

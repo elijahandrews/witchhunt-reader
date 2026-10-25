@@ -2,6 +2,7 @@
 #include <iostream>
 #include <optional>
 #include "activities/reader/EpubProgressRecord.h"
+#include "activities/reader/EpubJumpBack.h"
 #include "SourceAnchor.h"
 #define LOG_DBG(...) ((void)0)
 #define LOG_INF(...) ((void)0)
@@ -12,12 +13,21 @@ struct SectionProbe {
   int pageCount = 50, currentPage = 0;
   mutable int reads = 0;
   SourceAnchor anchor{9876, 0};
+  bool rangeReady=true;
+  std::optional<uint16_t> liveAnchorPage;
+  std::optional<uint16_t> activeBuildPageForTocIndex(int) const { return liveAnchorPage; }
+  std::optional<uint16_t> activeBuildPageForAnchor(const std::string&) const { return liveAnchorPage; }
+  SourceRange range{40,100};
+  mutable int lastRangePage=-1;
   mutable int visibleLookups = 0, rawLookups = 0;
   std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset) const {
     ++visibleLookups; return offset == 50 ? std::optional<uint16_t>(3) : std::nullopt;
   }
   std::optional<uint16_t> getPageForSourceOffset(SourceAnchor at) const {
     ++rawLookups; return at.sourceOffset == 50 && at.characterOffset == 2 ? std::optional<uint16_t>(7) : std::nullopt;
+  }
+  std::optional<SourceRange> getSourceRangeForPage(uint16_t page) const {
+    lastRangePage=page; return rangeReady ? std::optional<SourceRange>(range) : std::nullopt;
   }
   std::optional<uint16_t> sourceLookupPage() const { return std::nullopt; }
   std::optional<uint16_t> getPageForTocIndex(int) const { return std::nullopt; }
@@ -31,6 +41,21 @@ struct SectionProbe {
 };
 using Section = SectionProbe;
 struct EpubProbe { int getSpineItemsCount() const { return 10; } };
+// This wrapper owns no IO resources, but exposes the production section lifetime API.
+struct SectionHandle {
+  SectionProbe* value = nullptr;
+  SectionHandle& operator=(SectionProbe* p) { value=p; return *this; }
+  SectionProbe* operator->() const { return value; }
+  explicit operator bool() const { return value; }
+  void reset() { value=nullptr; }
+};
+struct RenderLock {
+  static inline int depth = 0;
+  template<class T> explicit RenderLock(T&) { assert(depth == 0); ++depth; }
+  ~RenderLock() { --depth; }
+};
+struct RendererProbe { bool isRefreshPending() const { return false; } };
+namespace ReaderUtils { inline void enforceExitFullRefresh(RendererProbe&) {} }
 class EpubReaderActivity {
  public:
 // NAVIGATION_DECLARATION
@@ -38,7 +63,43 @@ class EpubReaderActivity {
   NavigationTarget navTarget;
   SourceAnchor reflowSource_;
   int reflowSourceSpine_ = -1, reflowSourcePage_ = -1;
-  SectionProbe* section = nullptr;
+  SectionHandle section;
+  using SavedPosition = EpubLinkBackStack::Entry;
+  EpubJumpBack jumpBack_;
+  SavedPosition savedPositions[EpubLinkBackStack::kMaxDepth];
+  int footnoteDepth=0, sessionLinkDepth_=0, updates=0, stackChanges=0;
+  RendererProbe renderer;
+  bool pendingPreRender=false, usePreRenderedBuffer=false, preRenderedPlanesStaged_=false;
+  struct { bool active=false; } pendingGrayscale_;
+  struct { bool ready=false; } preRenderedPage;
+  enum class RenderPass { FinishedBook, SectionBuilding, BufferDisplay, PreRender, BuildSection, Normal };
+  RenderPass classifyRenderPass() const;
+  void armPreparedDisplay() {
+    pendingGrayscale_.active=pendingPreRender=usePreRenderedBuffer=preRenderedPlanesStaged_=true;
+    preRenderedPage.ready=true;
+    assert(classifyRenderPass()==RenderPass::BufferDisplay);
+  }
+  void assertRestoreCanceledDisplay() const {
+    assert(!pendingGrayscale_.active && !pendingPreRender && !usePreRenderedBuffer);
+    assert(!preRenderedPage.ready && !preRenderedPlanesStaged_ && !section);
+    assert(classifyRenderPass()==RenderPass::BuildSection);
+  }
+  int pendingFollowedLinkPage_=-1, pendingFollowedLinkSpine_=-1;
+  static constexpr int MAX_FOOTNOTE_DEPTH=EpubLinkBackStack::kMaxDepth;
+  void clearPendingFollowedLink();
+  void settleFollowedLink(int page);
+  void resolveLiveLink() { // LIVE_LINK_STATEMENTS
+  }
+  bool captureCurrentPosition(SavedPosition&) const;
+  void captureSourceBeforeReflow();
+  NavigationTarget savedPositionTarget(const SavedPosition&) const;
+  void rememberJumpOrigin(bool followedLink=false);
+  void clearJumpBack();
+  void returnFromJump();
+  void restorePosition(const SavedPosition&);
+  void restoreSavedPosition();
+  void requestUpdate() { assert(RenderLock::depth == 0); ++updates; }
+  void noteLinkBackStackChanged() { assert(RenderLock::depth == 1); ++stackChanges; }
   EpubProbe* epub = nullptr;
   enum class ReaderPhase { READING, PRECOMPILING };
   ReaderPhase readerPhase_ = ReaderPhase::READING;
@@ -56,6 +117,8 @@ class EpubReaderActivity {
   void restore(const EpubProgressRecord* record) { // RESTORE_STATEMENTS
   }
 };
+// JUMP_IMPLEMENTATION
+// CLASSIFY_IMPLEMENTATION
 // CAPTURE_IMPLEMENTATION
 // NAVIGATION_IMPLEMENTATION
 
@@ -149,5 +212,132 @@ int main() {
   reader.closeProgress(); assert(!reader.saved);
   reader.epub = &epub; reader.currentSpineIndex = 10;
   reader.closeProgress(); assert(!reader.saved);
-  std::cout << "PASS: production pending/sticky/live-page capture, close branches, source/legacy restore\n";
+  // A real source-captured jump must restore the caller's precise source, not
+  // the beginning of its multi-page paragraph. Generic jumps leave link history alone.
+  reader.currentSpineIndex=3; reader.section=&section;
+  section.currentPage=19; section.pageCount=80; section.anchor={50,2};
+  reader.navTarget=Target::makePage(19);
+  reader.footnoteDepth=1; reader.sessionLinkDepth_=1;
+  reader.savedPositions[0].spineIndex=1; reader.savedPositions[0].pageNumber=7;
+  {
+    RenderLock lock(reader); reader.rememberJumpOrigin();
+  }
+  reader.currentSpineIndex=8; reader.section.reset();
+  reader.navTarget=Target::makePercent(.8f);
+  // Input may arrive before the prepared page's queued render runs. Both Back
+  // variants must cancel that handoff, then dispatch to a new section build.
+  reader.section=&section; reader.armPreparedDisplay();
+  reader.returnFromJump();
+  reader.assertRestoreCanceledDisplay();
+  assert(reader.currentSpineIndex==3 && !reader.section && reader.updates==1);
+  assert(reader.navTarget.kind==Target::Kind::Source && reader.navTarget.sourceOffset==50);
+  assert(reader.navTarget.sourceCharacterOffset==2 && reader.navTarget.fallbackPage==19);
+  assert(reader.footnoteDepth==1 && reader.stackChanges==0 && !reader.jumpBack_.available());
+  reader.returnFromJump(); assert(reader.updates==1); // consumed: no second navigation
+
+  // Resizing or rotating from a reader menu destroys section before action
+  // dispatch. Capture the retained source target, not a nonexistent page zero.
+  reader.navTarget=Target::makeSourceOffset(50,19,2);
+  reader.navTarget.cachedPageCount=80; reader.navTarget.cachedSpineIdx=3;
+  {
+    RenderLock lock(reader); reader.rememberJumpOrigin();
+  }
+  assert(reader.jumpBack_.available());
+  reader.navTarget=Target::makePercent(.9f); reader.currentSpineIndex=8;
+  reader.returnFromJump();
+  assert(reader.currentSpineIndex==3 && reader.navTarget.sourceOffset==50);
+  assert(reader.navTarget.fallbackPage==19 && reader.navTarget.cachedPageCount==80);
+  // During incremental reflow a section exists, but page zero is still the
+  // indexing cursor. The pending target, including split-word character, wins.
+  reader.section=&section; section.active=true; section.currentPage=0;
+  section.anchor={999,0};
+  { RenderLock lock(reader); reader.rememberJumpOrigin(); }
+  reader.currentSpineIndex=8; reader.section.reset();
+  reader.navTarget=Target::makePercent(.9f); reader.returnFromJump();
+  assert(reader.currentSpineIndex==3 && reader.navTarget.sourceOffset==50);
+  assert(reader.navTarget.sourceCharacterOffset==2 && reader.navTarget.fallbackPage==19);
+  section.active=false; section.currentPage=19; section.anchor={50,2};
+
+  // Following a link uses the same precise restoration but consumes that link's
+  // persistent Back entry too. The test lock refuses nested acquisition.
+  reader.section=&section; reader.navTarget=Target::makePage(19);
+  EpubReaderActivity::SavedPosition caller;
+  assert(reader.captureCurrentPosition(caller));
+  reader.savedPositions[0]=caller;
+  { RenderLock lock(reader); reader.rememberJumpOrigin(true); }
+  for(int i=0;i<5;++i) reader.jumpBack_.pageTurned();
+  reader.currentSpineIndex=8; reader.armPreparedDisplay();
+  reader.returnFromJump();
+  reader.assertRestoreCanceledDisplay();
+  assert(reader.currentSpineIndex==3 && reader.footnoteDepth==0 && reader.sessionLinkDepth_==0);
+  assert(reader.stackChanges==1 && reader.navTarget.sourceCharacterOffset==2);
+  assert(!reader.jumpBack_.available());
+
+  // Legacy entries have no source: same layout returns the exact saved page,
+  // while only a changed layout may fall back to the paragraph LUT.
+  caller.sourceOffset=UINT32_MAX; caller.pageNumber=19; caller.pageCount=80;
+  caller.hasParagraph=true; caller.paragraphIndex=7;
+  auto legacy=reader.savedPositionTarget(caller);
+  section.pageCount=80; legacy.resolveInto(section,3);
+  assert(section.currentPage==19);
+  section.pageCount=100; legacy.resolveInto(section,3);
+  assert(section.currentPage==5);
+
+  // No loaded section and no source target is not a trustworthy jump origin.
+  reader.section.reset(); reader.navTarget=Target::makeAnchor("not-loaded");
+  { RenderLock lock(reader); reader.rememberJumpOrigin(); }
+  assert(!reader.jumpBack_.available());
+  // A Return may resolve before its page interval has been emitted. Retry
+  // against that same destination even if an ordinary turn advances the cursor.
+  reader.section=&section; reader.currentSpineIndex=3;
+  reader.savedPositions[0]=caller;
+  reader.savedPositions[0].sourceOffset=50;
+  reader.savedPositions[0].sourceRangeStart=100;
+  reader.savedPositions[0].sourceRangeEnd=200;
+  reader.savedPositions[1].spineIndex=8;
+  reader.footnoteDepth=reader.sessionLinkDepth_=2;
+  reader.navTarget=Target::makeAnchor("caller"); reader.navTarget.followedLink=true;
+  section.active=true; section.rangeReady=false; section.currentPage=0;
+  {
+    RenderLock lock(reader); reader.resolveLiveLink();
+  }
+  assert(reader.footnoteDepth==2 && reader.pendingFollowedLinkPage_==-1);
+  assert(reader.navTarget.followedLink && reader.navTarget.kind==Target::Kind::Anchor);
+  section.liveAnchorPage=16;
+  {
+    RenderLock lock(reader); reader.resolveLiveLink();
+  }
+  assert(reader.footnoteDepth==2 && reader.pendingFollowedLinkPage_==16);
+  assert(section.currentPage==16 && reader.navTarget.kind==Target::Kind::Page);
+  reader.navTarget=Target::makePage(17); section.currentPage=17;
+  section.rangeReady=true; section.range={150,250};
+  {
+    RenderLock lock(reader); reader.resolveLiveLink();
+  }
+  assert(section.lastRangePage==16 && reader.footnoteDepth==0 && reader.sessionLinkDepth_==0);
+  assert(reader.pendingFollowedLinkPage_==-1);
+
+  // A coincidental page number after reflow is not enough: source intervals
+  // meeting at a boundary or wholly outside the origin must not unwind history.
+  for (auto range : {SourceRange{200,250}, SourceRange{300,400}}) {
+    reader.footnoteDepth=reader.sessionLinkDepth_=2;
+    section.range=range; section.active=false;
+    reader.navTarget=Target::makeAnchor("elsewhere"); reader.navTarget.followedLink=true;
+    { RenderLock lock(reader); reader.settleFollowedLink(caller.pageNumber); }
+    assert(reader.footnoteDepth==2 && reader.pendingFollowedLinkPage_==-1);
+  }
+  // A deliberate new jump cancels any retry belonging to the old link.
+  reader.pendingFollowedLinkPage_=16; reader.pendingFollowedLinkSpine_=3;
+  { RenderLock lock(reader); reader.rememberJumpOrigin(); }
+  assert(reader.pendingFollowedLinkPage_==-1 && reader.pendingFollowedLinkSpine_==-1);
+  reader.pendingFollowedLinkPage_=16; reader.pendingFollowedLinkSpine_=2;
+  { RenderLock lock(reader); reader.settleFollowedLink(16); }
+  assert(reader.pendingFollowedLinkPage_==-1 && reader.pendingFollowedLinkSpine_==-1);
+  reader.pendingFollowedLinkPage_=16; reader.pendingFollowedLinkSpine_=3;
+  reader.navTarget=Target::makeSourceOffset(50,19,2); reader.navTarget.followedLink=true;
+  { RenderLock lock(reader); reader.captureSourceBeforeReflow(); }
+  assert(reader.pendingFollowedLinkPage_==-1 && !reader.navTarget.followedLink);
+  assert(reader.navTarget.kind==Target::Kind::Source && reader.navTarget.sourceOffset==50);
+  assert(RenderLock::depth==0);
+  std::cout << "PASS: production source capture/restore, menu reflow, precise jump/link Back and queued-display cancellation\n";
 }
