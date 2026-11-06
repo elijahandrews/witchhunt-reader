@@ -16,6 +16,15 @@ A separate oracle computes expected advance for `HHHH` from real glyph advance a
 
 These are bounded smoke checks, not an exhaustive proof. They do not test SD I/O, cache and prewarming policy, EPUB parser and page wiring, power and UI, grayscale refresh waveforms, or device panel output. The optional local-font coverage checks below add SD bitmap decoding and grayscale-plane composition. Stubs replace hardware refresh, ESP memory and time, and unused SD font paths. `FontCacheManager` scan and prewarm orchestration is disabled; its decoder pointer still delegates to production `FontDecompressor`.
 
+The image-warm regression checks that the production image backdrop and direct
+pixel writer preserve every framebuffer byte inside a cache-only scope, in all
+four orientations and all three render modes. Outside the scope, the backdrop
+must still replace exactly its rectangle. The pipeline's `CompanionCacheFixture`
+also runs the real `Page::warmImageCaches` and PNG decoder, verifying that both
+cache variants are created without painting a backdrop. The former bug erased
+an upcoming image's rectangle from an already prepared text page; returning to
+the page redrew the missing text. Neither host test validates physical e-ink.
+
 Host portability: `ScaledGlyphEntry` has 64-bit pointers on a host, so its device 16-byte size assertion fails. `run.py` copies the header to the output directory and changes only that assertion to `sizeof(void*) > 4 || sizeof(ScaledGlyphEntry) <= 16`. It copies `GfxRenderer.cpp` byte-identically to preserve quote-include adjacency. No production code is edited, and all glyph and rendering algorithms remain unchanged. The same conditional assertion is a proposed production portability patch that retains the 16-byte bound on 32-bit devices.
 
 Artifacts in the output directory are `real_render`, `frame.pgm`, `frame.png`, copied renderer header and source, and `build-command.json`. The command file records the exact source paths and compiler flags. Re-run after every production change. A full EPUB and UI simulator is a separate integration stage.

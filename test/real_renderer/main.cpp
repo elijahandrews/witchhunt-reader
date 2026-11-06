@@ -21,6 +21,7 @@ int runFractionalChecks(GfxRenderer&, HalDisplay&);
 int runStemWeightChecks(GfxRenderer&, HalDisplay&);
 int runRepeatedBitmapStemChecks(GfxRenderer&, HalDisplay&);
 int runRasterFallbackChecks(GfxRenderer&, HalDisplay&);
+int runImageWarmChecks(GfxRenderer&, HalDisplay&);
 int runDownscaleChecks(GfxRenderer&, HalDisplay&, const EpdFontFamily&, const EpdFontFamily&, const char*);
 #ifdef WITCH_TEST_OUTLINE
 int runOutlineChecks(GfxRenderer&, HalDisplay&, const char*);
@@ -77,6 +78,7 @@ int main(int argc, char** argv) {
     }
   const auto sampleFrame = d.fb;
   int failures = 0, checks = 0;
+  failures += runImageWarmChecks(g, d);
   for (int id = 1; id <= 2; ++id)
     for (float scale : {0.75f, 1.0f, 1.2f})
       for (int tracking : {0, 8, 16, -8})

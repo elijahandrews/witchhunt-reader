@@ -120,7 +120,7 @@ def main():
     if args.bitmap_stem_consistency:
         files = [source / "bitmap_stem_main.cpp", source / "support.cpp", source / "stem_weight.cpp", output / "GfxRenderer.cpp"]
     else:
-        files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "fractional.cpp", source / "stem_weight.cpp", source / "raster_fallback.cpp", output / "GfxRenderer.cpp"]
+        files = [source / "main.cpp", source / "support.cpp", source / "downscale.cpp", source / "overlap.cpp", source / "fractional.cpp", source / "stem_weight.cpp", source / "raster_fallback.cpp", source / "image_warm.cpp", output / "GfxRenderer.cpp"]
     files += [
         repo / "lib" / name
         for name in (

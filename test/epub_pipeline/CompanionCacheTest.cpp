@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "Epub.h"
+#include "Epub/Page.h"
 #include "Epub/blocks/ImageBlock.h"
 #include "Epub/converters/PngToFramebufferConverter.h"
 #include "GfxRenderer.h"
@@ -123,6 +124,38 @@ TEST_F(CompanionCacheFixture, UnwritableCompanionLeavesThePrimaryIntact) {
 
   EXPECT_EQ(read("primary.pxc"), read("sep_bw.pxc"));
   EXPECT_TRUE(fs::is_directory(blocked)) << "nothing should have been written over it";
+}
+
+TEST_F(CompanionCacheFixture, BackgroundPageWarmPreservesPreparedTextAndStillCachesBothVariants) {
+  Page page;
+  page.elements.push_back(std::make_unique<PageImage>(std::make_unique<ImageBlock>(png, 96, 160), 185, 37));
+  const auto& image = static_cast<const PageImage&>(*page.elements.front()).getImageBlock();
+  ASSERT_FALSE(image.hasPixelCache());
+  ASSERT_FALSE(image.hasGrayscaleCache());
+  int backdrops = 0;
+  renderer.rectSink = [&](int x, int y, int w, int h, bool state) {
+    ++backdrops;
+    EXPECT_EQ(x, 192);
+    EXPECT_EQ(y, 48);
+    EXPECT_EQ(w, 96);
+    EXPECT_EQ(h, 160);
+    EXPECT_FALSE(state);
+  };
+  constexpr size_t bytes = 48000;
+  std::fill_n(renderer.getWriteTarget(), bytes, 0x5a);
+  const std::vector<uint8_t> before(renderer.getWriteTarget(), renderer.getWriteTarget() + bytes);
+  {
+    GfxRenderer::ScopedCacheOnlyImageWrites cacheOnly(renderer);
+    page.warmImageCaches(renderer, 7, 11, true, true, true);
+    EXPECT_TRUE(image.hasPixelCache());
+    EXPECT_TRUE(image.hasGrayscaleCache());
+    // A revisit takes the cached path; it must be just as harmless.
+    page.warmImageCaches(renderer, 7, 11, true, true, true);
+  }
+  EXPECT_EQ(backdrops, 0) << "warming an upcoming image must not erase the prepared text page";
+  EXPECT_TRUE(std::equal(before.begin(), before.end(), renderer.getWriteTarget()));
+  page.render(renderer, 1, 7, 11, true, true);
+  EXPECT_EQ(backdrops, 1) << "the image still needs its white backdrop when actually displayed";
 }
 
 }  // namespace

@@ -36,7 +36,10 @@ inline void drawPublisherBox(GfxRenderer& renderer, int x, int y, int width, int
 // blitting. Clear that opaque rectangle explicitly so an underlying publisher
 // shade cannot show through. Keep both gray selectors clear before cache replay.
 inline void clearPublisherImageBackdrop(GfxRenderer& renderer, int x, int y, int width, int height) {
-  if (renderer.isErasingOpaqueGlyphs() || renderer.isFontCacheScanning()) return;
+  // The idle image lane can warm a different page while the next text page
+  // already occupies the write buffer. Clearing here would punch an image-sized
+  // white hole in that prepared page even though the decoder suppresses its pixels.
+  if (renderer.isCacheOnlyImageWrites() || renderer.isErasingOpaqueGlyphs() || renderer.isFontCacheScanning()) return;
   renderer.fillRect(x, y, width, height, renderer.getRenderMode() != GfxRenderer::BW);
 }
 

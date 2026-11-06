@@ -1030,10 +1030,13 @@ class GfxRenderer {
   uint8_t* getWriteTarget() const { return frameBuffer; }
   int getWriteOriginY() const { return 0; }
   int getWriteRows() const { return cacheOnlyImageWrites_ ? 0 : static_cast<int>(panelHeight); }
+  bool isCacheOnlyImageWrites() const { return cacheOnlyImageWrites_; }
   // While one of these is live the raw pixel writers see a zero-row write window and touch no
   // framebuffer byte, while the decoders' pixel caches are written as usual: an image can be
   // decoded into its .pxc without the displayed frame changing. The reader's image lane uses it
   // to warm the caches of the next few pages between page turns (memory audit 2026-09, R7).
+  // Image backdrop painting must also check isCacheOnlyImageWrites(): it uses
+  // fillRect(), which does not go through the raw writers' zero-row window.
   struct ScopedCacheOnlyImageWrites {
     explicit ScopedCacheOnlyImageWrites(const GfxRenderer& r) : renderer_(r) { renderer_.cacheOnlyImageWrites_ = true; }
     ~ScopedCacheOnlyImageWrites() { renderer_.cacheOnlyImageWrites_ = false; }

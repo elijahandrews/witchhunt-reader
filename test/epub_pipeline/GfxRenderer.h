@@ -82,7 +82,14 @@ class GfxRenderer {
   bool isErasingOpaqueGlyphs() const { return opaqueReplay; }
   uint8_t* getWriteTarget() const { return frameBuffer_; }
   int getWriteOriginY() const { return 0; }
-  int getWriteRows() const { return 800; }
+  bool isCacheOnlyImageWrites() const { return cacheOnlyImageWrites_; }
+  int getWriteRows() const { return cacheOnlyImageWrites_ ? 0 : 800; }
+  mutable bool cacheOnlyImageWrites_ = false;
+  struct ScopedCacheOnlyImageWrites {
+    const GfxRenderer& renderer;
+    explicit ScopedCacheOnlyImageWrites(const GfxRenderer& r) : renderer(r) { renderer.cacheOnlyImageWrites_ = true; }
+    ~ScopedCacheOnlyImageWrites() { renderer.cacheOnlyImageWrites_ = false; }
+  };
   void clearScreen(uint8_t = 0xFF) const {}
 
   // --- Drawing (no-ops: the harness never inspects pixels) ---
@@ -93,7 +100,10 @@ class GfxRenderer {
   void drawLine(int, int, int, int, int, bool) const {}
   void drawRect(int, int, int, int, bool = true) const {}
   void drawRect(int, int, int, int, int, bool) const {}
-  void fillRect(int, int, int, int, bool = true) const {}
+  std::function<void(int, int, int, int, bool)> rectSink;
+  void fillRect(int x, int y, int w, int h, bool state = true) const {
+    if (rectSink) rectSink(x, y, w, h, state);
+  }
   void fillRectDither(int, int, int, int, Color) const {}
 
   // --- Font lifecycle (built-in-font behavior: everything is always ready) ---
