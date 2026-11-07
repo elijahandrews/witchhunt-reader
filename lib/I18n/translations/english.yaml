@@ -894,7 +894,7 @@ STR_BOOK_SEARCH_LIMIT: "First %lu matches (search limit)"
 STR_BOOK_SEARCH_PARTIAL: "%lu matches; %d sections could not be searched"
 STR_BOOK_SEARCH_COUNT: "%lu matches"
 
-STR_BOOK_SYNC: "Sync books"
+STR_BOOK_SYNC: "Pluto local book sync"
 STR_BOOK_SYNC_DESC: "Add missing books from your home library"
 STR_BOOK_SYNC_CONNECTING: "Connecting to Wi-Fi..."
 STR_BOOK_SYNC_LIST: "Loading book list..."

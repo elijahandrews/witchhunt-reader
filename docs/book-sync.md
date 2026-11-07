@@ -1,6 +1,6 @@
 # Home-library book sync
 
-**File Transfer → Sync books** adds missing EPUBs from a compatible HTTPS helper.
+**File Transfer → Pluto local book sync** adds missing EPUBs from a compatible HTTPS helper.
 The reader joins ordinary Wi-Fi and resolves the configured hostname using that
 network's DNS. It does not implement SMB or require Tailscale.
 
