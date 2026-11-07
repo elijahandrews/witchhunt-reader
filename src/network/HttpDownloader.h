@@ -71,6 +71,9 @@ class HttpDownloader {
   class Session {
    public:
     Session();
+    // Private-CA sessions always use HTTPS, strict verification (including dates), and no redirects.
+    // The PEM is borrowed and must outlive this session. No change to global browsing policy.
+    explicit Session(const char* privateCa);
     ~Session();
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;

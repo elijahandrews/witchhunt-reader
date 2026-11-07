@@ -32,7 +32,7 @@ class NetworkModeSelectionActivity final : public UiListActivity {
 
   // Every board lists four rows, the last one its USB transfer method, plus the OPDS browser
   // when a server is configured.
-  static constexpr int MAX_ROWS = 5;
+  static constexpr int MAX_ROWS = 6;
 
   bool usesWifi() const override { return true; }
 

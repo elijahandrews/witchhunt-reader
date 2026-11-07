@@ -1,3 +1,5 @@
+Host prerequisites: CMake, a C++20 compiler, Python 3 with fonttools, and OpenSSL development headers/libraries (Debian/Ubuntu: libssl-dev; macOS: brew install openssl@3). The book-sync activity tests use OpenSSL only for host SHA-256; firmware continues to use wolfCrypt.
+
 Host-side gtest unit tests for crosspoint-reader.
 
 Build and run (Python with FontTools is required to generate original font fixtures):

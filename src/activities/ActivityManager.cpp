@@ -28,6 +28,7 @@
 #include "home/GlobalBookmarksActivity.h"
 #include "home/HomeActivity.h"
 #include "home/HomeMoreActivity.h"
+#include "network/BookSyncActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "network/SerialTransferActivity.h"
 #include "network/UsbDriveActivity.h"
@@ -534,6 +535,8 @@ void ActivityManager::goToGlobalBookmarks(ReturnHint hint) {
   hasReturnHint = false;
   replaceActivity(std::make_unique<GlobalBookmarksActivity>(renderer, mappedInput, std::move(hint)));
 }
+
+void ActivityManager::goToBookSync() { replaceActivity(std::make_unique<BookSyncActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goToBrowser() {
   const auto& servers = OPDS_STORE.getServers();

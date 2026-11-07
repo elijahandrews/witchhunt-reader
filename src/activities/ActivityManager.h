@@ -163,6 +163,7 @@ class ActivityManager {
   // The OPDS catalog, or the server picker first when more than one server is configured. Opened
   // from File Transfer, so Back returns there.
   void goToBrowser();
+  void goToBookSync();
   // The same, searching `query` on arrival: a finished book's "more by this author". Back goes Home.
   void goToBrowserWithSearch(std::string query);
   void goToReader(std::string path);

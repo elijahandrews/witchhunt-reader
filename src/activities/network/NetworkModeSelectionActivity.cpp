@@ -39,6 +39,7 @@ struct ModeRow {
 constexpr ModeRow kRows[] = {
     {NetworkMode::JOIN_NETWORK, StrId::STR_JOIN_NETWORK, StrId::STR_JOIN_DESC, networkModeIconWifi},
     {NetworkMode::CONNECT_CALIBRE, StrId::STR_CALIBRE_WIRELESS, StrId::STR_CALIBRE_DESC, networkModeIconLibrary},
+    {NetworkMode::BOOK_SYNC, StrId::STR_BOOK_SYNC, StrId::STR_BOOK_SYNC_DESC, networkModeIconLibrary},
     {NetworkMode::OPDS_BROWSER, StrId::STR_OPDS_BROWSER, StrId::STR_OPDS_DESC, networkModeIconOpds},
     {NetworkMode::CREATE_HOTSPOT, StrId::STR_CREATE_HOTSPOT, StrId::STR_HOTSPOT_DESC, networkModeIconHotspot},
     {USB_MODE, USB_MODE_LABEL, USB_MODE_DESC, USB_MODE_ICON},
@@ -101,6 +102,10 @@ void NetworkModeSelectionActivity::activateIndex(const int index) {
   // CrossPointWebServerActivity. The OPDS browser does need WiFi, but brings it up
   // itself and reboots on exit, so it is handed off the same way. The web server
   // modes still return to that owner.
+  if (mode == NetworkMode::BOOK_SYNC) {
+    activityManager.goToBookSync();
+    return;
+  }
   if (mode == NetworkMode::OPDS_BROWSER) {
     activityManager.goToBrowser();
     return;

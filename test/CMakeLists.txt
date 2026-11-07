@@ -247,3 +247,5 @@ add_subdirectory(progress_comparison)
 add_subdirectory(kosync_progress_reply)
 add_subdirectory(library_index)
 add_subdirectory(xtc_parser)
+
+add_subdirectory(book_sync)

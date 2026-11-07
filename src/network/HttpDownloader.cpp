@@ -190,12 +190,14 @@ struct HttpDownloader::Session::Impl {
   // persistent SecureHttpClient across downloadToFile(session, ...) calls.
   std::unique_ptr<crosspoint::SecureHttpClient> http;
   bool preCallLogged = false;
+  const char* privateCa = nullptr;
   // What this session's files learn about chunked downloads (RangeDownload.h): a chunk size that ran
   // out of memory stays out of reach, so later files start at a size that worked.
   crosspoint::ChunkSession chunking;
 };
 
 HttpDownloader::Session::Session() : impl_(std::make_unique<Impl>()) {}
+HttpDownloader::Session::Session(const char* privateCa) : Session() { impl_->privateCa = privateCa; }
 HttpDownloader::Session::~Session() = default;
 
 namespace {
@@ -209,6 +211,7 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
                                                     Sink& sink, HttpDownloader::TlsPolicy tls) {
   const WifiPowerSaveGuard psGuard;
   auto* impl = session.impl();
+  if (impl->privateCa && url.compare(0, 8, "https://") != 0) return HttpDownloader::HTTP_ERROR;
   // Evaluated on every call, not just when the session is created: a session opened before the
   // clock was set must not keep that verdict for the rest of its life (nor the reverse).
   const bool clockReady = logPreCallContext(url);
@@ -219,9 +222,13 @@ HttpDownloader::DownloadError runGetSecureOnSession(HttpDownloader::Session& ses
   }
   // Re-applied per call, like the clock verdict below: a session outlives a
   // single request and must not carry a previous caller's policy.
-  impl->http->setCACert(verificationRequested(tls) ? CROSSPOINT_ROOTS_PEM : nullptr);
+  impl->http->setCACert(impl->privateCa ? impl->privateCa
+                                        : (verificationRequested(tls) ? CROSSPOINT_ROOTS_PEM : nullptr));
+  impl->http->setRedirectFilter(impl->privateCa
+                                    ? HttpDownloader::RedirectFilter([](const std::string&) { return false; })
+                                    : HttpDownloader::RedirectFilter{});
   impl->http->setAllowInsecureFallback(false);
-  impl->http->setAllowCertificateDateErrors(!clockReady);
+  impl->http->setAllowCertificateDateErrors(!clockReady && !impl->privateCa);
   impl->http->clearHeaders();
   // Unconditionally, so a file without credentials does not inherit the previous one's
   // (sendRequest() leaves basic auth out unless both are set).

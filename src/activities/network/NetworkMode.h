@@ -8,4 +8,12 @@
 // file-transfer protocol, so it offers the drive instead (see the menu table
 // in NetworkModeSelectionActivity.cpp). Both enumerators exist in every build; only the listing
 // differs.
-enum class NetworkMode { JOIN_NETWORK, CONNECT_CALIBRE, CREATE_HOTSPOT, USB_SERIAL, USB_DRIVE, OPDS_BROWSER };
+enum class NetworkMode {
+  JOIN_NETWORK,
+  CONNECT_CALIBRE,
+  CREATE_HOTSPOT,
+  USB_SERIAL,
+  USB_DRIVE,
+  OPDS_BROWSER,
+  BOOK_SYNC
+};
