@@ -2,10 +2,16 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+inline std::map<std::string, size_t> readBytes, readCalls;
+inline std::function<void(const std::string&, size_t)> afterRead;
+inline std::function<void(const std::string&)> afterDirectoryEntry;
+extern unsigned long fakeMillis;
 
 struct CardEntry {
   std::string name, data;
@@ -38,6 +44,10 @@ class HalFile {
     const auto n = std::min(size_t(available()), cap);
     memcpy(out, entry->data.data() + position, n);
     position += n;
+    readBytes[entry->name] += n;
+    ++readCalls[entry->name];
+    ++fakeMillis;
+    if (afterRead) afterRead(entry->name, position);
     return int(n);
   }
   int read() {
@@ -58,7 +68,10 @@ class HalFile {
   void flush() {}
   HalFile openNextFile() {
     HalFile result;
-    if (next < children.size()) result.entry = children[next++];
+    if (next < children.size()) {
+      result.entry = children[next++];
+      if (afterDirectoryEntry) afterDirectoryEntry(result.entry->name);
+    }
     return result;
   }
 };
@@ -78,6 +91,10 @@ class HalStorage {
     return value;
   }
   void reset() {
+    readBytes.clear();
+    readCalls.clear();
+    afterRead = {};
+    afterDirectoryEntry = {};
     entries.clear();
     failRename = false;
     freeBytes = uint64_t(4) << 30;

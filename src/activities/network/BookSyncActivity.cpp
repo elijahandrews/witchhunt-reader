@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <cstring>
+#include <new>
 
 #include "SilentRestart.h"
 #include "activities/NetworkMemoryTrim.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "components/themes/ButtonHintStrip.h"
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
 #include "util/BookSyncProtocol.h"
@@ -53,26 +55,37 @@ void cleanTemps() {
 struct BookSyncActivity::Work {
   char line[BookSync::LINE_CAP]{};
   char name[256]{};
-  uint8_t bytes[1024]{};
+  // One reusable heap buffer: 8 KiB reads reduce SD call overhead without a
+  // library-sized allocation or putting the transfer buffer on the loop stack.
+  uint8_t bytes[8192]{};
   uint8_t expected[32]{}, actual[32]{};
   wc_Sha256 sha{};
   BookSync::Manifest parser;
   BookSync::Entry entry;
+  BookSync::CandidateSizes sizes;
   std::string url, token, ca;
   unsigned visited = 0, indexed = 0;
+  uint64_t hashedBytes = 0;
 };
 
 BookSyncActivity::BookSyncActivity(GfxRenderer& renderer, MappedInputManager& input)
     : UiListActivity("BookSync", renderer, input), status(StrId::STR_BOOK_SYNC_CONNECTING) {}
 BookSyncActivity::~BookSyncActivity() = default;
 const char* BookSyncActivity::headerTitle() const { return tr(STR_BOOK_SYNC); }
+const char* BookSyncActivity::footerBackLabel() const {
+  return busy ? tr(STR_CANCEL) : UiListActivity::footerBackLabel();
+}
 void BookSyncActivity::buildScreen(UiScreen& screen) { layoutListArea(screen); }
 void BookSyncActivity::drawChrome() {
   UiListActivity::drawChrome();
   const int y = renderer.getScreenHeight() / 2;
   renderer.drawCenteredText(UI_10_FONT_ID, y - 35, I18N.get(status));
   char summary[128];
-  snprintf(summary, sizeof(summary), tr(STR_BOOK_SYNC_COUNTS), added, skipped, conflicts);
+  if (status == StrId::STR_BOOK_SYNC_CHECKING) {
+    snprintf(summary, sizeof(summary), tr(STR_BOOK_SYNC_SCAN_PROGRESS), checkedShown, hashedMiBShown);
+  } else {
+    snprintf(summary, sizeof(summary), tr(STR_BOOK_SYNC_COUNTS), added, skipped, conflicts);
+  }
   renderer.drawCenteredText(UI_10_FONT_ID, y + 5, summary);
 }
 void BookSyncActivity::show(StrId message) {
@@ -86,7 +99,15 @@ void BookSyncActivity::show(StrId message) {
 void BookSyncActivity::onEnter() {
   UiListActivity::onEnter();
   releaseMemoryForDownload(renderer, "SYNC");
-  work = std::make_unique<Work>();
+  work.reset(new (std::nothrow) Work());
+  if (!work) {
+    {
+      RenderLock lock(*this);
+      busy = false;
+    }
+    show(StrId::STR_BOOK_SYNC_FAILED);
+    return;
+  }
   if (WiFi.status() == WL_CONNECTED) {
     connected(true);
     return;
@@ -123,29 +144,56 @@ void BookSyncActivity::connected(bool success) {
 }
 bool BookSyncActivity::pump() {
   mappedInput.update();
+  // sync() runs inside onEnter/the Wi-Fi result callback. ActivityManager's
+  // normal hint-strip dispatcher cannot run until it returns, so route Cancel
+  // here in the same portrait coordinates and raw-button mapping as that path.
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) cancelled = true;
+  int x = 0, y = 0;
+  if (ButtonHintStrip::hasStrip() && mappedInput.wasScreenTappedIn(touchtransform::Portrait, x, y) &&
+      ButtonHintStrip::hitTest(x, y) == mappedInput.rawIndex(MappedInputManager::Button::Back))
+    cancelled = true;
   buttonEvents.update();
   ButtonEventManager::ButtonEvent event;
   while (buttonEvents.consumeEvent(event)) {
     if (event.button == MappedInputManager::Button::Back) cancelled = true;
   }
-  if (millis() - lastPaint > 2000) {
+  if (cancelled) return false;
+  const auto now = millis();
+  if (now - lastPaint > 2000) {
+    {
+      RenderLock lock(*this);
+      checkedShown = work->indexed;
+      hashedMiBShown = static_cast<unsigned>(work->hashedBytes / (1024 * 1024));
+    }
     requestUpdate(true);
-    lastPaint = millis();
+    lastPaint = now;
   }
-  delay(1);
-  return !cancelled;
+  // Poll input after every bounded read, but yield by elapsed time rather than
+  // sleeping once per KiB. Wi-Fi and the input sampler still get regular time.
+  if (now - lastYield >= 20) {
+    delay(1);
+    lastYield = millis();
+  }
+  return true;
 }
 bool BookSyncActivity::hashFile(FsFile& file, uint8_t* digest) {
   if (wc_InitSha256(&work->sha) != 0) return false;
   bool ok = true;
-  while (file.available()) {
-    const int n = file.read(work->bytes, sizeof(work->bytes));
-    if (n <= 0 || wc_Sha256Update(&work->sha, work->bytes, n) != 0 || !pump()) {
+  uint64_t remaining = file.size64();
+  while (remaining) {
+    if (!pump()) {
       ok = false;
       break;
     }
+    const int n = file.read(work->bytes, std::min<uint64_t>(remaining, sizeof(work->bytes)));
+    if (n <= 0 || static_cast<uint64_t>(n) > remaining || wc_Sha256Update(&work->sha, work->bytes, n) != 0) {
+      ok = false;
+      break;
+    }
+    remaining -= n;
+    work->hashedBytes += n;
   }
-  if (ok) ok = wc_Sha256Final(&work->sha, digest) == 0;
+  if (ok) ok = pump() && wc_Sha256Final(&work->sha, digest) == 0;
   wc_Sha256Free(&work->sha);
   return ok;
 }
@@ -164,7 +212,9 @@ bool BookSyncActivity::indexLocal(const std::string& path, FsFile& index, unsign
       if (!indexLocal(child, index, depth + 1)) return false;
     } else if (length >= 5 && strcasecmp(work->name + length - 5, ".epub") == 0 &&
                file.size64() <= BookSync::MAX_BOOK_BYTES) {
-      if (++work->indexed > BookSync::MAX_BOOKS || !hashFile(file, work->actual) || index.write(work->actual, 32) != 32)
+      if (++work->indexed > BookSync::MAX_BOOKS) return false;
+      if (work->sizes.mayContain(static_cast<uint32_t>(file.size64())) &&
+          (!hashFile(file, work->actual) || index.write(work->actual, 32) != 32))
         return false;
     }
   }
@@ -214,11 +264,13 @@ bool BookSyncActivity::sync() {
     return false;
   // Validate the COMPLETE manifest before downloading anything. No partial inventory can pass.
   while (manifest.available()) {
-    if (!readLine(manifest, work->line) ||
-        work->parser.accept(work->line, work->entry) == BookSync::Manifest::Line::Invalid || !pump())
-      return false;
+    if (!readLine(manifest, work->line) || !pump()) return false;
+    const auto kind = work->parser.accept(work->line, work->entry);
+    if (kind == BookSync::Manifest::Line::Invalid) return false;
+    if (kind == BookSync::Manifest::Line::Book) work->sizes.add(work->entry.size);
   }
   if (!work->parser.ended || !manifest.seek(0)) return false;
+  if (work->parser.count == 0) return true;
   show(StrId::STR_BOOK_SYNC_CHECKING);
   FsFile index;
   if (!Storage.openFileForWrite("SYNC", INDEX, index) || !indexLocal("/", index) || !index.close() ||

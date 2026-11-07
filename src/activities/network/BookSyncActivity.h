@@ -22,10 +22,12 @@ class BookSyncActivity final : public UiListActivity {
   bool busy = true, cancelled = false;
   StrId status;
   unsigned added = 0, skipped = 0, conflicts = 0;
-  unsigned long lastPaint = 0;
+  unsigned checkedShown = 0, hashedMiBShown = 0;
+  unsigned long lastPaint = 0, lastYield = 0;
   int listCount() const override { return 0; }
   const char* headerTitle() const override;
   const char* footerConfirmLabel() const override { return ""; }
+  const char* footerBackLabel() const override;
   void activateIndex(int) override {}
   void buildScreen(UiScreen& screen) override;
   void drawChrome() override;

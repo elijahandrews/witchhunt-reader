@@ -16,6 +16,25 @@ Manifest::Line acceptRecord(const std::string& line) {
   return state.accept(line, entry);
 }
 }  // namespace
+TEST(BookSyncProtocol, SizePrefilterNeverDropsAnInsertedSize) {
+  CandidateSizes sizes;
+  EXPECT_FALSE(sizes.mayContain(4));
+  EXPECT_FALSE(sizes.mayContain(MAX_BOOK_BYTES));
+  uint32_t state = 123;
+  for (unsigned i = 0; i < MAX_BOOKS; ++i) {
+    state = state * 1664525U + 1013904223U;
+    sizes.add(4 + state % (MAX_BOOK_BYTES - 3));
+  }
+  state = 123;
+  for (unsigned i = 0; i < MAX_BOOKS; ++i) {
+    state = state * 1664525U + 1013904223U;
+    EXPECT_TRUE(sizes.mayContain(4 + state % (MAX_BOOK_BYTES - 3)));
+  }
+  sizes.add(4);
+  sizes.add(MAX_BOOK_BYTES);
+  EXPECT_TRUE(sizes.mayContain(4));
+  EXPECT_TRUE(sizes.mayContain(MAX_BOOK_BYTES));
+}
 TEST(BookSyncProtocol, AcceptsCompleteInventoryOnly) {
   Manifest state;
   Entry entry;
@@ -76,4 +95,14 @@ TEST(BookSyncProtocol, RequiresHTTPSOriginWithoutCredentialsOrPaths) {
        {"http://192.0.2.10", "https://u:p@host", "https://host/path", "https://host/", "https://host?x",
         "https://host#x", "https://host:0", "https://host:65536", "https://host\n", "https://", "https://a..b"})
     EXPECT_FALSE(origin(url)) << url;
+}
+TEST(BookSyncProtocol, SizeFilterNeverRejectsAnInventorySizeEvenWhenFull) {
+  CandidateSizes sizes;
+  EXPECT_FALSE(sizes.mayContain(123));
+  sizes.add(4);
+  sizes.add(MAX_BOOK_BYTES);
+  for (uint32_t i = 0; i < MAX_BOOKS; ++i) sizes.add(4 + (i * 7919U) % (MAX_BOOK_BYTES - 3));
+  EXPECT_TRUE(sizes.mayContain(4));
+  EXPECT_TRUE(sizes.mayContain(MAX_BOOK_BYTES));
+  for (uint32_t i = 0; i < MAX_BOOKS; ++i) EXPECT_TRUE(sizes.mayContain(4 + (i * 7919U) % (MAX_BOOK_BYTES - 3)));
 }

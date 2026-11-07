@@ -19,7 +19,10 @@ that name. The reader requires valid certificate dates and may need NTP after
 boot. Its global skip-HTTPS-validation setting does not apply to this connection.
 Redirects and plaintext HTTP are refused.
 
-Sync hashes existing nonhidden EPUBs throughout the SD card. Identical files are
+Sync scans existing nonhidden EPUBs throughout the SD card. It first filters by
+the byte lengths in the current helper inventory, avoiding content reads for books
+that cannot match. Candidates still receive a complete SHA-256 check; no filename
+or cached timestamp is trusted as proof of matching content. Identical files are
 skipped even if copied by USB with different filenames. Existing book paths,
 reading progress, annotations and settings are preserved. Different content or
 metadata produces a different hash and can result in a separate copy. Existing
@@ -29,7 +32,10 @@ There is no remote deletion or progress synchronization.
 New books go directly to `/Books`. Existing copies anywhere on the card, including
 the former `/Books/Sync` directory, are still recognized and skipped. Sync does
 not automatically relocate existing books. Each download is staged privately, then checked for
-exact byte length, SHA-256 and ZIP signature before publication. Back cancels;
+exact byte length, SHA-256 and ZIP signature before publication. During checking,
+the screen shows books examined and MiB read. Tap **Cancel** or press Back to stop;
+input is serviced between 8 KiB reads, including while checking local books.
+Cancellation waits for any current SD read or display operation to return;
 completed books remain and incomplete data is removed. Retry reruns the inventory
 and skips completed content. Leaving the activity restarts the reader, like its
 other memory-intensive network activities.

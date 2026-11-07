@@ -9,7 +9,9 @@ enum class StrId {
   STR_BOOK_SYNC_DONE,
   STR_BOOK_SYNC_FAILED,
   STR_BOOK_SYNC_CANCELLED,
-  STR_BOOK_SYNC_COUNTS
+  STR_BOOK_SYNC_COUNTS,
+  STR_BOOK_SYNC_SCAN_PROGRESS,
+  STR_CANCEL
 };
 struct Translations {
   const char* get(StrId id) const {
@@ -22,6 +24,10 @@ struct Translations {
         return "cancelled";
       case StrId::STR_BOOK_SYNC_COUNTS:
         return "%u/%u/%u";
+      case StrId::STR_BOOK_SYNC_SCAN_PROGRESS:
+        return "Checked: %u  Hashed: %u MiB";
+      case StrId::STR_CANCEL:
+        return "cancel";
       default:
         return "working";
     }

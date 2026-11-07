@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <string_view>
 
 // Bounded, line-oriented v1 inventory. Filenames are ASCII and carry a SHA-256 of the
@@ -13,6 +14,28 @@ constexpr uint32_t MAX_MANIFEST_BYTES = 3U * 1024 * 1024;
 constexpr uint32_t MAX_BOOKS = 10000;
 constexpr size_t LINE_CAP = 256;
 constexpr size_t NAME_CAP = 131;
+
+// A fixed 512-byte size filter avoids reading EPUBs which cannot possibly match
+// this inventory. Collisions only cause extra SHA-256 work, never a false match.
+// Saturation on large libraries degrades to the full scan without growing RAM.
+struct CandidateSizes {
+  uint32_t bits[128]{};
+  static uint32_t key(uint32_t size) {
+    size ^= size >> 16;
+    size *= 0x7feb352dU;
+    return size ^ (size >> 15);
+  }
+  void add(uint32_t size) {
+    const uint32_t value = key(size);
+    for (const uint32_t bit : {value & 4095U, (value >> 16) & 4095U}) bits[bit / 32] |= 1U << (bit % 32);
+  }
+  bool mayContain(uint32_t size) const {
+    const uint32_t value = key(size);
+    for (const uint32_t bit : {value & 4095U, (value >> 16) & 4095U})
+      if (!(bits[bit / 32] & (1U << (bit % 32)))) return false;
+    return true;
+  }
+};
 
 inline bool hex(std::string_view value) {
   for (char c : value)
