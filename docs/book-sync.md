@@ -26,7 +26,9 @@ metadata produces a different hash and can result in a separate copy. Existing
 sync destinations are never replaced: differences are counted as conflicts.
 There is no remote deletion or progress synchronization.
 
-New books go to `/Books/Sync`. Each download is staged privately, then checked for
+New books go directly to `/Books`. Existing copies anywhere on the card, including
+the former `/Books/Sync` directory, are still recognized and skipped. Sync does
+not automatically relocate existing books. Each download is staged privately, then checked for
 exact byte length, SHA-256 and ZIP signature before publication. Back cancels;
 completed books remain and incomplete data is removed. Retry reruns the inventory
 and skips completed content. Leaving the activity restarts the reader, like its

@@ -23,7 +23,7 @@ constexpr char TEMP_DIR[] = "/.crosspoint/book-sync";
 constexpr char MANIFEST[] = "/.crosspoint/book-sync/manifest";
 constexpr char INDEX[] = "/.crosspoint/book-sync/local.bin";
 constexpr char STAGE[] = "/.crosspoint/book-sync/book";
-constexpr char DEST_DIR[] = "/Books/Sync";
+constexpr char DEST_DIR[] = "/Books";
 // A truncated/oversized line, embedded NUL, and EOF without a newline all fail closed.
 bool readLine(FsFile& file, char* line) {
   for (size_t i = 0; i < BookSync::LINE_CAP - 1; ++i) {

@@ -54,14 +54,14 @@ TEST_F(SyncActivityTest, USBBookAtDifferentPathIsSkippedAndProgressPreserved) {
   Storage.put("/USB library/Renamed book.EPUB", BODY);
   run("done");
   EXPECT_EQ(Storage.content("/USB library/Renamed book.EPUB"), BODY);
-  EXPECT_FALSE(Storage.exists(("/Books/Sync/" + name()).c_str()));
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
   EXPECT_EQ(HttpDownloader::requests.size(), 1U);
   EXPECT_EQ(renderer.text[1], "0/1/0");
 }
 TEST_F(SyncActivityTest, AddsVerifiedBookAndSecondRunSkips) {
   Storage.put("/USB library/Other.epub", "existing unrelated content");
   run("done");
-  EXPECT_EQ(Storage.content("/Books/Sync/" + name()), BODY);
+  EXPECT_EQ(Storage.content("/Books/" + name()), BODY);
   EXPECT_EQ(Storage.content("/USB library/Other.epub"), "existing unrelated content");
   EXPECT_EQ(renderer.text[1], "1/0/0");
   HttpDownloader::requests.clear();
@@ -70,9 +70,9 @@ TEST_F(SyncActivityTest, AddsVerifiedBookAndSecondRunSkips) {
   EXPECT_EQ(renderer.text[1], "0/1/0");
 }
 TEST_F(SyncActivityTest, ChangedExistingDestinationIsNotReplaced) {
-  Storage.put("/Books/Sync/" + name(), "existing different edition");
+  Storage.put("/Books/" + name(), "existing different edition");
   run("done");
-  EXPECT_EQ(Storage.content("/Books/Sync/" + name()), "existing different edition");
+  EXPECT_EQ(Storage.content("/Books/" + name()), "existing different edition");
   EXPECT_EQ(HttpDownloader::requests.size(), 1U);
   EXPECT_EQ(renderer.text[1], "0/0/1");
 }
@@ -86,17 +86,17 @@ TEST_F(SyncActivityTest, DuplicateServerContentOnlyDownloadsOnce) {
 TEST_F(SyncActivityTest, PartialDownloadNeverPublishes) {
   HttpDownloader::abortBook = true;
   run("failed");
-  EXPECT_FALSE(Storage.exists(("/Books/Sync/" + name()).c_str()));
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
 }
 TEST_F(SyncActivityTest, HashMismatchNeverPublishes) {
   HttpDownloader::corruptBook = true;
   run("failed");
-  EXPECT_FALSE(Storage.exists(("/Books/Sync/" + name()).c_str()));
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
 }
 TEST_F(SyncActivityTest, CancelDuringDownloadCleansStage) {
   HttpDownloader::cancelBook = true;
   run("cancelled");
-  EXPECT_FALSE(Storage.exists(("/Books/Sync/" + name()).c_str()));
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
 }
 TEST_F(SyncActivityTest, IncompleteInventoryDoesNotDownloadAnyBooks) {
   HttpDownloader::responses[ORIGIN + "/v1/manifest"] = "WITCHSYNC1\n" + row();
@@ -115,7 +115,7 @@ TEST_F(SyncActivityTest, NoSpaceAndRenameFailureKeepLibraryUntouched) {
   Storage.freeBytes = 1ULL << 30;
   Storage.failRename = true;
   run("failed");
-  EXPECT_FALSE(Storage.exists(("/Books/Sync/" + name()).c_str()));
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
 }
 TEST_F(SyncActivityTest, NonHTTPSConfigFailsBeforeSendingCredentials) {
   Storage.put("/.crosspoint/book-sync.json",
