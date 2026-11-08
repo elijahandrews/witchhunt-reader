@@ -21,7 +21,7 @@ struct SdCardFontFamilyInfo;
 // Writing it erases the whole partition and copies the family back from SD, so
 // only a load that the reader will actually use should pay that price.
 enum class FlashCachePolicy : uint8_t {
-  ReadWrite,  // mmap on a hit, write-then-mmap on a miss
+  ReadWrite,  // mmap on a hit; install on a miss except while resizing the loaded bitmap family
   ReadOnly,   // mmap on a hit, plain SD read on a miss
 };
 
@@ -42,6 +42,9 @@ class SdCardFontManager {
   // flash-cache mmap hit) — callers use it to show a "loading font" popup.
   // Under FlashCachePolicy::ReadOnly that slow path is skipped entirely and
   // onColdLoad never fires.
+  // A different bitmap size of the currently loaded family also skips writes:
+  // uncached sizes use SD, leaving the old flash entry available for a return.
+  // Pass the still-loaded manager here; loadFamily owns unloading the old face.
   // `arena`, when set, is handed to the new SdCardFont (SdCardFont::useArena): the caller owns the
   // block and must unload this family before rewinding it. Only font previews pass one.
   //

@@ -249,10 +249,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
             targetPt);
   }
 
-  if (!currentFamily.empty()) {
-    manager_.unloadAll(renderer);
-  }
-
+  // loadFamily releases the old face after checking whether this is a resize.
   const auto* family = registry_.findFamily(wantedFamily);
   if (family) {
     if (manager_.loadFamily(*family, renderer, targetPt)) {
@@ -262,6 +259,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
       SETTINGS.sdFontFamilyName[0] = '\0';
     }
   } else {
+    manager_.unloadAll(renderer);
     LOG_DBG("SDFS", "SD font family not found: %s (clearing)", wantedFamily);
     SETTINGS.sdFontFamilyName[0] = '\0';
   }
@@ -300,10 +298,12 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer, const char* wantedFam
     }
   }
 
-  if (!currentFamily.empty()) manager_.unloadAll(renderer);
-
+  // Retain the previous family/size until loadFamily can choose its cache policy.
   const auto* family = registry_.findFamily(wantedFamily);
-  if (!family) return;
+  if (!family) {
+    manager_.unloadAll(renderer);
+    return;
+  }
 
   // The loader and the resolver used to disagree, and the loader lost. loadFamily() takes the
   // CLOSEST size the family ships, but resolveFontId() only handed the font out on an EXACT

@@ -1,5 +1,6 @@
 add_executable(SdFontIntervalsTest
   SdFontIntervalsTest.cpp
+  CpFontCrcTest.cpp
   ${REPO_ROOT}/lib/EpdFont/SdCardFont.cpp
   ${REPO_ROOT}/lib/EpdFont/EpdFont.cpp
   ${REPO_ROOT}/lib/EpdFont/GlyphFallback.cpp

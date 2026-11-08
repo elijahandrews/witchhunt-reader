@@ -126,6 +126,48 @@ TEST_F(SourceAnchorTest, CacheReopenAndIoFailuresAreConservative) {
   EXPECT_FALSE(reopened.getPageForSourceOffset(*anchor));
 }
 
+TEST_F(SourceAnchorTest, CachedSizeLookupBatchesReadsAndChecksTheWholeChapter) {
+  makeBook("<p>" + numberedWords(1800) + "</p>");
+  auto section = build(320);
+  ASSERT_GT(section->pageCount, 16);
+  const auto anchor = section->getSourceAnchorForPage(2);
+  ASSERT_TRUE(anchor);
+  Section reopened(book, 0, renderer);
+  ASSERT_TRUE(reopened.loadSectionFile(params(320)));
+  HalFile::readCalls = 0;
+  EXPECT_EQ(reopened.getPageForSourceOffset(*anchor), std::optional<uint16_t>(2));
+  // Two header reads, then one transfer per eight packed page records.
+  EXPECT_EQ(HalFile::readCalls, 2u + (reopened.pageCount + 7u) / 8u);
+
+  // An error later than the matching page must still refuse the lookup: an
+  // unread tail could contain an overlapping source range.
+  std::string cachePath;
+  for (const auto& entry : std::filesystem::directory_iterator(Epub::spineCacheDir(book->getCachePath(), 0))) {
+    if (entry.path().filename().string().starts_with("0_") && entry.path().extension() == ".bin")
+      cachePath = entry.path().string();
+  }
+  ASSERT_FALSE(cachePath.empty());
+  HalFile f;
+  ASSERT_TRUE(Storage.openFileForRead("TEST", cachePath, f));
+  uint32_t lutOffset = 0;
+  ASSERT_TRUE(f.seek(34));  // section v96's paragraph LUT offset
+  ASSERT_EQ(f.read(&lutOffset, sizeof(lutOffset)), sizeof(lutOffset));
+  f.close();
+  HalFile::failReadsFrom = lutOffset + sizeof(uint16_t) + 8 * 22;
+  EXPECT_FALSE(reopened.getPageForSourceOffset(*anchor));
+  HalFile::failReadsFrom = -1;
+
+  // An overlap in a later batch must not return the first matching page.
+  ASSERT_TRUE(Storage.openFileForUpdate("TEST", cachePath, f));
+  uint8_t range[14];
+  ASSERT_TRUE(f.seek(lutOffset + sizeof(uint16_t) + 2 * 22 + 8));
+  ASSERT_EQ(f.read(range, sizeof(range)), sizeof(range));
+  ASSERT_TRUE(f.seek(lutOffset + sizeof(uint16_t) + 8 * 22 + 8));
+  ASSERT_EQ(f.write(range, sizeof(range)), sizeof(range));
+  f.close();
+  EXPECT_FALSE(reopened.getPageForSourceOffset(*anchor));
+}
+
 TEST_F(SourceAnchorTest, InteriorLongWordProbeAndCookedFragmentSurviveReflow) {
   const std::string longWord = std::string(135, 'a') + "NEEDLE" + std::string(40, 'z');
   makeBook("<p>" + longWord + "</p>");

@@ -582,6 +582,22 @@ TEST(SdFontV5, SparseRowsAcrossChunksAndAllocationFallback) {
   std::filesystem::remove(path);
 }
 
+TEST(SdFontV5, ChecksumScratchFailureStillValidatesWholePayload) {
+  auto bytes = buildMetricFont(true);
+  for (const bool corrupt : {false, true}) {
+    if (corrupt) bytes.back() ^= 1;
+    const auto path = writeTemp(bytes);
+    SdCardFont font;
+    HalFile::readCalls = 0;
+    failKernChunk = true;  // refuse the optional 4096-byte checksum scratch
+    const bool loaded = font.load(path.c_str());
+    failKernChunk = false;
+    EXPECT_EQ(loaded, !corrupt);
+    EXPECT_GE(HalFile::readCalls, 1u + (bytes.size() - HEADER + 127u) / 128u);
+    std::filesystem::remove(path);
+  }
+}
+
 TEST(SdFontV5, PayloadChecksumChangesCacheIdentity) {
   auto first = buildMetricFont(true);
   auto second = first;

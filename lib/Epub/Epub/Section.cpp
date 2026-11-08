@@ -140,11 +140,20 @@ bool readChecked(FsFile& f, T& value) {
   return f.read(&value, sizeof(value)) == static_cast<int>(sizeof(value));
 }
 
+bool decodeSourceEntry(const uint8_t* bytes, SourceAnchor& anchor, uint32_t& first, uint32_t& end) {
+  // Records are packed on disk; memcpy also handles unaligned fields on the C3.
+  memcpy(&anchor.sourceOffset, bytes, sizeof(anchor.sourceOffset));
+  memcpy(&anchor.characterOffset, bytes + 4, sizeof(anchor.characterOffset));
+  memcpy(&first, bytes + 6, sizeof(first));
+  memcpy(&end, bytes + 10, sizeof(end));
+  return (first == UINT32_MAX && !anchor.valid() && end == 0) ||
+         (first < end && anchor.sourceOffset >= first && anchor.sourceOffset < end);
+}
+
 bool readSourceEntry(FsFile& f, uint32_t offset, SourceAnchor& anchor, uint32_t& first, uint32_t& end) {
-  return f.seek(offset + SOURCE_LUT_OFFSET) && readChecked(f, anchor.sourceOffset) &&
-         readChecked(f, anchor.characterOffset) && readChecked(f, first) && readChecked(f, end) &&
-         ((first == UINT32_MAX && !anchor.valid() && end == 0) ||
-          (first < end && anchor.sourceOffset >= first && anchor.sourceOffset < end));
+  uint8_t bytes[PARAGRAPH_LUT_ENTRY_SIZE - SOURCE_LUT_OFFSET];
+  return f.seek(offset + SOURCE_LUT_OFFSET) && f.read(bytes, sizeof(bytes)) == sizeof(bytes) &&
+         decodeSourceEntry(bytes, anchor, first, end);
 }
 
 }  // namespace
@@ -2714,12 +2723,26 @@ std::optional<uint16_t> Section::getPageForSourceOffset(SourceAnchor target) con
   uint16_t count;
   uint32_t start;
   if (!readParagraphLutHeader(f, count, start)) return std::nullopt;
-  for (uint16_t page = 0; page < count; ++page) {
-    SourceAnchor anchor;
-    uint32_t first = UINT32_MAX, end = 0;
-    if (!readSourceEntry(f, paragraphLutEntryOffset(start, page), anchor, first, end) || !accept(page, first, end)) {
+  // A cached size change scans every range to reject overlaps. Batch the packed
+  // table instead of making four reads and a seek per page. 176 bytes of stack,
+  // no retained index or allocation; still validate entries after the first hit.
+  constexpr uint16_t ENTRIES_PER_READ = 8;
+  uint8_t entries[ENTRIES_PER_READ * PARAGRAPH_LUT_ENTRY_SIZE];
+  for (uint16_t page = 0; page < count;) {
+    const uint16_t batch = std::min<uint16_t>(ENTRIES_PER_READ, count - page);
+    const size_t bytes = batch * PARAGRAPH_LUT_ENTRY_SIZE;
+    if (f.read(entries, bytes) != static_cast<int>(bytes)) {
       f.close();
       return std::nullopt;
+    }
+    for (uint16_t i = 0; i < batch; ++i, ++page) {
+      SourceAnchor anchor;
+      uint32_t first = UINT32_MAX, end = 0;
+      if (!decodeSourceEntry(entries + i * PARAGRAPH_LUT_ENTRY_SIZE + SOURCE_LUT_OFFSET, anchor, first, end) ||
+          !accept(page, first, end)) {
+        f.close();
+        return std::nullopt;
+      }
     }
   }
   f.close();

@@ -320,6 +320,7 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
                                    const std::function<void()>& onColdLoad, const FlashCachePolicy policy,
                                    BuildArena* const arena) {
   if (!renderer_) renderer_ = &renderer;
+  const uint8_t previousPointSize = loadedFamilyName_ == family.name ? loadedPointSize_ : 0;
   if (!loadedFamilyName_.empty()) unloadAll(renderer);
 
   if (family.ttf()) {
@@ -351,12 +352,15 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
     const bool alreadyCached = cachedFontMatches(family, *selected);
 
     bool readyToMmap = alreadyCached;
-    if (!alreadyCached && policy == FlashCachePolicy::ReadOnly) {
+    if (!alreadyCached && (policy == FlashCachePolicy::ReadOnly ||
+                           (previousPointSize != 0 && previousPointSize != selected->pointSize))) {
       // Transient load (font preview): beginWrite() erases the whole partition
       // and writeFamily() copies every size back from SD, so caching a font the
       // reader may never use would cost seconds and a flash erase cycle each
-      // time. Read the one file from SD instead and leave the partition alone.
-      LOG_DBG("SDMGR", "Flash cache miss for %s@%u; loading from SD (read-only policy)", family.name.c_str(),
+      // time. The same applies to size changes within a loaded family: a family
+      // that only fits one size would otherwise erase/rewrite on every resize.
+      // Keep its cached size available and load an uncached size from SD.
+      LOG_DBG("SDMGR", "Flash cache miss for %s@%u; loading from SD without rewriting", family.name.c_str(),
               selected->pointSize);
     } else if (!alreadyCached) {
       // Genuine first load: writing the family into the flash partition takes

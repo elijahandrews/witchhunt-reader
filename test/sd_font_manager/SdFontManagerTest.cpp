@@ -1,6 +1,7 @@
 #include <CpFontFormat.h>
 #include <FlashFontPartition.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <SdCardFont.h>
 #include <SdCardFontManager.h>
 #include <SdCardFontRegistry.h>
@@ -103,6 +104,7 @@ class SdFontManager : public testing::Test {
  protected:
   GfxRenderer renderer;
   std::filesystem::path path;
+  std::filesystem::path secondPath;
   void SetUp() override {
     flash_double::entries.clear();
     flash_double::capacity = 4 * 1024 * 1024;
@@ -110,16 +112,30 @@ class SdFontManager : public testing::Test {
     flash_double::mapped = false;
     path = std::filesystem::temp_directory_path() /
            (std::string("sd_manager_") + testing::UnitTest::GetInstance()->current_test_info()->name() + ".cpfont");
+    secondPath = path.string() + ".second";
   }
-  void TearDown() override { std::filesystem::remove(path); }
+  void TearDown() override {
+    std::filesystem::remove(path);
+    std::filesystem::remove(secondPath);
+  }
   SdCardFontFamilyInfo write(const std::vector<uint8_t>& bytes) {
     std::ofstream out(path, std::ios::binary);
     out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     out.close();
     return {"Synthetic", {{path.string(), 14, 0, static_cast<uint32_t>(bytes.size())}}};
   }
-  void expectNative(SdCardFontManager& manager, float scale, uint8_t marker) {
-    const int id = manager.getFontId("Synthetic", 14);
+  SdCardFontFamilyInfo writeTwoSizes() {
+    auto family = write(fixture(true, 0x88, 16));
+    const auto smaller = fixture(true, 0x44, 48);
+    std::ofstream out(secondPath, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(smaller.data()), smaller.size());
+    out.close();
+    family.files.push_back({secondPath.string(), 12, 0, static_cast<uint32_t>(smaller.size())});
+    return family;
+  }
+  void expectNative(SdCardFontManager& manager, float scale, uint8_t marker) { expectSize(manager, 14, scale, marker); }
+  void expectSize(SdCardFontManager& manager, uint8_t pointSize, float scale, uint8_t marker) {
+    const int id = manager.getFontId("Synthetic", pointSize);
     ASSERT_NE(id, 0);
     ASSERT_EQ(renderer.native.count(id), 1);
     EXPECT_FLOAT_EQ(renderer.fontBaseScale(id), scale);
@@ -205,6 +221,95 @@ TEST_F(SdFontManager, OversizeSourceDoesNotEraseExistingCache) {
   EXPECT_EQ(flash_double::appends, 0);
   EXPECT_EQ(flash_double::commits, 0);
   EXPECT_EQ(flash_double::entries.at({"Existing", 12}), prior);
+}
+
+TEST_F(SdFontManager, ResizeLargeFamilyAvoidsFlashWrites) {
+  const auto family = writeTwoSizes();
+  // Each size fits, but both together do not, as with dense bitmap families.
+  flash_double::capacity = FlashFontPartition::HEADER_BYTES + 172;
+  SdCardFontManager manager;
+  int coldLoads = 0;
+  const auto onColdLoad = [&] { ++coldLoads; };
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 14, onColdLoad));
+  ASSERT_TRUE(FlashFontPartition::isMapped());
+  ASSERT_EQ(flash_double::entries.size(), 1u);
+  const auto original = flash_double::entries.at({"Synthetic", 14});
+  const int originalId = manager.getFontId("Synthetic", 14);
+  for (unsigned attempt = 0; attempt < 3; ++attempt) {
+    ASSERT_TRUE(manager.loadFamily(family, renderer, 12, onColdLoad));
+    expectSize(manager, 12, .5f, 0x44);
+    EXPECT_FALSE(FlashFontPartition::isMapped());
+    EXPECT_EQ(manager.getFontId("Synthetic", 14), 0);
+    EXPECT_EQ(renderer.fonts.count(originalId), 0u);
+    ASSERT_TRUE(manager.loadFamily(family, renderer, 14, onColdLoad));
+    expectNative(manager, .5f, 0x88);
+    EXPECT_TRUE(FlashFontPartition::isMapped());
+    EXPECT_EQ(manager.getFontId("Synthetic", 14), originalId);
+    EXPECT_EQ(manager.getFontId("Synthetic", 12), 0);
+    EXPECT_EQ(flash_double::erases, 1);
+    EXPECT_EQ(flash_double::appends, 1);
+    EXPECT_EQ(flash_double::commits, 1);
+    EXPECT_EQ(coldLoads, 1);
+    EXPECT_EQ(flash_double::entries.size(), 1u);
+    EXPECT_EQ(flash_double::entries.at({"Synthetic", 14}), original);
+  }
+  // Ending the loaded-family session still allows the next open to cache its size.
+  manager.unloadAll(renderer);
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 12, onColdLoad));
+  expectSize(manager, 12, .5f, 0x44);
+  EXPECT_TRUE(FlashFontPartition::isMapped());
+  EXPECT_EQ(flash_double::erases, 2);
+  EXPECT_EQ(coldLoads, 2);
+}
+
+TEST_F(SdFontManager, ResizeWithinCachedFamilyStillUsesMappedFont) {
+  const auto family = writeTwoSizes();
+  SdCardFontManager manager;
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 14));
+  ASSERT_EQ(flash_double::entries.size(), 2u);
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 12));
+  expectSize(manager, 12, .5f, 0x44);
+  EXPECT_TRUE(FlashFontPartition::isMapped());
+  EXPECT_EQ(flash_double::erases, 1);
+  EXPECT_EQ(flash_double::appends, 2);
+  EXPECT_EQ(flash_double::commits, 1);
+}
+
+TEST_F(SdFontManager, DifferentFamilyAtNewSizeStillInstalls) {
+  auto family = writeTwoSizes();
+  flash_double::capacity = FlashFontPartition::HEADER_BYTES + 172;
+  SdCardFontManager manager;
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 14));
+  family.name = "Another synthetic family";
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 12));
+  EXPECT_NE(manager.getFontId(family.name, 12), 0);
+  EXPECT_EQ(manager.getFontId("Synthetic", 14), 0);
+  EXPECT_TRUE(FlashFontPartition::isMapped());
+  EXPECT_EQ(flash_double::erases, 2);
+  EXPECT_EQ(flash_double::appends, 2);
+  EXPECT_EQ(flash_double::commits, 2);
+}
+
+TEST_F(SdFontManager, LargeV5ChecksumUsesBatchedReadsAndStillRejectsCorruption) {
+  auto bytes = fixture(true, 0x88, 64 * 1024);
+  write(bytes);
+  HalFile::readCalls = 0;
+  {
+    SdCardFont font;
+    ASSERT_TRUE(font.load(path.c_str()));
+    // Header, TOC and intervals add a few reads beyond the checksum payload.
+    const size_t checksumReads = (bytes.size() - cpfont::HEADER_SIZE + 4095) / 4096;
+    EXPECT_LE(HalFile::readCalls, checksumReads + 4);
+  }
+  {
+    SdCardFont mapped;
+    ASSERT_TRUE(mapped.loadFromMmap(bytes.data(), bytes.size(), nullptr));
+  }
+  bytes.back() ^= 1;
+  write(bytes);
+  SdCardFont corruptSd, corruptMapped;
+  EXPECT_FALSE(corruptSd.load(path.c_str()));
+  EXPECT_FALSE(corruptMapped.loadFromMmap(bytes.data(), bytes.size(), nullptr));
 }
 }  // namespace
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -19,11 +20,19 @@ inline uint8_t rasterDensity(const uint8_t* header) {
 }
 // Streaming standard CRC32, matching zlib.crc32. V5 stores the final CRC of
 // bytes 32..EOF at offset14 so regenerated bitmaps also change the font ID.
-inline uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t size) {
-  for (size_t i = 0; i < size; ++i) {
-    crc ^= data[i];
+// A size switch validates several MiB of HD glyphs. Keep the 1 KiB table in
+// read-only storage and consume a byte per step instead of eight bit steps.
+inline constexpr auto CRC32_TABLE = [] {
+  std::array<uint32_t, 256> table{};
+  for (uint32_t i = 0; i < table.size(); ++i) {
+    uint32_t crc = i;
     for (int bit = 0; bit < 8; ++bit) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    table[i] = crc;
   }
+  return table;
+}();
+inline uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t size) {
+  for (size_t i = 0; i < size; ++i) crc = (crc >> 8) ^ CRC32_TABLE[(crc ^ data[i]) & 0xFFu];
   return crc;
 }
 }  // namespace cpfont

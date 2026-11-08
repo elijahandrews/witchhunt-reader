@@ -4,6 +4,7 @@
 #include <BuildArena.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Utf8.h>
 
 #include <algorithm>
@@ -1043,10 +1044,17 @@ bool SdCardFont::load(const char* path) {
   }
   if (fileVersion >= 5) {
     uint32_t crc = 0xFFFFFFFFu;
-    uint8_t chunk[512];
+    // Multi-MiB HD fonts must still be checked in full on every load. Batch SD
+    // reads, but release this optional scratch before allocating font metadata.
+    // 4 KiB exceeds the stack budget; low heap falls back to a small stack buffer.
+    constexpr size_t CHECKSUM_CHUNK_BYTES = 4096;
+    auto scratch = makeUniqueNoThrow<uint8_t[]>(CHECKSUM_CHUNK_BYTES);
+    uint8_t fallback[128];
+    uint8_t* const chunk = scratch ? scratch.get() : fallback;
+    const size_t chunkBytes = scratch ? CHECKSUM_CHUNK_BYTES : sizeof(fallback);
     size_t remaining = file.fileSize() - HEADER_SIZE;
     while (remaining) {
-      const size_t count = std::min(remaining, sizeof(chunk));
+      const size_t count = std::min(remaining, chunkBytes);
       if (file.read(chunk, count) != static_cast<int>(count)) {
         file.close();
         return false;

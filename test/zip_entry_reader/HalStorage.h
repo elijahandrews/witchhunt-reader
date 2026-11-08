@@ -164,8 +164,10 @@ class HalFile : public Print {
   // Test instrumentation: bytes delivered by read(), across all files. Lets a test bound how much
   // a pass reads, where wall-clock time on a host says little about SD cost.
   static inline size_t bytesRead = 0;
+  static inline size_t readCalls = 0;
 
   int read(void* buf, size_t n) {
+    ++readCalls;
     if (!fp_) return -1;
     if (failReadsFrom >= 0 && ftell(fp_) >= failReadsFrom) return -1;
     if (failReadAt >= 0 && ftell(fp_) == failReadAt) return -1;
