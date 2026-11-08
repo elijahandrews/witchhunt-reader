@@ -1110,7 +1110,7 @@ void EpubReaderActivity::loop() {
 
   // Visible navigation targets win; otherwise the bottom edge hides or reveals the bar.
   if (ReaderUtils::isTouchStatusBarTap(renderer, mappedInput,
-                                      UITheme::getStatusBarBottomHeight(automaticPageTurnActive))) {
+                                       UITheme::getStatusBarBottomHeight(automaticPageTurnActive))) {
     mappedInput.suppressTouchContact();
     onButtonAction(CrossPointSettings::BTN_TOGGLE_STATUS_BAR);
     return;

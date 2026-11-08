@@ -528,8 +528,8 @@ inline void buildSettings(const RowSink& emit) {
                           StrId::STR_TOUCH_READER_INVERTED},
                          "touchReaderCtl", StrId::STR_CAT_CONTROLS)
            .requiring(SettingRequires::TouchPanel));
-  emit(SettingInfo::Toggle(StrId::STR_TAP_STATUS_BAR, &CrossPointSettings::tapToToggleStatusBar,
-                           "tapToToggleStatusBar", StrId::STR_CAT_CONTROLS)
+  emit(SettingInfo::Toggle(StrId::STR_TAP_STATUS_BAR, &CrossPointSettings::tapToToggleStatusBar, "tapToToggleStatusBar",
+                           StrId::STR_CAT_CONTROLS)
            .requiring(SettingRequires::TouchPanel));
   for (const auto& binding : TouchGestures::BINDINGS) {
     // cppcheck-suppress useStlAlgorithm ; std::transform would have to carry this

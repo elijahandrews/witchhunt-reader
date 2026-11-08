@@ -3902,7 +3902,7 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
 }
 
 void GfxRenderer::getOrientedViewableTRBL(const Orientation orientation, int* outTop, int* outRight, int* outBottom,
-                                         int* outLeft) const {
+                                          int* outLeft) const {
   // Bezel overlap comes from the board profile, not from constants here.
   //
   // BoardProfile::viewableInsets exists precisely for this and documents itself

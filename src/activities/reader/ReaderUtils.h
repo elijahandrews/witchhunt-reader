@@ -179,7 +179,7 @@ inline TouchPageTurn detectTouchPageTurn(const GfxRenderer& renderer, const Mapp
 // while hidden. CrossInk uses the same minimum target height. Resolve dimensions, insets
 // and touch from one held orientation; a render can temporarily change the live one.
 inline bool isTouchStatusBarTap(const GfxRenderer& renderer, const MappedInputManager& input,
-                               const int statusBarHeight) {
+                                const int statusBarHeight) {
   if (!SETTINGS.tapToToggleStatusBar || !input.hasTouch()) return false;
   const auto orientation = renderer.getHeldOrientation();
   int x = 0, y = 0;
