@@ -142,6 +142,13 @@ void LineReaderActivity::loop() {
     }
   }
 
+  // Use the same source-preserving status-bar action as EPUB and the button shortcut.
+  if (ReaderUtils::isTouchStatusBarTap(renderer, mappedInput, UITheme::getStatusBarBottomHeight())) {
+    mappedInput.suppressTouchContact();
+    onButtonAction(CrossPointSettings::BTN_TOGGLE_STATUS_BAR);
+    return;
+  }
+
   // A centre-third tap, or the top-edge menu swipe, opens this reader's own overlay: the heading
   // list in MD, and nothing at all in plain TXT, which has none -- exactly what its Confirm
   // does, reached through the same call so the two cannot diverge. The EPUB reader answers the

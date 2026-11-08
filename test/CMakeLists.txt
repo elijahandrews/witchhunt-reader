@@ -245,6 +245,8 @@ add_subdirectory(bitmap_rows)
 add_subdirectory(publisher_fonts)
 add_subdirectory(progress_comparison)
 add_subdirectory(kosync_progress_reply)
+# Reuses the ArduinoJson dependency populated by kosync_progress_reply.
+add_subdirectory(status_bar_shortcut)
 add_subdirectory(library_index)
 add_subdirectory(xtc_parser)
 
