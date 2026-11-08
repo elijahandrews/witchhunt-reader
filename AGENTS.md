@@ -20,6 +20,14 @@ Last verified installation: **Witch Hunt `2.40-fontresize1-x4pro`**, installed 2
 - Validation before installation: 2892 registered host tests (2890 passed, two expected skips), 70 ASan/UBSan checks, clean firmware build, static analysis with no new findings, and independent review/fix loops clear. Publication hashes are tracked in private work-status. See `docs/font-size-performance.md` and private release evidence.
 - **User confirmed on 2026-11-08: “much better.”** This confirms perceived font-resize improvement in their tested use. Quantitative font-resize and SD-backed page-turn latency remain unmeasured, along with bottom-tap accuracy and long-run ghosting. Historical staged manifests are preserved; this installation record supersedes their not-installed flags. Do not overwrite subsequent reading progress from old backups.
 
+### Reviewed pinch-feedback candidate (not installed)
+
+`2.40-fontresize2-x4pro` adds the existing hourglass to effective direct EPUB font-size actions, including the default pinch gestures, before settings persistence/font loading/reflow. Clamped gestures remain no-ops; menus retain their existing feedback. Deferred AA and page previews are canceled under exclusive render ownership. Busy-indicator preference, measured-panel speed limit, pending clean refresh and framebuffer availability guards remain. See `docs/font-size-performance.md`.
+
+- Candidate: `.local-device/font-resize-feedback-release/witch-2.40-fontresize2-x4pro.bin`, 6552096 bytes, SHA-256 `1556c260ff9005cbefff7f669a51a98f3c7abc1fb46c3e50d9b7928f5b3ea57b`; 1504 bytes application-slot headroom, 101184 bytes static RAM. Matching web bundle remains `web-10450752e5eb.bin`.
+- Firmware build and 2893 registered host tests passed (2891 passed, two expected skips); 15 production resize-feedback checks passed with ASan/UBSan. Three deliberate regressions were detected. Independent source review is clear; final analysis/publication evidence is in the private release directory.
+- **Not flashed.** The installed reader remains the verified, user-confirmed `fontresize1` above. Physical hourglass appearance and timing remain unverified. A future install needs a new flash request and fresh device/state checks; retain fontresize1 as immediate rollback.
+
 ### Previous singlepass2 installation
 
 Previous verified installation: **Witch Hunt `2.40-singlepass2-x4pro`**, installed 2026-11-08 after explicit authorization. Includes experimental single-pass text AA plus the USB waiting-screen input fix. App-only compressed write to live-resolved app0 at `0x10000` took **59.7 seconds**; independent application verification passed, and bootloader/partition table/OTA metadata/NVS were unchanged. Boot/state and Settings confirmed the running version without startup crash markers.

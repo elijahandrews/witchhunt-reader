@@ -2966,12 +2966,13 @@ void EpubReaderActivity::applyBookReaderOverrides(const int8_t embeddedStyleOver
                                                   const int8_t imageRenderingOverride, const int8_t fontFamilyOverride,
                                                   const std::string& sdFontFamilyOverride,
                                                   const int8_t fontSizeOverride, const int8_t bionicReadingOverride,
-                                                  const int8_t paragraphAlignmentOverride) {
+                                                  const int8_t paragraphAlignmentOverride,
+                                                  const bool acknowledgeResize) {
   applyBookReaderOverrides(embeddedStyleOverride, imageRenderingOverride, fontFamilyOverride, sdFontFamilyOverride,
                            fontSizeOverride, bionicReadingOverride, paragraphAlignmentOverride,
                            bookTextAntiAliasingOverride, bookHyphenationOverride, bookFontSizeNormalizationOverride,
                            bookGuideDotsOverride, bookInlineFootnotePreviewsOverride,
-                           bookIgnorePublisherPageMarginsOverride);
+                           bookIgnorePublisherPageMarginsOverride, acknowledgeResize);
 }
 
 void EpubReaderActivity::applyBookReaderOverrides(
@@ -2979,10 +2980,15 @@ void EpubReaderActivity::applyBookReaderOverrides(
     const std::string& sdFontFamilyOverride, const int8_t fontSizeOverride, const int8_t bionicReadingOverride,
     const int8_t paragraphAlignmentOverride, const int8_t textAntiAliasingOverride, const int8_t hyphenationOverride,
     const int8_t fontSizeNormalizationOverride, const int8_t guideDotsOverride,
-    const int8_t inlineFootnotePreviewsOverride, const int8_t ignorePublisherPageMarginsOverride) {
+    const int8_t inlineFootnotePreviewsOverride, const int8_t ignorePublisherPageMarginsOverride,
+    const bool acknowledgeResize) {
   if (!epub) {
     return;
   }
+
+  // A pinch can arrive in a render pass's unlocked waveform wait. Finish that
+  // pass before replacing its fonts/section or painting feedback over its page.
+  RenderLock lock{RenderLock::ExclusiveActivityAccess{}};
 
   // Built-in and SD font overrides are mutually exclusive; explicit built-in wins.
   int8_t normalizedFontFamilyOverride = fontFamilyOverride;
@@ -3009,6 +3015,29 @@ void EpubReaderActivity::applyBookReaderOverrides(
 
   if (layoutOverridesUnchanged && bookGuideDotsOverride == guideDotsOverride) {
     return;
+  }
+
+  if (acknowledgeResize && !layoutOverridesUnchanged) {
+    // A returned borrow is seeded from the write buffer, which may hold the NEXT
+    // page. Only overlay when the displayed frame was already resident.
+    const bool displayedFrameAvailable = renderer.hasSecondaryBuffer();
+    const uint8_t preemptionsBeforeResize = backgroundPreemptCount_;
+    endBackgroundBorrow();
+    backgroundPreemptCount_ = preemptionsBeforeResize;
+    pendingGrayscale_ = {};
+    pendingPreRender = false;
+    usePreRenderedBuffer = false;
+    preRenderedPage = {};
+    preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
+
+    // Match the transition indicator's setting/panel budget. Ship before the
+    // resize arms its clean refresh, so that clean belongs to the new text.
+    // Async lets the waveform overlap persistence, font loading and reflow.
+    if (SETTINGS.showBusyIndicator && displayedFrameAvailable && !renderer.hasRefreshOverridePending() &&
+        renderer.getLastFastRefreshMs() <= 1000) {
+      GUI.drawBusyIndicator(renderer, /*overlayDisplayedFrame=*/true, PopupShip::Async);
+    }
   }
 
   bookEmbeddedStyleOverride = embeddedStyleOverride;
@@ -3046,8 +3075,6 @@ void EpubReaderActivity::applyBookReaderOverrides(
   // no-op reopens of the menu don't pay for it.
   ReaderUtils::enforceExitFullRefresh(renderer);
 
-  RenderLock lock(*this);
-
   // The SD font was only ever (re)loaded on BOOK OPEN: ensureSdFontLoadedForPath() is called from
   // ActivityManager's goToReader/replaceWithReader and nowhere else. Changing the font or the size
   // from the reader menu therefore left the previously loaded face in place, and because
@@ -3059,7 +3086,7 @@ void EpubReaderActivity::applyBookReaderOverrides(
   // Safe here and not earlier: the overrides are already persisted to RECENT_BOOKS above, which is
   // what the path-based resolution reads, and the RenderLock this holds is the one the cold-load
   // popup expects its caller to own.
-  if (epub) ensureSdFontLoadedForPath(epub->getPath().c_str());
+  ensureSdFontLoadedForPath(epub->getPath().c_str());
 
   captureSourceBeforeReflow();
   section.reset();
@@ -7590,7 +7617,7 @@ void EpubReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION 
             sdFontSystem.sizeListFor(bookSdFontFamily(bookFontFamilyOverride, bookSdFontFamilyOverride));
         applyBookReaderOverrides(bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
                                  bookSdFontFamilyOverride, static_cast<int8_t>(sizes.next(current)),
-                                 bookBionicReadingOverride, bookParagraphAlignmentOverride);
+                                 bookBionicReadingOverride, bookParagraphAlignmentOverride, /*acknowledgeResize=*/true);
         requestUpdate();
       }
       break;
@@ -7609,7 +7636,7 @@ void EpubReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION 
         if (next != sizes.snap(current)) {
           applyBookReaderOverrides(bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
                                    bookSdFontFamilyOverride, static_cast<int8_t>(next), bookBionicReadingOverride,
-                                   bookParagraphAlignmentOverride);
+                                   bookParagraphAlignmentOverride, /*acknowledgeResize=*/true);
           requestUpdate();
         }
       }

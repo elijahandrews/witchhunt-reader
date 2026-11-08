@@ -268,3 +268,8 @@ add_test(NAME ReaderOptionalAaMemory
   COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/reader_memory/run.py
           --out ${CMAKE_CURRENT_BINARY_DIR}/reader_memory)
 set_tests_properties(ReaderOptionalAaMemory PROPERTIES TIMEOUT 60)
+
+add_test(NAME ReaderResizeFeedback
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/reader_resize_feedback/run.py
+          --out ${CMAKE_CURRENT_BINARY_DIR}/reader_resize_feedback)
+set_tests_properties(ReaderResizeFeedback PROPERTIES TIMEOUT 60)

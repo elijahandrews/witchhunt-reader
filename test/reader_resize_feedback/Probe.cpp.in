@@ -1,0 +1,215 @@
+#include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "ReaderFontSizes.h"
+
+CrossPointSettings CrossPointSettings::instance;
+std::vector<std::string> events;
+bool locked = false, renderInFlight = false;
+struct RenderLock {
+  struct ExclusiveActivityAccess {};
+  explicit RenderLock(ExclusiveActivityAccess) {
+    assert(!locked);
+    renderInFlight = false;  // join the entire render pass, not just its unlocked wait
+    locked = true;
+    events.push_back("lock");
+  }
+  ~RenderLock() {
+    locked = false;
+    events.push_back("unlock");
+  }
+};
+struct GfxRenderer {
+  bool secondary = true, refreshOverride = false, displayedCurrent = true;
+  uint16_t fastMs = 792;
+  bool hasSecondaryBuffer() const {
+    assert(locked);
+    return secondary;
+  }
+  bool hasRefreshOverridePending() const {
+    assert(locked);
+    return refreshOverride;
+  }
+  uint16_t getLastFastRefreshMs() const { return fastMs; }
+};
+enum class PopupShip { Async };
+void checkPrepared();
+struct Theme {
+  void drawBusyIndicator(GfxRenderer& renderer, bool overlayDisplayedFrame, PopupShip) {
+    assert(locked && !renderInFlight && overlayDisplayedFrame && renderer.displayedCurrent);
+    assert(!renderer.refreshOverride);
+    checkPrepared();
+    events.push_back("indicator");
+  }
+} GUI;
+struct ReaderUtils {
+  static void enforceExitFullRefresh(GfxRenderer& renderer) {
+    assert(locked);
+    events.push_back("clean");
+    renderer.refreshOverride = true;
+  }
+};
+struct Recent {
+  template <class... Args>
+  void setReaderOverrides(Args&&...) {
+    assert(locked && !renderInFlight);
+    events.push_back("persist");
+  }
+} recent;
+#define RECENT_BOOKS recent
+void ensureSdFontLoadedForPath(const char*) {
+  assert(locked && !renderInFlight);
+  events.push_back("font");
+}
+const char* bookSdFontFamily(int8_t, const std::string&) { return "Synthetic"; }
+struct FontSystem {
+  ReaderSizeList sizeListFor(const char*) { return {{11, 12, 14}, 3}; }
+} sdFontSystem;
+struct Epub {
+  std::string getPath() const { return "/synthetic.epub"; }
+};
+struct SectionSlot {
+  bool exists = true;
+  void reset() {
+    assert(locked);
+    exists = false;
+    events.push_back("reset");
+  }
+};
+class EpubReaderActivity {
+ public:
+  using BA = CrossPointSettings::BUTTON_ACTION;
+  std::unique_ptr<Epub> epub = std::make_unique<Epub>();
+  GfxRenderer renderer;
+  SectionSlot section;
+  int8_t bookEmbeddedStyleOverride = -1, bookImageRenderingOverride = -1, bookFontFamilyOverride = -1;
+  std::string bookSdFontFamilyOverride = "Synthetic";
+  int8_t bookFontSizeOverride = 12, bookBionicReadingOverride = -1, bookParagraphAlignmentOverride = -1;
+  int8_t bookTextAntiAliasingOverride = -1, bookHyphenationOverride = -1, bookFontSizeNormalizationOverride = -1;
+  int8_t bookGuideDotsOverride = -1, bookInlineFootnotePreviewsOverride = -1,
+         bookIgnorePublisherPageMarginsOverride = -1;
+  bool pendingPreRender = true, usePreRenderedBuffer = true, preRenderedPlanesStaged_ = true;
+  struct Preview {
+    bool ready = false;
+  } preRenderedPage{true};
+  struct Deferred {
+    bool active = false;
+  } pendingGrayscale_{true};
+  uint32_t capturedTextAaGeneration_ = 42;
+  uint8_t backgroundPreemptCount_ = 1;
+  bool backgroundBorrowActive_ = false;
+  void endBackgroundBorrow() {
+    assert(locked);
+    if (!backgroundBorrowActive_) return;
+    backgroundBorrowActive_ = false;
+    ++backgroundPreemptCount_;
+    renderer.secondary = true;
+    renderer.displayedCurrent = false;  // returning the borrow copies a prefetched NEXT page
+  }
+  void captureSourceBeforeReflow() {
+    assert(locked && section.exists);
+    events.push_back("anchor");
+  }
+  void requestUpdate() { events.push_back("update"); }
+  // DECLARATIONS
+  void action(BA action) {
+    switch (action) {
+      // ROUTING
+      default:
+        assert(false);
+    }
+  }
+  void menuSize(int8_t size) {
+    applyBookReaderOverrides(bookEmbeddedStyleOverride, bookImageRenderingOverride, bookFontFamilyOverride,
+                             bookSdFontFamilyOverride, size, bookBionicReadingOverride, bookParagraphAlignmentOverride);
+  }
+};
+EpubReaderActivity* active = nullptr;
+void checkPrepared() {
+  assert(active && !active->pendingGrayscale_.active && !active->pendingPreRender);
+  assert(!active->usePreRenderedBuffer && !active->preRenderedPage.ready);
+  assert(!active->preRenderedPlanesStaged_ && active->capturedTextAaGeneration_ == 0);
+  assert(active->bookFontSizeOverride == 12);  // acknowledge the gesture before mutating the old layout
+}
+// METHODS
+
+int main() {
+  using BA = CrossPointSettings::BUTTON_ACTION;
+  int checks = 0;
+  for (int scenario = 0; scenario < 8; ++scenario) {
+    EpubReaderActivity reader;
+    active = &reader;
+    SETTINGS.showBusyIndicator = 1;
+    if (scenario == 1) SETTINGS.showBusyIndicator = 0;
+    if (scenario == 2) reader.renderer.refreshOverride = true;
+    if (scenario == 3) reader.renderer.fastMs = 1001;
+    if (scenario == 4) reader.renderer.secondary = false;
+    if (scenario == 5) {
+      reader.renderer.secondary = false;
+      reader.backgroundBorrowActive_ = true;
+    }
+    if (scenario == 6) reader.renderer.fastMs = 0;
+    if (scenario == 7) reader.renderer.fastMs = 1000;
+    renderInFlight = true;
+    events.clear();
+    reader.action(BA::BTN_FONT_SIZE_LARGER);
+    const bool shown = scenario == 0 || scenario == 6 || scenario == 7;
+    std::vector<std::string> expected = {"lock"};
+    if (shown) expected.push_back("indicator");
+    expected.insert(expected.end(), {"persist", "clean", "font", "anchor", "reset", "unlock", "update"});
+    assert(events == expected && reader.bookFontSizeOverride == 14 && !reader.section.exists);
+    assert(reader.backgroundPreemptCount_ == 1 && !reader.pendingGrayscale_.active);
+    assert(!reader.pendingPreRender && !reader.usePreRenderedBuffer && !reader.preRenderedPage.ready);
+    assert(!reader.preRenderedPlanesStaged_ && reader.capturedTextAaGeneration_ == 0);
+    ++checks;
+  }
+  SETTINGS.showBusyIndicator = 1;
+  for (auto action : {BA::BTN_FONT_SIZE_SMALLER, BA::BTN_CYCLE_FONT_SIZE}) {
+    EpubReaderActivity reader;
+    active = &reader;
+    events.clear();
+    reader.action(action);
+    assert(std::count(events.begin(), events.end(), "indicator") == 1);
+    ++checks;
+  }
+  for (auto action : {BA::BTN_FONT_SIZE_SMALLER, BA::BTN_FONT_SIZE_LARGER}) {
+    EpubReaderActivity reader;
+    active = &reader;
+    reader.bookFontSizeOverride = action == BA::BTN_FONT_SIZE_SMALLER ? 11 : 14;
+    events.clear();
+    reader.action(action);
+    assert(events.empty() && reader.section.exists && reader.pendingPreRender);
+    ++checks;
+  }
+  {
+    EpubReaderActivity reader;
+    active = &reader;
+    reader.epub.reset();
+    events.clear();
+    reader.action(BA::BTN_FONT_SIZE_LARGER);
+    assert(events.empty());
+    ++checks;
+  }
+  {
+    EpubReaderActivity reader;
+    active = &reader;
+    events.clear();
+    reader.menuSize(14);
+    assert(std::count(events.begin(), events.end(), "indicator") == 0);
+    assert(std::count(events.begin(), events.end(), "font") == 1);
+    ++checks;
+  }
+  {
+    EpubReaderActivity reader;
+    active = &reader;
+    events.clear();
+    reader.menuSize(12);
+    assert((events == std::vector<std::string>{"lock", "unlock"}));
+    ++checks;
+  }
+  std::cout << checks << " production resize feedback checks passed\n";
+}

@@ -38,3 +38,13 @@ passage stays visible, inspect regular/bold/italic text, and compare subsequent
 page turns at an SD-backed size. Repeat in portrait and landscape and monitor
 serial heap/crash diagnostics when using an instrumented build. No cache deletion
 or progress reset is needed.
+
+Direct EPUB font-size actions, including the default pinch gestures, now show the
+existing hourglass before saving the new size, loading fonts and rebuilding the
+layout. The indicator uses an asynchronous refresh and follows Show Busy
+Indicator and the existing measured-panel speed limit. A pinch at either size
+limit does nothing. Menu selections keep their existing transition feedback.
+If the displayed framebuffer is borrowed/unavailable or a clean refresh is
+already pending, the extra overlay is skipped to avoid stale-page flashes or
+consuming that refresh. Queued page previews and deferred text AA are canceled
+before an acknowledged resize; the new layout replaces the hourglass.
