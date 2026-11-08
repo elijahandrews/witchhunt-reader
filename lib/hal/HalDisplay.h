@@ -59,6 +59,8 @@ class HalDisplay {
   // the reader's inline AA -- must ask this rather than infer it from the board,
   // or they pay the plane/gray/restore cost with no overlap to hide it in.
   bool supportsAsyncRefresh() const;
+  bool supportsDeferredGrayscaleBase() const;
+  void triggerGrayscaleBaseAsync(RefreshMode mode, bool turnOffScreen = false);
   void finishDisplayAsync();
   bool isRefreshPending() const;
   bool isRedRamSynced() const;
@@ -172,6 +174,9 @@ class HalDisplay {
   // not merely slower but wrong: a self-normalizing grey column expects the
   // pixel it drives not to have been driven already.
   bool supportsGrayFrame() const;
+  bool supportsTextAa() const;
+  bool tryDisplayTextAa(const uint8_t* lsb, const uint8_t* msb, size_t bytes, bool turnOffScreen);
+  void releaseTextAa();
   // Compose the intact B/W framebuffer with the LSB/MSB planes staged by
   // copyGrayscale*Buffers() and display the result in one refresh. Falls back to
   // a plain displayBuffer() on a panel that cannot, so callers need no branch of

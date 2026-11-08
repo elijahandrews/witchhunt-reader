@@ -1670,7 +1670,8 @@ void loop() {
     // takes screenshots or navigates — all of which need that filesystem — so
     // run the activity and nothing else. It leaves by rebooting, never by
     // transitioning, so there is no path out of here that we need to service.
-    mappedInputManager.update();
+    // gpio.update() above already captured this tick's input. A second drain
+    // clears those Power/Back/touch edges before USB Drive can handle them.
     activityManager.loop();
     if (activityManager.preventAutoSleep()) {
       // A host is attached: keep the clock up so MSC callbacks stay responsive.

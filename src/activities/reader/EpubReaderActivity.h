@@ -18,6 +18,7 @@
 #include <atomic>
 
 #include "BookmarkStore.h"
+#include "BufferedGrayscalePlanes.h"
 #include "ChapterPageSpan.h"
 #include "CrossPointState.h"
 #include "EpubJumpBack.h"
@@ -429,6 +430,7 @@ class EpubReaderActivity final : public Activity {
     // (so `ready` stays true for restoreCurrentPageToBufferIfPreRendered), but the page turn
     // must not show it: it renders the page afresh, by when the pass's own Page is gone.
     bool incomplete = false;
+    uint32_t textAaGeneration = 0;
   };
   PreRenderedPage preRenderedPage;
   // The pre-render staged this page's grayscale planes, so displaying it can go
@@ -437,6 +439,11 @@ class EpubReaderActivity final : public Activity {
   // because a stale plane pair belongs to a page that is no longer in the
   // framebuffer.
   bool preRenderedPlanesStaged_ = false;
+  // Host masks belong to a completed BW capture generation. Preserve the token
+  // across ready=false -> display handoff, invalidate on all buffer rebuilds.
+  uint32_t textAaGeneration_ = 0;
+  uint32_t capturedTextAaGeneration_ = 0;
+  bool lastTextAaPresented_ = false;
   // Debug-only Background B (section pre-analysis) progress, surfaced as a small
   // status-bar overlay when DEBUG_BACKGROUND_WORK is enabled. Background A's state is
   // derived at draw time from pendingPreRender / preRenderedPage, so only B needs a
@@ -634,6 +641,7 @@ class EpubReaderActivity final : public Activity {
     bool fastLut = false;
   };
   PendingGrayscale pendingGrayscale_;
+  BufferedGrayscalePlanes bufferedGrayscalePlanes_;
   // The reading position the owed deferred AA and the armed pre-render belong to: the page on
   // screen when either was armed (every arming site runs with that page current). render() and
   // the deferred-AA runner drop both once the position has moved, so a navigation that does not

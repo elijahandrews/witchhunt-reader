@@ -284,15 +284,15 @@ CI builds the same three envs (`.github/workflows/ci.yml`).
 - A wrong pin is a black screen, not a compile error. After changing how a C3 board sources pins,
   flash an X3 or X4 and check that it boots to Home, the SD card mounts and a book opens, the
   battery reading is sane (gauge over I2C on the X3, ADC on the X4), and Settings shows the same
-  entries as before (tilt and Fast AA only on the X3).
+  entries according to their capabilities (tilt on supported sensors; Fast AA on panels with selectable waveforms).
 - Flash every board whose behaviour changed. Builds and host tests cannot see what a screen shows
   or what a thumb can reach.
 
 ## Upstream references
 
 - SDK board notes, in our SDK fork:
-  [X4 Pro](https://github.com/jpirnay/freeink-sdk/blob/witchhunt/docs/xteink-x4pro-support.md)
-  and [LilyGo T5S3](https://github.com/jpirnay/freeink-sdk/blob/witchhunt/docs/lilygo-t5s3-support.md).
+  [X4 Pro](https://github.com/elijahandrews/freeink-sdk/blob/witchhunt/docs/xteink-x4pro-support.md)
+  and [LilyGo T5S3](https://github.com/elijahandrews/freeink-sdk/blob/witchhunt/docs/lilygo-t5s3-support.md).
 - Board profiles: `libs/hardware/BoardConfig/include/BoardConfig.h` in the SDK.
 - LilyGo T5S3 vendor repository,
   [`Xinyuan-LilyGO/T5S3-4.7-e-paper-PRO`](https://github.com/Xinyuan-LilyGO/T5S3-4.7-e-paper-PRO).

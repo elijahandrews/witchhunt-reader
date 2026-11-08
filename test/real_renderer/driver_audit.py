@@ -29,7 +29,8 @@ def run(repo, output, sanitize=False):
     sdk = repo / "freeink-sdk/libs/display/FreeInkDisplay"
     for name in (
         "src/driver/Uc8279X4Driver.cpp", "src/driver/Uc8279X4Driver.h",
-        "src/driver/PanelDriver.h", "src/lut/Uc8279X3Luts.h",
+        "src/driver/PanelDriver.h", "src/driver/X4ProTextAa.h",
+        "src/lut/Uc8279X3Luts.h", "src/lut/X4ProTextAaLuts.h",
         "include/GrayscaleCapabilities.h",
     ):
         destination = output / "sdk" / name

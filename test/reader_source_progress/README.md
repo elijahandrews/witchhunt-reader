@@ -15,3 +15,10 @@ physical storage, the full reader activity, or display rendering.
 The record unit tests cover literal bytes and torn/unknown tails. The pipeline
 `SourceAnchorTest.Persisted*` cases cover real EPUB/Section layout and persistence
 across long/nested paragraph and publisher-margin reflows using host metrics.
+
+The same probe extracts real page-turn, jump and render-classification functions.
+It checks a prepared-page hit followed by another queued forward/backward action,
+a multi-page jump, or a chapter crossing before rendering, plus refused navigation
+and stale handoff identity. `--negative-control keep-handoff` restores the old
+invalidation bug; `--negative-control skip-identity` removes the defensive page
+check. Both mutations must fail. No physical panel or scheduling latency is simulated.

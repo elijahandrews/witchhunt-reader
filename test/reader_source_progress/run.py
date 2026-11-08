@@ -8,6 +8,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
 p.add_argument("--out", type=Path, required=True)
 p.add_argument("--sanitize", action="store_true")
+p.add_argument("--negative-control", choices=("keep-handoff", "skip-identity"))
 a = p.parse_args()
 repo, out = a.repo.resolve(), a.out.resolve()
 out.mkdir(parents=True, exist_ok=True)
@@ -47,7 +48,23 @@ live = live_start + extract(live_start, "    if (navTarget.kind == NavigationTar
 classifier = "EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {" + extract(
     "EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {",
     "void EpubReaderActivity::renderFinishedBookPass(")
-generated.write_text(shell.replace("// LIVE_LINK_STATEMENTS", live)
+turns = "void EpubReaderActivity::pageTurn(" + extract(
+    "void EpubReaderActivity::pageTurn(", "bool EpubReaderActivity::reallocSecondaryEvictingCaches()")
+steps = "void EpubReaderActivity::anchorNavTargetToCurrentPage(" + extract(
+    "void EpubReaderActivity::anchorNavTargetToCurrentPage(", "void EpubReaderActivity::pageTurn(")
+
+if a.negative_control == "keep-handoff":
+    guard = "  usePreRenderedBuffer = false;\n"
+    assert turns.count(guard) == 2
+    turns = turns.replace(guard, "")
+if a.negative_control == "skip-identity":
+    guard = ("section && !preRenderedPage.incomplete && preRenderedPage.spineIndex == currentSpineIndex &&\n"
+             "        preRenderedPage.pageIndex == section->currentPage && !renderer.isRefreshPending()")
+    assert classifier.count(guard) == 1
+    classifier = classifier.replace(guard, "!renderer.isRefreshPending()")
+
+generated.write_text(shell.replace("// PAGE_TURN_IMPLEMENTATION", steps + turns)
+                          .replace("// LIVE_LINK_STATEMENTS", live)
                           .replace("// CLASSIFY_IMPLEMENTATION", classifier)
                           .replace("// JUMP_IMPLEMENTATION", pending + jump + reflow + positions)
                           .replace("// NAVIGATION_DECLARATION", nav_decl)
@@ -59,4 +76,11 @@ binary = out / "reader-source-progress"
 flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if a.sanitize else []
 subprocess.run(["c++", "-std=c++20", "-O1", "-g", *flags, "-I" + str(repo / "src"),
                 "-I" + str(repo / "lib/Epub/Epub"), str(generated), "-o", str(binary)], check=True)
-subprocess.run([str(binary)], check=True)
+result = subprocess.run([str(binary)], capture_output=True, text=True)
+(out / "run.log").write_text(result.stdout + result.stderr)
+print(result.stdout + result.stderr, end="")
+if a.negative_control:
+    assert result.returncode != 0, "Mutated navigation unexpectedly passed"
+    print("Negative control rejected:", a.negative_control)
+else:
+    assert result.returncode == 0, "Production reader navigation/progress regression failed"

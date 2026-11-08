@@ -1,4 +1,5 @@
-# The SDK is pinned to OUR FORK, not to Free-Ink/freeink-sdk.
+# The SDK is pinned to this repository owner's fork, elijahandrews/freeink-sdk.
+# Its witchhunt branch retains the jpirnay integration history plus our fixes.
 #
 # The firmware needs work that is not on upstream main: the LilyGo T5 S3 board
 # support of Free-Ink/freeink-sdk#51 (still open), our fixes on top of it, and
@@ -25,5 +26,5 @@
 # the submodule to upstream and the firmware then failed to build.
 [submodule "freeink-sdk"]
 	path = freeink-sdk
-	url = https://github.com/jpirnay/freeink-sdk.git
+	url = https://github.com/elijahandrews/freeink-sdk.git
 	branch = witchhunt

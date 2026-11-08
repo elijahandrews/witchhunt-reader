@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--repo', type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--sanitize', action='store_true')
-    parser.add_argument('--negative-control', choices=('old-order', 'conditional-hook'))
+    parser.add_argument('--negative-control', choices=('old-order', 'conditional-hook', 'stale-generation', 'late-cancel'))
     args = parser.parse_args()
     repo = args.repo.resolve()
     screenshot = (repo / 'src/util/ScreenshotUtil.cpp').read_text()
@@ -33,6 +33,7 @@ def main():
     restore = function(reader, 'void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered(')
     content = function(reader, 'uint16_t EpubReaderActivity::renderPageContentOnly(')
     status = function(reader, 'void EpubReaderActivity::renderStatusBar(')
+    cached = function(reader, 'void EpubReaderActivity::displayPreRenderedPage(')
     hook = function(header, '  void prepareFramebufferForCapture() override')
     hook = hook.replace(' override', '')
     sync = function(sdk, 'void FreeInkDisplay::syncWriteBufferFromActive(')
@@ -48,6 +49,14 @@ def main():
         condition = '(!forCapture && !preRenderedPage.ready)'
         assert restore.count(condition) == 1
         restore = restore.replace(condition, '!preRenderedPage.ready')
+    if args.negative_control == 'stale-generation':
+        guard = 'capturedTextAaGeneration_ == preRenderedPage.textAaGeneration'
+        assert guard in cached
+        cached = cached.replace(guard, 'true')
+    if args.negative_control == 'late-cancel':
+        guard = 'const bool canceled = aaPreemptedByNavigation();'
+        assert guard in cached
+        cached = cached.replace(guard, 'const bool canceled = false;')
     code = r'''#include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -72,6 +81,10 @@ struct FontCacheManager {
 };
 
 #define LOG_ERR(...) do {} while (0)
+#define LOG_DBG(...) do {} while (0)
+void checkHeapIntegrity(const char*) {}
+struct HalDisplay { enum RefreshMode { FULL_REFRESH, HALF_REFRESH, FAST_REFRESH }; };
+static bool navigationPending = false;
 static unsigned long nowMs = 1;
 unsigned long millis() { return nowMs; }
 struct RenderLock {
@@ -101,15 +114,39 @@ class GfxRenderer {
   RenderMode mode = GRAYSCALE_MSB;
   FreeInkDisplay display;
   FontCacheManager fonts;
-  unsigned grayBegins = 0, planeWrites = 0;
+  unsigned grayBegins = 0, planeWrites = 0, overlays = 0;
+  bool textSupport = false, acceptText = true, cancelDuringChrome = false;
+  bool rejectErasedFringe = false, lastUsedAa = false;
+  uint8_t* capLsb = nullptr; uint8_t* capMsb = nullptr;
+  HalDisplay::RefreshMode lastMode = HalDisplay::FAST_REFRESH;
+  bool supportsTextAa() const { return textSupport; }
+  bool supportsDeferredGrayscaleBase() const { return false; }
+  bool isErasingOpaqueGlyphs() const { return false; }
+  void displayBuffer(HalDisplay::RefreshMode m) { ++displayCalls; lastMode = m; }
+  void displayGrayscaleFrame(HalDisplay::RefreshMode m) { displayBuffer(m); }
+  void triggerGrayscaleBaseAsync(HalDisplay::RefreshMode m) { displayBuffer(m); }
+  bool displayTextAaOrBw(HalDisplay::RefreshMode m, const uint8_t* l, const uint8_t* h) {
+    displayBuffer(m);
+    if (rejectErasedFringe && l && h) assert(l[3] == 0 && h[3] == 0);
+    return lastUsedAa = m == HalDisplay::FAST_REFRESH && l && h && acceptText;
+  }
+  HalDisplay::RefreshMode getLastRefreshMode() const { return lastMode; }
+  uint8_t getLastDisplayModeByte() const { return 0; }
+  struct GrayTimes { bool aborted = false; };
+  template<class Render, class Abort> GrayTimes renderGrayscalePlanesSequential(Render, Abort) {
+    ++overlays; return {};
+  }
+  template<class Render, class Abort> GrayTimes renderGrayscalePlanesInterleaved(Render, Abort, uint8_t*, uint8_t*) {
+    ++overlays; return {};
+  }
   void setRenderMode(RenderMode value) { mode = value; }
   FontCacheManager* getFontCacheManager() { return &fonts; }
   int getScreenHeight() const { return 800; }
   int getDisplayWidthBytes() const { return 4; }
-  bool supportsGrayFrame() const { return true; }
+  bool supportsGrayFrame() const { return !textSupport; }
   void setFastGrayscaleLut(bool) {}
-  void beginGrayCapture(uint8_t*, uint8_t*) { ++grayBegins; }
-  void endGrayCapture() {}
+  void beginGrayCapture(uint8_t* l, uint8_t* h) { ++grayBegins; capLsb = l; capMsb = h; }
+  void endGrayCapture() { capLsb = capMsb = nullptr; }
   void copyGrayscaleLsbBuffers(uint8_t*) { ++planeWrites; }
   void copyGrayscaleMsbBuffers(uint8_t*) { ++planeWrites; }
   void clearScreen() { std::memset(getFrameBuffer(), 0, 4); }
@@ -124,16 +161,27 @@ class GfxRenderer {
   int getDisplayHeight() const { return 1; }
   void getOrientedViewableTRBL(int* a, int* b, int* c, int* d) { *a = *b = *c = *d = 0; }
 } renderer;
+namespace WakeTrace { enum class Phase { PageVisible }; void mark(Phase) {} void logSummary() {} }
 namespace CrossPointSettings {
+constexpr int IMAGES_SUPPRESS = 0;
 enum class STATUS_BAR_TITLE { NONE, CHAPTER_TITLE, BOOK_TITLE };
 }
 struct Settings {
   uint8_t screenMargin = 8;
+  bool halfRefreshAfterImagePage = true;
+  int getRefreshFrequency() const { return 15; }
   bool fastAntiAliasing = true, largeImagePlaceholder = true;
   bool touchReaderControls = true;
   bool statusBarPrintedPage = false, statusBarBattery = true, useClock = true, statusBarClock = true;
   CrossPointSettings::STATUS_BAR_TITLE statusBarTitle = CrossPointSettings::STATUS_BAR_TITLE::NONE;
 } SETTINGS;
+namespace ReaderUtils {
+HalDisplay::RefreshMode nextRefreshCycleMode(int& remaining) {
+  if (--remaining <= 0) { remaining = SETTINGS.getRefreshFrequency(); return HalDisplay::HALF_REFRESH; }
+  return HalDisplay::FAST_REFRESH;
+}
+void displayWithRefreshCycle(GfxRenderer& r, int& remaining) { r.displayBuffer(nextRefreshCycleMode(remaining)); }
+}
 struct ImageBlock {
   static bool placeholderOnly;
   struct PlaceholderOnlyScope {
@@ -161,6 +209,9 @@ struct Gui {
                      const std::string&, bool, bool, SyncIndicator, Rect* back = nullptr) const {
     if (back) *back=Rect{4,20,80,30};
     ++r.chromeDraws; r.getFrameBuffer()[3] = 99;
+    if (r.capLsb) r.capLsb[3] = 0;
+    if (r.capMsb) r.capMsb[3] = 0;
+    if (r.cancelDuringChrome) navigationPending = true;
   }
 } GUI;
 namespace UITheme {
@@ -171,10 +222,13 @@ int getStatusBarItemsHeight() { return 3; }
 struct Page {
   uint8_t id;
   bool hasImages() const { return false; }
-  void renderTextOnly(GfxRenderer&, int, int, int) const {}
+  bool renderTextOnly(GfxRenderer&, int, int, int, bool = false) const { return true; }
+  void renderImagesFromGrayscaleCache(GfxRenderer&, int, int) const {}
   void render(GfxRenderer& r, int, int, int, bool force = true, bool mono = true) const {
     assert(r.getFrameBuffer()); ++r.redraws;
     std::memset(r.getFrameBuffer(), id, 4);
+    if (r.capLsb) std::memset(r.capLsb, id, 4);
+    if (r.capMsb) std::memset(r.capMsb, id, 4);
     r.getFrameBuffer()[1] = force;
     r.getFrameBuffer()[2] = (ImageBlock::placeholderOnly ? 1 : 0) | (mono ? 2 : 0);
   }
@@ -212,7 +266,26 @@ class EpubReaderActivity {
   int getImageOnlyPageYOffset(const Page&, int) { return 0; }
   int getEffectiveReaderFontId() const { return 1; }
   bool getEffectiveTextAntiAliasing() const { return true; }
-  struct { bool ready = true; } preRenderedPage;
+  struct {
+    bool ready = true; int spineIndex = 1, pageIndex = 1;
+    bool incomplete = false; uint32_t textAaGeneration = 0;
+  } preRenderedPage;
+  uint32_t textAaGeneration_ = 0, capturedTextAaGeneration_ = 0;
+  bool secondaryBufferDegraded_ = false, backgroundBuildThrough_ = false, lastTextAaPresented_ = false;
+  bool pendingHalfRefreshAfterImagePage = false, pageHasPlaceholders = false;
+  int pagesUntilFullRefresh = 15;
+  HalDisplay::RefreshMode lastPageRefreshMode_ = HalDisplay::FAST_REFRESH;
+  uint8_t lastPageDisplayModeByte_ = 0;
+  struct {
+    uint8_t low[4]{}, high[4]{}; bool available = true;
+    bool ensure(size_t n) { assert(n == 4); return available; }
+    uint8_t* lsb() { return low; } uint8_t* msb() { return high; }
+  } bufferedGrayscalePlanes_;
+  bool aaPreemptedByNavigation() const { return navigationPending; }
+  bool usesDeferredAa() const { return false; }
+  int getEffectiveImageRendering() const { return 1; }
+  void publishPageLinkTargets(const Page&, int, int) {}
+  void displayPreRenderedPage(const Page&, int, int, int, int);
   bool preRenderedPlanesStaged_ = true, pendingPreRender = true, usePreRenderedBuffer = true;
   EpubReaderActivity(GfxRenderer& r, Section& s) : renderer(r), section(&s) {}
   void restoreCurrentPageToBufferIfPreRendered(bool forCapture = false);
@@ -223,6 +296,7 @@ class EpubReaderActivity {
 // READER_RESTORE
 // READER_CONTENT
 // READER_STATUS
+// READER_CACHED
 struct Manager {
   EpubReaderActivity* reader = nullptr;
   void prepareFramebufferForCapture() { if (reader) reader->prepareFramebufferForCapture(); }
@@ -253,7 +327,7 @@ void check(bool valid, const char* why) {
 }
 void reset() {
   renderer.~GfxRenderer(); new (&renderer) GfxRenderer;
-  SETTINGS = {};
+  SETTINGS = {}; navigationPending = false;
   captured = {}; activityManager.reader = nullptr; nowMs = 1; RenderLock::held = false;
   pendingTarget = ScreenshotUtil::Target::None;
 }
@@ -261,6 +335,49 @@ void capture(ScreenshotUtil::Target target = ScreenshotUtil::Target::Host) {
   ScreenshotUtil::request(target); ScreenshotUtil::service(renderer, send);
 }
 int main() {
+  for (int scenario = 0; scenario < 10; ++scenario) {
+    reset(); Section section; EpubReaderActivity reader(renderer, section);
+    renderer.textSupport = true; Page page{7};
+    reader.renderPageContentOnly(page, 0, 0, 0, 0);
+    check(reader.capturedTextAaGeneration_ != 0 && !renderer.capLsb && renderer.planeWrites == 0,
+          "text masks captured without SPI and capture pointers disarmed");
+    reader.preRenderedPage.textAaGeneration = reader.capturedTextAaGeneration_;
+    reader.preRenderedPage.ready = false; // Real ready-to-display ownership handoff.
+    if (scenario == 1) ++reader.preRenderedPage.textAaGeneration;
+    if (scenario == 2) ++reader.preRenderedPage.pageIndex;
+    if (scenario == 3) ++reader.preRenderedPage.spineIndex;
+    if (scenario == 4) reader.preRenderedPage.incomplete = true;
+    if (scenario == 5) renderer.cancelDuringChrome = true;
+    if (scenario == 6) reader.pendingHalfRefreshAfterImagePage = true;
+    if (scenario == 7) renderer.acceptText = false;
+    if (scenario == 8) reader.pagesUntilFullRefresh = 1;
+    if (scenario == 9) {
+      const auto generation = reader.textAaGeneration_;
+      reader.renderPageContentOnly(Page{9}, 0, 0, 0, 0);
+      check(reader.textAaGeneration_ != generation, "replacement capture changes the generation");
+    }
+    renderer.rejectErasedFringe = true;
+    reader.displayPreRenderedPage(page, 0, 0, 0, 0);
+    check(renderer.displayCalls == 1 && reader.lastTextAaPresented_ == (scenario == 0),
+          "only matching complete current-generation capture gets one-pass AA");
+    check(renderer.getFrameBuffer()[0] == (scenario == 9 ? 9 : 7) && renderer.getFrameBuffer()[3] == 99,
+          "fallback preserves BW target and live chrome");
+    check(renderer.overlays == (scenario == 0 || scenario == 5 ? 0u : 1u),
+          "success and late navigation skip replay; other fallbacks retain AA");
+    check(reader.pagesUntilFullRefresh == (scenario == 6 || scenario == 8 ? 15 : 14),
+          "cadence consumed once even on fallback");
+    check(reader.capturedTextAaGeneration_ == 0 && !renderer.capLsb, "consumed masks cannot be reused");
+  }
+  // Software screenshots must invalidate a retained one-pass capture even when
+  // reloading the displayed page fails, and must not start a new gray capture.
+  for (bool fail : {false, true}) {
+    reset(); Section section; EpubReaderActivity reader(renderer, section);
+    renderer.textSupport = true; reader.renderPageContentOnly(Page{7}, 0, 0, 0, 0);
+    section.loadFails = fail; const auto begins = renderer.grayBegins;
+    reader.restoreCurrentPageToBufferIfPreRendered(true);
+    check(reader.capturedTextAaGeneration_ == 0 && renderer.grayBegins == begins,
+          "screenshot invalidates retained one-pass masks without capturing new ones");
+  }
   for (bool activeBuild : {false, true}) for (bool staleSecondary : {true, false}) {
     reset(); Section section; section.active = activeBuild; EpubReaderActivity reader(renderer, section);
     activityManager.reader = &reader;
@@ -354,7 +471,7 @@ int main() {
   check(!captured.called, "pending refresh is not captured");
   nowMs = 5001; ScreenshotUtil::service(renderer, send);
   check(captured.called && captured.busy && captured.null, "deadline keeps busy response");
-  std::printf("%u production screenshot order/current-page/image-policy/chrome/null/busy checks passed\n", checks);
+  std::printf("%u production cached-AA generation/cancellation/cadence and screenshot checks passed\n", checks);
 }
 '''
     code = code.replace('// SDK_FUNCTIONS', sync + '\n' + borrow + '\n' + give_back)
@@ -362,6 +479,7 @@ int main() {
     code = code.replace('// READER_RESTORE', restore)
     code = code.replace('// READER_CONTENT', content)
     code = code.replace('// READER_STATUS', status)
+    code = code.replace('// READER_CACHED', cached)
     code = code.replace('// SCREENSHOT_FUNCTIONS', request + '\n' + service)
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)

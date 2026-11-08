@@ -44,11 +44,11 @@ The reported major version must be 21 or newer.
 ## Clone and initialize
 
 ```sh
-git clone --recursive https://github.com/jpirnay/witchhunt-reader
+git clone --recursive https://github.com/elijahandrews/witchhunt-reader
 cd witchhunt-reader
 ```
 
-The `freeink-sdk` submodule points at our SDK fork, `https://github.com/jpirnay/freeink-sdk` (branch `witchhunt`, see `.gitmodules`). A build against the upstream `Free-Ink/freeink-sdk` main does not compile.
+The `freeink-sdk` submodule points at our SDK fork, `https://github.com/elijahandrews/freeink-sdk` (branch `witchhunt`, see `.gitmodules`). A build against the upstream `Free-Ink/freeink-sdk` main does not compile.
 
 If you already cloned without submodules:
 

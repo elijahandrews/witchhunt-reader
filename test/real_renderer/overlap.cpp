@@ -392,6 +392,120 @@ int runOverlapChecks(GfxRenderer& g, HalDisplay& d, int id, const EpdFontFamily&
     }
     g.removeFont(14);
   }
+  // The PSRAM path must match the old plane pixels, preserve BOTH host
+  // framebuffer slots, finish all rendering before waiting, and defer every
+  // controller write until after that wait. Exercise styles, rotations,
+  // darkness, publisher fills and overlapping opaque ink through real code.
+  Plane bufferedLsb{}, bufferedMsb{};
+  for (auto orientation : {GfxRenderer::Portrait, GfxRenderer::PortraitInverted, GfxRenderer::LandscapeClockwise,
+                           GfxRenderer::LandscapeCounterClockwise}) {
+    g.setOrientation(orientation);
+    for (uint8_t darkness = 0; darkness <= 4; ++darkness) {
+      g.setTextDarkness(darkness);
+      for (auto style :
+           {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC}) {
+        auto paint = [&] {
+          drawPublisherBox(g, 10, 10, 270, 110, 232, 1, 2);
+          g.drawTextSpaced(id, 30, 40, "fT office gypj", true, style, .75f, 0);
+          g.drawLine(20, 55, 130, 55, 1, true);
+        };
+        const Frame expected = capture(g, d, paint, true);
+        d.fb.fill(0xA5);
+        const Plane saved = d.fb;
+        d.trace = true;
+        d.events.clear();
+        const auto result = g.renderGrayscalePlanesInterleaved(
+            [&](GfxRenderer::RenderMode mode) {
+              d.events.push_back(10 + int(mode) * 2 + (g.isErasingOpaqueGlyphs() ? 1 : 0));
+              paint();
+            },
+            [] { return false; }, bufferedLsb.data(), bufferedMsb.data());
+        const std::vector<int> order = {12,
+                                        13,
+                                        14,
+                                        15,
+                                        HalDisplay::Wait,
+                                        HalDisplay::CopyLsb,
+                                        HalDisplay::CopyMsb,
+                                        HalDisplay::Gray,
+                                        HalDisplay::Cleanup};
+        ++checks;
+        if (result.aborted || d.events != order || d.fb != saved || g.getFrameBuffer() != d.fb.data() ||
+            g.getRenderMode() != GfxRenderer::BW || g.isErasingOpaqueGlyphs() || d.copiedLsb != expected.lsb ||
+            d.copiedMsb != expected.msb) {
+          ++failures;
+          std::cerr << "Buffered AA mismatch font=" << id << " orientation=" << int(orientation)
+                    << " darkness=" << int(darkness) << " style=" << int(style) << '\n';
+        }
+        d.trace = false;
+      }
+    }
+  }
+  // Cancellation at either normal/opaque render gate, or while waiting, must
+  // latch even a transient request, drain exactly once and upload nothing.
+  for (int abortAt = 1; abortAt <= 5; ++abortAt) {
+    int predicates = 0;
+    d.fb.fill(0x5A);
+    const Plane saved = d.fb;
+    d.trace = true;
+    d.events.clear();
+    const auto result = g.renderGrayscalePlanesInterleaved([&](GfxRenderer::RenderMode) { g.drawPixel(20, 20, true); },
+                                                           [&] { return ++predicates == abortAt; }, bufferedLsb.data(),
+                                                           bufferedMsb.data());
+    ++checks;
+    if (!result.aborted || d.events != std::vector<int>{HalDisplay::Wait, HalDisplay::Cleanup} || d.fb != saved ||
+        g.getFrameBuffer() != d.fb.data() || g.getRenderMode() != GfxRenderer::BW || g.isErasingOpaqueGlyphs())
+      ++failures;
+    d.trace = false;
+  }
+  // Navigation can arrive during the synchronous SPI upload too. Restore the
+  // controller baseline and skip the gray waveform after either upload.
+  for (auto abortDuring : {HalDisplay::CopyLsb, HalDisplay::CopyMsb}) {
+    d.fb.fill(0x3C);
+    const Plane saved = d.fb;
+    d.trace = true;
+    d.events.clear();
+    const auto result = g.renderGrayscalePlanesInterleaved(
+        [&](GfxRenderer::RenderMode) { g.drawPixel(20, 20, true); },
+        [&] { return !d.events.empty() && d.events.back() == abortDuring; }, bufferedLsb.data(), bufferedMsb.data());
+    std::vector<int> expected = {HalDisplay::Wait, HalDisplay::CopyLsb};
+    if (abortDuring == HalDisplay::CopyMsb) expected.push_back(HalDisplay::CopyMsb);
+    expected.push_back(HalDisplay::Cleanup);
+    ++checks;
+    if (!result.aborted || d.events != expected || d.fb != saved || g.getFrameBuffer() != d.fb.data() ||
+        g.getRenderMode() != GfxRenderer::BW || g.isErasingOpaqueGlyphs()) {
+      ++failures;
+      std::cerr << "Buffered AA upload cancellation failed at " << int(abortDuring) << '\n';
+    }
+    d.trace = false;
+  }
+  // The production presenter consumes a refresh override exactly once and
+  // transfers the new target exactly once, whether AA or its BW fallback wins.
+  d.simulateText = true;
+  for (int scenario = 0; scenario < 5; ++scenario) {
+    d.acceptText = scenario != 1;
+    d.events.clear();
+    auto* target = g.getFrameBuffer();
+    memset(target, 0x53 + scenario, 48000);
+    const auto requested = HalDisplay::FAST_REFRESH;
+    if (scenario == 2) g.setNextDisplayRefreshMode(HalDisplay::HALF_REFRESH);
+    if (scenario == 3) g.setNextDisplayRefreshMode(HalDisplay::FULL_REFRESH);
+    const bool result =
+        g.displayTextAaOrBw(requested, scenario == 4 ? nullptr : bufferedLsb.data(), bufferedMsb.data());
+    const auto expectedMode = scenario == 2   ? HalDisplay::HALF_REFRESH
+                              : scenario == 3 ? HalDisplay::FULL_REFRESH
+                                              : HalDisplay::FAST_REFRESH;
+    ++checks;
+    if (result != (scenario == 0) ||
+        d.events != std::vector<int>{scenario == 0 ? HalDisplay::TextAa : HalDisplay::Bw} ||
+        d.displayedBuffer != target || g.getFrameBuffer() == target || g.getFrameBuffer() != d.getFrameBuffer() ||
+        d.submittedMode != expectedMode || g.hasRefreshOverridePending() || d.displayedBuffer[0] != 0x53 + scenario)
+      ++failures;
+  }
+  d.simulateText = false;
+  d.writeBuffer = d.fb.data();
+  // Resynchronize the renderer using its public presentation operation.
+  g.triggerDisplay(HalDisplay::FAST_REFRESH);
   g.setOrientation(savedOrientation);
   g.setRenderMode(GfxRenderer::BW);
   g.setTextDarkness(0);

@@ -34,6 +34,7 @@ class EpdBus {
     cmd(c);
     (c == 0x10 ? oldPlane : newPlane).assign(size_t(h) * wb, v);
   }
+  bool isBusy() const { return false; }
   void reset(int) {}
   void waitBusy(const char*) {}
   void waitRefreshComplete(const char*) {}
