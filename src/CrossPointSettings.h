@@ -534,6 +534,7 @@ class CrossPointSettings {
   // tap zones, which is what upstream ships; the X4 Pro has no back/confirm
   // button, so leaving it off would strand the reader.
   uint8_t touchReaderControls = TOUCH_READER_ON;
+  uint8_t tapToToggleStatusBar = 1;
   // Whether touch does anything OUTSIDE the reader: tapping list rows, book
   // covers, the home menu, the on-screen button-hint strip, and the back/home
   // edge gestures. Off leaves those screens button-only, for a device carried in

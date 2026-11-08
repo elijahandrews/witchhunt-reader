@@ -534,6 +534,8 @@ class GfxRenderer {
   // clearScreen() whose frame was never displayed -- so a caller can never wait on it forever.
   bool isComposingFrame(uint32_t maxAgeMs = 2000) const;
   void getOrientedViewableTRBL(int* outTop, int* outRight, int* outBottom, int* outLeft) const;
+  // Use the same sampled orientation for input geometry as for its touch transform.
+  void getOrientedViewableTRBL(Orientation orientation, int* outTop, int* outRight, int* outBottom, int* outLeft) const;
 
   // Extra bezel inset the reader has asked for, on top of whatever the board profile declares.
   //

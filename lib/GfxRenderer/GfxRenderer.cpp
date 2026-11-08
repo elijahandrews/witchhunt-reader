@@ -3898,6 +3898,11 @@ void GfxRenderer::cleanupGrayscaleWithFrameBuffer() const {
 }
 
 void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBottom, int* outLeft) const {
+  getOrientedViewableTRBL(getOrientation(), outTop, outRight, outBottom, outLeft);
+}
+
+void GfxRenderer::getOrientedViewableTRBL(const Orientation orientation, int* outTop, int* outRight, int* outBottom,
+                                         int* outLeft) const {
   // Bezel overlap comes from the board profile, not from constants here.
   //
   // BoardProfile::viewableInsets exists precisely for this and documents itself
@@ -3908,7 +3913,7 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
   // same {9,3,3,3}, so this is behaviour-identical until a profile says otherwise.
   const BoardConfig::ViewableInsets& in = BoardConfig::ACTIVE.viewableInsets;
   const int top = in.top, right = in.right, bottom = in.bottom, left = in.left;
-  switch (getOrientation()) {
+  switch (orientation) {
     case Portrait:
       *outTop = top;
       *outRight = right;
@@ -3942,8 +3947,8 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
   if (pad > 0) {
     // Clamped to a quarter of each axis so a future option, or a bad settings file, cannot
     // inset the viewport out of existence.
-    const int maxH = getScreenWidth() / 4;
-    const int maxV = getScreenHeight() / 4;
+    const int maxH = getScreenWidth(orientation) / 4;
+    const int maxV = getScreenHeight(orientation) / 4;
     const int padH = pad < maxH ? pad : maxH;
     const int padV = pad < maxV ? pad : maxV;
     *outTop += padV;
@@ -3957,12 +3962,11 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
   // does not necessarily move the screen's left edge -- in landscape it moves the
   // top. This logs both halves so the mapping can be checked against the device
   // instead of inferred.
-  static int lastKey = -1;
-  const int key = (static_cast<int>(getOrientation()) << 24) | (pad << 20) | (top << 16) | (right << 8) | left;
-  if (key != lastKey) {
-    lastKey = key;
+  static std::atomic<int> lastKey{-1};
+  const int key = (static_cast<int>(orientation) << 24) | (pad << 20) | (top << 16) | (right << 8) | left;
+  if (key != lastKey.exchange(key, std::memory_order_relaxed)) {
     LOG_INF("GFX", "Viewable insets: profile T%d R%d B%d L%d +pad %d, orientation=%d -> screen T%d R%d B%d L%d", top,
-            right, bottom, left, pad, static_cast<int>(getOrientation()), *outTop, *outRight, *outBottom, *outLeft);
+            right, bottom, left, pad, static_cast<int>(orientation), *outTop, *outRight, *outBottom, *outLeft);
   }
 }
 

@@ -5,6 +5,7 @@
 #include <HalTiltSensor.h>
 #include <Logging.h>
 
+#include <algorithm>
 #include <cstdint>
 
 #include "MappedInputManager.h"
@@ -172,6 +173,26 @@ inline TouchPageTurn detectTouchPageTurn(const GfxRenderer& renderer, const Mapp
   }
   result.heldMs = input.lastTouchHeldMs();
   return result;
+}
+
+// Cover the visible bottom status bar and its inset, with a 32-pixel edge target even
+// while hidden. CrossInk uses the same minimum target height. Resolve dimensions, insets
+// and touch from one held orientation; a render can temporarily change the live one.
+inline bool isTouchStatusBarTap(const GfxRenderer& renderer, const MappedInputManager& input,
+                               const int statusBarHeight) {
+  if (!SETTINGS.tapToToggleStatusBar || !input.hasTouch()) return false;
+  const auto orientation = renderer.getHeldOrientation();
+  int x = 0, y = 0;
+  if (!input.wasScreenTappedIn(static_cast<touchtransform::Orientation>(orientation), x, y)) return false;
+  const int width = renderer.getScreenWidth(orientation);
+  const int height = renderer.getScreenHeight(orientation);
+  int tapHeight = 32;
+  if (statusBarHeight > 0) {
+    int top, right, bottom, left;
+    renderer.getOrientedViewableTRBL(orientation, &top, &right, &bottom, &left);
+    tapHeight = std::max(tapHeight, statusBarHeight + bottom);
+  }
+  return x >= 0 && x < width && y >= 0 && y >= height - tapHeight && y < height;
 }
 
 // Tap in the centre third: the tap path into the reader menu. The page-turn tap

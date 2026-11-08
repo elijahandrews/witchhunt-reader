@@ -24,6 +24,18 @@ footer, which this action cannot remove. Visibility is saved globally and can
 also be changed under **Customise Status Bar → Show Status Bar**. The action is
 reader-only, so ordinary list navigation outside a book has no double-click wait.
 
+On touch devices, **Settings → Controls → Tap to Toggle Status Bar** is on by
+default, including after upgrading an older settings file. In EPUB, TXT, and
+Markdown, tap along the bottom status bar to hide it; tap the bottom edge again
+to reveal it. The visible target covers the bar's full height and bottom inset.
+When hidden, the bottom 32 screen pixels remain active in every orientation.
+The setting works independently of the Touch Reading Controls page-turn mode.
+Turning it off returns that area to the usual touch gestures.
+
+**Go back** keeps priority over the status-bar toggle, as do EPUB link targets.
+Explicitly assigned gestures keep their existing priority. A status-bar tap uses
+the same saved visibility and source-preserving layout change as the button action.
+
 On ESP32-S3 builds using hardware USB Serial/JTAG, USB Drive startup disconnects
 the old serial interface for 250 ms before starting mass storage. This allows
 the host to enumerate the new device while the cable stays connected. It is a

@@ -1108,6 +1108,14 @@ void EpubReaderActivity::loop() {
     return;
   }
 
+  // Visible navigation targets win; otherwise the bottom edge hides or reveals the bar.
+  if (ReaderUtils::isTouchStatusBarTap(renderer, mappedInput,
+                                      UITheme::getStatusBarBottomHeight(automaticPageTurnActive))) {
+    mappedInput.suppressTouchContact();
+    onButtonAction(CrossPointSettings::BTN_TOGGLE_STATUS_BAR);
+    return;
+  }
+
   // A centre-third tap, or the top-edge menu swipe, opens the reader menu.
   // Kept next to the page-turn zones so both touch paths live in one place; the
   // zones do not overlap (outer thirds vs centre), so the order is not
