@@ -3024,6 +3024,17 @@ HalDisplay::RefreshMode GfxRenderer::consumeRefreshOverride(const HalDisplay::Re
   return requested;
 }
 
+bool GfxRenderer::displayTextAaOrBw(const HalDisplay::RefreshMode mode, const uint8_t* lsb, const uint8_t* msb) const {
+  const auto effectiveMode = consumeRefreshOverride(mode);
+  noteRefresh(effectiveMode);
+  const bool off = fadingFix.load(std::memory_order_relaxed);
+  const size_t bytes = static_cast<size_t>(getDisplayWidthBytes()) * getDisplayHeight();
+  const bool aa = effectiveMode == HalDisplay::FAST_REFRESH && display.tryDisplayTextAa(lsb, msb, bytes, off);
+  if (!aa) display.displayBuffer(effectiveMode, off);
+  frameBuffer = display.getFrameBuffer();
+  return aa;
+}
+
 void GfxRenderer::triggerDisplay(const HalDisplay::RefreshMode mode, const bool turnOffScreen) const {
   const HalDisplay::RefreshMode effectiveMode = consumeRefreshOverride(mode);
   noteRefresh(effectiveMode);
@@ -3041,6 +3052,16 @@ void GfxRenderer::triggerDisplayAsync(const HalDisplay::RefreshMode mode, const 
   display.triggerDisplayAsync(effectiveMode, effectiveTurnOff);
   // The buffer swap happened before the waveform started; resync the cached
   // pointer now so plane renders during the waveform hit the write buffer.
+  frameBuffer = display.getFrameBuffer();
+}
+
+void GfxRenderer::triggerGrayscaleBaseAsync(const HalDisplay::RefreshMode mode, const bool turnOffScreen) const {
+  const HalDisplay::RefreshMode effectiveMode = consumeRefreshOverride(mode);
+  noteRefresh(effectiveMode);
+  const bool effectiveTurnOff = turnOffScreen || fadingFix.load(std::memory_order_relaxed);
+  display.triggerGrayscaleBaseAsync(effectiveMode, effectiveTurnOff);
+  // The facade protects the displayed frame in the active slot before returning.
+  // Subsequent plane draws must target the new write buffer.
   frameBuffer = display.getFrameBuffer();
 }
 

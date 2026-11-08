@@ -394,6 +394,16 @@ void HalDisplay::triggerDisplayAsync(RefreshMode mode, bool turnOffScreen) {
 
 bool HalDisplay::supportsAsyncRefresh() const { return einkDisplay.supportsAsyncRefresh(); }
 
+bool HalDisplay::supportsDeferredGrayscaleBase() const { return einkDisplay.supportsDeferredGrayscaleBase(); }
+
+void HalDisplay::triggerGrayscaleBaseAsync(RefreshMode mode, bool turnOffScreen) {
+  HalSpiBus::Lock spiLock;
+  lastRefreshMode = mode;
+  lastDisplayModeByte = refreshModeToByte(mode);
+  LOG_DBG("DISP", "#%lu grayscaleBaseAsync mode=%d", static_cast<unsigned long>(++panelSeq), static_cast<int>(mode));
+  einkDisplay.displayGrayscaleBaseAsync(convertRefreshMode(mode), turnOffScreen);
+}
+
 void HalDisplay::finishDisplayAsync() {
   HalSpiBus::Lock spiLock;
   einkDisplay.finishDisplayAsync();
@@ -439,6 +449,22 @@ void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) {
 void HalDisplay::cleanupGrayscaleWithPreviousBuffer() {
   HalSpiBus::Lock spiLock;
   einkDisplay.cleanupGrayscaleWithPreviousBuffer();
+}
+
+bool HalDisplay::supportsTextAa() const { return einkDisplay.supportsTextAa(); }
+
+bool HalDisplay::tryDisplayTextAa(const uint8_t* lsb, const uint8_t* msb, size_t bytes, bool turnOffScreen) {
+  HalSpiBus::Lock spiLock;
+  if (!einkDisplay.tryDisplayTextAa(lsb, msb, bytes, turnOffScreen)) return false;
+  lastRefreshMode = FAST_REFRESH;
+  lastDisplayModeByte = refreshModeToByte(FAST_REFRESH);
+  ++panelSeq;
+  return true;
+}
+
+void HalDisplay::releaseTextAa() {
+  HalSpiBus::Lock spiLock;
+  einkDisplay.releaseTextAa();
 }
 
 bool HalDisplay::supportsGrayFrame() const { return einkDisplay.supportsGrayFrame(); }

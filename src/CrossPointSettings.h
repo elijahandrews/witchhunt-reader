@@ -403,11 +403,10 @@ class CrossPointSettings {
   // Text rendering settings
   uint8_t extraParagraphSpacing = 0;
   uint8_t textAntiAliasing = 1;
-  // X3-only: when on, the AA refresh uses the 7-frame community grayscale LUT
-  // (~130 ms panel time) instead of the OEM 53-frame LUT (~2.4 s). Mid-tones
-  // run slightly darker than X4. Matches what papyrix-reader has shipped since
-  // 2025-11. Default on — the 2.2 s/page win dwarfs the subtle mid-tone shift.
-  // No effect on X4.
+  // X4 Pro UC8279 LUT68: selects one-pass text AA (black, gray, white).
+  // Off retains the established two-pass AA path; images are unchanged.
+  // Default on. Current legacy drivers do not consume setFastGrayscaleLut,
+  // so this setting does not change their waveform.
   //
   // JSON key was bumped from "fastAntiAliasing" to "fastAntiAliasingV2" when
   // the default flipped to 1: existing settings files with the old key are

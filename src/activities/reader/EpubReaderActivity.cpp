@@ -821,6 +821,8 @@ void EpubReaderActivity::onEnter() {
 }
 
 void EpubReaderActivity::onExit() {
+  renderer.endGrayCapture();
+  renderer.releaseTextAa();
   Activity::onExit();
   logReaderMemSnapshot("onExit_before_release");
 
@@ -858,6 +860,10 @@ void EpubReaderActivity::onExit() {
   // next activity (notably SleepActivity's OVERLAY mode) sees what the user was looking at.
   // Must run before section.reset() and the orientation reset below.
   restoreCurrentPageToBufferIfPreRendered();
+  // Restoration may recapture text masks. Reuse the pair until it finishes instead of
+  // freeing and allocating another 96 KB pair while closing the reader.
+  bufferedGrayscalePlanes_.reset();
+  capturedTextAaGeneration_ = 0;
 
   // Record the paragraph under the saved page, so a reopen under a different layout lands on it
   // (EpubProgressRecord), and what the status bar shows for that page -- its place in the whole
@@ -1393,6 +1399,7 @@ void EpubReaderActivity::startActivityForResult(std::unique_ptr<Activity>&& acti
     usePreRenderedBuffer = false;
     preRenderedPage = {};
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
   }
   Activity::startActivityForResult(std::move(activity), std::move(resultHandler));
 }
@@ -2922,6 +2929,7 @@ void EpubReaderActivity::stopAutomaticPageTurn() {
   usePreRenderedBuffer = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   pendingGrayscale_ = {};
   section.reset();
 }
@@ -3629,8 +3637,10 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   // next page instead of displaying the page we just navigated to — leaving the
   // previous (now stale) frame on screen. (This is the classic last-page case:
   // turning onto the final page would otherwise show the penultimate page.)
+  usePreRenderedBuffer = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   pendingPreRender = false;
   requestUpdate();
 }
@@ -3661,8 +3671,10 @@ void EpubReaderActivity::jumpPages(const bool isForwardTurn, const int count) {
     jumpBack_.remember(origin);
   else
     jumpBack_.clear();
+  usePreRenderedBuffer = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   pendingPreRender = false;
   requestUpdate();
 }
@@ -3906,6 +3918,7 @@ bool EpubReaderActivity::dropStagedWorkIfPositionMoved(const char* where) {
   pendingPreRender = false;
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   return true;
 }
 
@@ -3924,8 +3937,16 @@ EpubReaderActivity::RenderPass EpubReaderActivity::classifyRenderPass() const {
   // the prior waveform + post-waveform SPI work has settled; otherwise we fall through
   // to a full render that waits for the waveform naturally. The helper may still bail to
   // Normal at runtime if the page load fails / is an image page.
-  if (usePreRenderedBuffer && !renderer.isRefreshPending()) {
-    return RenderPass::BufferDisplay;
+  if (usePreRenderedBuffer) {
+    // More than one navigation can be queued before the render task runs. The
+    // handoff owns one exact page; a later turn/jump must not display its pixels
+    // with the new page's status bar (even when the AA masks were invalidated).
+    if (section && !preRenderedPage.incomplete && preRenderedPage.spineIndex == currentSpineIndex &&
+        preRenderedPage.pageIndex == section->currentPage && !renderer.isRefreshPending()) {
+      return RenderPass::BufferDisplay;
+    }
+    // Reject the whole handoff, including any old pre-render request behind it.
+    return section ? RenderPass::Normal : RenderPass::BuildSection;
   }
   if (pendingPreRender) {
     return RenderPass::PreRender;
@@ -4091,7 +4112,13 @@ void EpubReaderActivity::renderPreRenderPass(const RenderLayout& layout) {
     // overlay and screenshots restore the current one from it) but is never shown: the turn
     // renders afresh, without this pass's Page in the heap.
     const bool incomplete = glyphsDropped > 0 || imagesMissed > 0;
-    preRenderedPage = {true, currentSpineIndex, nextPage, preRenderDuration, millis(), incomplete};
+    preRenderedPage = {true,
+                       currentSpineIndex,
+                       nextPage,
+                       preRenderDuration,
+                       millis(),
+                       incomplete,
+                       incomplete ? 0 : capturedTextAaGeneration_};
 #if DEBUG_BACKGROUND_WORK
     if (!incomplete) bgCounters_.aCompletes++;
 #endif
@@ -4972,6 +4999,17 @@ void EpubReaderActivity::renderNormalPass(RenderLock& lock, const RenderLayout& 
         // re-entry costs a LUT re-read, not a rebuild.
         LOG_ERR("ERS", "Page %d load failed (spine %d, free=%lu); evicting caches and reloading section",
                 section->currentPage, currentSpineIndex, static_cast<unsigned long>(esp_get_free_heap_size()));
+        // Optional AA state must yield to the page allocation. Disarm its borrowed
+        // pointers and cached handoff before releasing the masks and driver workspace.
+        renderer.endGrayCapture();
+        preRenderedPage.ready = false;
+        preRenderedPage.textAaGeneration = 0;
+        preRenderedPlanesStaged_ = false;
+        capturedTextAaGeneration_ = 0;
+        pendingPreRender = false;
+        usePreRenderedBuffer = false;
+        bufferedGrayscalePlanes_.reset();
+        renderer.releaseTextAa();
         if (FontCacheManager* fontCache = renderer.getFontCacheManager()) {
           fontCache->clearCache();
         }
@@ -5250,6 +5288,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   if (pass != RenderPass::PreRender && pass != RenderPass::BufferDisplay && preRenderedPage.ready) {
     preRenderedPage.ready = false;
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
   }
 
   switch (pass) {
@@ -5565,6 +5604,17 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
   // are a by-product of the page render rather than ~1 s of extra work, so
   // there is no pass for a page turn to abort.
   const bool singlePushAaThisRender = aaEnabledForThisRender && renderer.supportsGrayFrame();
+  capturedTextAaGeneration_ = 0;
+  const bool captureTextAa = aaEnabledForThisRender && SETTINGS.fastAntiAliasing && !page->hasImages() &&
+                             !secondaryBufferDegraded_ && renderer.supportsTextAa() &&
+                             bufferedGrayscalePlanes_.ensure(static_cast<size_t>(renderer.getDisplayWidthBytes()) *
+                                                             renderer.getDisplayHeight());
+  if (captureTextAa) {
+    const size_t bytes = static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight();
+    memset(bufferedGrayscalePlanes_.lsb(), 0, bytes);
+    memset(bufferedGrayscalePlanes_.msb(), 0, bytes);
+    renderer.beginGrayCapture(bufferedGrayscalePlanes_.lsb(), bufferedGrayscalePlanes_.msb());
+  }
 
   const bool effectiveForceLoad = forceLoadLargeImages || !SETTINGS.largeImagePlaceholder;
   pageHasPlaceholders = page->hasPlaceholderImages(effectiveForceLoad, imageMonochrome);
@@ -5736,6 +5786,13 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
       aaEnabledForThisRender && !singlePushAaThisRender && inlineAaAvailable && !aaPreempted;
   // Anything that cannot run AA inline defers it, rather than only the X3 doing so.
   const bool deferredAaThisRender = aaEnabledForThisRender && !singlePushAaThisRender && !inlineAaAvailable;
+  const bool submitTextAa = captureTextAa && !aaPreempted;
+  bool textAaPresented = false;
+  const bool bufferedAaThisRender =
+      !submitTextAa && inlineAaThisRender && pageRefreshMode == HalDisplay::FAST_REFRESH && !page->hasImages() &&
+      renderer.hasSecondaryBuffer() && renderer.supportsDeferredGrayscaleBase() &&
+      bufferedGrayscalePlanes_.ensure(static_cast<size_t>(renderer.getDisplayWidthBytes()) *
+                                      renderer.getDisplayHeight());
   lastRenderStats.textAntiAliasing = inlineAaThisRender || deferredAaThisRender;
   if (capLsb) {
     // Hand the captured planes to the controller, then base + greys go out as
@@ -5755,6 +5812,11 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     renderer.triggerGrayscaleFrame(pageRefreshMode);
     lastRenderStats.usedGrayscale = true;
     lastRenderStats.textAntiAliasing = true;
+  } else if (submitTextAa) {
+    textAaPresented =
+        renderer.displayTextAaOrBw(pageRefreshMode, bufferedGrayscalePlanes_.lsb(), bufferedGrayscalePlanes_.msb());
+  } else if (bufferedAaThisRender) {
+    renderer.triggerGrayscaleBaseAsync(pageRefreshMode);
   } else if (inlineAaThisRender) {
     renderer.triggerDisplayAsync(pageRefreshMode);
   } else {
@@ -5778,7 +5840,8 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
     pendingHalfRefreshAfterImagePage = true;
   }
 
-  if (singlePushAaThisRender) {
+  lastTextAaPresented_ = textAaPresented;
+  if (singlePushAaThisRender || textAaPresented) {
     // Nothing to schedule and nothing to restore: the planes were staged before
     // the page render and went out with it in one waveform. No deferred pass, so
     // no second refresh for the idle loop to run and nothing for a page turn to
@@ -5813,9 +5876,11 @@ void EpubReaderActivity::renderContents(RenderLock& lock, std::unique_ptr<Page> 
         // Re-checked here because the up-front gate can only see the gesture as it stands when
         // the render begins; the pass itself is ~1 s long, so most presses during a burst land
         // after that decision and would otherwise be unstoppable.
-        [&] { return planeAborted || aaPreemptedByNavigation(); });
-    LOG_DBG("ERS", "Inline AA%s: planes=%lums gray=%lums restore=%lums", gt.aborted ? " ABORTED" : "", gt.planesMs,
-            gt.displayMs, gt.restoreMs);
+        [&] { return planeAborted || aaPreemptedByNavigation(); },
+        bufferedAaThisRender ? bufferedGrayscalePlanes_.lsb() : nullptr,
+        bufferedAaThisRender ? bufferedGrayscalePlanes_.msb() : nullptr);
+    LOG_DBG("ERS", "Inline AA buffered=%d%s: planes=%lums gray=%lums restore=%lums", bufferedAaThisRender,
+            gt.aborted ? " ABORTED" : "", gt.planesMs, gt.displayMs, gt.restoreMs);
     checkHeapIntegrity("after_inline_aa");
     lastRenderStats.usedGrayscale = !gt.aborted;
     lastRenderStats.textAntiAliasing = !gt.aborted;
@@ -6041,7 +6106,20 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
   // Buffers live only for this function; the planes are handed to the controller
   // before it returns and the display consumes them at the page turn.
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   std::unique_ptr<uint8_t[]> capLsb, capMsb;
+  ++textAaGeneration_;
+  if (textAaGeneration_ == 0) ++textAaGeneration_;
+  const bool captureTextAa = !forCapture && SETTINGS.fastAntiAliasing && getEffectiveTextAntiAliasing() &&
+                             !page.hasImages() && !secondaryBufferDegraded_ && renderer.supportsTextAa() &&
+                             bufferedGrayscalePlanes_.ensure(static_cast<size_t>(renderer.getDisplayWidthBytes()) *
+                                                             renderer.getDisplayHeight());
+  if (captureTextAa) {
+    const size_t bytes = static_cast<size_t>(renderer.getDisplayWidthBytes()) * renderer.getDisplayHeight();
+    memset(bufferedGrayscalePlanes_.lsb(), 0, bytes);
+    memset(bufferedGrayscalePlanes_.msb(), 0, bytes);
+    renderer.beginGrayCapture(bufferedGrayscalePlanes_.lsb(), bufferedGrayscalePlanes_.msb());
+  }
   const bool wantCapture =
       !forCapture && renderer.supportsGrayFrame() && getEffectiveTextAntiAliasing() && !page.hasImages();
   if (wantCapture) {
@@ -6075,6 +6153,7 @@ uint16_t EpubReaderActivity::renderPageContentOnly(const Page& page, const int o
     renderer.copyGrayscaleMsbBuffers(capMsb.get());
     preRenderedPlanesStaged_ = true;
   }
+  if (captureTextAa) capturedTextAaGeneration_ = textAaGeneration_;
   // Status bar intentionally omitted — superimposed at display time with live
   // values, and so outside the capture. It carries no anti-aliasing either way:
   // UI chrome is 1-bit and produces no AA pixels at all.
@@ -6131,7 +6210,15 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // The pixels came from the pre-render, but the Page is in hand here and the links have to
   // describe what is going on screen NOW — the pre-render measured the page AFTER this one.
   publishPageLinkTargets(page, orientedMarginLeft, contentTop);
+  const bool submitTextAa =
+      capturedTextAaGeneration_ != 0 && capturedTextAaGeneration_ == preRenderedPage.textAaGeneration &&
+      preRenderedPage.spineIndex == currentSpineIndex && section && preRenderedPage.pageIndex == section->currentPage &&
+      !preRenderedPage.incomplete && SETTINGS.fastAntiAliasing && getEffectiveTextAntiAliasing() && !page.hasImages() &&
+      !secondaryBufferDegraded_ && renderer.supportsTextAa() && !aaPreemptedByNavigation();
+  if (submitTextAa) renderer.beginGrayCapture(bufferedGrayscalePlanes_.lsb(), bufferedGrayscalePlanes_.msb());
   renderStatusBar();
+  renderer.endGrayCapture();
+  bool textAaPresented = false;
 
   // The image-page follow-up half-refresh can carry over if the previous page had images; honour
   // and clear it here so the pre-render path doesn't skip it.
@@ -6142,12 +6229,28 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // falls through to the B/W display plus the two-push AA replay below.
   const bool singlePushThisPage = preRenderedPlanesStaged_ && !secondaryBufferDegraded_;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
+  // Cached pages previously waited for BW, re-warmed glyphs, then rendered
+  // both AA planes. Match CrossInk's overlap on ordinary text turns: prewarm
+  // before the base, render both planes during it, and upload only after BUSY.
+  const bool bufferedAaThisPage = !submitTextAa && !singlePushThisPage && !forceHalfRefreshThisPage &&
+                                  (SETTINGS.getRefreshFrequency() == 0 || pagesUntilFullRefresh > 1) &&
+                                  !page.hasImages() && !secondaryBufferDegraded_ && renderer.hasSecondaryBuffer() &&
+                                  renderer.supportsDeferredGrayscaleBase() && getEffectiveTextAntiAliasing() &&
+                                  !usesDeferredAa() && !aaPreemptedByNavigation() &&
+                                  bufferedGrayscalePlanes_.ensure(static_cast<size_t>(renderer.getDisplayWidthBytes()) *
+                                                                  renderer.getDisplayHeight());
+  if (bufferedAaThisPage) {
+    auto scope = renderer.getFontCacheManager()->createPrewarmScope();
+    page.renderTextOnly(renderer, getEffectiveReaderFontId(), orientedMarginLeft, contentTop);
+    scope.endScanAndPrewarm();
+  }
   // Lent for a build-through rather than lost to an OOM: the X3 diffs against its own copy of
   // the frame on screen, so the normal cadence stays correct (and AA stays off below).
   if (secondaryBufferDegraded_ && !backgroundBuildThrough_) {
     renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
-  } else if (singlePushThisPage) {
+  } else if (singlePushThisPage || submitTextAa) {
     HalDisplay::RefreshMode mode;
     if (forceHalfRefreshThisPage) {
       mode = HalDisplay::HALF_REFRESH;
@@ -6155,8 +6258,18 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
     } else {
       mode = ReaderUtils::nextRefreshCycleMode(pagesUntilFullRefresh);
     }
-    renderer.displayGrayscaleFrame(mode);
-    LOG_DBG("ERS", "Single-push AA (pre-rendered)");
+    if (submitTextAa) {
+      // Input may arrive while live chrome is drawn. Refuse AA at the last
+      // pre-submission boundary, but still display this same resolved BW page.
+      const bool canceled = aaPreemptedByNavigation();
+      textAaPresented = renderer.displayTextAaOrBw(mode, canceled ? nullptr : bufferedGrayscalePlanes_.lsb(),
+                                                   canceled ? nullptr : bufferedGrayscalePlanes_.msb());
+    } else {
+      renderer.displayGrayscaleFrame(mode);
+    }
+    LOG_DBG("ERS", "Single-push AA (pre-rendered) text=%d", textAaPresented);
+  } else if (bufferedAaThisPage) {
+    renderer.triggerGrayscaleBaseAsync(ReaderUtils::nextRefreshCycleMode(pagesUntilFullRefresh));
   } else if (forceHalfRefreshThisPage) {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
@@ -6165,10 +6278,12 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   }
   // A pre-rendered page can be the first one a book open puts on screen (Background-A having
   // won the race), so this path closes the trace too. Correct to stamp here without a
-  // completeDisplay(): unlike renderContents()'s trigger/complete split, displayBuffer() is
-  // the blocking variant and has already waited out the waveform by this line.
-  WakeTrace::mark(WakeTrace::Phase::PageVisible);
-  WakeTrace::logSummary();
+  // completeDisplay() on the blocking path. Buffered AA drains the async base
+  // below, so its visible stamp must wait until that work has finished.
+  if (!bufferedAaThisPage) {
+    WakeTrace::mark(WakeTrace::Phase::PageVisible);
+    WakeTrace::logSummary();
+  }
   // Capture before the AA replay below overwrites the renderer's last-mode (see renderContents).
   lastPageRefreshMode_ = renderer.getLastRefreshMode();
   lastPageDisplayModeByte_ = renderer.getLastDisplayModeByte();
@@ -6186,16 +6301,20 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
   // forward burst is exactly what hits the pre-render cache, and the replay below costs a
   // glyph re-warm scan, two plane renders, the plane SPI writes and a gray flush — all on a
   // page the next turn is about to replace. It is inline and uncancellable on both devices,
-  // so unlike renderContents() this gate applies to X3 too. The BW refresh above has already
-  // completed, so checking here also catches a gesture that began during it. Skipping leaves
+  // so unlike renderContents() this gate applies to X3 too. The blocking BW path
+  // has completed here; the buffered path below must still drain its base. Skipping leaves
   // precisely the state the AA-disabled path leaves (no plane render means nothing for the
   // grayscale cleanup to undo), so no buffer or RED-RAM baseline is disturbed.
   const bool aaPreempted = aaPreemptedByNavigation();
   if (aaPreempted) {
     LOG_DBG("ERS", "AA replay skipped: page preempted by navigation");
   }
-  if (!singlePushThisPage && !aaPreempted && getEffectiveTextAntiAliasing() && renderer.hasSecondaryBuffer() &&
-      !secondaryBufferDegraded_) {
+  // An already-started async base must always be drained, even if input
+  // arrived during it. The buffered helper cancels AA and restores the baseline.
+  lastTextAaPresented_ = textAaPresented;
+  if (bufferedAaThisPage ||
+      (!textAaPresented && !singlePushThisPage && !aaPreempted && getEffectiveTextAntiAliasing() &&
+       renderer.hasSecondaryBuffer() && !secondaryBufferDegraded_)) {
     const int fontId = getEffectiveReaderFontId();
     // Re-warm the page's glyph BITMAPS before the AA replay. The pre-render pass warmed
     // them, but background work since may have dropped or re-wired the cache (B's
@@ -6203,34 +6322,43 @@ void EpubReaderActivity::displayPreRenderedPage(const Page& page, const int orie
     // and replaying against a metadata-only table dereferences a null bitmap base
     // (observed: Load access fault at glyph->dataOffset + heap corruption). When the
     // cache is still warm this is nearly free via the prewarm coverage fast-path.
-    {
+    if (!bufferedAaThisPage) {
       auto* fcm = renderer.getFontCacheManager();
       auto scope = fcm->createPrewarmScope();
       page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop);  // scan pass
       scope.endScanAndPrewarm();
     }
     renderer.setFastGrayscaleLut(SETTINGS.fastAntiAliasing);
-    // No waveform to hide behind on this path (displayBuffer() above already returned), so the
-    // per-element abort translates directly into saved wall-clock on both devices.
+    // Buffered text pages render both planes while the base runs. The fallback
+    // still replays after its blocking display; both paths honour cancellation.
     bool planeAborted = false;
-    const auto gt = renderer.renderGrayscalePlanesSequential(
-        [&](GfxRenderer::RenderMode) {
-          if (!page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop, /*abortable=*/true)) {
-            planeAborted = true;
-            return;
-          }
-          page.renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
-        },
-        [&] { return planeAborted || aaPreemptedByNavigation(); });
+    const auto renderPlane = [&](GfxRenderer::RenderMode) {
+      if (!page.renderTextOnly(renderer, fontId, orientedMarginLeft, contentTop, /*abortable=*/true)) {
+        planeAborted = true;
+        return;
+      }
+      page.renderImagesFromGrayscaleCache(renderer, orientedMarginLeft, contentTop);
+    };
+    const auto shouldAbort = [&] { return planeAborted || aaPreemptedByNavigation(); };
+    const auto gt = bufferedAaThisPage
+                        ? renderer.renderGrayscalePlanesInterleaved(
+                              renderPlane, shouldAbort, bufferedGrayscalePlanes_.lsb(), bufferedGrayscalePlanes_.msb())
+                        : renderer.renderGrayscalePlanesSequential(renderPlane, shouldAbort);
     if (gt.aborted) {
       LOG_DBG("ERS", "AA replay aborted mid-pass: page preempted by navigation");
     }
-    // timings not otherwise recorded for the pre-rendered path
+    LOG_DBG("ERS", "Cached AA buffered=%d%s: planes=%lums gray=%lums restore=%lums", bufferedAaThisPage,
+            gt.aborted ? " ABORTED" : "", gt.planesMs, gt.displayMs, gt.restoreMs);
+  }
+  if (bufferedAaThisPage) {
+    WakeTrace::mark(WakeTrace::Phase::PageVisible);
+    WakeTrace::logSummary();
   }
   checkHeapIntegrity("after_bufferdisplay_aa");
 }
 
 void EpubReaderActivity::appendDebugState(std::string& out) const {
+  out += lastTextAaPresented_ ? " textAA=one-pass" : " textAA=legacy";
   out += " book=";
   out += epub ? epub->getPath() : std::string("none");
   out +=
@@ -6260,6 +6388,7 @@ void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered(const bool forC
     // even if the current page cannot be loaded. Never let a later turn trust stale pixels.
     preRenderedPage.ready = false;
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
     pendingPreRender = false;
     usePreRenderedBuffer = false;
   }
@@ -6275,6 +6404,7 @@ void EpubReaderActivity::restoreCurrentPageToBufferIfPreRendered(const bool forC
   if (forCapture) renderStatusBar(/*recordDisplayed=*/false);
   preRenderedPage.ready = false;
   preRenderedPlanesStaged_ = false;
+  capturedTextAaGeneration_ = 0;
   pendingPreRender = false;
   usePreRenderedBuffer = false;
 }
@@ -6940,6 +7070,7 @@ void EpubReaderActivity::restorePosition(const SavedPosition& pos) {
     usePreRenderedBuffer = false;
     preRenderedPage = {};
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
     section.reset();
   }
   requestUpdate();
@@ -6968,6 +7099,7 @@ void EpubReaderActivity::restoreSavedPosition() {
     usePreRenderedBuffer = false;
     preRenderedPage = {};
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
     section.reset();
   }
   requestUpdate();
@@ -7427,6 +7559,7 @@ void EpubReaderActivity::onButtonAction(const CrossPointSettings::BUTTON_ACTION 
         usePreRenderedBuffer = false;
         preRenderedPage.ready = false;
         preRenderedPlanesStaged_ = false;
+        capturedTextAaGeneration_ = 0;
         pendingGrayscale_ = {};
         section.reset();
         ReaderUtils::enforceExitFullRefresh(renderer);
@@ -7509,6 +7642,7 @@ bool EpubReaderActivity::handleForcedRefresh(const HalDisplay::RefreshMode mode)
     usePreRenderedBuffer = false;
     preRenderedPage.ready = false;
     preRenderedPlanesStaged_ = false;
+    capturedTextAaGeneration_ = 0;
     forceRefreshModeNextRender_ = static_cast<int8_t>(mode);
   }
   requestUpdate();

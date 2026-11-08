@@ -250,7 +250,19 @@ add_subdirectory(xtc_parser)
 
 add_subdirectory(book_sync)
 
+add_subdirectory(buffered_grayscale)
+
 add_test(NAME UsbDriveInputLoop
   COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/usb_drive_handoff/input_loop.py
           --out ${CMAKE_CURRENT_BINARY_DIR}/usb_drive_input)
 set_tests_properties(UsbDriveInputLoop PROPERTIES TIMEOUT 60)
+
+add_test(NAME ReaderSourceProgress
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/reader_source_progress/run.py
+          --out ${CMAKE_CURRENT_BINARY_DIR}/reader_source_progress)
+set_tests_properties(ReaderSourceProgress PROPERTIES TIMEOUT 60)
+
+add_test(NAME ReaderOptionalAaMemory
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/reader_memory/run.py
+          --out ${CMAKE_CURRENT_BINARY_DIR}/reader_memory)
+set_tests_properties(ReaderOptionalAaMemory PROPERTIES TIMEOUT 60)

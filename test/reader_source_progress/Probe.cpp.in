@@ -1,4 +1,5 @@
 #include <cassert>
+#include <atomic>
 #include <iostream>
 #include <optional>
 #include "activities/reader/EpubProgressRecord.h"
@@ -46,6 +47,7 @@ struct SectionHandle {
   SectionProbe* value = nullptr;
   SectionHandle& operator=(SectionProbe* p) { value=p; return *this; }
   SectionProbe* operator->() const { return value; }
+  SectionProbe& operator*() const { return *value; }
   explicit operator bool() const { return value; }
   void reset() { value=nullptr; }
 };
@@ -54,7 +56,14 @@ struct RenderLock {
   template<class T> explicit RenderLock(T&) { assert(depth == 0); ++depth; }
   ~RenderLock() { --depth; }
 };
-struct RendererProbe { bool isRefreshPending() const { return false; } };
+struct RendererProbe {
+  bool refreshPending = false;
+  bool isRefreshPending() const { return refreshPending; }
+  bool fastRefreshNeedsHostFrame() const { return false; }
+};
+unsigned long millis() { return 100; }
+struct SessionProbe { void onPageTurn() {} };
+SessionProbe& globalReadingSessionTracker() { static SessionProbe session; return session; }
 namespace ReaderUtils { inline void enforceExitFullRefresh(RendererProbe&) {} }
 class EpubReaderActivity {
  public:
@@ -71,12 +80,38 @@ class EpubReaderActivity {
   RendererProbe renderer;
   bool pendingPreRender=false, usePreRenderedBuffer=false, preRenderedPlanesStaged_=false;
   struct { bool active=false; } pendingGrayscale_;
-  struct { bool ready=false; } preRenderedPage;
+  struct {
+    bool ready=false; int spineIndex=-1, pageIndex=-1;
+    unsigned long renderDurationMs=0, completedAtMs=0;
+    bool incomplete=false; uint32_t textAaGeneration=0;
+  } preRenderedPage;
+  uint32_t capturedTextAaGeneration_ = 0;
+  bool buildingPopupShown_=false, forceHalfRefreshAfterPopup_=false;
+  bool forceLoadLargeImages=false, pageHasPlaceholders=false;
+  int sessionPagesAdvanced=0;
+  unsigned long lastPageTurnTime=0;
+  struct {
+    int spineIndex=0, page=0, pageCount=0;
+    std::atomic<bool> pending{false};
+  } pendingProgressSave;
+  static constexpr unsigned PAGE_TURN_STATS_WINDOW_SIZE=20;
+  struct {
+    unsigned turns=0, preRenderHits=0, preRenderMisses=0;
+    unsigned long totalPreRenderMs=0, totalIdleSlackMs=0;
+  } pageTurnStatsWindow;
+  bool allowLockedUpdate=false;
+  void anchorNavTargetToCurrentPage(bool preserveSourceAnchor=false);
+  bool stepPageState(bool);
+  bool stepPageStateLocked(bool);
+  void pageTurn(bool);
+  void jumpPages(bool, int);
   enum class RenderPass { FinishedBook, SectionBuilding, BufferDisplay, PreRender, BuildSection, Normal };
   RenderPass classifyRenderPass() const;
   void armPreparedDisplay() {
     pendingGrayscale_.active=pendingPreRender=usePreRenderedBuffer=preRenderedPlanesStaged_=true;
     preRenderedPage.ready=true;
+    preRenderedPage.spineIndex=currentSpineIndex;
+    preRenderedPage.pageIndex=section->currentPage;
     assert(classifyRenderPass()==RenderPass::BufferDisplay);
   }
   void assertRestoreCanceledDisplay() const {
@@ -98,7 +133,7 @@ class EpubReaderActivity {
   void returnFromJump();
   void restorePosition(const SavedPosition&);
   void restoreSavedPosition();
-  void requestUpdate() { assert(RenderLock::depth == 0); ++updates; }
+  void requestUpdate() { assert(RenderLock::depth == 0 || allowLockedUpdate); ++updates; }
   void noteLinkBackStackChanged() { assert(RenderLock::depth == 1); ++stackChanges; }
   EpubProbe* epub = nullptr;
   enum class ReaderPhase { READING, PRECOMPILING };
@@ -117,12 +152,60 @@ class EpubReaderActivity {
   void restore(const EpubProgressRecord* record) { // RESTORE_STATEMENTS
   }
 };
+// PAGE_TURN_IMPLEMENTATION
 // JUMP_IMPLEMENTATION
 // CLASSIFY_IMPLEMENTATION
 // CAPTURE_IMPLEMENTATION
 // NAVIGATION_IMPLEMENTATION
 
 int main() {
+  // Two queued inputs can run before the render task sees the first request.
+  // Exercise real pageTurn/jumpPages/stepPageStateLocked and classification.
+  using Pass = EpubReaderActivity::RenderPass;
+  for (int second=0; second<5; ++second) {
+    EpubReaderActivity r; SectionProbe s; EpubProbe e;
+    r.section=&s; r.epub=&e; r.allowLockedUpdate=true; s.currentPage=10;
+    r.preRenderedPage={true, r.currentSpineIndex, 11, 20, 50, false, 7};
+    r.preRenderedPlanesStaged_=true; r.capturedTextAaGeneration_=7;
+    r.pageTurn(true);
+    assert(s.currentPage==11 && r.usePreRenderedBuffer && !r.preRenderedPage.ready);
+    assert(r.classifyRenderPass()==Pass::BufferDisplay);
+    if (second==0) r.pageTurn(true);
+    if (second==1) r.pageTurn(false);
+    if (second==2) r.jumpPages(true,10);
+    if (second==3) r.jumpPages(false,10);
+    if (second==4) {
+      r.jumpPages(true,0); // A refused navigation must preserve the good handoff.
+      assert(r.usePreRenderedBuffer && r.classifyRenderPass()==Pass::BufferDisplay);
+      continue;
+    }
+    assert(s.currentPage==(second==0 ? 12 : second==1 ? 10 : second==2 ? 21 : 1));
+    assert(!r.usePreRenderedBuffer && !r.pendingPreRender && !r.preRenderedPlanesStaged_);
+    assert(r.capturedTextAaGeneration_==0 && r.classifyRenderPass()==Pass::Normal);
+  }
+  // A stale handoff from another navigation route must never select old pixels.
+  for (int mismatch=0; mismatch<6; ++mismatch) {
+    EpubReaderActivity r; SectionProbe s; EpubProbe e;
+    r.section=&s; r.epub=&e; r.usePreRenderedBuffer=true;
+    r.preRenderedPage={false, r.currentSpineIndex, s.currentPage, 0, 0, false, 0};
+    assert(r.classifyRenderPass()==Pass::BufferDisplay);
+    if (mismatch==0) ++s.currentPage;
+    if (mismatch==1) ++r.currentSpineIndex;
+    if (mismatch==2) r.preRenderedPage.incomplete=true;
+    if (mismatch==3) r.section.reset();
+    if (mismatch==4) r.renderer.refreshPending=true;
+    if (mismatch==5) { ++s.currentPage; r.pendingPreRender=true; }
+    assert(r.classifyRenderPass()==(mismatch==3 ? Pass::BuildSection : Pass::Normal));
+  }
+  // Crossing a chapter after the cached last page must dispatch a section build.
+  {
+    EpubReaderActivity r; SectionProbe s; EpubProbe e;
+    r.section=&s; r.epub=&e; r.allowLockedUpdate=true; s.currentPage=s.pageCount-2;
+    r.preRenderedPage={true,r.currentSpineIndex,s.pageCount-1};
+    r.pageTurn(true); r.pageTurn(true);
+    assert(!r.section && !r.usePreRenderedBuffer && r.currentSpineIndex==4);
+    assert(r.classifyRenderPass()==Pass::BuildSection);
+  }
   EpubReaderActivity reader;
   SectionProbe section;
   reader.section = &section;

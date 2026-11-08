@@ -1,3 +1,6 @@
+> Current X4 Pro experiment: [Single-pass text AA](single-pass-text-aa.md).
+> The image pipeline and other panels described below retain their existing behavior.
+
 # Grayscale Anti-Aliasing Rendering
 
 How the reader renders anti-aliased text on the e-ink panels: the two-plane model, the current
@@ -44,7 +47,7 @@ decoders and the task stacks.
 
 ---
 
-## Current approach: reuse the B/W framebuffer as plane scratch
+## Baseline approach: reuse the B/W framebuffer as plane scratch
 
 ### Why it works
 
@@ -92,6 +95,34 @@ ESP32 RAM during the pass:
   Extra:            0 KB
 ```
 
+### Optional PSRAM overlap on `fast-page-turns`
+
+On ordinary text-only FAST turns with the UC8279 AA-base capability, the reader can pass two reusable PSRAM planes to
+`renderGrayscalePlanesInterleaved()`. It renders both planes, including opaque-ink
+cleanup, while the asynchronous B/W waveform runs. Only after `finishDisplayAsync()`
+returns does it upload either plane and run the existing grayscale waveform. A
+cancelled render still drains the base and restores its B/W baseline without
+uploading partial planes.
+
+The base uses the SDK's grayscale-aware split, preserving the old blocking sequence on consecutive AA cached turns and selecting
+that existing AA-aware transition for fresh turns too. After B/W or cancelled-AA
+frames, the explicit API can also choose it instead of the old cached DU path. It
+does not substitute a generic async B/W refresh for a cached grayscale base.
+
+The reader owns one 96,000-byte allocation on an 800×480 panel, restricted to PSRAM
+with a 128 KiB free-space reserve at allocation. It reuses the allocation until the
+activity exits. Missing/fragmented PSRAM, images, periodic full/half refreshes, deferred
+AA and single-push panels keep their existing paths. Fresh pages already overlapped
+LSB rendering; this additionally overlaps MSB rendering. Cached pages now prewarm
+before starting the base and overlap both planes as well. The live framebuffer stays
+intact during plane preparation.
+
+This follows CrossInk's `DeferredGrayscale` scheduling, adapted to Witch Hunt's
+existing HAL, opaque-ink replay and cancellation rules. It still performs a separate
+gray waveform; fewer CPU operations after the base does not establish a faster or
+visually seamless page turn. See [fast-page-turns.md](fast-page-turns.md) for prior
+experiments and validation.
+
 ### Which path the reader takes
 
 All three need text anti-aliasing on and a resident, non-degraded secondary
@@ -100,7 +131,7 @@ All three need text anti-aliasing on and a resident, non-degraded secondary
 | Path | Where | What happens |
 |---|---|---|
 | Single push | `supportsGrayFrame()`: the T5S3 | `beginGrayCapture()` makes the B/W render write both planes as it goes; page and greys go out as one waveform (`triggerGrayscaleFrame()`). |
-| Inline | `!usesDeferredAa()`: an async-capable panel that is not an X3 (X4, X4 Pro) | B/W page via `triggerDisplayAsync()`, then `renderGrayscalePlanesInterleaved()`. Skipped when a page turn is already on its way. |
+| Inline, optionally PSRAM buffered | `!usesDeferredAa()`: an async-capable panel that is not an X3 (X4, X4 Pro) | B/W page via `triggerDisplayAsync()`, then `renderGrayscalePlanesInterleaved()`. Skipped when a page turn is already on its way. |
 | Deferred | the X3, and any panel that cannot overlap | The B/W page is shown; `runDeferredGrayscalePass()` runs `renderGrayscalePlanesSequential()` from idle time, and a page turn aborts it. |
 
 ### Absolute planes: images and the sleep cover
@@ -149,7 +180,7 @@ The write buffer holds plane data from step 1 to step 9. That is safe because:
 Planes are sent row-reversed by `EpdBus::sendPlaneFlipped()` while streaming; the framebuffer itself
 is never flipped in place.
 
-### Trade-offs
+### Baseline trade-offs
 
 - Zero extra allocation, so no fragmentation and no AA suspension under memory pressure; and also no
   "suspend and recover" safety valve.
@@ -182,7 +213,7 @@ but the reader does not use it.
 
 ### Comparison
 
-| Property | Snapshot | Tiled strips | B/W-buffer reuse (current) |
+| Property | Snapshot | Tiled strips | B/W-buffer reuse (baseline) |
 |---|---|---|---|
 | Extra peak RAM | 48 KB per page | ~24 KB for the session | 0 KB |
 | Allocation pattern | alloc/free every page | one alloc at session start | none |
@@ -199,13 +230,13 @@ but the reader does not use it.
 | Method | Layer | Purpose |
 |--------|-------|---------|
 | `renderGrayscalePlanesSequential(fn, abort)` | `GfxRenderer` | The staged pass, end to end |
-| `renderGrayscalePlanesInterleaved(fn, abort)` | `GfxRenderer` | The same, overlapping an async B/W refresh |
+| `renderGrayscalePlanesInterleaved(fn, abort)` | `GfxRenderer` | The same, overlapping an async B/W refresh; optional LSB/MSB scratch overlaps both renders |
 | `beginGrayCapture()` / `displayGrayscaleFrame()` / `triggerGrayscaleFrame()` | `GfxRenderer` | Single-push AA where `supportsGrayFrame()` |
 | `beginAbsoluteGrayPass()` | `GfxRenderer` → `HalDisplay` | Open an absolute pass and push its B/W base |
 | `copyGrayscaleLsbBuffers()` / `copyGrayscaleMsbBuffers()` | `GfxRenderer` → `HalDisplay` → `FreeInkDisplay` | Stream a plane to the controller |
 | `displayGrayBuffer()` | `GfxRenderer` → `HalDisplay` → `FreeInkDisplay` | Run the grayscale waveform (no swap) |
 | `cleanupGrayscaleWithPreviousBuffer()` | `GfxRenderer` → `HalDisplay` → `FreeInkDisplay` | Restore the driver's baseline and the write buffer from `frameBufferActive`; with the secondary away, tell the driver there is no baseline |
-| `setFastGrayscaleLut(bool)` | `GfxRenderer` | Stores the Fast AA preference; currently read by no driver |
+| `setFastGrayscaleLut(bool)` | `GfxRenderer` | Stores the legacy Fast AA preference; current legacy drivers do not consume it. The X4 Pro reader separately reads the setting to select the one-pass API |
 
 ## Scheduling: the deferred pass runs before the next-page pre-render
 

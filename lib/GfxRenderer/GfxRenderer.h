@@ -146,7 +146,7 @@ class GfxRenderer {
     uint8_t sel;           // drawMask for this coverage/AA plane
     uint8_t w;
     uint8_t h;
-    int8_t phase; // signed output-pixel sixteenths; fits existing padding
+    int8_t phase;  // signed output-pixel sixteenths; fits existing padding
   };
   // Keeps the documented budget honest if a field is ever added.
   static_assert(sizeof(ScaledGlyphEntry) <= 16, "scaled-glyph entry grew; update the cache budget comment");
@@ -506,6 +506,8 @@ class GfxRenderer {
   // Honors the same refresh override + fading-fix policy as triggerDisplay().
   // On X3 the trigger falls back to the synchronous path and finish is a no-op.
   void triggerDisplayAsync(HalDisplay::RefreshMode mode = HalDisplay::FAST_REFRESH, bool turnOffScreen = false) const;
+  bool supportsDeferredGrayscaleBase() const { return display.supportsDeferredGrayscaleBase(); }
+  void triggerGrayscaleBaseAsync(HalDisplay::RefreshMode mode, bool turnOffScreen = false) const;
   void finishDisplayAsync() const { display.finishDisplayAsync(); }
   void completeDisplay() const {
     display.completeDisplay();
@@ -853,6 +855,11 @@ class GfxRenderer {
   // waveform, i.e. when beginGrayCapture() + displayGrayscaleFrame() is
   // available instead of the base-then-overlay pair.
   bool supportsGrayFrame() const;
+  bool supportsTextAa() const { return display.supportsTextAa(); }
+  // Always presents the current target. Resolves the override once, then falls
+  // back to BW if this page cannot use the one-pass path. True means AA landed.
+  bool displayTextAaOrBw(HalDisplay::RefreshMode mode, const uint8_t* lsb, const uint8_t* msb) const;
+  void releaseTextAa() const { display.releaseTextAa(); }
   // Display the framebuffer composed with the planes handed to
   // copyGrayscale*Buffers(), in one refresh. Resyncs the cached framebuffer
   // pointer afterwards for the same reason triggerDisplay() does: the display
@@ -942,7 +949,52 @@ class GfxRenderer {
   // renderFn draws must already be prewarmed (a cache miss would issue SD reads
   // — allowed — but a display/SPI call in renderFn is not).
   template <typename RenderFn, typename AbortFn>
-  GrayscaleTimings renderGrayscalePlanesInterleaved(RenderFn renderFn, AbortFn shouldAbort) {
+  GrayscaleTimings renderGrayscalePlanesInterleaved(RenderFn renderFn, AbortFn shouldAbort, uint8_t* lsbPlane = nullptr,
+                                                    uint8_t* msbPlane = nullptr) {
+    // Like CrossInk's DeferredGrayscale: with two caller-owned full planes,
+    // finish BOTH renders before waiting for the base waveform. Pixel writes
+    // target PSRAM; the live framebuffer and controller stay untouched. Keep
+    // the opaque-ink replay and cancellation gates used by the original path.
+    // renderFn draws pixels only (no display or whole-screen clear operations).
+    if (lsbPlane && msbPlane) {
+      GrayscaleTimings t;
+      const unsigned long t0 = millis();
+      uint8_t* const saved = frameBuffer;
+      const auto renderPlane = [&](const RenderMode mode, uint8_t* target) {
+        frameBuffer = target;
+        memset(target, 0, frameBufferSize);
+        setRenderMode(mode);
+        renderFn(mode);
+        bool aborted = shouldAbort();
+        if (!aborted) {
+          eraseOpaqueGlyphs([&] { renderFn(mode); });
+          aborted = shouldAbort();
+        }
+        frameBuffer = saved;
+        return aborted;
+      };
+      bool aborted = renderPlane(GRAYSCALE_LSB, lsbPlane);
+      if (!aborted) aborted = renderPlane(GRAYSCALE_MSB, msbPlane);
+      t.planesMs = millis() - t0;
+      setRenderMode(BW);
+      // Always drain, including a cancelled/partial render. Never upload a
+      // partial plane or write controller RAM while the base is still busy.
+      display.finishDisplayAsync();
+      if (aborted || shouldAbort()) return abandonGrayscalePass(t.planesMs);
+      const unsigned long tCopy = millis();
+      copyGrayscaleLsbBuffers(lsbPlane);
+      if (shouldAbort()) return abandonGrayscalePass(t.planesMs + millis() - tCopy);
+      copyGrayscaleMsbBuffers(msbPlane);
+      if (shouldAbort()) return abandonGrayscalePass(t.planesMs + millis() - tCopy);
+      const unsigned long tGray = millis();
+      t.planesMs += tGray - tCopy;
+      display.displayGrayBuffer(/*turnOffScreen=*/false);
+      const unsigned long tRestore = millis();
+      t.displayMs = tRestore - tGray;
+      cleanupGrayscaleWithPreviousBuffer();
+      t.restoreMs = millis() - tRestore;
+      return t;
+    }
     GrayscaleTimings t;
     const unsigned long t0 = millis();
 
@@ -995,7 +1047,8 @@ class GfxRenderer {
   }
 
   // X3-only: trade AA visual fidelity for ~2.2 s faster page-flip wall clock.
-  // No effect on X4 (its single grayscale LUT already runs at ~500 ms).
+  // No effect on classic X4. X4 Pro text one-pass selection happens in the
+  // reader through displayTextAaOrBw(), not through this legacy LUT setter.
   void setFastGrayscaleLut(bool fast) const { display.setFastGrayscaleLut(fast); }
   bool getFastGrayscaleLut() const { return display.getFastGrayscaleLut(); }
 
@@ -1079,8 +1132,10 @@ class GfxRenderer {
   // find returns the cached mask for an exact key match, alloc reserves a zeroed
   // mask of w*h bits for the caller to fill, or nullptr when the glyph is too
   // large to cache or the arena could not be allocated.
-  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
-  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h, int8_t phase = 0) const;
+  const uint8_t* findScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
+                                     int8_t phase = 0) const;
+  uint8_t* allocScaledGlyphMask(const void* fontData, uint32_t cp, float scale, uint8_t sel, int w, int h,
+                                int8_t phase = 0) const;
 
   // Drop every cached mask, keeping the arena. MUST run whenever a font is added
   // or removed: entries are keyed by EpdFontData address, which a later font

@@ -320,10 +320,8 @@ inline void buildSettings(const RowSink& emit) {
   emit(SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",
                            StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_FONT));
-  // X3-only fast AA LUT toggle. Swaps the 53-frame OEM grayscale waveform
-  // (~2.4 s panel time, X4-accurate grays) for the 7-frame community LUT
-  // (~130 ms, mid-tones slightly darker). See freeink-sdk
-  // FreeInkDisplay::setFastGrayscaleLut for trade-offs.
+  // Selects one-pass text AA on X4 Pro UC8279 LUT68. Current legacy
+  // drivers retain their existing waveform regardless of this preference.
   emit(SettingInfo::Toggle(StrId::STR_FAST_AA, &CrossPointSettings::fastAntiAliasing, "fastAntiAliasingV2",
                            StrId::STR_CAT_READER)
            .withSubmenu(StrId::STR_MENU_READER_FONT)

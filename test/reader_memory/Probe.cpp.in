@@ -1,0 +1,211 @@
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include "activities/reader/BufferedGrayscalePlanes.h"
+
+namespace Heap {
+constexpr size_t capacity = 800000, textWorkspace = 529024, pageBytes = 200000;
+size_t used = 0, maskAllocations = 0;
+std::unordered_map<void*, size_t> allocations;
+}
+void* heap_caps_malloc(size_t bytes, uint32_t caps) {
+  assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (bytes > Heap::capacity - Heap::used) return nullptr;
+  void* result = std::malloc(bytes);
+  assert(result);
+  Heap::allocations.emplace(result, bytes);
+  Heap::used += bytes;
+  if (bytes == 96000) ++Heap::maskAllocations;
+  return result;
+}
+void heap_caps_free(void* ptr) {
+  if (!ptr) return;
+  auto it = Heap::allocations.find(ptr);
+  assert(it != Heap::allocations.end());
+  Heap::used -= it->second;
+  Heap::allocations.erase(it);
+  std::free(ptr);
+}
+size_t heap_caps_get_free_size(uint32_t) { return Heap::capacity - Heap::used; }
+size_t heap_caps_get_largest_free_block(uint32_t c) { return heap_caps_get_free_size(c); }
+template<typename T> auto makeUniqueNoThrow(size_t count) { return std::make_unique<T>(count); }
+#define LOG_ERR(...) do {} while (0)
+void logReaderMemSnapshot(const char*) {}
+struct FontDecompressor {
+  struct Stats { uint16_t fallbackOomGlyphs = 0; };
+  Stats getStats() const { return {}; }
+};
+static unsigned cacheClears = 0;
+struct FontCacheManager {
+  struct Scope { void endScanAndPrewarm() {} };
+  void resetStats() {}
+  void clearCache() { ++cacheClears; }
+  Scope createPrewarmScope() { return {}; }
+  const FontDecompressor* getDecompressor() { return nullptr; }
+};
+struct GfxRenderer {
+  enum RenderMode { BW };
+  uint8_t frame[48000]{};
+  uint8_t* capLsb = nullptr;
+  uint8_t* capMsb = nullptr;
+  void* workspace = nullptr;
+  FontCacheManager fonts;
+  unsigned draws = 0, planeWrites = 0;
+  ~GfxRenderer() { releaseTextAa(); }
+  void retainWorkspace() {
+    assert(!workspace);
+    workspace = heap_caps_malloc(Heap::textWorkspace, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    assert(workspace);
+  }
+  void releaseTextAa() {
+    assert(!capLsb && !capMsb);
+    heap_caps_free(workspace); workspace = nullptr;
+  }
+  bool supportsTextAa() const { return true; }
+  bool supportsGrayFrame() const { return false; }
+  void beginGrayCapture(uint8_t* low, uint8_t* high) { capLsb = low; capMsb = high; }
+  void endGrayCapture() { capLsb = capMsb = nullptr; }
+  FontCacheManager* getFontCacheManager() { return &fonts; }
+  void setRenderMode(RenderMode) {}
+  void setFastGrayscaleLut(bool) {}
+  void copyGrayscaleLsbBuffers(uint8_t*) { ++planeWrites; }
+  void copyGrayscaleMsbBuffers(uint8_t*) { ++planeWrites; }
+  void clearScreen() { std::memset(frame, 255, sizeof(frame)); }
+  uint8_t* getFrameBuffer() { return frame; }
+  int getScreenHeight() const { return 480; }
+  int getDisplayWidthBytes() const { return 100; }
+  int getDisplayHeight() const { return 480; }
+  void getOrientedViewableTRBL(int* a, int* b, int* c, int* d) { *a = *b = *c = *d = 0; }
+};
+struct Page {
+  void* allocation = nullptr;
+  ~Page() { heap_caps_free(allocation); }
+  bool hasImages() const { return false; }
+  bool renderTextOnly(GfxRenderer&, int, int, int) const { return true; }
+  void render(GfxRenderer& r, int, int, int, bool, bool) const {
+    ++r.draws; r.frame[0] = 42;
+    if (r.capLsb) r.capLsb[0] = 3;
+    if (r.capMsb) r.capMsb[0] = 3;
+  }
+};
+struct Section {
+  int currentPage = 1;
+  size_t loadBytes = 16000;
+  bool failLoad = false;
+  bool hasActiveBuild() const { return false; }
+  std::unique_ptr<Page> loadPageFromSectionFile() {
+    if (failLoad) return nullptr;
+    void* mem = heap_caps_malloc(loadBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!mem) return nullptr;
+    auto page = std::make_unique<Page>(); page->allocation = mem; return page;
+  }
+  std::unique_ptr<Page> loadPageFromActiveBuild(uint16_t) { return loadPageFromSectionFile(); }
+};
+struct Css { void clearCaches(bool) { ++cacheClears; } };
+struct Epub { Css css; Css* getCssParser() { return &css; } };
+struct Settings { bool fastAntiAliasing = true, largeImagePlaceholder = true; int screenMargin = 0; } SETTINGS;
+namespace UITheme {
+int getStatusBarTopHeight(bool) { return 0; }
+int getStatusBarBottomHeight(bool) { return 0; }
+}
+namespace ReaderUtils { void enforceExitFullRefresh(GfxRenderer&) {} }
+struct ImageBlock { struct PlaceholderOnlyScope {}; };
+struct Activity { void onExit() {} };
+class EpubReaderActivity : public Activity {
+ public:
+  GfxRenderer& renderer;
+  std::unique_ptr<Section> section = std::make_unique<Section>();
+  std::unique_ptr<Epub> epub = std::make_unique<Epub>();
+  BufferedGrayscalePlanes bufferedGrayscalePlanes_;
+  uint32_t textAaGeneration_ = 0, capturedTextAaGeneration_ = 0;
+  bool automaticPageTurnActive = false, forceLoadLargeImages = false;
+  bool secondaryBufferDegraded_ = false, preRenderedPlanesStaged_ = true;
+  bool pendingPreRender = true, usePreRenderedBuffer = true;
+  struct { bool ready = true; uint32_t textAaGeneration = 1; } preRenderedPage;
+  int pageLoadFailStage_ = 1;
+  unsigned updates = 0, backgroundResets = 0;
+  explicit EpubReaderActivity(GfxRenderer& r) : renderer(r) {}
+  bool getEffectiveTextAntiAliasing() const { return true; }
+  int getEffectiveReaderFontId() const { return 1; }
+  int getImageOnlyPageYOffset(const Page&, int) const { return 0; }
+  void renderStatusBar(bool = true) const {}
+  void resetBackgroundBuild() { ++backgroundResets; }
+  void requestUpdate() { ++updates; }
+  void restoreCurrentPageToBufferIfPreRendered(bool forCapture = false);
+  uint16_t renderPageContentOnly(const Page&, int, int, int, int, bool forCapture = false);
+  void exitMemoryPrefix() {
+    // EXIT_BODY
+  }
+  void recoverPageOom() {
+    // OOM_BODY
+  }
+};
+// RESTORE
+// CONTENT
+static unsigned checks = 0;
+void check(bool good, const char* why) {
+  ++checks;
+  if (!good) { std::fprintf(stderr, "FAIL: %s\n", why); std::exit(1); }
+}
+void exitChecks() {
+  for (int scenario = 0; scenario < 3; ++scenario) {
+    Heap::maskAllocations = 0;
+    GfxRenderer renderer; EpubReaderActivity reader(renderer); Page page;
+    reader.renderPageContentOnly(page, 0, 0, 0, 0);
+    check(Heap::maskAllocations == 1, "initial content allocated one mask pair");
+    renderer.retainWorkspace();
+    // This load fits only if the half-MB driver workspace is released before restoration.
+    reader.section->loadBytes = Heap::pageBytes;
+    if (scenario == 1) reader.section->failLoad = true;
+    if (scenario == 2) reader.preRenderedPage.ready = false;
+    renderer.beginGrayCapture(reader.bufferedGrayscalePlanes_.lsb(), reader.bufferedGrayscalePlanes_.msb());
+    reader.exitMemoryPrefix();
+    check(Heap::maskAllocations == 1, "exit restoration reused the existing mask pair");
+    check(Heap::used == 0 && !renderer.workspace && !reader.bufferedGrayscalePlanes_.lsb(),
+          "exit released all optional AA memory even when restore failed/skipped");
+    check(!renderer.capLsb && !renderer.capMsb, "exit disarmed all capture pointers");
+    check(renderer.draws == (scenario == 0 ? 2u : 1u), "only a loadable pending current page was restored");
+    check(renderer.frame[0] == 42 && renderer.planeWrites == 0, "restoration preserved BW without plane uploads");
+  }
+}
+void oomChecks() {
+  Heap::maskAllocations = 0; cacheClears = 0;
+  GfxRenderer renderer; EpubReaderActivity reader(renderer); Page initial;
+  reader.renderPageContentOnly(initial, 0, 0, 0, 0);
+  renderer.retainWorkspace();
+  reader.section->loadBytes = Heap::pageBytes;
+  check(Heap::used == 625024 && !reader.section->loadPageFromSectionFile(),
+        "page allocation fails while optional AA retains its masks and workspace");
+  check(reader.capturedTextAaGeneration_ != 0, "AA capture was eligible before recovery");
+  reader.preRenderedPlanesStaged_ = true;
+  renderer.beginGrayCapture(reader.bufferedGrayscalePlanes_.lsb(), reader.bufferedGrayscalePlanes_.msb());
+  reader.recoverPageOom();
+  check(Heap::used == 0 && !renderer.workspace && !reader.bufferedGrayscalePlanes_.lsb(),
+        "first OOM recovery frees optional AA before retry");
+  check(!renderer.capLsb && !renderer.capMsb && !reader.capturedTextAaGeneration_,
+        "OOM recovery disarms freed masks and invalidates their generation");
+  check(!reader.preRenderedPage.ready && !reader.preRenderedPage.textAaGeneration && !reader.preRenderedPlanesStaged_ &&
+        !reader.pendingPreRender && !reader.usePreRenderedBuffer,
+        "OOM recovery invalidates cached handoff and scheduling");
+  check(!reader.section && reader.updates == 1 && reader.backgroundResets == 1 && cacheClears == 2,
+        "original cache/section retry behavior remains intact");
+  reader.section = std::make_unique<Section>(); reader.section->loadBytes = Heap::pageBytes;
+  auto page = reader.section->loadPageFromSectionFile();
+  check(bool(page) && Heap::used == Heap::pageBytes, "same page allocation succeeds after AA release");
+  reader.renderPageContentOnly(*page, 0, 0, 0, 0);
+  check(reader.capturedTextAaGeneration_ && Heap::maskAllocations == 2 && Heap::used == Heap::pageBytes + 96000,
+        "later optional capture can resume once the page has loaded");
+}
+int main(int argc, char** argv) {
+  const std::string mode = argc > 1 ? argv[1] : "all";
+  if (mode != "oom") exitChecks();
+  if (mode != "exit") oomChecks();
+  check(Heap::used == 0 && Heap::allocations.empty(), "all test allocations released");
+  std::printf("%u production reader optional-AA memory checks passed\n", checks);
+}
