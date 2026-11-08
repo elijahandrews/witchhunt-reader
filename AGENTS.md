@@ -19,6 +19,15 @@ Last verified installation: **Witch Hunt `2.40-singlepass2-x4pro`**, installed 2
 - Matching binary web bundle stamp verified; unchanged web assets not rewritten or individually reread. 2880 registered host tests: 2878 passed, two known skips; 23 USB sanitizer checks and deliberate duplicate-drain regression controls passed. Review clean. **User confirmed on 2026-11-08: “nice the settling is gone!”** Visible settling is resolved in their tested use. Quantitative latency, long-run ghosting and physical USB-button response remain unverified.
 - The user confirmed settling is gone and subsequently authorized promoting the reviewed page-turn work and default-on status-bar tap toggle to `master`, with subagent review/fix loops for every change. The installed device remains `singlepass2`; subsequent source fixes/builds must not be described as installed. Check private work-status for publication hashes.
 
+### Reviewed singlepass3 candidate (not installed)
+
+The requested `master` integration includes the single-pass text path, rapid-navigation handoff checks, pending-refresh cleanup, optional-AA memory recovery and a default-on **Controls → Tap to Toggle Status Bar** setting. Bottom taps reuse the existing status-bar action in EPUB/TXT/Markdown; Go back, links and configured gestures retain priority. The device still runs the separately verified `singlepass2` image above.
+
+- Candidate: `.local-device/single-pass-aa-main-release/witch-2.40-singlepass3-x4pro.bin`, 6550784 bytes, SHA-256 `9fbd9044438548e6efd690f6c17f8fe5098037ae57ccab4fd2c403ce0e2e0ce2`; 2816 bytes application-slot headroom, 101184 bytes static RAM. Matching web bundle: `web-2532404b1e6c.bin`, SHA-256 `2532404b1e6c096bf4081eacdb5583986dda2d62305b63131e57610adb367349`.
+- Build source: `fcab66f3edb0b32ab33c923bedf3ee3a82ce6652`; SDK `74857888cb78ca47234b7b2d82f56a77bdfa8001`, published to the user's SDK fork. Source provenance, exact binaries and validation logs are in the release directory; publication hashes are tracked separately in private work-status.
+- Validation: firmware build, 2884 registered host tests (zero failures, two expected skips), production-renderer/driver sanitizers and independent review/fix loops. Negative controls demonstrate that the AA-generation and Go back regressions are detected. Consult the release manifest for final static-analysis and publication status.
+- This candidate has not been flashed. Physical bottom-tap accuracy, the latest safety fixes on hardware, quantitative latency and long-run ghosting remain unverified. A future install needs a new flash request and fresh identity/slot/state checks. Preserve the installed singlepass2 image as rollback.
+
 ### Previous fastpages2 installation
 
 Previous verified installation: **Witch Hunt `2.40-fastpages2-x4pro`**, installed 2026-11-08 after explicit flash authorization from the reviewed, uncommitted `fast-page-turns` candidate. App-only write and independent verification passed in live-resolved app0 at `0x10000`; bootloader, partition table, OTA metadata and NVS were unchanged. Boot/state, Settings and the live API confirmed the version; no startup crash markers.
