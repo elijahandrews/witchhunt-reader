@@ -243,6 +243,29 @@ JsonDocument report() {
   EXPECT_FALSE(deserializeJson(doc, Storage.content("/.crosspoint/book-sync/last-run.json")));
   return doc;
 }
+TEST_F(SyncActivityTest, DirectoryReadErrorDoesNotDownloadDuplicateOrSealPartialIndex) {
+  Storage.put("/Books/first.epub", BODY);
+  Storage.put("/Books/second.epub", BODY + "other");
+  serve(BODY + "other");
+  failDirectoryRead = "/Books";
+  failDirectoryAfterEntries = 1;
+  run("failed");
+  EXPECT_EQ(HttpDownloader::requests.size(), 1U);
+  EXPECT_FALSE(Storage.exists(("/Books/" + name()).c_str()));
+  EXPECT_FALSE(Storage.seal.valid());
+  failDirectoryRead.clear();
+  run("done");
+  EXPECT_EQ(renderer.text[1], "0/1/0");
+  EXPECT_TRUE(Storage.seal.valid());
+}
+TEST_F(SyncActivityTest, DirectoryReadErrorCannotSealAnEmptyConflictIndex) {
+  Storage.put("/Books/" + name(), "different edition at reserved destination");
+  failDirectoryRead = "/Books";
+  run("failed");
+  EXPECT_EQ(HttpDownloader::requests.size(), 1U);
+  EXPECT_FALSE(Storage.seal.valid());
+  EXPECT_EQ(Storage.content("/Books/" + name()), "different edition at reserved destination");
+}
 TEST_F(SyncActivityTest, ImmediateRepeatReadsNoBookBytes) {
   Storage.put("/Books/match.epub", BODY);
   run("done");

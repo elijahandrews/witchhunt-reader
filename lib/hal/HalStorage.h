@@ -186,6 +186,8 @@ class HalFile : public Print {
   bool seekCur(int64_t offset);
   bool seekSet(size_t offset);
   int available() const;
+  // Includes read errors that make directory iteration look like ordinary EOF.
+  uint8_t getError() const;
   size_t position() const;
   int read(void* buf, size_t count);
   int read();  // read a single byte

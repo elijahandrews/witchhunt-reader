@@ -55,7 +55,9 @@ explicitly armed when leaving sync. Cold boot, deep sleep, unrelated resets,
 remounting, USB access and public content mutations invalidate that trust. An
 index is never started, trusted or sealed while unrelated writable handles remain
 open. Corrupt, truncated, missing or differently filtered caches cause a fresh
-scan. A concurrent library mutation aborts the attempt; retry after it completes.
+scan. Reported SD directory-read errors fail the attempt instead of accepting
+an incomplete index. A concurrent library mutation also aborts the attempt;
+retry after it completes.
 
 This cache accelerates immediate repeats, not the first sync after normal sleep
 or USB use. A run that adds books leaves the cache invalid; the next successful

@@ -377,7 +377,9 @@ bool BookSyncActivity::indexLocal(const std::string& path, FsFile& index, unsign
         return false;
     }
   }
-  return true;
+  // SdFat also ends iteration on an I/O error. Never trust or retain a partial
+  // index, which could miss a USB copy and download the same content again.
+  return directory.getError() == 0;
 }
 bool BookSyncActivity::containsHash(FsFile& index, const uint8_t* digest, bool& found) {
   found = false;

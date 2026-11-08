@@ -630,6 +630,7 @@ bool HalFile::seek(size_t pos) { HAL_FILE_WRAPPED_CALL(seekSet, pos); }
 bool HalFile::seekCur(int64_t offset) { HAL_FILE_WRAPPED_CALL(seekCur, offset); }
 bool HalFile::seekSet(size_t offset) { HAL_FILE_WRAPPED_CALL(seekSet, offset); }
 int HalFile::available() const { HAL_FILE_WRAPPED_CALL(available, ); }
+uint8_t HalFile::getError() const { HAL_FILE_WRAPPED_CALL(getError, ); }
 size_t HalFile::position() const {
   assert(impl != nullptr);
   return static_cast<size_t>(impl->file.position());

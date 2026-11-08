@@ -14,6 +14,8 @@ inline std::map<std::string, size_t> readBytes, readCalls;
 inline std::function<void(const std::string&, size_t)> afterRead;
 inline std::function<void(const std::string&)> afterDirectoryEntry;
 extern unsigned long fakeMillis;
+inline std::string failDirectoryRead;
+inline size_t failDirectoryAfterEntries = 0;
 inline std::function<void()> contentMutation;
 inline unsigned contentWriters = 0;
 inline bool publicContent(const std::string& path) {
@@ -34,6 +36,8 @@ class HalFile {
   std::shared_ptr<CardEntry> entry;
   size_t position = 0, next = 0;
   bool writable = false, publicWriter = false;
+  uint8_t error = 0;
+  uint8_t getError() const { return error; }
   std::shared_ptr<ContentWriter> writer;
   std::vector<std::shared_ptr<CardEntry>> children;
   operator bool() const { return bool(entry); }
@@ -84,6 +88,10 @@ class HalFile {
   void flush() {}
   HalFile openNextFile() {
     HalFile result;
+    if (entry->name == failDirectoryRead && next >= failDirectoryAfterEntries) {
+      error = 1;
+      return result;
+    }
     if (next < children.size()) {
       result.entry = children[next++];
       if (afterDirectoryEntry) afterDirectoryEntry(result.entry->name);
@@ -141,6 +149,8 @@ class HalStorage {
     generation = 0;
     seal = {};
     contentMutation = [this] { changed(); };
+    failDirectoryRead.clear();
+    failDirectoryAfterEntries = 0;
     readBytes.clear();
     readCalls.clear();
     afterRead = {};
