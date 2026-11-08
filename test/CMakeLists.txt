@@ -249,3 +249,8 @@ add_subdirectory(library_index)
 add_subdirectory(xtc_parser)
 
 add_subdirectory(book_sync)
+
+add_test(NAME UsbDriveInputLoop
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/usb_drive_handoff/input_loop.py
+          --out ${CMAKE_CURRENT_BINARY_DIR}/usb_drive_input)
+set_tests_properties(UsbDriveInputLoop PROPERTIES TIMEOUT 60)

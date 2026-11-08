@@ -99,6 +99,8 @@ Previous verified installation: **Witch Hunt `2.40-links2-x4pro`**, installed 20
 
 ## Reflashing this reader
 
+For routine app-only updates use the fast workflow in `docs/flashing-x4pro.md` and `scripts/reader_state_backup.py`: preserve complete reading state, skip untouched library/font/dictionary hashes and known derived caches, and include old web assets only when replacing the bundle. The user explicitly accepts dictionary loss and requests that dictionary checks not delay flashing. Use `--no-stub` for reliable ROM access on this device and explicit `--compress` for the next authorized ESP32-S3 write; retain all identity/slot/rollback/protected-flash/application verification. Return the reader promptly after critical checks. Do not run the old full-library helper by default.
+
 1. Flash only when requested. Do not mistake USB dictionary installation for permission to flash experimental firmware. Preserve the known-good image and verify its hash before using it as rollback.
 2. Identify the physical reader, rather than assuming a serial-port name. Expected hardware: **Xteink X4 Pro, ESP32-S3**, MAC `98:c3:77:b9:90:18`, USB serial VID `303a`, PID `1001`. USB serial numbers may contain colons; normalize before comparison. Last observed port: `/dev/cu.usbmodem1401`; rediscover it each time. The original C3 X4 is a different device.
 3. If in USB drive mode, back up current settings/progress from the mounted SD card. Identify the card by its volume UUID `085494E0-3B78-3E20-A63C-B3C70B8BC6F5`, not by a reusable disk number. Safely eject before opening the flash tool. This firmware automatically leaves USB drive mode after host eject.
