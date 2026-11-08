@@ -135,6 +135,14 @@ class HalStorage {
   // one of its own: the generation goes up and the marker is left.
   void noteFoundChange() { noteContentChange(nullptr); }
 
+  // Hash-index trust is independent of the library's shared dirty marker. Cold
+  // boot, sleep, USB access and any content mutation invalidate it. No SD writes
+  // are needed to invalidate; the retained seal is armed only on sync's exit.
+  bool beginContentHashScan(uint32_t& generation);
+  bool loadContentHashSeal(uint8_t* digest, uint32_t& bytes);
+  bool saveContentHashSeal(uint32_t generation, const uint8_t* digest, uint32_t bytes);
+  void armContentHashRestart();
+
   static HalStorage& getInstance() { return instance; }
 
   class StorageLock;  // private class, used internally
@@ -151,6 +159,7 @@ class HalStorage {
   SemaphoreHandle_t storageMutex = nullptr;
   std::atomic<uint32_t> contentGeneration_{0};
   int8_t changeMarker_ = -1;  // the marker file: -1 not looked for yet, 0 absent, 1 present
+  uint32_t contentWriters_ = 0;
 };
 
 #define Storage HalStorage::getInstance()

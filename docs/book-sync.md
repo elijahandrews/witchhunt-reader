@@ -21,7 +21,7 @@ Redirects and plaintext HTTP are refused.
 
 Sync scans existing nonhidden EPUBs throughout the SD card. It first filters by
 the byte lengths in the current helper inventory, avoiding content reads for books
-that cannot match. Candidates still receive a complete SHA-256 check; no filename
+that cannot match. A fresh scan gives candidates a complete SHA-256 check; no filename
 or cached timestamp is trusted as proof of matching content. Identical files are
 skipped even if copied by USB with different filenames. Existing book paths,
 reading progress, annotations and settings are preserved. Different content or
@@ -39,6 +39,44 @@ Cancellation waits for any current SD read or display operation to return;
 completed books remain and incomplete data is removed. Retry reruns the inventory
 and skips completed content. Leaving the activity restarts the reader, like its
 other memory-intensive network activities.
+
+## Scan performance and diagnostics
+
+On X4 Pro, book hashing uses the SDK's hardware-backed SHA-256 API. Other boards
+keep the existing wolfCrypt path. The hash buffer remains 8 KiB; inventory parsing
+adds one separate 512-byte buffer so pending lines survive intervening book reads.
+The firmware still reads and hashes staged downloads from the SD card before
+publishing them, including when the helper has already computed their hashes.
+
+After a successful run with no additions, sync can reuse its local hash index for
+an immediate repeat. Its digest and candidate-size filter are verified before use.
+The expected digest is retained in RTC memory only through the software restart
+explicitly armed when leaving sync. Cold boot, deep sleep, unrelated resets,
+remounting, USB access and public content mutations invalidate that trust. An
+index is never started, trusted or sealed while unrelated writable handles remain
+open. Corrupt, truncated, missing or differently filtered caches cause a fresh
+scan. A concurrent library mutation aborts the attempt; retry after it completes.
+
+This cache accelerates immediate repeats, not the first sync after normal sleep
+or USB use. A run that adds books leaves the cache invalid; the next successful
+zero-addition run rebuilds it. Cache files live at
+`/.crosspoint/book-sync/hash-index`, separate from all reading progress. No
+persistent cache based solely on file size or FAT timestamps is used.
+
+Each attempt writes aggregate diagnostics to
+`/.crosspoint/book-sync/last-run.json`, even in the compact X4 Pro logging build.
+`CMD:STATE` also exposes activity counters and timings while sync is open. The
+report includes total/Wi-Fi/manifest/scan/download/verification/cache/free-space
+milliseconds, display-wait milliseconds, SD read and SHA microseconds, read calls,
+bytes, cache-hit status and result counts. Timings include failures/cancellation;
+display waits overlap phases, so the fields must not all be summed. No filenames,
+URLs, tokens, book hashes or contents are logged. Inspect `cache_hit` and
+`local_bytes` to distinguish a reused index from a fresh scan.
+
+Host tests validate parsing, hashing orchestration, invalidation and cancellation
+between reads. Actual hardware speed, physical buttons/touch and dynamic heap
+still need device measurement. Blocking DNS/TLS connection, socket waits and SD
+operations can delay cancellation until the underlying call returns.
 
 ## Helper protocol v1
 

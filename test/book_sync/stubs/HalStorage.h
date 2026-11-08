@@ -8,10 +8,22 @@
 #include <string>
 #include <vector>
 
+#include "hal/ContentHashCacheSeal.h"
+
 inline std::map<std::string, size_t> readBytes, readCalls;
 inline std::function<void(const std::string&, size_t)> afterRead;
 inline std::function<void(const std::string&)> afterDirectoryEntry;
 extern unsigned long fakeMillis;
+inline std::function<void()> contentMutation;
+inline unsigned contentWriters = 0;
+inline bool publicContent(const std::string& path) {
+  return !(path == "/.crosspoint" || path.starts_with("/.crosspoint/")) || path.find("/../") != path.npos ||
+         path.ends_with("/..");
+}
+struct ContentWriter {
+  ContentWriter() { ++contentWriters; }
+  ~ContentWriter() { --contentWriters; }
+};
 
 struct CardEntry {
   std::string name, data;
@@ -21,7 +33,8 @@ class HalFile {
  public:
   std::shared_ptr<CardEntry> entry;
   size_t position = 0, next = 0;
-  bool writable = false;
+  bool writable = false, publicWriter = false;
+  std::shared_ptr<ContentWriter> writer;
   std::vector<std::shared_ptr<CardEntry>> children;
   operator bool() const { return bool(entry); }
   bool isDirectory() const { return entry && entry->directory; }
@@ -56,12 +69,15 @@ class HalFile {
   }
   size_t write(const void* data, size_t n) {
     if (!entry || !writable) return 0;
+    if (publicWriter && contentMutation) contentMutation();
     entry->data.resize(std::max(fileSize(), position + n));
     memcpy(entry->data.data() + position, data, n);
     position += n;
     return n;
   }
+  size_t write(uint8_t c) { return write(&c, 1); }
   bool close() {
+    writer.reset();
     entry.reset();
     return true;
   }
@@ -80,6 +96,37 @@ class HalStorage {
  public:
   std::map<std::string, std::shared_ptr<CardEntry>> entries;
   bool failRename = false;
+  uint32_t generation = 0;
+  ContentHashCacheSeal seal{};
+  void changed(const std::string& path = "") {
+    if (path.empty() || publicContent(path)) {
+      ++generation;
+      seal.invalidate();
+    }
+  }
+  uint32_t contentGeneration() const { return generation; }
+  bool beginContentHashScan(uint32_t& expected) {
+    if (contentWriters) return false;
+    expected = generation;
+    return true;
+  }
+  bool loadContentHashSeal(uint8_t* digest, uint32_t& bytes) {
+    if (contentWriters || !seal.valid()) return false;
+    memcpy(digest, seal.digest, 32);
+    bytes = seal.bytes;
+    return true;
+  }
+  bool saveContentHashSeal(uint32_t expected, const uint8_t* digest, uint32_t bytes) {
+    if (contentWriters || expected != generation) return false;
+    seal.set(digest, bytes);
+    return seal.valid();
+  }
+  void armContentHashRestart() {
+    if (contentWriters) seal.invalidate();
+    seal.armRestart();
+  }
+  void boot(bool softwareReset) { seal.boot(softwareReset); }
+  void usbSession() { changed(); }
   uint64_t freeBytes = uint64_t(4) * 1024 * 1024 * 1024;
   static HalStorage& getInstance() {
     static HalStorage value;
@@ -91,6 +138,9 @@ class HalStorage {
     return value;
   }
   void reset() {
+    generation = 0;
+    seal = {};
+    contentMutation = [this] { changed(); };
     readBytes.clear();
     readCalls.clear();
     afterRead = {};
@@ -109,6 +159,7 @@ class HalStorage {
       if (parent.empty()) parent = "/";
       ensureDirectoryExists(parent.c_str());
     }
+    changed(name);
     entries[k] = std::make_shared<CardEntry>(CardEntry{name, "", true});
     return true;
   }
@@ -116,6 +167,7 @@ class HalStorage {
     auto parent = path.substr(0, path.find_last_of('/'));
     if (parent.empty()) parent = "/";
     ensureDirectoryExists(parent.c_str());
+    changed(path);
     entries[key(path)] = std::make_shared<CardEntry>(CardEntry{path, data, false});
   }
   std::string content(const std::string& path) const {
@@ -140,12 +192,18 @@ class HalStorage {
     put(path, "");
     file = {};
     file.entry = entries[key(path)];
+    changed(path);
     file.writable = true;
+    file.publicWriter = publicContent(path);
+    file.writer = std::make_shared<ContentWriter>();
     return true;
   }
   bool openFileForUpdate(const char* module, const std::string& path, HalFile& file) {
     if (!openFileForRead(module, path, file)) return false;
+    changed(path);
     file.writable = true;
+    file.publicWriter = publicContent(path);
+    file.writer = std::make_shared<ContentWriter>();
     return true;
   }
   bool readFileToString(const char*, const std::string& path, size_t cap, std::string& out) {
@@ -155,8 +213,13 @@ class HalStorage {
     return true;
   }
   bool exists(const char* path) const { return entries.count(key(path)); }
-  bool remove(const char* path) { return entries.erase(key(path)); }
+  bool remove(const char* path) {
+    changed(path);
+    return entries.erase(key(path));
+  }
   bool rename(const char* from, const char* to) {
+    changed(from);
+    changed(to);
     if (failRename || !exists(from) || exists(to)) return false;
     auto value = entries.at(key(from));
     entries.erase(key(from));

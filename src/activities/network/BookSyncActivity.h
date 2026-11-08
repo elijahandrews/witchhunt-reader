@@ -13,6 +13,7 @@ class BookSyncActivity final : public UiListActivity {
   void onExit() override;
   bool usesWifi() const override { return true; }
   bool preventAutoSleep() override { return busy; }
+  void appendDebugState(std::string& out) const override;
 
  private:
   struct Work;
@@ -24,6 +25,13 @@ class BookSyncActivity final : public UiListActivity {
   unsigned added = 0, skipped = 0, conflicts = 0;
   unsigned checkedShown = 0, hashedMiBShown = 0;
   unsigned long lastPaint = 0, lastYield = 0;
+  struct Metrics {
+    uint32_t totalMs = 0, wifiMs = 0, manifestMs = 0, scanMs = 0, downloadMs = 0, verifyMs = 0;
+    uint32_t cacheMs = 0, freeSpaceMs = 0, paintWaitMs = 0, readCalls = 0;
+    uint64_t readUs = 0, hashUs = 0, localBytes = 0, verifyBytes = 0;
+    bool cacheHit = false;
+  } metrics;
+  unsigned long startedAt = 0;
   int listCount() const override { return 0; }
   const char* headerTitle() const override;
   const char* footerConfirmLabel() const override { return ""; }
@@ -35,7 +43,11 @@ class BookSyncActivity final : public UiListActivity {
   bool sync();
   bool pump();
   void show(StrId message);
-  bool hashFile(FsFile& file, uint8_t* digest);
+  enum class HashKind { Local, Verify, Index };
+  bool hashFile(FsFile& file, uint8_t* digest, HashKind kind = HashKind::Local);
   bool indexLocal(const std::string& path, FsFile& index, unsigned depth = 0);
   bool containsHash(FsFile& index, const uint8_t* digest, bool& found);
+  bool loadIndex(FsFile& index);
+  void saveIndex(FsFile& index);
+  void saveMetrics(bool success);
 };

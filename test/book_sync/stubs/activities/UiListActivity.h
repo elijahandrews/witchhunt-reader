@@ -10,6 +10,7 @@ inline bool injectCancel = false;
 inline bool injectTouch = false, injectBackPress = false;
 inline int tapX = 50, tapY = 780;
 inline unsigned long fakeMillis = 0, delayCalls = 0;
+inline unsigned long micros() { return fakeMillis * 1000; }
 inline unsigned long millis() { return fakeMillis; }
 inline void delay(unsigned ms) {
   ++delayCalls;
@@ -77,6 +78,7 @@ class UiListActivity {
   UiListActivity(const char*, GfxRenderer& r, MappedInputManager& i) : renderer(r), mappedInput(i) {}
   virtual ~UiListActivity() = default;
   virtual void onEnter() {}
+  virtual void appendDebugState(std::string&) const {}
   virtual void onExit() {}
   virtual bool usesWifi() const { return false; }
   virtual bool preventAutoSleep() { return false; }

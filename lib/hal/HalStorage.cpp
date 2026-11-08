@@ -8,6 +8,8 @@
 #include <Logging.h>
 #include <SDCardManager.h>
 #include <SdFat.h>
+#include <esp_attr.h>
+#include <esp_system.h>
 #if FREEINK_CAP_USB_MSC
 #include <BatteryMonitor.h>
 #include <UsbMassStorage.h>
@@ -22,8 +24,14 @@
 #include <new>
 #include <optional>
 
+#include "ContentHashCacheSeal.h"
 #include "HalI2cBus.h"
 #include "HalSpiBus.h"
+
+namespace {
+RTC_NOINIT_ATTR ContentHashCacheSeal contentHashSeal;
+bool storageBootSeen = false;
+}  // namespace
 
 #define SDCard SDCardManager::getInstance()
 
@@ -49,6 +57,10 @@ static bool sdSharesDisplaySpiBus() { return BoardConfig::ACTIVE.sdmmc.busWidth 
 // begin() and ready() are only called from setup, no need to acquire mutex for them
 
 bool HalStorage::begin() {
+  // Only the first mount may consume an armed restart. Remounting in this boot
+  // always discards trust, including after external ownership of the card.
+  contentHashSeal.boot(!storageBootSeen && esp_reset_reason() == ESP_RST_SW);
+  storageBootSeen = true;
   // Create the mutex here rather than in the constructor: HalStorage::instance
   // is a global, and its constructor runs before the FreeRTOS scheduler starts.
   // Calling xSemaphoreCreateRecursiveMutex() that early corrupts the TLSF heap metadata.
@@ -264,6 +276,8 @@ namespace {
 bool isCachePath(const char* path) {
   constexpr char kCacheRoot[] = "/.crosspoint";
   constexpr size_t kLength = sizeof(kCacheRoot) - 1;
+  const size_t length = strlen(path);
+  if (strstr(path, "/../") || (length >= 3 && strcmp(path + length - 3, "/..") == 0)) return false;
   return strncmp(path, kCacheRoot, kLength) == 0 && (path[kLength] == '\0' || path[kLength] == '/');
 }
 
@@ -281,8 +295,40 @@ bool opensForWriting(const oflag_t oflag) {
 // session), which counts as a change.
 void HalStorage::noteContentChange(const char* path) {
   if (path != nullptr && isCachePath(path)) return;
+  StorageLock lock;
+  contentHashSeal.invalidate();
   contentGeneration_.fetch_add(1, std::memory_order_relaxed);
   persistChangeMarker();
+}
+
+bool HalStorage::beginContentHashScan(uint32_t& generation) {
+  StorageLock lock;
+  // A handle opened under the private tree may have been renamed into /Books.
+  // Start only with no writers; every later public mutation changes generation.
+  if (contentWriters_) return false;
+  generation = contentGeneration();
+  return true;
+}
+
+bool HalStorage::loadContentHashSeal(uint8_t* digest, uint32_t& bytes) {
+  StorageLock lock;
+  if (contentWriters_ || !contentHashSeal.valid()) return false;
+  memcpy(digest, contentHashSeal.digest, 32);
+  bytes = contentHashSeal.bytes;
+  return true;
+}
+
+bool HalStorage::saveContentHashSeal(uint32_t generation, const uint8_t* digest, uint32_t bytes) {
+  StorageLock lock;
+  if (contentWriters_ || generation != contentGeneration()) return false;
+  contentHashSeal.set(digest, bytes);
+  return contentHashSeal.valid();
+}
+
+void HalStorage::armContentHashRestart() {
+  StorageLock lock;
+  if (contentWriters_) contentHashSeal.invalidate();
+  contentHashSeal.armRestart();
 }
 
 // The first change after the mark leaves the marker; later ones find it there. StorageLock is
@@ -343,13 +389,15 @@ bool HalStorage::readFileToString(const char* moduleName, const std::string& pat
 }
 
 bool HalStorage::writeFile(const char* path, const String& content) {
+  StorageLock lock;
   noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(writeFile, path, content);
+  return SDCard.writeFile(path, content);
 }
 
 bool HalStorage::ensureDirectoryExists(const char* path) {
-  noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(ensureDirectoryExists, path);
+  StorageLock lock;
+  if (!SDCard.exists(path)) noteContentChange(path);
+  return SDCard.ensureDirectoryExists(path);
 }
 
 uint64_t HalStorage::sdTotalBytes() const {
@@ -371,8 +419,19 @@ uint64_t HalStorage::sdFreeBytes() {
 
 class HalFile::Impl {
  public:
-  Impl(FsFile&& fsFile) : file(std::move(fsFile)) {}
+  Impl(FsFile&& fsFile, bool writable = false, bool contentWriter = false)
+      : file(std::move(fsFile)), writable(writable && file), contentWriter(contentWriter) {
+    if (this->writable) ++Storage.contentWriters_;
+  }
+  ~Impl() { endWriter(); }
+  void endWriter() {
+    if (writable) {
+      --Storage.contentWriters_;
+      writable = false;
+    }
+  }
   FsFile file;
+  bool writable, contentWriter;
 };
 
 HalFile::HalFile() = default;
@@ -397,29 +456,33 @@ HalFile& HalFile::operator=(HalFile&& other) {
 HalFile HalStorage::open(const char* path, const oflag_t oflag) {
   StorageLock lock;  // ensure thread safety for the duration of this function
   if (opensForWriting(oflag)) noteContentChange(path);
-  return HalFile(std::make_unique<HalFile::Impl>(SDCard.open(path, oflag)));
+  return HalFile(std::make_unique<HalFile::Impl>(SDCard.open(path, oflag), opensForWriting(oflag), !isCachePath(path)));
 }
 
 bool HalStorage::mkdir(const char* path, const bool pFlag) {
+  StorageLock lock;
   noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(mkdir, path, pFlag);
+  return SDCard.mkdir(path, pFlag);
 }
 
 bool HalStorage::exists(const char* path) { HAL_STORAGE_WRAPPED_CALL(exists, path); }
 
 bool HalStorage::remove(const char* path) {
+  StorageLock lock;
   noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(remove, path);
+  return SDCard.remove(path);
 }
 bool HalStorage::rename(const char* oldPath, const char* newPath) {
+  StorageLock lock;
   noteContentChange(oldPath);
   noteContentChange(newPath);
-  HAL_STORAGE_WRAPPED_CALL(rename, oldPath, newPath);
+  return SDCard.rename(oldPath, newPath);
 }
 
 bool HalStorage::rmdir(const char* path) {
+  StorageLock lock;
   noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(rmdir, path);
+  return SDCard.rmdir(path);
 }
 
 // Ported from crosspoint-reader PR #3979 (phuclee, @phucisstupid). A directory entry is known by
@@ -469,7 +532,7 @@ bool HalStorage::openFileForWrite(const char* moduleName, const char* path, HalF
   noteContentChange(path);
   FsFile fsFile;
   bool ok = SDCard.openFileForWrite(moduleName, path, fsFile);
-  file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
+  file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile), true, !isCachePath(path)));
   return ok;
 }
 
@@ -483,12 +546,13 @@ bool HalStorage::openFileForWrite(const char* moduleName, const String& path, Ha
 
 bool HalStorage::openFileForUpdate(const char* moduleName, const char* path, HalFile& file) {
   StorageLock lock;  // ensure thread safety for the duration of this function
+  noteContentChange(path);
   FsFile fsFile = SDCard.open(path, O_RDWR);
   const bool ok = static_cast<bool>(fsFile);
   if (!ok) {
     LOG_ERR(moduleName, "Failed to open %s for update", path);
   }
-  file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
+  file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile), true, !isCachePath(path)));
   return ok;
 }
 
@@ -497,8 +561,9 @@ bool HalStorage::openFileForUpdate(const char* moduleName, const std::string& pa
 }
 
 bool HalStorage::removeDir(const char* path) {
+  StorageLock lock;
   noteContentChange(path);
-  HAL_STORAGE_WRAPPED_CALL(removeDir, path);
+  return SDCard.removeDir(path);
 }
 
 bool HalStorage::copyFile(const char* moduleName, const std::string& srcPath, const char* dstPath) {
@@ -571,11 +636,28 @@ size_t HalFile::position() const {
 }
 int HalFile::read(void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(read, buf, count); }
 int HalFile::read() { HAL_FILE_WRAPPED_CALL(read, ); }
-size_t HalFile::write(const void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(write, buf, count); }
-size_t HalFile::write(uint8_t b) { HAL_FILE_WRAPPED_CALL(write, b); }
+size_t HalFile::write(const void* buf, size_t count) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  if (impl->contentWriter) Storage.noteContentChange(nullptr);
+  return impl->file.write(buf, count);
+}
+size_t HalFile::write(uint8_t b) { return write(&b, 1); }
 bool HalFile::rename(const char* newPath) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
   Storage.noteContentChange(nullptr);  // the old path is not known here
-  HAL_FILE_WRAPPED_CALL(rename, newPath);
+  const bool ok = impl->file.rename(newPath);
+  if (ok) {
+    // An originally private handle can now name a public book. Conservatively
+    // prevent sealing an index until it closes, even if it was read-only.
+    impl->contentWriter = true;
+    if (!impl->writable) {
+      impl->writable = true;
+      ++Storage.contentWriters_;
+    }
+  }
+  return ok;
 }
 bool HalFile::getModifyDateTime(uint16_t* pdate, uint16_t* ptime) {
   HAL_FILE_WRAPPED_CALL(getModifyDateTime, pdate, ptime);
@@ -585,7 +667,13 @@ bool HalFile::getCreateDateTime(uint16_t* pdate, uint16_t* ptime) {
 }
 bool HalFile::isDirectory() const { HAL_FILE_FORWARD_CALL(isDirectory, ); }  // already thread-safe, no need to wrap
 void HalFile::rewindDirectory() { HAL_FILE_WRAPPED_CALL(rewindDirectory, ); }
-bool HalFile::close() { HAL_FILE_WRAPPED_CALL(close, ); }
+bool HalFile::close() {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  const bool ok = impl->file.close();
+  if (ok) impl->endWriter();
+  return ok;
+}
 uint64_t HalFile::size64() { HAL_FILE_FORWARD_CALL(size, ); }
 uint64_t HalFile::fileSize64() { HAL_FILE_FORWARD_CALL(fileSize, ); }
 bool HalFile::seek64(uint64_t pos) { HAL_FILE_WRAPPED_CALL(seekSet, pos); }
