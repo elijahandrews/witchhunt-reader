@@ -117,6 +117,8 @@ const std::vector<SettingInfo>& getBaseSettingsList() {
                             StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, &CrossPointSettings::ignorePublisherPageMargins,
                             "ignorePublisherPageMargins", StrId::STR_CAT_READER));
+    add(SettingInfo::Toggle(StrId::STR_IGNORE_PUBLISHER_LINE_SPACING, &CrossPointSettings::ignorePublisherLineSpacing,
+                            "ignorePublisherLineSpacing", StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled, "hyphenationEnabled",
                             StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",

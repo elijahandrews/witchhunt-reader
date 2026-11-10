@@ -536,6 +536,7 @@ void EpubReaderDrawerActivity::onEnter() {
   app.on(ACTION_STEP, &EpubReaderDrawerActivity::onStepEvent, this);
   app.on(ACTION_SLIDER + 3, &EpubReaderDrawerActivity::onSliderEvent, this);
   app.on(ACTION_STEP + 3, &EpubReaderDrawerActivity::onStepEvent, this);
+  app.on(ACTION_IGNORE_LINE_SPACING, &EpubReaderDrawerActivity::onIgnoreLineSpacingEvent, this);
   app.on(ACTION_CONFIRM, &EpubReaderDrawerActivity::onConfirmEvent, this);
   app.on(ACTION_KEYPAD_KEY, &EpubReaderDrawerActivity::onKeypadKeyEvent, this);
   app.on(ACTION_KEYPAD_BACKSPACE, &EpubReaderDrawerActivity::onKeypadBackspaceEvent, this);
@@ -715,6 +716,7 @@ ReaderSettingsDraft EpubReaderDrawerActivity::captureSettings() {
   value.forceParagraphIndents = SETTINGS.forceParagraphIndents;
   value.embeddedStyle = SETTINGS.embeddedStyle;
   value.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins;
+  value.ignorePublisherLineSpacing = SETTINGS.ignorePublisherLineSpacing;
   value.publisherFonts = SETTINGS.publisherFonts;
   value.imageRendering = SETTINGS.imageRendering;
   value.imageGrayscale = SETTINGS.imageGrayscale;
@@ -744,6 +746,7 @@ void EpubReaderDrawerActivity::applySettings(const ReaderSettingsDraft& value) {
   SETTINGS.forceParagraphIndents = value.forceParagraphIndents;
   SETTINGS.embeddedStyle = value.embeddedStyle;
   SETTINGS.ignorePublisherPageMargins = value.ignorePublisherPageMargins;
+  SETTINGS.ignorePublisherLineSpacing = value.ignorePublisherLineSpacing;
   SETTINGS.publisherFonts = value.publisherFonts;
   SETTINGS.imageRendering = value.imageRendering;
   SETTINGS.imageGrayscale = value.imageGrayscale;
@@ -872,8 +875,16 @@ void EpubReaderDrawerActivity::onStepEvent(const fui::ActionEvent& event, void* 
                           CrossPointSettings::MAX_SCREEN_MARGIN);
     }
   } else {
-    self->adjustActiveSlider(event.value);
+    const int step = self->state.pane == ReaderDrawerPane::Spacing && self->mappedInput.hasTouchHardware() ? 5 : 1;
+    self->adjustActiveSlider(event.value * step);
   }
+  self->markSettingChanged(ReaderSettingsChangeMask::Preview | ReaderSettingsChangeMask::Relayout);
+  self->requestUpdate();
+}
+
+void EpubReaderDrawerActivity::onIgnoreLineSpacingEvent(const fui::ActionEvent&, void* user) {
+  auto* self = static_cast<EpubReaderDrawerActivity*>(user);
+  self->draft.ignorePublisherLineSpacing = !self->draft.ignorePublisherLineSpacing;
   self->markSettingChanged(ReaderSettingsChangeMask::Preview | ReaderSettingsChangeMask::Relayout);
   self->requestUpdate();
 }
@@ -919,6 +930,7 @@ int16_t EpubReaderDrawerActivity::drawerHeight() const {
                                         (state.pane == ReaderDrawerPane::CharacterSpacing ? 1 : 2) *
                                             readerSliderRowHeight(uiTarget, theme, row) +
                                         theme.spaceMd + theme.spaceSm);
+    if (state.pane == ReaderDrawerPane::Spacing) drawerHeight += theme.rowHeight + theme.spaceSm;
     drawerHeight = std::min<int16_t>(drawerHeight, renderer.getScreenHeight());
   } else if (state.pane == ReaderDrawerPane::Root && isLandscapeOrientation(renderer.getOrientation())) {
     const int16_t rowHeight = app.theme().rowHeight;
@@ -999,6 +1011,7 @@ void EpubReaderDrawerActivity::buildDrawer(UiApp::ScreenType& screen) {
       const int controlsHeight =
           screen.theme().headerHeight +
           (state.pane == ReaderDrawerPane::CharacterSpacing ? 1 : 2) * readerSliderRowHeight(screen, row) +
+          (state.pane == ReaderDrawerPane::Spacing ? screen.theme().rowHeight + screen.theme().spaceSm : 0) +
           2 * (screen.target().lineHeight(screen.theme().smallText.font) + screen.theme().spaceSm) +
           screen.theme().spaceSm + sheet.ruleWidth + metrics.verticalSpacing;
       previewHeight = std::min(previewHeight, std::max(0, screen.body().height - controlsHeight));
@@ -1260,7 +1273,31 @@ void EpubReaderDrawerActivity::buildSpacingPane(UiApp::ScreenType& screen) {
   line.editing = line.focused && buttonSliderState.editing;
   word.editing = word.focused && buttonSliderState.editing;
   if (mappedInput.hasTouchHardware()) alignReaderSliderLabels(screen, line, word);
+  // The slider helper distributes all remaining height. Reserve the toggle
+  // first so it stays visible and touchable in every orientation.
+  const fui::Rect publisherSpacingBounds = screen.takeBottom(screen.theme().rowHeight, screen.theme().spaceSm);
   drawDualReaderSliderRows(screen, line, word, !mappedInput.hasTouchHardware());
+  fui::ToggleRowProps publisherSpacing;
+  publisherSpacing.row.action = ACTION_IGNORE_LINE_SPACING;
+  publisherSpacing.row.labelText = samplePreviewBesideControls() ? screen.theme().smallText : screen.theme().bodyText;
+  publisherSpacing.row.labelText.maxLines = 2;
+  publisherSpacing.row.valueText = screen.theme().smallText;
+  publisherSpacing.row.state =
+      !mappedInput.hasTouchHardware() && buttonSliderState.focus == 2 ? fui::StateSelected : fui::StateNormal;
+  setDrawerSelectionStyle(publisherSpacing.row.styles);
+  publisherSpacing.checked = draft.ignorePublisherLineSpacing;
+  publisherSpacing.toggleAction = ACTION_IGNORE_LINE_SPACING;
+  fui::toggleRow(screen.frame(), publisherSpacingBounds, publisherSpacing);
+  // The SDK toggle paints over the row's label slot. Give this longer label
+  // its own bounded area so it cannot run underneath the switch.
+  const fui::Rect labelBounds = publisherSpacingBounds.inset(
+      fui::Insets{0, static_cast<int16_t>(publisherSpacing.row.sidePadding + publisherSpacing.toggleWidth +
+                                         publisherSpacing.row.textGap),
+                  0, publisherSpacing.row.sidePadding});
+  const auto rowState = screen.frame().stateFor(ACTION_IGNORE_LINE_SPACING, 0, publisherSpacing.row.state);
+  screen.target().text(labelBounds, tr(STR_IGNORE_PUBLISHER_LINE_SPACING),
+                       fui::textStyleWithForeground(publisherSpacing.row.labelText,
+                                                    publisherSpacing.row.styles.resolve(rowState).foreground));
 }
 
 void EpubReaderDrawerActivity::buildMarginsPane(UiApp::ScreenType& screen) {
@@ -2649,6 +2686,7 @@ void EpubReaderDrawerActivity::renderPreviewText(const ReaderSettingsDraft& prev
                             previewSettings.readerFontPointSize == sourceSettings.readerFontPointSize &&
                             previewSettings.sdFontFamilyName == sourceSettings.sdFontFamilyName &&
                             previewSettings.lineHeightPercent == sourceSettings.lineHeightPercent &&
+                            previewSettings.ignorePublisherLineSpacing == sourceSettings.ignorePublisherLineSpacing &&
                             previewSettings.wordSpacing == sourceSettings.wordSpacing &&
                             previewSettings.characterSpacing == sourceSettings.characterSpacing &&
                             previewSettings.screenMarginVertical == sourceSettings.screenMarginVertical &&
@@ -2677,7 +2715,8 @@ void EpubReaderDrawerActivity::renderPreviewText(const ReaderSettingsDraft& prev
       renderer, previewFontId, previewXOffset, previewYOffset, previewWidth, previewSettings.lineHeightPercent,
       previewSettings.wordSpacing, previewSettings.paragraphAlignment, previewSettings.focusReadingEnabled,
       previewSettings.guideReadingEnabled, ReaderUtils::readerForegroundBlack(), std::numeric_limits<int>::max(),
-      CrossPointSettings::characterSpacingLevel(previewSettings.characterSpacing));
+      CrossPointSettings::characterSpacingLevel(previewSettings.characterSpacing),
+      previewSettings.ignorePublisherLineSpacing);
   renderer.endTextClip();
 }
 
@@ -2697,11 +2736,11 @@ void EpubReaderDrawerActivity::renderSamplePreviewText(const ReaderSettingsDraft
   const int top = area.y + metrics.previewPadding + marginY;
   const int width = std::max(1, area.width - marginX * 2);
   renderer.beginTextClip(area.x + marginX, top, width, std::max(0, textHeight - marginY * 2));
-  previewModel->renderText(renderer, fontId, area.x + marginX, top, width, settings.lineHeightPercent,
-                           settings.wordSpacing, settings.paragraphAlignment, settings.focusReadingEnabled,
-                           settings.guideReadingEnabled, ReaderUtils::readerForegroundBlack(),
-                           top + std::max(0, textHeight - marginY * 2),
-                           CrossPointSettings::characterSpacingLevel(settings.characterSpacing));
+  previewModel->renderText(
+      renderer, fontId, area.x + marginX, top, width, settings.lineHeightPercent, settings.wordSpacing,
+      settings.paragraphAlignment, settings.focusReadingEnabled, settings.guideReadingEnabled,
+      ReaderUtils::readerForegroundBlack(), top + std::max(0, textHeight - marginY * 2),
+      CrossPointSettings::characterSpacingLevel(settings.characterSpacing), settings.ignorePublisherLineSpacing);
   renderer.endTextClip();
 }
 
@@ -2769,6 +2808,7 @@ bool EpubReaderDrawerActivity::renderPreview(int& previewFontId,
     renderPreviewUnavailable();
     return false;
   }
+  previewModel->invalidateLayout();
   if (auto* fontCacheManager = renderer.getFontCacheManager()) {
     prewarmScope.emplace(*fontCacheManager, FontCacheManager::PreparationPolicy::Normal);
     renderPreviewContents(previewSettings,
@@ -2951,7 +2991,8 @@ void EpubReaderDrawerActivity::loop() {
   }
   if (!mappedInput.hasTouchHardware() && readerDrawerStepChangesSettings(state.pane)) {
     const auto onDirectionRelease = [this](const ReaderButtonSliderInput input, const int delta) {
-      const auto action = readerButtonSliderInput(buttonSliderState, input);
+      const auto action =
+          readerButtonSliderInput(buttonSliderState, input, state.pane == ReaderDrawerPane::Spacing ? 3 : 2);
       if (action == ReaderButtonSliderAction::Increase || action == ReaderButtonSliderAction::Decrease)
         adjustButtonSlider(delta);
       requestUpdate();
@@ -2963,7 +3004,8 @@ void EpubReaderDrawerActivity::loop() {
       // Held buttons update the draft without refreshing the e-ink panel on
       // every repeat; release draws the resulting preview once.
       buttonNavigator.onContinuous({button, button}, [this, input, delta] {
-        const auto action = readerButtonSliderInput(buttonSliderState, input);
+        const auto action =
+            readerButtonSliderInput(buttonSliderState, input, state.pane == ReaderDrawerPane::Spacing ? 3 : 2);
         if (action == ReaderButtonSliderAction::Increase || action == ReaderButtonSliderAction::Decrease)
           adjustButtonSlider(delta);
       });
@@ -2978,7 +3020,10 @@ void EpubReaderDrawerActivity::loop() {
     handleDirection(previous, ReaderButtonSliderInput::Previous, -5);
     handleDirection(next, ReaderButtonSliderInput::Next, 5);
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-      readerButtonSliderInput(buttonSliderState, ReaderButtonSliderInput::Confirm);
+      if (state.pane == ReaderDrawerPane::Spacing && buttonSliderState.focus == 2)
+        onIgnoreLineSpacingEvent({}, this);
+      else
+        readerButtonSliderInput(buttonSliderState, ReaderButtonSliderInput::Confirm);
       requestUpdate();
     }
     return;

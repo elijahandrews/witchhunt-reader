@@ -78,6 +78,45 @@ adjustments still slow. No matched hardware timing comparison has been measured.
 
 ## Hardware verification
 
+### Spacing-menu follow-up
+
+The reader's Spacing pane now offers **Ignore publisher line spacing**. With the
+switch on, line advance uses the font's natural height times the user percentage,
+rounded to pixels; other publisher styling stays enabled. The existing CSS
+normalization divides numeric `line-height` by 1.5 (thus CSS 1.2 becomes an
+internal 0.8 multiplier). That conversion is bypassed by the switch. The previous
+investigation's 0.8 was an internal value, not a verified literal from the book.
+
+Touch line-spacing +/- controls now adjust five percentage points; dragging
+retains one-point precision. Word spacing remains unchanged: 0 is natural,
+positive levels add 10 pixels each and negative levels remove 20% of the natural
+gap per level, leaving at least one pixel. Justification may add further space.
+
+Prewarm scanning now enumerates glyphs without measuring or wrapping. The BW
+preview prepares horizontal metrics and breaks once in its existing bounded
+arrays; grayscale passes reuse them. A small fixed key tracks the prepared word
+prefix and horizontal inputs. Capture and each new preview update invalidate it
+so font/profile reloads cannot reuse stale metrics. No new per-frame allocation
+or framebuffer is introduced; antialiasing and pixel output are retained.
+
+An original 160-word synthetic preview needed 640 word-width measurements over
+scan/BW/gray/gray before this change and 160 afterward (0/160/0/0). Drawn text,
+x/y positions and their hash were identical. The model grew by 16 bytes on the
+host; the existing C3 sample-size assertion still passes. These are operation
+counts, not an on-device timing measurement.
+
+All 269 focused parser, preview, menu and full/partial cache tests pass under
+ASan/UBSan. Simulator checks cover old per-book records, explicit true/false
+overrides, malformed records, global persistence and controls in all four
+orientations on touch and button profiles.
+
+Picco, X3/X4, touch-simulator and button-simulator builds pass. Both independent
+code reviews are clean after fixes, and final captures show the toggle clear of
+the slider controls and its label in every orientation. The preview still needs
+a hardware responsiveness check when installation is requested.
+
+This follow-up has not been flashed. Device settings are unchanged.
+
 On the flashed Picco:
 
 1. Wait several seconds, then tap a settings tab and swipe through reader menus.

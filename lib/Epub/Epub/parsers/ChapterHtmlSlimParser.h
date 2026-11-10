@@ -137,6 +137,7 @@ class ChapterHtmlSlimParser {
   CssStyle resolveInlineStyle(std::string_view text) const;
   bool embeddedStyle;
   bool ignorePublisherPageMargins = false;
+  bool ignorePublisherLineSpacing = false;
   PublisherFonts publisherFonts = PublisherFonts::Off;
   uint32_t effectiveFontFamily = 0;
   uint32_t bodyFontFamily = 0;
@@ -597,6 +598,7 @@ class ChapterHtmlSlimParser {
   }
   void setPublisherFonts(PublisherFonts mode) { publisherFonts = mode; }
   void setIgnorePublisherPageMargins(bool ignore) { ignorePublisherPageMargins = ignore; }
+  void setIgnorePublisherLineSpacing(bool ignore) { ignorePublisherLineSpacing = ignore; }
   void setDeferAdvancePrewarm(bool defer) { deferAdvancePrewarm_ = defer; }
   bool prewarmSectionAdvanceStep();
   bool beginParse();

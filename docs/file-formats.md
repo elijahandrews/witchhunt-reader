@@ -562,6 +562,15 @@ if (parsedSize != fileSize) {
 
 ## `reader_settings.bin`
 
+### Version 15
+
+Version 14 appends `u8 ignorePublisherPageMargins` (0 or 1), with override bit 22.
+Version 15 appends `u8 ignorePublisherLineSpacing` (0 or 1), with override bit 23.
+The complete version-15 record is 162 bytes. Older records retain their original
+fields and override bits and inherit the newer global defaults, including legacy
+records that previously owned a full snapshot. Invalid or missing trailing flags
+reject the record rather than applying a partially decoded override.
+
 ### Version 13
 
 Each EPUB cache directory may contain `reader_settings.bin`. Missing files mean
@@ -1043,6 +1052,14 @@ Binary layout:
 - `[69-72]` `estimatedTimeLeftSeconds` (`uint32_t` LE, `0` means unavailable)
 
 ## `section.bin`
+
+### Version 111
+
+Complete caches use `111`; suspended partial caches use `0xE0`. The header adds
+`bool ignorePublisherLineSpacing` immediately after `ignorePublisherPageMargins`.
+Both full-cache validation and layout signatures include it. TextBlocks retain
+the authored CSS multiplier so a live preview can switch the override either way.
+Older layouts rebuild automatically without changing saved reading positions.
 
 ### Version 110
 

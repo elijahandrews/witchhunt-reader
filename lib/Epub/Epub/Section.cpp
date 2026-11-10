@@ -55,17 +55,18 @@ constexpr uint32_t SECTION_CACHE_MAGIC = 0x535843FF;  // bytes: 0xFF, "CXS"
 // v104: Spend chapter-wrapper closing spacing before the following paragraph.
 // v105: Optional publisher outer-margin override participates in cache identity.
 // v110: Preserve publisher line height for previews and round percentages consistently.
-constexpr uint8_t SECTION_FILE_VERSION = 110;
+// v111: The publisher line-spacing override participates in cache identity.
+constexpr uint8_t SECTION_FILE_VERSION = 111;
 // Suspended incremental build: valid pages plus LUTs and a parse-watermark trailer.
 // Change this with layout or payload changes so stale partial pages cannot resume
 // under a different layout contract.
-constexpr uint8_t SECTION_FILE_PARTIAL_VERSION = 0xDF;
+constexpr uint8_t SECTION_FILE_PARTIAL_VERSION = 0xE0;
 constexpr uint32_t HEADER_SIZE =
     2 * sizeof(uint32_t) + 2 * sizeof(uint64_t) + sizeof(PublisherFonts) + sizeof(SECTION_CACHE_MAGIC) +
     sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint16_t) +
     sizeof(uint16_t) + sizeof(bool) + sizeof(uint32_t) + sizeof(bool) + sizeof(uint8_t) + sizeof(bool) + sizeof(bool) +
     sizeof(uint8_t) + sizeof(int8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint32_t) +
-    sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(bool);
+    sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + 2 * sizeof(bool);
 constexpr size_t SECTION_HTML_STREAM_CHUNK_SIZE = 8192;
 // One staging buffer per build (not per page) turns a page's hundreds of 1-4
 // byte field writes into a handful of SD writes. Larger fields (a long line's
@@ -287,10 +288,11 @@ bool Section::writeSectionFileHeader(const ReaderRenderSpec& spec) {
                         sizeof(spec.extraParagraphSpacing) + sizeof(spec.forceParagraphIndents) +
                         sizeof(spec.paragraphAlignment) + sizeof(spec.viewportWidth) + sizeof(spec.viewportHeight) +
                         sizeof(spec.hyphenationEnabled) + sizeof(uint32_t) + sizeof(spec.embeddedStyle) +
-                        sizeof(spec.ignorePublisherPageMargins) + sizeof(spec.imageRendering) +
-                        sizeof(spec.focusReadingEnabled) + sizeof(spec.guideReadingEnabled) + sizeof(spec.wordSpacing) +
-                        sizeof(spec.characterSpacing) + sizeof(uint8_t) + sizeof(pageCount) + sizeof(uint32_t) +
-                        sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
+                        sizeof(spec.ignorePublisherPageMargins) + sizeof(spec.ignorePublisherLineSpacing) +
+                        sizeof(spec.imageRendering) + sizeof(spec.focusReadingEnabled) +
+                        sizeof(spec.guideReadingEnabled) + sizeof(spec.wordSpacing) + sizeof(spec.characterSpacing) +
+                        sizeof(uint8_t) + sizeof(pageCount) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+                        sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
                 "Header size mismatch");
   return serialization::tryWritePod(file, SECTION_CACHE_MAGIC) &&
          serialization::tryWritePod(file, SECTION_FILE_VERSION) && serialization::tryWritePod(file, spec.fontId) &&
@@ -305,6 +307,7 @@ bool Section::writeSectionFileHeader(const ReaderRenderSpec& spec) {
                                     spec.hyphenationEnabled ? Hyphenator::patternIdentity(epub->getLanguage()) : 0u) &&
          serialization::tryWritePod(file, spec.embeddedStyle) &&
          serialization::tryWritePod(file, spec.ignorePublisherPageMargins) &&
+         serialization::tryWritePod(file, spec.ignorePublisherLineSpacing) &&
          serialization::tryWritePod(file, spec.imageRendering) &&
          serialization::tryWritePod(file, spec.focusReadingEnabled) &&
          serialization::tryWritePod(file, spec.guideReadingEnabled) &&
@@ -381,6 +384,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
     uint32_t fileHyphenationIdentity;
     bool fileEmbeddedStyle;
     bool fileIgnorePublisherPageMargins;
+    bool fileIgnorePublisherLineSpacing;
     uint8_t fileImageRendering;
     bool fileFocusReadingEnabled;
     bool fileGuideReadingEnabled;
@@ -398,6 +402,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
         !serialization::tryReadPod(file, fileHyphenationIdentity) ||
         !serialization::tryReadPod(file, fileEmbeddedStyle) ||
         !serialization::tryReadPod(file, fileIgnorePublisherPageMargins) ||
+        !serialization::tryReadPod(file, fileIgnorePublisherLineSpacing) ||
         !serialization::tryReadPod(file, fileImageRendering) ||
         !serialization::tryReadPod(file, fileFocusReadingEnabled) ||
         !serialization::tryReadPod(file, fileGuideReadingEnabled) ||
@@ -418,6 +423,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
         fileHyphenationIdentity != (spec.hyphenationEnabled ? Hyphenator::patternIdentity(epub->getLanguage()) : 0u) ||
         spec.embeddedStyle != fileEmbeddedStyle || spec.imageRendering != fileImageRendering ||
         spec.ignorePublisherPageMargins != fileIgnorePublisherPageMargins ||
+        spec.ignorePublisherLineSpacing != fileIgnorePublisherLineSpacing ||
         spec.focusReadingEnabled != fileFocusReadingEnabled || spec.guideReadingEnabled != fileGuideReadingEnabled ||
         spec.wordSpacing != fileWordSpacing || spec.characterSpacing != fileCharacterSpacing ||
         static_cast<uint8_t>(spec.renderMode) != fileRenderMode || spec.publisherFonts != filePublisherFonts ||
@@ -792,6 +798,7 @@ bool Section::createSectionFile(const ReaderRenderSpec& spec, const std::functio
                                    !embeddedStyle || documentCssReady, truncated);
     visitor->setPublisherFonts(spec.publisherFonts);
     visitor->setIgnorePublisherPageMargins(spec.ignorePublisherPageMargins);
+    visitor->setIgnorePublisherLineSpacing(spec.ignorePublisherLineSpacing);
     visitor->setSourceTarget(buildOptions.sourceTarget, buildOptions.sourceTargetCharacter);
     sourceTargetVisibleOffset_.reset();
     sourceTargetPage_.reset();
@@ -1144,6 +1151,7 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const SectionBuildOptions
                                         !embeddedStyle || documentCssReady, truncated);
   build_->parser->setPublisherFonts(spec.publisherFonts);
   build_->parser->setIgnorePublisherPageMargins(spec.ignorePublisherPageMargins);
+  build_->parser->setIgnorePublisherLineSpacing(spec.ignorePublisherLineSpacing);
   build_->parser->setSourceTarget(buildOptions.sourceTarget, buildOptions.sourceTargetCharacter);
   sourceTargetVisibleOffset_.reset();
   sourceTargetPage_.reset();

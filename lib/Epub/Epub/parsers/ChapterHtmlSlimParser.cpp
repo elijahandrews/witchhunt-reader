@@ -605,7 +605,7 @@ void ChapterHtmlSlimParser::finishTextFloat() {
   int totalHeight = 0, left = column;
   const auto lineHeight = [&](const TextBlock& line) {
     return epubLineHeightPixels(line.maxLineHeight(renderer, fontId), lineCompression,
-                                line.getBlockStyle().lineHeightMultiplier) +
+                                ignorePublisherLineSpacing ? 0 : line.getBlockStyle().lineHeightMultiplier) +
            line.getRubyShift(line.maxAscender(renderer, fontId));
   };
   // The reference captures at most 64 words. A probe clones that bounded state;
@@ -6255,9 +6255,10 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line, const
   }
 
   const auto& lineImages = currentTextBlock->currentLineImages();
-  const int textHeight = epubLineHeightPixels(line->maxLineHeight(renderer, fontId), lineCompression,
-                                             line->getBlockStyle().lineHeightMultiplier) +
-                         line->getRubyShift(line->maxAscender(renderer, fontId));
+  const int textHeight =
+      epubLineHeightPixels(line->maxLineHeight(renderer, fontId), lineCompression,
+                           ignorePublisherLineSpacing ? 0 : line->getBlockStyle().lineHeightMultiplier) +
+      line->getRubyShift(line->maxAscender(renderer, fontId));
   if (line->getBlockStyle().fontSize || effectiveInlineFontSize || textHeight != effectiveLineHeight()) {
     auto style = line->getBlockStyle();
     style.lineHeight = static_cast<uint16_t>(textHeight);
@@ -6364,8 +6365,9 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line, const
 }
 
 int ChapterHtmlSlimParser::effectiveLineHeight() const {
-  return epubLineHeightPixels(renderer.getLineHeight(currentTextFontId()), lineCompression,
-                              currentTextBlock ? currentTextBlock->getBlockStyle().lineHeightMultiplier : 0);
+  return epubLineHeightPixels(
+      renderer.getLineHeight(currentTextFontId()), lineCompression,
+      !ignorePublisherLineSpacing && currentTextBlock ? currentTextBlock->getBlockStyle().lineHeightMultiplier : 0);
 }
 
 void ChapterHtmlSlimParser::makePages(const bool completeBlock) {

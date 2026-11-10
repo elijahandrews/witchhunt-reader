@@ -643,6 +643,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
   uint8_t embeddedStyle = 1;
   uint8_t ignorePublisherPageMargins = 0;
+  uint8_t ignorePublisherLineSpacing = 0;
   uint8_t publisherFonts = 1;
   // EPUB section indexing policy. The current chapter keeps its active build.
   uint8_t indexingMethod = defaultIndexingMethod();

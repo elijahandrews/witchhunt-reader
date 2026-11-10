@@ -2,6 +2,8 @@
 
 ### Added
 
+- Add an “Ignore publisher line spacing” switch to the reader’s Line/Word Spacing menu and global Reader settings. It preserves other book styling and can be saved per book.
+
 - Restore Witch Hunt publisher-font fallback stacks, variable-font selection, exact content sizes, monospace variants, small caps and optional ligatures in CrossInk's native reader.
 - Preserve chapter-local styles, publisher whitespace and hyphenation rules, gray backgrounds, bounded background pictures and keep-together groups.
 - Render bounded SVG illustrations and full progressive JPEGs; recognize image formats from their contents and prepare upcoming image caches while the current page is displayed.
@@ -56,6 +58,8 @@
 - Show the publisher’s body font as a disabled Font Family value in the in-book Reader Font menu when "Publisher Font" is set to "All Text"; keep the normal picker available when the body uses the reader font.
 
 ### Fixed
+
+- Reduce repeated text measurement and wrapping in reader-menu previews. Touch line-spacing buttons now move five percentage points per tap; slider dragging retains fine adjustment.
 
 - Wake the BOOX Picco input loop on touch reports instead of waiting for its idle polling timeout.
 - Retain more scalable-font glyphs across page and antialiasing passes, avoiding repeated outline rendering without changing text quality.

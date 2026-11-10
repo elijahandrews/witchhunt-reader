@@ -473,6 +473,47 @@ struct SliderOrientationSmokeTest {
 };
 
 struct ReaderDrawerLayoutSmokeTest {
+  template <typename Capture>
+  static bool verifySpacing(RenderLock& lock, const Capture& capture) {
+    bool valid = true;
+    const auto orientation = renderer.getOrientation();
+    for (int rotation = 0; rotation < 4; ++rotation) {
+      renderer.setOrientation(static_cast<GfxRenderer::Orientation>(rotation));
+      renderer.clearScreen();
+      EpubReaderDrawerActivity drawer(renderer, mappedInputManager, {}, nullptr, 0.0f, 0, 0, false, false, false, false,
+                                      false, false, false, false, true, true, 0, 0, 5, false);
+      drawer.onEnter();
+      drawer.openPane(ReaderDrawerPane::Spacing);
+      drawer.draft.lineHeightPercent = 100;
+      drawer.draft.ignorePublisherLineSpacing = 0;
+      drawer.render(std::move(lock));
+      bool reachable = false;
+      freeink::ui::Interaction hit;
+      for (int y = 0; y < renderer.getScreenHeight(); y += 2) {
+        reachable |= drawer.app.hitPublished(renderer.getScreenWidth() / 2, y,
+                                             EpubReaderDrawerActivity::ACTION_IGNORE_LINE_SPACING, hit);
+        // Button landscape uses the left column for controls.
+        reachable |= drawer.app.hitPublished(renderer.getScreenWidth() / 4, y,
+                                             EpubReaderDrawerActivity::ACTION_IGNORE_LINE_SPACING, hit);
+      }
+      valid &= reachable;
+      EpubReaderDrawerActivity::onIgnoreLineSpacingEvent({}, &drawer);
+      valid &= drawer.draft.ignorePublisherLineSpacing == 1 && drawer.previewDirty &&
+               hasReaderSettingsChange(drawer.changeMask, ReaderSettingsChangeMask::Relayout);
+      freeink::ui::ActionEvent step{};
+      step.action = EpubReaderDrawerActivity::ACTION_STEP;
+      step.value = 1;
+      EpubReaderDrawerActivity::onStepEvent(step, &drawer);
+      valid &= drawer.draft.lineHeightPercent == (mappedInputManager.hasTouchHardware() ? 105 : 101);
+      drawer.render(std::move(lock));
+      capture("spacing-override-" + std::to_string(rotation));
+      EpubReaderDrawerActivity::onIgnoreLineSpacingEvent({}, &drawer);
+      valid &= drawer.draft.ignorePublisherLineSpacing == 0;
+      drawer.onExit();
+    }
+    renderer.setOrientation(orientation);
+    return valid;
+  }
 #if CROSSINK_SCALABLE_FONTS
   template <typename Capture>
   static bool verifyPublisherBodyFont(RenderLock& lock, Epub& book, Section& section, const uint8_t mode,
@@ -5196,6 +5237,72 @@ class SimulatorSmokeTest {
     LOG_INF("SMOKE", "Block font sizes: layout, cache, rendering and selection passed");
   }
 
+  void verifyReaderSpacing() {
+    RenderLock lock;
+    JsonDocument original;
+    SETTINGS.toJson(original);
+    Epub book(std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK"), "/.crosspoint");
+    if (!book.load()) fail("Cannot open spacing fixture");
+    const auto settingsPath = book.getCachePath() + "/reader_settings.bin";
+    uint8_t record[162]{};
+    record[0] = 14;
+    record[1] = 1;
+    record[7] = 147;
+    record[153] = 4;   // Existing line-height override bit 2.
+    record[155] = 64;  // Existing page-margin override bit 22.
+    record[160] = 1;
+    const auto writeRecord = [&](size_t bytes) {
+      auto file = Storage.open(settingsPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC);
+      if (!file || file.write(record, bytes) != bytes || !file.sync()) fail("Spacing fixture write failed");
+      file.close();
+    };
+    SETTINGS.ignorePublisherLineSpacing = 1;
+    SETTINGS.ignorePublisherPageMargins = 1;
+    writeRecord(161);
+    auto loaded = EpubReaderActivity::readBookReaderSettings(book);
+    if (loaded.readerSettings.lineHeightPercent != 147 || !loaded.readerSettings.ignorePublisherPageMargins ||
+        !loaded.readerSettings.ignorePublisherLineSpacing || (loaded.readerSettingsOverrideMask & (1U << 23)))
+      fail("Version 14 spacing inheritance changed existing fields");
+    record[0] = 9;
+    writeRecord(153);
+    loaded = EpubReaderActivity::readBookReaderSettings(book);
+    if (!loaded.readerSettings.ignorePublisherLineSpacing || !loaded.readerSettings.ignorePublisherPageMargins ||
+        (loaded.readerSettingsOverrideMask & ((1U << 22) | (1U << 23))))
+      fail("Legacy custom records overrode newer spacing defaults");
+    record[0] = 15;
+    record[155] = 192;  // Page-margin and line-spacing override bits.
+    for (uint8_t value : {uint8_t{0}, uint8_t{1}}) {
+      SETTINGS.ignorePublisherLineSpacing = !value;
+      record[161] = value;
+      writeRecord(sizeof(record));
+      loaded = EpubReaderActivity::readBookReaderSettings(book);
+      if (loaded.readerSettings.ignorePublisherLineSpacing != value ||
+          !(loaded.readerSettingsOverrideMask & (1U << 23)) ||
+          !EpubReaderActivity::saveBookRenderMode(book.getPath(), 0) ||
+          EpubReaderActivity::readBookReaderSettings(book).readerSettings.ignorePublisherLineSpacing != value)
+        fail("Explicit publisher spacing override did not survive reload/save");
+    }
+    for (const size_t bytes : {size_t{161}, sizeof(record)}) {
+      record[161] = 2;
+      writeRecord(bytes);
+      EpubReaderActivity::BookSettingsReadStatus status;
+      EpubReaderActivity::readBookReaderSettingsForSupport(book.getCachePath(), status);
+      if (status != EpubReaderActivity::BookSettingsReadStatus::Invalid)
+        fail("Invalid or truncated spacing flag was accepted");
+    }
+    Storage.remove(settingsPath.c_str());
+    SETTINGS.ignorePublisherLineSpacing = 1;
+    if (!SETTINGS.saveToFile()) fail("Global spacing setting save failed");
+    SETTINGS.ignorePublisherLineSpacing = 0;
+    SETTINGS.loadFromFile();
+    if (!SETTINGS.ignorePublisherLineSpacing) fail("Global spacing setting did not reload");
+    if (!ReaderDrawerLayoutSmokeTest::verifySpacing(
+            lock, [&](const std::string& name) { captureStatusBarScreen(name.c_str()); }))
+      fail("Spacing override UI is unreachable or failed to update");
+    SETTINGS.fromJson(original.as<JsonVariantConst>());
+    LOG_INF("SMOKE", "Spacing override: migration, persistence and orientation checks passed");
+  }
+
 #if CROSSINK_SCALABLE_FONTS
   void verifyPublisherFonts() {
     RenderLock lock;
@@ -8163,6 +8270,11 @@ class SimulatorSmokeTest {
           inputScript.push_back(assertActivity("Home"));
           step = SmokeStep::ReaderInput;
           break;
+        }
+        if (std::getenv("CROSSINK_SIMULATOR_SMOKE_SPACING")) {
+          verifyReaderSpacing();
+          LOG_INF("SMOKE", "Simulator smoke test passed: reader spacing");
+          std::_Exit(0);
         }
 #if CROSSINK_SCALABLE_FONTS
         if (std::getenv("CROSSINK_SIMULATOR_SMOKE_READER_FONT_LAYOUT")) {

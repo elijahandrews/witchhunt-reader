@@ -22,7 +22,7 @@ class ReaderPreviewModel {
   static constexpr bool RETAINS_SOURCE_BLOCKS = KeepSourceBlocks;
 
   bool capture(const Page& page, const GfxRenderer& renderer, const int fontId, const uint8_t lineHeightPercent,
-               const int xOffset = 0, const int yOffset = 0) {
+               const int xOffset = 0, const int yOffset = 0, const bool ignorePublisherLineSpacing = false) {
     clear();
     sourceXOffset = xOffset;
     sourceYOffset = yOffset;
@@ -60,9 +60,9 @@ class ReaderPreviewModel {
       // Retain each source line's own advance. A publisher line box is not an
       // extra paragraph gap, even when it is taller than the reader body font.
       if (!line.style.lineHeight) {
-        line.style.lineHeight =
-            epubLineHeightPixels(block->maxLineHeight(renderer, fontId), compression, line.style.lineHeightMultiplier) +
-            block->getRubyShift(block->maxAscender(renderer, fontId));
+        line.style.lineHeight = epubLineHeightPixels(block->maxLineHeight(renderer, fontId), compression,
+                                                     ignorePublisherLineSpacing ? 0 : line.style.lineHeightMultiplier) +
+                                block->getRubyShift(block->maxAscender(renderer, fontId));
       }
       line.sourceIndentVisible = block->wordCount() > 0 && block->wordXpos(0) != 0;
       line.startsParagraph =
@@ -162,25 +162,40 @@ class ReaderPreviewModel {
                   const int contentWidth, const uint8_t lineHeightPercent, const uint8_t wordSpacing,
                   const uint8_t paragraphAlignment, const bool focusReadingEnabled, const bool guideReadingEnabled,
                   const bool foregroundBlack, const int bottom = std::numeric_limits<int>::max(),
-                  const int8_t spacing = 0) const {
+                  const int8_t spacing = 0, const bool ignorePublisherLineSpacing = false) const {
     characterSpacing = spacing;
     if (!valid()) return;
-    if constexpr (!KeepSourceBlocks) {
-      if (renderer.isFontCacheScanning()) {
-        // A newly selected SD font has no glyph metrics yet. Scan the whole
-        // bounded sample so changed line breaks cannot expose unprepared glyphs.
-        for (uint16_t index = 0; index < wordCount; ++index) {
-          drawWord(renderer, fontId, xOffset, yOffset, words[index], focusReadingEnabled, foregroundBlack);
+    if (renderer.isFontCacheScanning()) {
+      // Scan glyphs before metrics are loaded, without measuring or wrapping.
+      // The BW pass prepares horizontal layout in the existing bounded arrays;
+      // subsequent grayscale passes reuse that layout.
+      invalidateLayout();
+      for (uint16_t index = 0; index < wordCount; ++index) {
+        const Word& word = words[index];
+        drawWord(renderer, fontId, xOffset, yOffset, word, focusReadingEnabled, foregroundBlack);
+        const int wordFont = resolvedWordFont(renderer, fontId, word);
+        renderer.drawText(wordFont, xOffset, yOffset, " ", foregroundBlack, word.style, BidiUtils::BidiBaseDir::AUTO,
+                          characterSpacing, word.letterSpacing, word.typography);
+        if (word.insertedHyphenAfter) {
+          renderer.drawText(wordFont, xOffset, yOffset, "-", foregroundBlack, word.style, BidiUtils::BidiBaseDir::AUTO,
+                            characterSpacing, word.letterSpacing, word.typography);
         }
-        // Spaces are measured between words even though they are not drawn.
-        renderer.drawText(fontId, xOffset, yOffset, " ", foregroundBlack, EpdFontFamily::REGULAR,
-                          BidiUtils::BidiBaseDir::AUTO, characterSpacing);
         if (guideReadingEnabled) {
-          renderer.drawText(fontId, xOffset, yOffset, GUIDE_DOT_UTF8, foregroundBlack, EpdFontFamily::REGULAR,
+          renderer.drawText(wordFont, xOffset, yOffset, " \xc2\xb7", foregroundBlack, EpdFontFamily::REGULAR,
                             BidiUtils::BidiBaseDir::AUTO, characterSpacing);
         }
-        return;
       }
+      if (guideReadingEnabled) {
+        renderer.drawText(fontId, xOffset, yOffset, " \xc2\xb7", foregroundBlack, EpdFontFamily::REGULAR,
+                          BidiUtils::BidiBaseDir::AUTO, characterSpacing);
+      }
+      return;
+    }
+    if (layout.fontId != fontId || layout.contentWidth != contentWidth || layout.wordSpacing != wordSpacing ||
+        layout.alignment != paragraphAlignment || layout.focus != focusReadingEnabled ||
+        layout.guide != guideReadingEnabled || layout.spacing != spacing) {
+      layout = {
+          fontId, contentWidth, 0, wordSpacing, paragraphAlignment, spacing, focusReadingEnabled, guideReadingEnabled};
     }
     const float compression = static_cast<float>(lineHeightPercent) / 100.0f;
     int y = firstLineY + yOffset;
@@ -207,9 +222,12 @@ class ReaderPreviewModel {
       uint16_t wordIndex = firstWord;
       bool firstPreviewLine = true;
       int lastLineHeight = 1;
-      prepareMetrics(renderer, fontId, firstWord, paragraphWordEnd, wordSpacing, focusReadingEnabled,
-                     guideReadingEnabled);
-      prepareLineBreaks(firstWord, paragraphWordEnd, availableWidth, previewFirstLineIndent(line, alignment));
+      if (paragraphWordEnd > layout.preparedWords) {
+        prepareMetrics(renderer, fontId, firstWord, paragraphWordEnd, wordSpacing, focusReadingEnabled,
+                       guideReadingEnabled);
+        prepareLineBreaks(firstWord, paragraphWordEnd, availableWidth, previewFirstLineIndent(line, alignment));
+        layout.preparedWords = paragraphWordEnd;
+      }
       while (wordIndex < paragraphWordEnd) {
         const int firstLineIndent = firstPreviewLine ? previewFirstLineIndent(line, alignment) : 0;
         const uint16_t lineEnd = nextBreak[wordIndex];
@@ -222,7 +240,8 @@ class ReaderPreviewModel {
             inkHeight = std::max(inkHeight, renderer.getTextHeight(wordFont));
           }
         }
-        lastLineHeight = epubLineHeightPixels(naturalHeight, compression, line.style.lineHeightMultiplier);
+        lastLineHeight = epubLineHeightPixels(naturalHeight, compression,
+                                              ignorePublisherLineSpacing ? 0 : line.style.lineHeightMultiplier);
         if (bottom != std::numeric_limits<int>::max() && y + inkHeight > bottom) return;
         renderReflowedLine(renderer, fontId, wordIndex, lineEnd, y, availableLeft, availableWidth, firstLineIndent,
                            alignment, lineEnd == paragraphWordEnd, wordSpacing, focusReadingEnabled,
@@ -259,8 +278,23 @@ class ReaderPreviewModel {
 
   bool valid() const { return hasBaseline && lineCount > 0 && wordCount > 0; }
 
+  // Font IDs can be reused after font/profile reloads. Start each preview
+  // update fresh; only its BW and grayscale passes share horizontal layout.
+  void invalidateLayout() const { layout.preparedWords = 0; }
+
  private:
   mutable int8_t characterSpacing = 0;
+  struct LayoutState {
+    int fontId = -1;
+    int contentWidth = 0;
+    uint16_t preparedWords = 0;
+    uint8_t wordSpacing = 0;
+    uint8_t alignment = 0;
+    int8_t spacing = 0;
+    bool focus = false;
+    bool guide = false;
+  };
+  mutable LayoutState layout{};
   struct Word {
     uint16_t textOffset = 0;
     int16_t x = 0;
@@ -652,14 +686,16 @@ class ReaderPreviewModel {
     const auto boldStyle = static_cast<EpdFontFamily::Style>(word.style | EpdFontFamily::BOLD);
     renderer.drawText(fontId, x, y, prefix, foregroundBlack, boldStyle, BidiUtils::BidiBaseDir::AUTO, characterSpacing,
                       word.letterSpacing, word.typography);
-    renderer.drawText(fontId,
-                      x + renderer.getTextAdvanceX(fontId, prefix, boldStyle, firstCodepoint(value + length),
-                                                   characterSpacing, word.letterSpacing, word.typography),
-                      y, value + length, foregroundBlack, word.style, BidiUtils::BidiBaseDir::AUTO, characterSpacing,
-                      word.letterSpacing, word.typography);
+    const int prefixAdvance = renderer.isFontCacheScanning()
+                                  ? 0
+                                  : renderer.getTextAdvanceX(fontId, prefix, boldStyle, firstCodepoint(value + length),
+                                                             characterSpacing, word.letterSpacing, word.typography);
+    renderer.drawText(fontId, x + prefixAdvance, y, value + length, foregroundBlack, word.style,
+                      BidiUtils::BidiBaseDir::AUTO, characterSpacing, word.letterSpacing, word.typography);
   }
 
   void clear() {
+    invalidateLayout();
     if constexpr (KeepSourceBlocks) {
       for (size_t i = 0; i < lineCount; ++i) lines[i].sourceBlock.reset();
       publisherWords.fill(PublisherWord{});

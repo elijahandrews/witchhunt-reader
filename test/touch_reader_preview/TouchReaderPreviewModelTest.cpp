@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <climits>
 #include <memory>
 
 #include "TouchReaderPreviewModel.h"
@@ -23,6 +24,120 @@ std::shared_ptr<TextBlock> makeLine(std::initializer_list<const char*> words, co
 }
 
 }  // namespace
+
+TEST(TouchReaderPreviewModel, PublisherSpacingOverrideCanBeToggledInBothDirections) {
+  for (const float publisherHeight : {0.8f, 1.5f}) {
+    for (const bool sourceIgnored : {false, true}) {
+      Page page;
+      BlockStyle style;
+      style.lineHeightMultiplier = publisherHeight;
+      // Ordinary body lines may omit the stored pixel height. Capture must
+      // use the source setting to distinguish a line from a paragraph gap.
+      const int sourceHeight = sourceIgnored ? 10 : static_cast<int>(10 * publisherHeight);
+      for (int i = 0; i < 3; ++i) {
+        page.elements.push_back(std::make_unique<PageLine>(
+            std::make_shared<TextBlock>(std::vector<TextBlock::Word>{{"aa", 0}, {"bb", 3}}, style), 0,
+            i * sourceHeight));
+      }
+      GfxRenderer renderer;
+      TouchReaderPreviewModel model;
+      ASSERT_TRUE(model.capture(page, renderer, 1, 100, 0, 0, sourceIgnored));
+      for (const bool ignore : {true, false, true}) {
+        renderer.drawCalls.clear();
+        model.renderText(renderer, 1, 0, 0, 5, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true,
+                         INT_MAX, 0, ignore);
+        ASSERT_EQ(renderer.drawCalls.size(), 6u);
+        const int advance = ignore ? 11 : publisherHeight < 1 ? 8 : 16;
+        EXPECT_EQ(renderer.drawCalls[2].y, advance);
+        EXPECT_EQ(renderer.drawCalls[4].y, 2 * advance);
+      }
+      renderer.drawCalls.clear();
+      model.renderText(renderer, 1, 0, 0, 40, 100, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true,
+                       INT_MAX, 0, true);
+      for (const auto& draw : renderer.drawCalls) EXPECT_EQ(draw.y, 0);
+    }
+  }
+}
+
+TEST(TouchReaderPreviewModel, ReusesHorizontalWorkAcrossPassesAndPreparesLaterParagraphs) {
+  Page page;
+  page.elements.push_back(std::make_unique<PageLine>(makeLine({"aa", "bb"}), 0, 0));
+  page.elements.push_back(std::make_unique<PageLine>(makeLine({"cc", "dd"}), 0, 30));
+  GfxRenderer renderer;
+  TouchReaderPreviewModel model;
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  const auto draw = [&](int width, int bottom, int8_t spacing = 0) {
+    model.renderText(renderer, 1, 0, 0, width, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true,
+                     bottom, spacing);
+  };
+  renderer.widthMeasurements = 0;
+  draw(2, 10);  // Stops in paragraph one; paragraph two is not yet prepared.
+  EXPECT_EQ(renderer.widthMeasurements, 2u);
+  renderer.drawCalls.clear();
+  draw(2, INT_MAX);
+  EXPECT_EQ(renderer.widthMeasurements, 4u);
+  const auto expected = renderer.drawCalls;
+  for (int pass = 0; pass < 2; ++pass) {
+    renderer.drawCalls.clear();
+    draw(2, INT_MAX);
+    EXPECT_EQ(renderer.widthMeasurements, 4u);
+    ASSERT_EQ(renderer.drawCalls.size(), expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_EQ(renderer.drawCalls[i].text, expected[i].text);
+      EXPECT_EQ(renderer.drawCalls[i].x, expected[i].x);
+      EXPECT_EQ(renderer.drawCalls[i].y, expected[i].y);
+    }
+  }
+  draw(6, INT_MAX);
+  EXPECT_EQ(renderer.widthMeasurements, 8u);
+  draw(6, INT_MAX, 1);
+  EXPECT_EQ(renderer.widthMeasurements, 12u);
+  model.invalidateLayout();  // Font reload/profile edit with the same font ID.
+  draw(6, INT_MAX, 1);
+  EXPECT_EQ(renderer.widthMeasurements, 16u);
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  renderer.widthMeasurements = 0;
+  draw(6, INT_MAX, 1);
+  EXPECT_EQ(renderer.widthMeasurements, 4u);
+}
+
+TEST(TouchReaderPreviewModel, ScanEnumeratesMixedFontsFocusSpacesAndHyphensWithoutMeasuring) {
+  Page page;
+  BlockStyle style;
+  style.fontSize64 = 768;
+  page.elements.push_back(std::make_unique<PageLine>(
+      std::make_shared<TextBlock>(
+          std::vector<TextBlock::Word>{{"reading", 0, EpdFontFamily::REGULAR, false, false, 768},
+                                       {"long-", 10, EpdFontFamily::ITALIC, true, true, 1536}},
+          style),
+      0, 0));
+  page.elements.push_back(std::make_unique<PageLine>(
+      std::make_shared<TextBlock>(std::vector<TextBlock::Word>{{"word", 0, EpdFontFamily::ITALIC, false, false, 1536}},
+                                  style),
+      0, 10));
+  GfxRenderer renderer;
+  renderer.sizedFonts = true;
+  TouchReaderPreviewModel model;
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  renderer.widthMeasurements = 0;
+  renderer.scanning = true;
+  model.renderText(renderer, 1, 0, 0, 20, 105, 0, 0, true, true, true);
+  EXPECT_EQ(renderer.widthMeasurements, 0u);
+  const auto has = [&](const char* text, int font, EpdFontFamily::Style face) {
+    return std::any_of(renderer.drawCalls.begin(), renderer.drawCalls.end(), [&](const auto& call) {
+      return call.text == text && call.fontId == font && call.style == face;
+    });
+  };
+  EXPECT_TRUE(has("rea", 768, EpdFontFamily::BOLD));
+  EXPECT_TRUE(has("ding", 768, EpdFontFamily::REGULAR));
+  EXPECT_TRUE(has(" ", 1536, EpdFontFamily::ITALIC));
+  EXPECT_TRUE(has("-", 1536, EpdFontFamily::ITALIC));
+  EXPECT_TRUE(has(" \xc2\xb7", 1536, EpdFontFamily::REGULAR));
+  renderer.scanning = false;
+  renderer.drawCalls.clear();
+  model.renderText(renderer, 1, 0, 0, 20, 105, 0, 0, false, false, true);
+  EXPECT_GT(renderer.widthMeasurements, 0u);
+}
 
 TEST(TouchReaderPreviewModel, PublisherLineHeightMatchesPageAfterSpacingChange) {
   for (const float publisherHeight : {0.8f, 1.5f}) {

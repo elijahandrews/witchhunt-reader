@@ -76,7 +76,8 @@ struct ReaderButtonSliderState {
 };
 
 constexpr ReaderButtonSliderAction readerButtonSliderInput(ReaderButtonSliderState& state,
-                                                           const ReaderButtonSliderInput input) {
+                                                           const ReaderButtonSliderInput input,
+                                                           const uint8_t fieldCount = 2) {
   if (input == ReaderButtonSliderInput::Back) {
     if (state.editing) {
       state.editing = false;
@@ -92,7 +93,11 @@ constexpr ReaderButtonSliderAction readerButtonSliderInput(ReaderButtonSliderSta
     return input == ReaderButtonSliderInput::Next ? ReaderButtonSliderAction::Increase
                                                   : ReaderButtonSliderAction::Decrease;
   }
-  state.focus = input == ReaderButtonSliderInput::Next ? 1 : 0;
+  if (input == ReaderButtonSliderInput::Next) {
+    if (state.focus + 1 < fieldCount) ++state.focus;
+  } else if (state.focus > 0) {
+    --state.focus;
+  }
   return ReaderButtonSliderAction::None;
 }
 
@@ -357,6 +362,7 @@ struct ReaderSettingsDraft {
   uint8_t forceParagraphIndents = 0;
   uint8_t embeddedStyle = 0;
   uint8_t ignorePublisherPageMargins = 0;
+  uint8_t ignorePublisherLineSpacing = 0;
   uint8_t publisherFonts = 0;
   uint8_t imageRendering = 0;
   uint8_t imageGrayscale = 1;

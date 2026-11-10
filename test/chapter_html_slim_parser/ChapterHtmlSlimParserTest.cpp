@@ -3367,6 +3367,33 @@ TEST_F(ChapterHtmlSlimParserTest, PercentLineHeightRoundsConsistentlyAtHalfPixel
   EXPECT_EQ(parser.effectiveLineHeight(), 32);
 }
 
+TEST_F(ChapterHtmlSlimParserTest, IgnorePublisherLineSpacingKeepsOtherCssAndAuthoredMultiplier) {
+  renderer.scalableBaseSize = 15;
+  parser.lineCompression = 1.05f;
+  const XML_Char* body[] = {"style", "line-height:1.2; text-indent:1.5em; text-align:left", nullptr};
+  ChapterHtmlSlimParser::startElement(&parser, "body", body);
+  ChapterHtmlSlimParser::startElement(&parser, "p", nullptr);
+  ASSERT_TRUE(parser.currentTextBlock);
+  const auto style = parser.currentTextBlock->getBlockStyle();
+  EXPECT_FLOAT_EQ(style.lineHeightMultiplier, 0.8f);
+  EXPECT_GT(style.textIndent, 0);
+  EXPECT_EQ(parser.effectiveLineHeight(), 25);
+  parser.setIgnorePublisherLineSpacing(true);
+  EXPECT_EQ(parser.effectiveLineHeight(), 32);
+  EXPECT_FLOAT_EQ(parser.currentTextBlock->getBlockStyle().lineHeightMultiplier, 0.8f);
+  EXPECT_EQ(parser.currentTextBlock->getBlockStyle().textIndent, style.textIndent);
+  EXPECT_EQ(parser.currentTextBlock->getBlockStyle().alignment, style.alignment);
+  constexpr char text[] = "One two three four five six";
+  ChapterHtmlSlimParser::characterData(&parser, text, sizeof(text) - 1);
+  ChapterHtmlSlimParser::endElement(&parser, "p");
+  parser.makePages();
+  ASSERT_TRUE(parser.currentPage);
+  ASSERT_FALSE(parser.currentPage->elements.empty());
+  const auto& line = static_cast<PageLine&>(*parser.currentPage->elements.front());
+  EXPECT_EQ(parser.currentPageNextY, line.yPos + 32);
+  EXPECT_FLOAT_EQ(line.getBlock()->getBlockStyle().lineHeightMultiplier, 0.8f);
+}
+
 TEST_F(ChapterHtmlSlimParserTest, RightTextFloatKeepsLabelAndValueOnSameLine) {
   renderer.textAdvancePerChar = 10;
   ChapterHtmlSlimParser::startElement(&parser, "p", nullptr);

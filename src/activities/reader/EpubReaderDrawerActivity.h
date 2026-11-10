@@ -98,7 +98,7 @@ class EpubReaderDrawerActivity final : public Activity {
  private:
   using RowId = ReaderDrawerCatalogItem;
 
-  using UiApp = freeink::ui::FreeInkApp<48, 11>;
+  using UiApp = freeink::ui::FreeInkApp<48, 12>;
   static constexpr freeink::ui::ActionId ACTION_ROW = 1;
   static constexpr freeink::ui::ActionId ACTION_TAB = 2;
   static constexpr freeink::ui::ActionId ACTION_DISMISS = 3;
@@ -110,6 +110,7 @@ class EpubReaderDrawerActivity final : public Activity {
   // ACTION_STEP + 3); the keypad grid's digit/dot/OK keys share one action.
   static constexpr freeink::ui::ActionId ACTION_KEYPAD_KEY = 10;
   static constexpr freeink::ui::ActionId ACTION_KEYPAD_BACKSPACE = 11;
+  static constexpr freeink::ui::ActionId ACTION_IGNORE_LINE_SPACING = 12;
   static constexpr size_t WINDOW_SIZE = 20;
 
   std::shared_ptr<Epub> epub;
@@ -227,6 +228,7 @@ class EpubReaderDrawerActivity final : public Activity {
   static void onBackEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onSliderEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onStepEvent(const freeink::ui::ActionEvent& event, void* user);
+  static void onIgnoreLineSpacingEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onConfirmEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onKeypadKeyEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onKeypadBackspaceEvent(const freeink::ui::ActionEvent& event, void* user);

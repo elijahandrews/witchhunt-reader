@@ -76,6 +76,7 @@ class EpubReaderActivity final : public Activity {
     uint8_t paragraphAlignment = 0;
     uint8_t embeddedStyle = 1;
     uint8_t ignorePublisherPageMargins = 0;
+    uint8_t ignorePublisherLineSpacing = 0;
     uint8_t publisherFonts = 0;
     uint8_t hyphenationEnabled = 0;
     uint8_t textAntiAliasing = 1;

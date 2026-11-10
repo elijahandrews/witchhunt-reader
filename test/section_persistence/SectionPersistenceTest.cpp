@@ -23,7 +23,7 @@ extern uint32_t testHyphenationIdentity;
 extern std::vector<BookMetadataCache::TocEntry> testTocEntries;
 
 namespace {
-constexpr uint8_t kFullVersion = 110;
+constexpr uint8_t kFullVersion = 111;
 constexpr uint8_t kPreRoundingFullVersion = 100;
 constexpr uint8_t kPreRoundingPartialVersion = 0xD5;
 constexpr uint8_t kStablePageFullVersion = 99;
@@ -35,7 +35,7 @@ constexpr uint8_t kPreImageAlignmentPartialVersion = 0xCF;
 constexpr uint8_t kPreFieldsetFullVersion = 93;
 constexpr uint8_t kPreFieldsetPartialVersion = 0xCE;
 constexpr uint8_t kS3BitmapFullVersion = 90;
-constexpr uint8_t kPartialVersion = 0xDF;
+constexpr uint8_t kPartialVersion = 0xE0;
 constexpr uint8_t kS3BitmapPartialVersion = 0xCB;
 constexpr uint8_t kC3BitmapFullVersion = 89;
 constexpr uint8_t kC3BitmapPartialVersion = 0xCA;
@@ -125,6 +125,29 @@ class SectionPersistenceTest : public testing::Test {
   }
 };
 
+TEST_F(SectionPersistenceTest, PublisherLineSpacingOverrideInvalidatesFullAndPartialCaches) {
+  for (const auto version : {kFullVersion, kPartialVersion}) {
+    for (const bool ignored : {false, true}) {
+      Storage.reset();
+      SectionHarness harness;
+      harness.spec.ignorePublisherLineSpacing = ignored;
+      harness.begin();
+      harness.appendPages(2);
+      ASSERT_TRUE(harness.commit(version));
+      harness.finishSuccessfulCommit();
+      {
+        Section matching(harness.epub, 0, harness.renderer);
+        ASSERT_TRUE(matching.loadSectionFile(harness.spec));
+      }
+      auto changed = harness.spec;
+      changed.ignorePublisherLineSpacing = !ignored;
+      EXPECT_NE(readerRenderSpecSignature(changed), readerRenderSpecSignature(harness.spec));
+      Section stale(harness.epub, 0, harness.renderer);
+      EXPECT_FALSE(stale.loadSectionFile(changed));
+    }
+  }
+}
+
 TEST_F(SectionPersistenceTest, FullCommitReopensAndResolvesMetadataAcrossAChunkBoundary) {
   SectionHarness harness;
   harness.begin({{"chapter", 0}, {"boundary", 64}});
@@ -198,7 +221,11 @@ TEST_F(SectionPersistenceTest, FailedCommitKeepsThePreviousReadableCache) {
 }
 
 TEST_F(SectionPersistenceTest, RejectsCachesFromPreviousLayoutRevisions) {
-  for (const uint8_t staleVersion : {uint8_t{109}, uint8_t{0xDE}, uint8_t{104},
+  for (const uint8_t staleVersion : {uint8_t{110},
+                                     uint8_t{0xDF},
+                                     uint8_t{109},
+                                     uint8_t{0xDE},
+                                     uint8_t{104},
                                      uint8_t{0xD9},
                                      uint8_t{103},
                                      uint8_t{0xD8},

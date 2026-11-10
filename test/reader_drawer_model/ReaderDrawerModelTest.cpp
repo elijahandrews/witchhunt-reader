@@ -260,6 +260,23 @@ TEST(ReaderDrawerModel, AntiAliasingOnlyRunsWhenTheReaderPreviewWasRedrawn) {
   EXPECT_FALSE(shouldRenderReaderDrawerAntiAliasing(true, true, false));
 }
 
+TEST(ReaderDrawerModel, SpacingPaneCanFocusItsThirdControlWithoutChangingOtherPanes) {
+  ReaderButtonSliderState state;
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Next, 3);
+  EXPECT_EQ(state.focus, 1);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Next, 3);
+  EXPECT_EQ(state.focus, 2);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Next, 3);
+  EXPECT_EQ(state.focus, 2);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Previous, 3);
+  EXPECT_EQ(state.focus, 1);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Previous, 3);
+  EXPECT_EQ(state.focus, 0);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Next);
+  readerButtonSliderInput(state, ReaderButtonSliderInput::Next);
+  EXPECT_EQ(state.focus, 1);
+}
+
 TEST(ReaderDrawerModel, TouchModeDoesNotRenderPhysicalButtonFocus) {
   EXPECT_FALSE(isReaderDrawerRowFocused(false, 0, 0));
   EXPECT_EQ(readerDrawerFocusedWindowIndex(false, 7, 5), -1);

@@ -22,10 +22,12 @@ class GfxRenderer {
   mutable std::vector<DrawCall> drawCalls;
   int spaceWidth = 1;
   bool sizedFonts = false;
+  bool scanning = false;
+  mutable unsigned widthMeasurements = 0;
   uint16_t getFontPointSize64(int id) const { return sizedFonts ? id==1?768:id==2?832:id : 0; }
   int resolveBookFont64(int id, uint32_t, uint16_t points = 0, uint8_t = 0) const { return sizedFonts && points ? points : id; }
 
-  bool isFontCacheScanning() const { return false; }
+  bool isFontCacheScanning() const { return scanning; }
 
   int getFontAscenderSize(int id) const { return sizedFonts ? (getFontPointSize64(id)*8+384)/768 : 8; }
   int getLineHeight(int id) const { return sizedFonts ? (getFontPointSize64(id)*10+384)/768 : 10; }
@@ -35,6 +37,7 @@ class GfxRenderer {
   int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style, int8_t = 0, int16_t = 0, uint8_t = 0) const { return 0; }
 
   int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style) const {
+    ++widthMeasurements;
     return static_cast<int>(std::string(text).size()) * (sizedFonts ? getFontPointSize64(fontId)>1400?2:1 : fontId == 2 ? 2 : 1);
   }
 
