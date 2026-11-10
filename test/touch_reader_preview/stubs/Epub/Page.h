@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -12,6 +13,10 @@
 enum class CssTextAlign : uint8_t { Justify = 0, Left = 1, Center = 2, Right = 3, None = 4 };
 
 struct BlockStyle {
+  float lineHeightMultiplier = 0;
+  uint16_t lineHeight = 0;
+  uint16_t fontSize64 = 0;
+  uint8_t fontSize = 0;
   CssTextAlign alignment = CssTextAlign::Justify;
   int16_t marginLeft = 0;
   int16_t marginRight = 0;
@@ -33,6 +38,7 @@ class TextBlock {
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
     bool endsWithInsertedHyphen = false;
     bool hasSpaceBefore = false;
+    uint16_t points64 = 0;
   };
 
   explicit TextBlock(std::vector<Word> words, BlockStyle style = {}) : words(std::move(words)), style(style) {}
@@ -43,6 +49,22 @@ class TextBlock {
   }
 
   int8_t getCharacterSpacing() const { return 0; }
+  int16_t wordLetterSpacing(uint16_t) const { return 0; }
+  uint8_t wordTypography(uint16_t) const { return 0; }
+  uint32_t wordFontFamily(uint16_t) const { return 0; }
+  int wordFontId(const GfxRenderer& renderer, int id, uint16_t i) const {
+    return renderer.resolveBookFont64(id, 0, words[i].points64 ? words[i].points64 : style.fontSize64);
+  }
+  int resolvedFontId(const GfxRenderer& renderer, int id) const {
+    return renderer.resolveBookFont64(id, 0, style.fontSize64 ? style.fontSize64 : style.fontSize * 64);
+  }
+  int maxLineHeight(const GfxRenderer& renderer, int id) const {
+    int height = renderer.getLineHeight(resolvedFontId(renderer, id));
+    for (uint16_t i = 0; i < words.size(); ++i) height = std::max(height, renderer.getLineHeight(wordFontId(renderer, id, i)));
+    return height;
+  }
+  int maxAscender(const GfxRenderer& renderer, int id) const { return renderer.getFontAscenderSize(id); }
+  int getRubyShift(int) const { return 0; }
   uint16_t wordCount() const { return static_cast<uint16_t>(words.size()); }
   const char* wordText(uint16_t index) const { return words[index].text.c_str(); }
   uint16_t wordTextLen(uint16_t index) const { return static_cast<uint16_t>(words[index].text.size()); }

@@ -2,6 +2,13 @@
 
 ### Added
 
+- Restore Witch Hunt publisher-font fallback stacks, variable-font selection, exact content sizes, monospace variants, small caps and optional ligatures in CrossInk's native reader.
+- Preserve chapter-local styles, publisher whitespace and hyphenation rules, gray backgrounds, bounded background pictures and keep-together groups.
+- Render bounded SVG illustrations and full progressive JPEGs; recognize image formats from their contents and prepare upcoming image caches while the current page is displayed.
+- Keep EPUB reading positions tied to original source text through layout changes, and expose Go back in the reader footer after a jump.
+
+- Replay local Witch Hunt improvements onto the native CrossInk UI: HD cpfont support and font-quality refinements, measured X4 Pro single-pass text antialiasing, Pluto library downloads, isolated legacy reading-state import, publisher page-margin control and font-size gesture feedback. See `docs/cross-ink-fork.md` for the port map and validation status.
+
 - BOOX Picco Support
 - Discover and upload static `.otf` fonts on ESP32-S3 readers, including OpenType CFF fonts and CFF files named `.ttf`, from SD or the Fonts web upload. Variable fonts and font collections remain unsupported (CrossPoint #3646, #3717).
 - Assign Select Chapter to shortcuts, Quick Actions, or touch gestures to open the chapter list directly in EPUB and XTC books.
@@ -49,6 +56,13 @@
 - Show the publisher’s body font as a disabled Font Family value in the in-book Reader Font menu when "Publisher Font" is set to "All Text"; keep the normal picker available when the body uses the reader font.
 
 ### Fixed
+
+- Keep the EPUB line-spacing preview consistent with the page after closing the reader menu, including publisher CSS, cached pages and percentage rounding.
+
+- Keep EPUB searches responsive when a chapter contains many repeated matches, so cancellation can be handled between small batches.
+- Reserve the complete settings catalog, including persisted tilt preferences and publisher-margin controls, without an unnecessary vector growth allocation.
+
+- Restore read/write access for newly created cache files so EPUB pages can be displayed while a chapter is still being laid out.
 
 - Keep font upload and delete feedback visible while scrolling on the web portal, including mobile, and prevent older notification timers from hiding newer messages (adapted from CrossPoint #3984).
 - Keep web dialogs open when a text-selection drag ends outside the dialog, while preserving backdrop clicks and upload-in-progress protection (adapted from Crestwave, CrossPoint #3931).

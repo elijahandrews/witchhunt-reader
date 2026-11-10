@@ -17,7 +17,8 @@ enum class NetworkMode {
   SYNC_BOOKS,
   SYNC_READING_STATS,
   SYNC_CLIPPINGS,
-  OPDS_BROWSER
+  OPDS_BROWSER,
+  PLUTO_BOOK_SYNC
 };
 
 /**

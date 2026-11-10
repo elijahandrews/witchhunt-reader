@@ -10,6 +10,7 @@
 
 #include "Epub/FootnoteEntry.h"
 #include "Epub/Page.h"
+#include "Epub/SourceAnchor.h"
 #include "Epub/blocks/BlockStyle.h"
 
 class GfxRenderer;
@@ -37,8 +38,11 @@ class CompactTableLayout final {
   bool beginRow();
   bool beginCell(bool isHeader, uint8_t colSpan, uint32_t visibleTextOffset, const BlockStyle& style);
   bool appendWord(std::string_view text, EpdFontFamily::Style style, bool attachToPrevious, bool backgroundBlack,
-                  uint8_t linkId);
+                  uint8_t linkId, const SourceWordSpan& source = {}, const uint16_t* sourceOffsets = nullptr,
+                  size_t sourceOffsetCount = 0);
   bool endCell(const std::vector<std::pair<int, FootnoteEntry>>& footnotes);
+  bool setCellImage(std::shared_ptr<ImageBlock> image, uint32_t source);
+  bool hasCellImage() const { return cellActive_ && cellCount_ && cells_[cellCount_ - 1].image != nullptr; }
   void markUnsupported() { unsupported_ = true; }
   bool unsupported() const { return unsupported_; }
   bool flattened() const { return flattened_; }
@@ -56,6 +60,8 @@ class CompactTableLayout final {
 
  private:
   struct Token {
+    SourceWordSpan source;
+    uint16_t sourceMapOffset = UINT16_MAX;
     uint16_t offset = 0;
     uint16_t length = 0;
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
@@ -70,9 +76,12 @@ class CompactTableLayout final {
     bool isHeader = false;
     uint32_t visibleTextOffset = 0;
     BlockStyle style;
+    std::shared_ptr<ImageBlock> image;
+    uint32_t imageSource = UINT32_MAX;
   };
 
   struct LineToken {
+    uint16_t tokenIndex = 0;
     uint16_t offset = 0;
     uint16_t length = 0;
     uint16_t width = 0;
@@ -97,6 +106,11 @@ class CompactTableLayout final {
   BlockStyle tableStyle_;
 
   std::unique_ptr<char[]> buffer_;
+  // Only non-identity transforms need a map; reuse this bounded fallible buffer
+  // across rows, never a second full table model. Max 8 KiB for a 4 KiB row.
+  std::unique_ptr<uint16_t[]> sourceMap_;
+  uint16_t sourceMapCapacity_ = 0;
+  uint16_t sourceMapUsed_ = 0;
   uint16_t bufferCapacity_ = 0;
   uint16_t bufferUsed_ = 0;
   std::array<Token, MAX_ROW_TOKENS> tokens_{};
@@ -123,13 +137,16 @@ class CompactTableLayout final {
   uint8_t fragmentColumnCount_ = 0;
 
   bool ensureBuffer(size_t additionalBytes);
+  bool appendSourceMap(const uint16_t* offsets, size_t count, uint16_t& start);
+  SourceWordSpan sourceForLineToken(const LineToken& line) const;
   uint16_t tableWidth() const;
   uint16_t innerWidthForSpan(uint8_t columns, uint8_t startColumn, uint8_t span) const;
   int gapBefore(const LineToken& previous, uint16_t offset, EpdFontFamily::Style style, bool attached) const;
   uint16_t measure(uint16_t offset, uint16_t length, EpdFontFamily::Style style);
   bool appendLineToken(std::array<LineToken, MAX_ROW_TOKENS>& line, uint16_t& lineCount, uint16_t& lineWidth,
-                       uint16_t maxWidth, uint16_t offset, uint16_t length, EpdFontFamily::Style style, uint8_t flags,
-                       bool attachToPrevious, bool& emittedAny, const BlockStyle& cellStyle, TableFragmentCell& output);
+                       uint16_t maxWidth, uint16_t tokenIndex, uint16_t offset, uint16_t length,
+                       EpdFontFamily::Style style, uint8_t flags, bool attachToPrevious, bool& emittedAny,
+                       const BlockStyle& cellStyle, TableFragmentCell& output);
   bool emitLine(std::array<LineToken, MAX_ROW_TOKENS>& line, uint16_t lineCount, uint16_t lineWidth, uint16_t maxWidth,
                 const BlockStyle& style, TableFragmentCell& output);
   bool wrapCell(const Cell& cell, uint16_t maxWidth, TableFragmentCell& output);

@@ -21,7 +21,17 @@ struct RenderConfig {
   bool useExactDimensions = false;      // If true, use maxWidth/maxHeight as exact output size (no recalculation)
   const uint8_t* sourceData = nullptr;  // borrowed only for this decode
   size_t sourceSize = 0;
-  std::string cachePath;  // If non-empty, decoder will write pixel cache to this path
+  std::string cachePath;   // If non-empty, decoder will write pixel cache to this path
+  bool cacheOnly = false;  // Populate all PXC pixels without changing the framebuffer.
+  bool (*shouldCancel)(void*) = nullptr;
+  void* cancelContext = nullptr;
+  bool* cancellationObserved = nullptr;  // Optional caller-owned latch, initially false.
+  bool cancelled() const {
+    if (cancellationObserved && *cancellationObserved) return true;
+    if (!shouldCancel || !shouldCancel(cancelContext)) return false;
+    if (cancellationObserved) *cancellationObserved = true;
+    return true;
+  }
 };
 
 class ImageToFramebufferDecoder {

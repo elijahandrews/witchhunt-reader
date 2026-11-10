@@ -113,3 +113,8 @@ TEST(PreviewBlockLocatorTest, ChunkSizeDoesNotAffectResult) {
 }
 
 }  // namespace
+
+TEST(PreviewBlockLocatorTest, BareVoidTagsKeepTheRenderingElementOrdinals) {
+  const std::string html = "<html><head><meta name='x'><link href='a'></head><body><p>before<br>after <img src='a'><span id='note'/></p></body></html>";
+  for (size_t chunk : {1u, 3u, 64u}) EXPECT_EQ(locate(html, "note", chunk), 6u);
+}

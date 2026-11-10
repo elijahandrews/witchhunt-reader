@@ -2,6 +2,7 @@
 #include <HalStorage.h>
 #include <Memory.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
@@ -15,8 +16,17 @@ class ImageBlock final : public Block {
   const std::string& getImagePath() const { return imagePath; }
   int16_t getWidth() const { return width; }
   int16_t getHeight() const { return height; }
+  std::unique_ptr<ImageBlock> fittedTo(int maximumWidth, int maximumHeight) const {
+    if (width <= 0 || height <= 0 || maximumWidth <= 0 || maximumHeight <= 0) return nullptr;
+    const float scale = std::min({1.0f, float(maximumWidth) / width, float(maximumHeight) / height});
+    return makeUniqueNoThrow<ImageBlock>(imagePath, sourcePath, std::max(1, int(width * scale)),
+                                         std::max(1, int(height * scale)));
+  }
 
   void prepareCache() const;
+  enum class CacheWarmResult : uint8_t { Ready, Unavailable, Cancelled };
+  CacheWarmResult warmCache(GfxRenderer& renderer, int x, int y, bool (*shouldCancel)(void*) = nullptr,
+                            void* cancelContext = nullptr) const;
   bool hasValidCache() const;
   bool needsDecode() const;
   void renderPlaceholder(GfxRenderer& renderer, int x, int y, bool foregroundBlack) const;

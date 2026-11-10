@@ -39,7 +39,7 @@ class SdCardFont {
   SdCardFont& operator=(SdCardFont&&) = delete;
 
   // Load .cpfont file: reads header + intervals into RAM, records file layout offsets.
-  // Supports v4 (multi-style) format.
+  // Supports v4 plus density-2 v5/v6 files; native CrossInk downloads remain v4.
   // Returns true on success.
   // A nonzero ceiling is for optional C3 content sizes: includes this object,
   // conservative interval/ligature residency, and one reusable 4KB bitmap.
@@ -100,6 +100,10 @@ class SdCardFont {
   uint8_t resolveStyleMask(uint8_t styleMask) const;
 
   // Number of styles present in this font file.
+  uint8_t rasterDensity() const { return rasterDensity_; }
+  // Borrow the original density-2 source for one final-grid CSS resample.
+  // Pixels use the existing bounded HD scratch and expire on the next read.
+  bool readHdGlyph(uint32_t codepoint, uint8_t style, EpdGlyph& raw, const uint8_t*& pixels, bool readPixels);
   uint8_t styleCount() const { return styleCount_; }
 
   // Returns true if the glyph pointer points into the overflow buffer.
@@ -156,6 +160,10 @@ class SdCardFont {
     uint32_t kernMatrixFileOffset = 0;
     uint32_t ligatureFileOffset = 0;
     uint32_t bitmapFileOffset = 0;
+    uint32_t capsOffset = 0;
+    uint32_t capsGlyphOffset = 0, capsKernOffset = 0, capsBitmapOffset = 0, capsBitmapBytes = 0;
+    uint32_t capsKernCount = 0;
+    uint16_t smcpCount = 0, c2scCount = 0, capsGlyphCount = 0;
 
     // RAM lookup: compact sorted BMP prefix, then full-width suffix (on-disk records stay 12 bytes).
     EpdUnicodeInterval* fullIntervals = nullptr;
@@ -242,6 +250,7 @@ class SdCardFont {
     uint8_t miniKernLeftClassCount = 0;
     uint8_t miniKernRightClassCount = 0;
     int8_t* miniKernMatrix = nullptr;
+    int16_t* miniKernMatrixWide = nullptr;
     uint16_t miniKernLeftCapacity = 0;
     uint16_t miniKernRightCapacity = 0;
     uint32_t miniKernMatrixCapacity = 0;
@@ -262,6 +271,9 @@ class SdCardFont {
   static constexpr size_t CONTENT_BITMAP_BYTES = 4096;
   std::unique_ptr<uint8_t[]> contentBitmap_;
   bool leanContent_ = false;
+  uint8_t rasterDensity_ = 1;
+  HeapByteBuffer hdScratch_;
+  size_t hdScratchBytes_ = 0;
   char filePath_[128] = {};
 
   // Overflow context: glyphMissHandler needs to know which style it's serving
@@ -340,7 +352,14 @@ class SdCardFont {
   // Global helpers
   void freeAll();
   void clearOverflow();
-  static void computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset);
+  void computeStyleFileOffsets(PerStyle& s, uint32_t baseOffset);
+
+  bool validateHdFeatures(class HalFile& file, PerStyle& s);
+  uint32_t glyphFileOffset(const PerStyle& s, uint32_t index) const;
+  bool adaptGlyph(EpdGlyph& glyph) const;
+  bool readBitmap(class HalFile& file, EpdGlyph& glyph, uint8_t* destination);
+  static uint32_t onSmallCaps(void* ctx, uint32_t cp, bool all);
+  static int16_t onAlternateKerning(void* ctx, uint32_t left, uint32_t right);
 
   // Static callback for EpdFontData::glyphMissHandler (per-style via OverflowContext)
   static const EpdGlyph* onGlyphMiss(void* ctx, uint32_t codepoint);

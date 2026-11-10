@@ -32,6 +32,8 @@ struct SectionBuildOptions {
   uint32_t referenceUnitCount = 0;
   bool referenceUnitsAreCharacters = false;
   uint16_t* resolvedReferencePage = nullptr;
+  uint32_t sourceTarget = UINT32_MAX;
+  uint16_t sourceTargetCharacter = 0;
 
   bool isPreview() const { return previewAnchor && previewAnchor[0] != '\0' && previewMaxPages > 0; }
   bool isCancellationRequested() const { return shouldCancel && shouldCancel(cancelContext); }
@@ -73,6 +75,8 @@ class Section {
   // allocation. Incremental builds use BuildContext::pageWriteBuffer instead.
   uint8_t* fullBuildPageWriteBuffer_ = nullptr;
   bool buildComplete_ = false;
+  std::optional<uint32_t> sourceTargetVisibleOffset_;
+  std::optional<uint16_t> sourceTargetPage_;
   bool lastImagesWereSuppressed_ = false;
   bool lastLayoutAbortedForLowMemory_ = false;
   uint16_t imageEstimateViewportHeight_ = 0;
@@ -90,9 +94,12 @@ class Section {
 
   uint32_t baseLayoutSignature_ = 0;
   bool publisherFontsEnabled_ = false;
-  uint32_t publisherFontFaces_ = 0;
+  uint64_t publisherFontFaces_ = 0;
+  uint32_t buildFontFailureEpoch_ = 0;
+  bool prepareLayoutRetryMarker(bool& retry, bool stylesNeedRetry) const;
+  void finishLayoutRetryMarker(bool retry) const;
   uint32_t publisherFaceSignature_ = 0;
-  uint32_t publisherLoadedFaces_ = 0;
+  uint64_t publisherLoadedFaces_ = 0;
   bool writePublisherFontState();
   bool writeSectionFileHeader(const ReaderRenderSpec& spec);
   uint32_t onPageComplete(std::unique_ptr<Page> page);
@@ -214,6 +221,10 @@ class Section {
   // Content coordinate recorded at the start of each rendered page. Available
   // for finalized sections and the readable prefix of incremental sections.
   std::optional<uint32_t> getVisibleTextOffsetForPage(uint16_t page) const;
+  std::optional<SourceAnchor> getSourceAnchorForPage(uint16_t page) const;
+  std::optional<uint16_t> getPageForSourceAnchor(SourceAnchor target) const;
+  std::optional<uint16_t> getSourceTargetPage() const { return sourceTargetPage_; }
+  std::optional<uint32_t> getSourceTargetVisibleOffset() const { return sourceTargetVisibleOffset_; }
   std::optional<uint32_t> getReferenceTextOffsetForPage(uint16_t page, uint32_t& textLength) const;
   std::optional<uint16_t> getPageForVisibleTextOffset(uint32_t offset, bool preferFirstAtOffset = false) const;
 };

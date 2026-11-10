@@ -12,9 +12,12 @@
 class HalFile : public Print {
   std::string contents_;
   size_t offset_ = 0;
+  std::string* sink_ = nullptr;
 
  public:
+  void setWriteSink(std::string* sink) { sink_ = sink; contents_.clear(); offset_ = 0; }
   void setContents(std::string contents) {
+    sink_ = nullptr;
     contents_ = std::move(contents);
     offset_ = 0;
   }
@@ -33,11 +36,17 @@ class HalFile : public Print {
     return true;
   }
   bool seekSet(size_t offset) { return seek(offset); }
-  bool close() { return true; }
+  bool close() { sync(); sink_ = nullptr; return true; }
+  bool sync() { if (sink_) *sink_ = contents_; return true; }
   bool isOpen() const { return false; }
-  operator bool() const { return !contents_.empty(); }
-  size_t write(uint8_t) override { return 0; }
-  size_t write(const uint8_t*, size_t) { return 0; }
+  operator bool() const { return sink_ || !contents_.empty(); }
+  size_t write(uint8_t byte) override { return write(&byte, 1); }
+  size_t write(const uint8_t* bytes, size_t count) {
+    if (offset_ + count > contents_.size()) contents_.resize(offset_ + count);
+    std::memcpy(contents_.data() + offset_, bytes, count);
+    offset_ += count;
+    return count;
+  }
 };
 
 using FsFile = HalFile;
@@ -55,10 +64,15 @@ class HalStorage {
     file.setContents(it->second);
     return true;
   }
-  bool openFileForWrite(const char*, const std::string&, HalFile&) { return false; }
-  bool remove(const char*) { return false; }
-  bool exists(const char*) const { return false; }
-  bool rename(const char*, const char*) { return false; }
+  bool openFileForWrite(const char*, const std::string& path, HalFile& file) {
+    file.setWriteSink(&files[path]); return true;
+  }
+  bool remove(const char* path) { return files.erase(path) != 0; }
+  bool exists(const char* path) const { return files.count(path); }
+  bool rename(const char* from, const char* to) {
+    auto it = files.find(from); if (it == files.end()) return false;
+    files[to] = std::move(it->second); files.erase(it); return true;
+  }
 };
 
 #define Storage HalStorage::getInstance()

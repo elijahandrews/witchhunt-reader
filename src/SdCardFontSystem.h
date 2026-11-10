@@ -138,6 +138,7 @@ class SdCardFontSystem {
  private:
   void persistSettingsChange() const;
 
+  GfxRenderer* renderer_ = nullptr;
   SdCardFontRegistry registry_;
   SdCardFontManager manager_;
   std::atomic<bool> registryDirty_{false};

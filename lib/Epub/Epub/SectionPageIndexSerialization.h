@@ -51,3 +51,17 @@ bool writeSectionPageIndex(FsFile& file, const SectionPageIndex& index, AnchorMa
   }
   return true;
 }
+
+// One fixed 14-byte record per page after referenceTextLength. Explicit fields
+// avoid host/firmware padding differences. No per-word cache allocation.
+inline constexpr uint32_t SECTION_SOURCE_RECORD_BYTES = 14;
+inline bool writeSectionSourceIndex(FsFile& file, const SectionPageIndex& index) {
+  for (size_t i = 0; i < index.size(); ++i) {
+    const auto& entry = index[i];
+    if (!serialization::tryWritePod(file, entry.sourceAnchor.sourceOffset) ||
+        !serialization::tryWritePod(file, entry.sourceAnchor.characterOffset) ||
+        !serialization::tryWritePod(file, entry.sourceRange.first) ||
+        !serialization::tryWritePod(file, entry.sourceRange.end)) return false;
+  }
+  return true;
+}

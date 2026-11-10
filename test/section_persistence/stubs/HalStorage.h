@@ -51,6 +51,7 @@ class HalFile : public Print {
     return true;
   }
   bool seekSet(const size_t position) { return seek(position); }
+  bool seekCur(const size_t distance) { return seek(cursor_ + distance); }
 
   size_t write(const uint8_t value) override { return write(&value, 1); }
   size_t write(const uint8_t* input, const size_t length) override {

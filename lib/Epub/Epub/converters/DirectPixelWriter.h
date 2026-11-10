@@ -37,8 +37,8 @@ struct DirectPixelWriter {
   // Row-precomputed: the Y-dependent portion of the physical coords
   int rowPhyXBase, rowPhyYBase;
 
-  void init(GfxRenderer& renderer, const bool imageGrayscale = true) {
-    fb = renderer.getWriteTarget();
+  void init(GfxRenderer& renderer, const bool imageGrayscale = true, const bool cacheOnly = false) {
+    fb = cacheOnly ? nullptr : renderer.getWriteTarget();
     originY = renderer.getWriteOriginY();
     clipRows = renderer.getWriteRows();
     mode = renderer.getRenderMode();
@@ -111,6 +111,7 @@ struct DirectPixelWriter {
   // Must be called after beginRow() for the current row.
   // No bounds checking — caller guarantees coordinates are valid.
   inline void writePixel(int logicalX, uint8_t pixelValue) const {
+    if (!fb) return;
     // Determine whether to draw based on render mode
     bool draw;
     bool state;

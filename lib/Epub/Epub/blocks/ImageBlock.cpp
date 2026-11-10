@@ -154,6 +154,16 @@ void rememberImageFailure(const std::string& path) {
   failedImageHashes[failedImageCount++] = imagePathHash(path);
 }
 
+void forgetImageFailure(const std::string& path) {
+  const uint64_t hash = imagePathHash(path);
+  for (size_t i = 0; i < failedImageCount; ++i) {
+    if (failedImageHashes[i] == hash) {
+      failedImageHashes[i] = failedImageHashes[--failedImageCount];
+      return;
+    }
+  }
+}
+
 void clearRetainedPxcEntry(RetainedPxcEntry& entry) {
   retainedPxcCapacity -= entry.capacity;
   entry.pixels.reset();
@@ -449,6 +459,50 @@ void ImageBlock::prepareCache() const {
   }
 }
 
+ImageBlock::CacheWarmResult ImageBlock::warmCache(GfxRenderer& renderer, int x, int y, bool (*shouldCancel)(void*),
+                                                  void* cancelContext) const {
+  bool cancelled = false;
+  RenderConfig config;
+  config.cacheOnly = true;
+  config.shouldCancel = shouldCancel;
+  config.cancelContext = cancelContext;
+  config.cancellationObserved = &cancelled;
+  const auto unavailable = [&] {
+    return config.cancelled() ? CacheWarmResult::Cancelled : CacheWarmResult::Unavailable;
+  };
+  const auto ready = [&] {
+    forgetImageFailure(imagePath);
+    return CacheWarmResult::Ready;
+  };
+  if (config.cancelled()) return CacheWarmResult::Cancelled;
+  if (hasValidCache()) return ready();
+  if (width <= 0 || height <= 0) return CacheWarmResult::Unavailable;
+  const std::string cache = getCachePath(imagePath);
+  invalidateRetainedPxcPath(cache);
+  if (!sourcePath.empty()) {
+    if (seedCacheFn && seedCacheFn(extractContext, sourcePath.c_str(), width, height, cache.c_str())) {
+      if (config.cancelled()) return CacheWarmResult::Cancelled;
+      if (hasValidCache()) return ready();
+    }
+    if (config.cancelled()) return CacheWarmResult::Cancelled;
+    if (!Storage.exists(imagePath.c_str()) &&
+        (!extractFn || !extractFn(extractContext, sourcePath.c_str(), imagePath.c_str())))
+      return unavailable();
+  }
+  if (config.cancelled()) return CacheWarmResult::Cancelled;
+  auto* decoder = ImageDecoderFactory::getDecoder(imagePath);
+  if (!decoder) return unavailable();
+  config.x = x;
+  config.y = y;
+  config.maxWidth = width;
+  config.maxHeight = height;
+  config.useExactDimensions = true;
+  config.cachePath = cache;
+  if (!decoder->decodeToFramebuffer(imagePath, renderer, config)) return unavailable();
+  if (config.cancelled()) return CacheWarmResult::Cancelled;
+  return hasValidCache() ? ready() : CacheWarmResult::Unavailable;
+}
+
 bool ImageBlock::needsDecode() const { return !imageFailedThisSession(imagePath) && !hasValidCache(); }
 
 void ImageBlock::clearSessionRenderFailures() {
@@ -530,8 +584,17 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y, const b
   HeapByteBuffer source;
   size_t sourceSize = 0;
   if (!sourcePath.empty() && !Storage.exists(imagePath.c_str())) {
-    if (loadFn && ImageDecoderFactory::supportsMemorySource(imagePath))
-      source = loadFn(extractContext, sourcePath.c_str(), sourceSize);
+    if (loadFn && psramHeapAvailable()) source = loadFn(extractContext, sourcePath.c_str(), sourceSize);
+    // Admission follows the bytes: a GIF/SVG named .png still needs a file,
+    // while a JPEG/PNG without an extension can use the native memory path.
+    if (source) {
+      const auto format = ImageFormatDetector::detect(source.get(), sourceSize);
+      if (!ImageDecoderFactory::supportsMemorySource(format) ||
+          (format == ImageFormatDetector::Format::Jpeg && !ImageFormatDetector::isBaselineJpeg(source.get(), sourceSize))) {
+        source.reset();
+        sourceSize = 0;
+      }
+    }
     if (!source && extractFn && !extractFn(extractContext, sourcePath.c_str(), imagePath.c_str())) {
       LOG_ERR("IMG", "Image extraction failed: %s", sourcePath.c_str());
       rememberImageFailure(imagePath);
@@ -570,7 +633,8 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y, const b
     config.cachePath = cachePath;  // Enable caching during decode
   }
 
-  ImageToFramebufferDecoder* decoder = ImageDecoderFactory::getDecoder(imagePath);
+  ImageToFramebufferDecoder* decoder =
+      source ? ImageDecoderFactory::getDecoder(source.get(), sourceSize) : ImageDecoderFactory::getDecoder(imagePath);
   if (!decoder) {
     LOG_ERR("IMG", "No decoder found for image: %s", imagePath.c_str());
     rememberImageFailure(imagePath);

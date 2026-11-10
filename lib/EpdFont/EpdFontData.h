@@ -2,6 +2,7 @@
 // https://github.com/vroland/epdiy/blob/c61e9e923ce2418150d54f88cea5d196cdc40c54/src/epd_internals.h
 
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 /// Font metrics use "fixed-point 4" (4 fractional bits, i.e. 1/16-pixel
@@ -127,16 +128,29 @@ constexpr int raiseAboveBase(const Anchor anchor, const int markTop, const int m
 ///   kernMatrix:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
 /// Both share 4 fractional bits so they combine directly in an accumulator.
 
-/// Font data stored PER GLYPH
-typedef struct {
-  uint8_t width;        ///< Bitmap dimensions in pixels
-  uint8_t height;       ///< Bitmap dimensions in pixels
-  uint16_t advanceX;    ///< Distance to advance cursor (x axis), 12.4 fixed-point in pixels
-  int16_t left;         ///< X dist from cursor pos to UL corner
-  int16_t top;          ///< Y dist from cursor pos to UL corner
-  uint16_t dataLength;  ///< Size of the font data.
-  uint32_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
-} EpdGlyph;
+/// Font data stored PER GLYPH. The two historic disk-padding bytes remain at
+/// offsets 10/11. Native caches use one as a 1/32-pixel advance remainder;
+/// cpfont v5/v6 decode them as dimension high bytes before normalization.
+struct EpdGlyph {
+  uint8_t width = 0, height = 0;
+  uint16_t advanceX = 0;
+  int16_t left = 0, top = 0;
+  uint16_t dataLength = 0;
+  uint8_t advanceRemainder = 0, reserved = 0;
+  uint32_t dataOffset = 0;
+  constexpr EpdGlyph() = default;
+  constexpr EpdGlyph(uint8_t w, uint8_t h, uint16_t advance, int16_t l, int16_t t, uint16_t bytes, uint32_t offset)
+      : width(w), height(h), advanceX(advance), left(l), top(t), dataLength(bytes), dataOffset(offset) {}
+};
+static_assert(sizeof(EpdGlyph) == 16 && offsetof(EpdGlyph, dataOffset) == 12);
+namespace fp5 {
+inline int32_t advance(const EpdGlyph& glyph) { return int32_t(glyph.advanceX) * 2 + glyph.advanceRemainder; }
+inline int toPixel(int32_t value) { return (value + 16) >> 5; }
+inline int toFp4(int32_t value) {
+  const int lower = value >= 0 ? value / 2 : -((-value + 1) / 2);
+  return lower + ((value - lower * 2) && (lower & 1));
+}
+}  // namespace fp5
 
 /// Compressed font group: a DEFLATE-compressed block of glyph bitmaps
 typedef struct {
@@ -231,14 +245,29 @@ typedef struct EpdFontData {
   // before the next bitmap request. These are null for legacy bitmap fonts.
   const EpdGlyph* (*dynamicGlyphHandler)(void*, uint32_t) = nullptr;
   const uint8_t* (*bitmapHandler)(void*, const EpdGlyph*) = nullptr;
+  // Optional final-grid outline raster. Phase is signed sixteenths of a pixel;
+  // borrowed pixels are consumed before the next request. Failure uses the
+  // ordinary bitmap exactly once, without a second differently phased attempt.
+  bool (*rasterHandler)(void*, uint32_t, int8_t, EpdGlyph&, const uint8_t*&) = nullptr;
+  // Final-size outline path for synthetic small caps and SUP/SUB; scale is 1/64.
+  bool (*scaledRasterHandler)(void*, uint32_t, uint8_t, int8_t, EpdGlyph&, const uint8_t*&) = nullptr;
   int8_t (*kerningHandler)(void*, uint32_t, uint32_t) = nullptr;
+  int16_t (*kerning32Handler)(void*, uint32_t, uint32_t) = nullptr;
   uint32_t (*ligatureHandler)(void*, uint32_t, uint32_t) = nullptr;
+  // Bounded outline shaping: longest supported sequence wins without requiring an intermediate pair.
+  uint32_t (*ligatureSequenceHandler)(void*, const uint32_t*, unsigned) = nullptr;
 #endif
 #if CROSSINK_SCALABLE_FONTS
   // Non-owning identity shared by all sizes of one scalable face.
   const void* sizeFamily = nullptr;
   uint8_t pointSize = 0;
+  uint16_t pointSize64 = 0;
 #endif
+  // Optional HD bitmap features. Existing generated font aggregates leave these null.
+  bool fractionalAdvances = false;
+  const int16_t* kernMatrixWide = nullptr;  // HD files retain their 1/32-pixel pair precision.
+  uint32_t (*smallCapsHandler)(void*, uint32_t, bool) = nullptr;
+  int16_t (*alternateKerningHandler)(void*, uint32_t, uint32_t) = nullptr;
 } EpdFontData;
 
 namespace syntheticGlyph {

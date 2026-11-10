@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "EpdFontFamily.h"
+#include "Epub/SourceAnchor.h"
 #include "Epub/blocks/BlockStyle.h"
 
 class TextBlock {
@@ -24,5 +25,12 @@ class TextBlock {
             int8_t = 0)
       : words(words), xPositions(xPositions), styles(styles), style(style) {}
 
+  SourceAnchor anchor;
+  bool probeMatched = false;
+  void noteSource(SourceWordSpan source) {
+    if (!source.valid()) return;
+    if (!anchor.valid()) anchor = {source.start, source.characterOffset};
+    probeMatched |= source.probeByte != UINT16_MAX;
+  }
   bool valid() const { return true; }
 };

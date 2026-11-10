@@ -12,3 +12,5 @@ target_link_libraries(DictionaryWordPartsTest PRIVATE
 )
 
 gtest_discover_tests(DictionaryWordPartsTest)
+
+add_test(NAME DictionaryWordTracking COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_word_tracking.py)

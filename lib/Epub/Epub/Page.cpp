@@ -1,5 +1,6 @@
 #include "Page.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -7,12 +8,13 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include "PublisherBoxPaint.h"
 #include "tables/TableColumnLayout.h"
 #include "tables/TableTextLineOrder.h"
 
 namespace {
 
-constexpr uint16_t MAX_PAGE_ELEMENTS = 1024;
+constexpr uint16_t MAX_PAGE_ELEMENTS = Page::MAX_ELEMENTS;
 constexpr uint8_t MAX_TABLE_ROWS_PER_FRAGMENT = 64;
 constexpr uint8_t MAX_TABLE_CELLS_PER_ROW = 8;
 constexpr uint8_t MAX_TABLE_LINES_PER_CELL = 64;
@@ -36,40 +38,6 @@ void renderFilteredPageElements(const std::vector<std::unique_ptr<PageElement>>&
       element->render(renderer, fontId, xOffset, yOffset, foregroundBlack);
     }
   }
-}
-
-// Draws one border edge as a strip along a box side.
-void drawBorderEdge(const GfxRenderer& renderer, const int x, const int y, const int length, const CssBorderSide& side,
-                    const bool horizontal, const bool foregroundBlack) {
-  const int thickness = side.width;
-  const auto strip = [&](const int offset, const int along, const int span, const int depth) {
-    if (horizontal) {
-      renderer.fillRect(x + along, y + offset, span, depth, foregroundBlack);
-    } else {
-      renderer.fillRect(x + offset, y + along, depth, span, foregroundBlack);
-    }
-  };
-  switch (side.style) {
-    case CssBorderStyle::Double:
-      if (thickness >= 3) {
-        const int line = std::max(1, thickness / 3);
-        strip(0, 0, length, line);
-        strip(thickness - line, 0, length, line);
-        return;
-      }
-      break;
-    case CssBorderStyle::Dotted:
-    case CssBorderStyle::Dashed: {
-      const int dash = side.style == CssBorderStyle::Dotted ? thickness : std::max(3, thickness * 3);
-      const int gap = side.style == CssBorderStyle::Dotted ? std::max(2, thickness) : std::max(2, thickness * 2);
-      for (int along = 0; along < length; along += dash + gap)
-        strip(0, along, std::min(dash, length - along), thickness);
-      return;
-    }
-    default:
-      break;
-  }
-  strip(0, 0, length, thickness);
 }
 
 }  // namespace
@@ -294,24 +262,23 @@ std::unique_ptr<PageDropCap> PageDropCap::deserialize(FsFile& file) {
   return dropCap;
 }
 
+bool PageBorderBox::paintsPixel(int localX, int localY, int screenX, int screenY, bool& dark) const {
+  return publisherBox::pixel(localX, localY, width, height, screenX, screenY, backgroundGray, shaded, sides, dark);
+}
+
 void PageBorderBox::render(GfxRenderer& renderer, const int, const int xOffset, const int yOffset,
                            const bool foregroundBlack) {
-  const int x = xPos + xOffset;
-  const int y = yPos + yOffset;
-  if (renderer.getRenderMode() != GfxRenderer::BW) return;
-  if (shaded) {
-    for (int row = 0; row < height; ++row)
-      for (int col = row & 1; col < width; col += 2)
-        if ((row & 1) == 0) renderer.drawPixel(x + col, y + row, foregroundBlack);
-  }
-  const CssBorderSide& top = sides[0];
-  const CssBorderSide& right = sides[1];
-  const CssBorderSide& bottom = sides[2];
-  const CssBorderSide& left = sides[3];
-  if (top.visible()) drawBorderEdge(renderer, x, y, width, top, true, foregroundBlack);
-  if (bottom.visible()) drawBorderEdge(renderer, x, y + height - bottom.width, width, bottom, true, foregroundBlack);
-  if (left.visible()) drawBorderEdge(renderer, x, y, height, left, false, foregroundBlack);
-  if (right.visible()) drawBorderEdge(renderer, x + width - right.width, y, height, right, false, foregroundBlack);
+  const auto* fonts = renderer.getFontCacheManager();
+  if ((fonts && fonts->isScanning()) || renderer.getRenderMode() != GfxRenderer::BW) return;
+  const int x = xPos + xOffset, y = yPos + yOffset;
+  const int left = std::max(0, -x), right = std::min<int>(width, renderer.getScreenWidth() - x);
+  const int top = std::max(0, -y), bottom = std::min<int>(height, renderer.getScreenHeight() - y);
+  for (int row = top; row < bottom; ++row)
+    for (int col = left; col < right; ++col) {
+      bool dark = false;
+      if (paintsPixel(col, row, x + col, y + row, dark))
+        renderer.drawPixel(x + col, y + row, dark ? foregroundBlack : !foregroundBlack);
+    }
 }
 
 bool PageBorderBox::serialize(Print& file) {
@@ -345,7 +312,7 @@ bool PageBorderBox::serialize(Print& file) {
     LOG_ERR("PGE", "Truncated decoration write");
     return false;
   }
-  return true;
+  return serialization::tryWritePod(file, backgroundGray) && serialization::tryWritePod(file, backgroundLayer);
 }
 
 std::unique_ptr<PageBorderBox> PageBorderBox::deserialize(FsFile& file) {
@@ -391,12 +358,22 @@ std::unique_ptr<PageBorderBox> PageBorderBox::deserialize(FsFile& file) {
     LOG_ERR("PGE", "Truncated decoration read");
     return nullptr;
   }
+  uint16_t gray = 256;
+  uint8_t layer = 0;
+  if (!serialization::tryReadPod(file, gray) || !serialization::tryReadPod(file, layer) ||
+      gray > publisherBox::Transparent || layer > publisherBox::MaxLayer || width > 4096 || height > 4096) {
+    LOG_ERR("PGE", "Invalid publisher box background");
+    return nullptr;
+  }
   if (width == 0 || height == 0) {
     LOG_ERR("PGE", "Deserialization failed: empty border box");
     return nullptr;
   }
   auto box = makeUniqueNoThrow<PageBorderBox>(width, height, sides, shaded, xPos, yPos);
-  if (!box) LOG_ERR("PGE", "Deserialization failed: could not allocate PageBorderBox");
+  if (!box)
+    LOG_ERR("PGE", "Deserialization failed: could not allocate PageBorderBox");
+  else
+    box->configureBackground(gray, layer);
   return box;
 }
 
@@ -418,7 +395,9 @@ bool TableFragmentCell::serialize(Print& file) const {
       return false;
     }
   }
-  return true;
+  const uint8_t hasImage = image ? 1 : 0;
+  return serialization::tryWritePod(file, hasImage) &&
+         (!image || (serialization::tryWritePod(file, imageSource) && image->serialize(file)));
 }
 
 bool TableFragmentCell::deserialize(FsFile& file, TableFragmentCell& outCell) {
@@ -443,6 +422,15 @@ bool TableFragmentCell::deserialize(FsFile& file, TableFragmentCell& outCell) {
       return false;
     }
     outCell.lines.push_back(std::move(line));
+  }
+  uint8_t hasImage = 0;
+  outCell.image.reset();
+  outCell.imageSource = UINT32_MAX;
+  if (!serialization::tryReadPod(file, hasImage) || hasImage > 1) return false;
+  if (hasImage) {
+    if (!serialization::tryReadPod(file, outCell.imageSource)) return false;
+    outCell.image = ImageBlock::deserialize(file);
+    if (!outCell.image) return false;
   }
   return true;
 }
@@ -581,6 +569,76 @@ void PageTableFragment::render(GfxRenderer& renderer, const int fontId, const in
   }
 }
 
+bool Page::forEachImage(const PageImageVisitor visitor, void* context, bool* invalidGeometry) const {
+  if (invalidGeometry) *invalidGeometry = false;
+  if (!visitor) return false;
+  for (const auto& element : elements) {
+    if (element->getTag() == TAG_PageImage) {
+      auto& image = static_cast<PageImage&>(*element);
+      if (!visitor({&image.getImageBlock(), image.xPos, image.yPos, image.isInlineImage()}, context)) return false;
+    } else if (element->getTag() == TAG_PageTableFragment) {
+      const auto& table = static_cast<const PageTableFragment&>(*element);
+      int y = table.yPos;
+      for (const auto& row : table.rows) {
+        uint8_t column = 0;
+        for (const auto& cell : row.cells) {
+          if (column >= table.columnCount) break;
+          const auto span = std::min<uint8_t>(std::max<uint8_t>(1, cell.colSpan), table.columnCount - column);
+          if (cell.image) {
+            const int width =
+                TableColumnLayout::innerWidth(table.width, table.columnCount, column, span, table.cellPadding);
+            const int x = table.xPos + TableColumnLayout::columnStart(table.width, table.columnCount, column) +
+                          table.cellPadding + std::max(0, (width - cell.image->getWidth()) / 2);
+            const int imageY = y + table.cellPadding + cell.lines.size() * table.lineHeight;
+            if (cell.image->getWidth() <= 0 || cell.image->getHeight() <= 0 || cell.image->getWidth() > width ||
+                imageY + cell.image->getHeight() > y + row.height - table.cellPadding) {
+              LOG_ERR("PTB", "Skipping invalid table image geometry");
+              if (invalidGeometry) *invalidGeometry = true;
+            } else if (!visitor({cell.image.get(), x, imageY, true, true}, context))
+              return false;
+          }
+          column += span;
+        }
+        y += row.height;
+      }
+    }
+  }
+  return true;
+}
+
+bool Page::hasImages() const {
+  return !forEachImage([](const PageImagePlacement&, void*) { return false; }, nullptr);
+}
+
+bool Page::hasImagesNeedingDecode() const {
+  return !forEachImage([](const PageImagePlacement& image, void*) { return !image.block->needsDecode(); }, nullptr);
+}
+
+bool Page::getImageBoundingBox(int16_t& outX, int16_t& outY, int16_t& outW, int16_t& outH) const {
+  struct Bounds {
+    int x = INT16_MAX, y = INT16_MAX, right = INT16_MIN, bottom = INT16_MIN;
+    bool found = false;
+  } bounds;
+  forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        auto& b = *static_cast<Bounds*>(context);
+        b.found = true;
+        b.x = std::min(b.x, image.x);
+        b.y = std::min(b.y, image.y);
+        b.right = std::max(b.right, image.x + image.block->getWidth());
+        b.bottom = std::max(b.bottom, image.y + image.block->getHeight());
+        return true;
+      },
+      &bounds);
+  if (bounds.found) {
+    outX = std::clamp(bounds.x, int(INT16_MIN), int(INT16_MAX));
+    outY = std::clamp(bounds.y, int(INT16_MIN), int(INT16_MAX));
+    outW = std::clamp(bounds.right - bounds.x, 0, int(INT16_MAX));
+    outH = std::clamp(bounds.bottom - bounds.y, 0, int(INT16_MAX));
+  }
+  return bounds.found;
+}
+
 bool Page::forEachTextLine(const PageTextLineVisitor visitor, void* context) const {
   if (!visitor) return false;
 
@@ -698,6 +756,20 @@ std::unique_ptr<PageTableFragment> PageTableFragment::deserialize(FsFile& file) 
     if (!TableFragmentRow::deserialize(file, row)) {
       return nullptr;
     }
+    uint8_t column = 0;
+    for (const auto& cell : row.cells) {
+      const auto span = std::min<uint8_t>(cell.colSpan, columnCount > column ? columnCount - column : 0);
+      if (cell.image) {
+        const int innerWidth = TableColumnLayout::innerWidth(width, columnCount, column, span, cellPadding);
+        const uint32_t contentHeight =
+            cell.lines.size() * uint32_t(lineHeight) + cell.image->getHeight() + cellPadding * 2;
+        if (!span || cell.image->getWidth() <= 0 || cell.image->getHeight() <= 0 ||
+            cell.image->getWidth() > innerWidth || cell.image->getHeight() > TableFragmentCell::MAX_IMAGE_HEIGHT ||
+            contentHeight > row.height)
+          return nullptr;
+      }
+      column += span;
+    }
     rows.push_back(std::move(row));
   }
 
@@ -716,40 +788,142 @@ void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, co
   renderImages(renderer, fontId, xOffset, yOffset, foregroundBlack, imageGrayscale);
 }
 
+namespace {
+// Recompose background ink into a 128-byte row tile. Inner white boxes mask
+// parent shading; clearing gray selectors under solid ink keeps text AA from
+// lightening it. No second framebuffer or page-sized mask is retained.
+void finalizePublisherBackgrounds(const Page& page, GfxRenderer& renderer, int xOffset, int yOffset) {
+  const auto* fonts = renderer.getFontCacheManager();
+  if (renderer.getRenderMode() == GfxRenderer::BW || (fonts && fonts->isScanning())) return;
+  int firstY = renderer.getScreenHeight(), lastY = 0;
+  int firstX = renderer.getScreenWidth(), lastX = 0;
+  uint8_t lastLayer = 0;
+  for (const auto& element : page.elements)
+    if (element->getTag() == TAG_PageBorderBox) {
+      const auto& box = static_cast<const PageBorderBox&>(*element);
+      firstY = std::min(firstY, std::max(0, box.yPos + yOffset));
+      lastY = std::max(lastY, std::min(renderer.getScreenHeight(), box.yPos + yOffset + box.getHeight()));
+      firstX = std::min(firstX, std::max(0, box.xPos + xOffset));
+      lastX = std::max(lastX, std::min(renderer.getScreenWidth(), box.xPos + xOffset + box.getWidth()));
+      lastLayer = std::max(lastLayer, box.paintLayer());
+    }
+  // Gray passes often target a small physical strip. Limit compositing to its
+  // logical bounds instead of redoing every box pixel for every strip.
+  if (renderer.isStripTargetActive()) {
+    const int start = renderer.getWriteOriginY(), end = start + renderer.getWriteRows();
+    const int height = renderer.getDisplayHeight();
+    switch (renderer.getOrientation()) {
+      case GfxRenderer::LandscapeCounterClockwise:
+        firstY = std::max(firstY, start);
+        lastY = std::min(lastY, end);
+        break;
+      case GfxRenderer::LandscapeClockwise:
+        firstY = std::max(firstY, height - end);
+        lastY = std::min(lastY, height - start);
+        break;
+      case GfxRenderer::Portrait:
+        firstX = std::max(firstX, height - end);
+        lastX = std::min(lastX, height - start);
+        break;
+      case GfxRenderer::PortraitInverted:
+        firstX = std::max(firstX, start);
+        lastX = std::min(lastX, end);
+        break;
+    }
+  }
+  uint8_t row[128];
+  for (int y = firstY; y < lastY; ++y) {
+    for (int start = firstX; start < lastX; start += 1024) {
+      const int end = std::min(lastX, start + 1024);
+      std::memset(row, 0, sizeof(row));
+      for (uint8_t layer = 0; layer <= lastLayer; ++layer) {
+        for (const auto& element : page.elements) {
+          if (element->getTag() != TAG_PageBorderBox) continue;
+          const auto& box = static_cast<const PageBorderBox&>(*element);
+          const int x = box.xPos + xOffset, boxY = box.yPos + yOffset;
+          if (box.paintLayer() != layer || y < boxY || y >= boxY + box.getHeight()) continue;
+          for (int pixel = std::max(start, x); pixel < std::min<int>(end, x + box.getWidth()); ++pixel) {
+            bool dark = false;
+            if (!box.paintsPixel(pixel - x, y - boxY, pixel, y, dark)) continue;
+            const int bit = pixel - start;
+            const uint8_t mask = 1u << (bit & 7);
+            if (dark)
+              row[bit / 8] |= mask;
+            else
+              row[bit / 8] &= static_cast<uint8_t>(~mask);
+          }
+        }
+      }
+      for (int pixel = start; pixel < end; ++pixel)
+        if (row[(pixel - start) / 8] & (1u << ((pixel - start) & 7))) renderer.drawPixel(pixel, y, true);
+    }
+  }
+  // Images are opaque, even when their gray overlay is disabled by the reader.
+  struct Clear {
+    GfxRenderer& renderer;
+    int x, y;
+  } clear{renderer, xOffset, yOffset};
+  page.forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        auto& c = *static_cast<Clear*>(context);
+        c.renderer.fillRect(image.x + c.x, image.y + c.y, image.block->getWidth(), image.block->getHeight(), true);
+        return true;
+      },
+      &clear);
+}
+}  // namespace
+
 void Page::renderText(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                       const bool foregroundBlack) const {
-  renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, foregroundBlack,
-                             [](const PageElement& element) { return element.getTag() == TAG_PageBorderBox; });
+  for (uint8_t layer = 0; layer <= publisherBox::MaxLayer; ++layer)
+    renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, foregroundBlack,
+                               [layer](const PageElement& element) {
+                                 return element.getTag() == TAG_PageBorderBox &&
+                                        static_cast<const PageBorderBox&>(element).paintLayer() == layer;
+                               });
   renderFilteredPageElements(elements, renderer, fontId, xOffset, yOffset, foregroundBlack,
                              [](const PageElement& element) {
                                return element.getTag() != TAG_PageImage && element.getTag() != TAG_PageBorderBox;
                              });
+  finalizePublisherBackgrounds(*this, renderer, xOffset, yOffset);
 }
 
 void Page::renderImages(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                         const bool foregroundBlack, const bool imageGrayscale) const {
-  for (const auto& element : elements) {
-    if (element->getTag() == TAG_PageImage) {
-      static_cast<PageImage&>(*element).render(renderer, fontId, xOffset, yOffset, foregroundBlack, imageGrayscale);
-    }
-  }
+  (void)fontId;
+  struct Draw {
+    GfxRenderer& renderer;
+    int x, y;
+    bool foreground, gray;
+  } draw{renderer, xOffset, yOffset, foregroundBlack, imageGrayscale};
+  forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        auto& d = *static_cast<Draw*>(context);
+        image.block->render(d.renderer, image.x + d.x, image.y + d.y, d.foreground, d.gray);
+        return true;
+      },
+      &draw);
 }
 
 void Page::renderWithImagePlaceholders(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                                        const bool foregroundBlack, const bool renderCachedImages,
                                        const bool imageGrayscale) const {
   renderText(renderer, fontId, xOffset, yOffset, foregroundBlack);
-  for (const auto& element : elements) {
-    if (element->getTag() != TAG_PageImage) {
-      continue;
-    }
-    auto& pageImage = static_cast<PageImage&>(*element);
-    if (!renderCachedImages || pageImage.getImageBlock().needsDecode()) {
-      pageImage.renderPlaceholder(renderer, xOffset, yOffset, foregroundBlack);
-    } else {
-      pageImage.render(renderer, fontId, xOffset, yOffset, foregroundBlack, imageGrayscale);
-    }
-  }
+  struct Draw {
+    GfxRenderer& renderer;
+    int x, y;
+    bool foreground, cached, gray;
+  } draw{renderer, xOffset, yOffset, foregroundBlack, renderCachedImages, imageGrayscale};
+  forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        auto& d = *static_cast<Draw*>(context);
+        if (!d.cached || image.block->needsDecode())
+          image.block->renderPlaceholder(d.renderer, image.x + d.x, image.y + d.y, d.foreground);
+        else
+          image.block->render(d.renderer, image.x + d.x, image.y + d.y, d.foreground, d.gray);
+        return true;
+      },
+      &draw);
 }
 
 uint16_t Page::imageEstimateUnits(const uint16_t viewportWidth, const uint16_t viewportHeight) const {
@@ -793,6 +967,22 @@ uint16_t Page::imageEstimateUnits(const uint16_t viewportWidth, const uint16_t v
     }
   }
 
+  struct TableArea {
+    bool& hasImage;
+    uint64_t& area;
+    uint16_t width, height;
+  } tableArea{hasImage, imageArea, viewportWidth, viewportHeight};
+  forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        if (!image.inTable) return true;
+        auto& area = *static_cast<TableArea*>(context);
+        area.hasImage = true;
+        const int visibleHeight =
+            std::max(0, std::min<int>(area.height, image.y + image.block->getHeight()) - std::max(0, image.y));
+        area.area += uint64_t(visibleHeight) * std::clamp<int>(image.block->getWidth(), 0, area.width);
+        return true;
+      },
+      &tableArea);
   if (!hasImage) return 0;
   if ((!hasReadableContent && hasBlockImage) || viewportWidth == 0 || viewportHeight == 0)
     return PageCountEstimator::kUnitsPerPage;
@@ -970,9 +1160,42 @@ std::unique_ptr<Page> Page::deserialize(FsFile& file) {
 }
 
 void Page::prepareImageCaches() const {
-  for (const auto& element : elements) {
-    if (element->getTag() == TAG_PageImage) {
-      static_cast<const PageImage&>(*element).getImageBlock().prepareCache();
-    }
-  }
+  forEachImage(
+      [](const PageImagePlacement& image, void*) {
+        image.block->prepareCache();
+        return true;
+      },
+      nullptr);
+}
+
+ImageBlock::CacheWarmResult Page::warmImageCaches(GfxRenderer& renderer, const int xOffset, const int yOffset,
+                                                  bool (*shouldCancel)(void*), void* context,
+                                                  bool* cacheChanged) const {
+  if (cacheChanged) *cacheChanged = false;
+  struct Warm {
+    GfxRenderer& renderer;
+    int x, y;
+    bool (*cancel)(void*);
+    void* context;
+    bool* changed;
+    ImageBlock::CacheWarmResult result = ImageBlock::CacheWarmResult::Ready;
+  } warm{renderer, xOffset, yOffset, shouldCancel, context, cacheChanged};
+  bool invalidGeometry = false;
+  forEachImage(
+      [](const PageImagePlacement& image, void* context) {
+        auto& w = *static_cast<Warm*>(context);
+        if (w.cancel && w.cancel(w.context)) {
+          w.result = ImageBlock::CacheWarmResult::Cancelled;
+          return false;
+        }
+        const bool existed = !w.changed || image.block->hasValidCache();
+        const auto result = image.block->warmCache(w.renderer, image.x + w.x, image.y + w.y, w.cancel, w.context);
+        if (w.changed && !existed && result == ImageBlock::CacheWarmResult::Ready) *w.changed = true;
+        if (result != ImageBlock::CacheWarmResult::Ready) w.result = result;
+        return result != ImageBlock::CacheWarmResult::Cancelled;
+      },
+      &warm, &invalidGeometry);
+  if (invalidGeometry && warm.result != ImageBlock::CacheWarmResult::Cancelled)
+    return ImageBlock::CacheWarmResult::Unavailable;
+  return warm.result;
 }

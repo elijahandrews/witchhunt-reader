@@ -5,6 +5,7 @@
 #include <utility>
 
 inline int failReadCall = -1, readCalls = 0, openFiles = 0;
+inline bool failNextClose = false;
 inline unsigned long millis() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
       .count();
@@ -25,12 +26,13 @@ class HalFile {
     if (file_) ++openFiles;
     return file_;
   }
-  void close() {
-    if (file_) {
-      std::fclose(file_);
-      --openFiles;
-    }
+  bool close() {
+    if (!file_) return true;
+    const bool ok = std::fclose(file_) == 0;
+    --openFiles;
     file_ = nullptr;
+    const bool injected = std::exchange(failNextClose, false);
+    return ok && !injected;
   }
   size_t fileSize() const {
     if (!file_) return 0;

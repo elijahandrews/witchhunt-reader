@@ -54,6 +54,7 @@ class EpubReaderDrawerActivity final : public Activity {
 
   // Button menu only: shown under the book title. Set before the activity starts.
   void setChapterTitle(std::string title) { chapterTitle = std::move(title); }
+  void setCanGoBack(bool available) { canGoBack = available; }
 #if CROSSINK_SCALABLE_FONTS
   using PublisherBodyFontProbe = uint32_t (*)(void* context);
   void setPublisherBodyFontProbe(PublisherBodyFontProbe probe, void* context) {
@@ -152,6 +153,7 @@ class EpubReaderDrawerActivity final : public Activity {
   bool percentConfirmLongPressFired = false;
   int percentBeforeKeypad = 0;
   bool hasFootnotes = false;
+  bool canGoBack = false;
   bool hasDictionary = false;
   bool hasBookmarks = false;
   bool hasClippings = false;

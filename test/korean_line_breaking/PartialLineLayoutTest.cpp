@@ -228,3 +228,40 @@ TEST(PartialLineLayout, BoundedLinesKeepRubyAndPunctuationGroupsTogether) {
     }
   }
 }
+
+TEST(PartialLineLayout, FirstLineTypographyResetsAfterPhysicalLineAndPartialFlush) {
+  GfxRenderer renderer; renderer.preciseTypography=true;
+  BlockStyle style; style.textIndentDefined=true; style.alignment=CssTextAlign::Left;
+  style.firstLinePoints64=1536; style.firstLineStyleMask=EpdFontFamily::ITALIC;
+  style.firstLineStyle=EpdFontFamily::ITALIC; style.firstLineTypographyMask=fontTypography::AllSmallCaps|fontTypography::NoLigatures;
+  style.firstLineTypography=fontTypography::AllSmallCaps|fontTypography::NoLigatures;
+  style.firstLineLetterSpacingDefined=true; style.firstLineLetterSpacing=8;
+  ParsedText text(false,false,false,false,false,0,style);
+  for(unsigned i=0;i<8;++i) text.addWord("aa",EpdFontFamily::REGULAR,false,false,false,0,0,0,0,false,0,0,0,nullptr,0,768,0);
+  std::vector<std::shared_ptr<TextBlock>> lines;
+  const auto emit=[&](std::shared_ptr<TextBlock> block,uint32_t,uint32_t){lines.push_back(std::move(block));};
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer,768,70,emit,true,1));
+  ASSERT_EQ(lines.size(),1u); ASSERT_EQ(lines[0]->wordCount(),2); EXPECT_TRUE(text.isContinuation());
+  for(unsigned i=0;i<lines[0]->wordCount();++i) {
+    EXPECT_EQ(lines[0]->wordFontSize64(i),1536); EXPECT_EQ(lines[0]->wordStyle(i),EpdFontFamily::ITALIC);
+    EXPECT_EQ(lines[0]->wordTypography(i),fontTypography::AllSmallCaps|fontTypography::NoLigatures); EXPECT_EQ(lines[0]->wordLetterSpacing(i),8);
+  }
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer,768,70,emit)); ASSERT_GT(lines.size(),1u);
+  EXPECT_EQ(lines[1]->wordCount(),3);
+  for(size_t line=1;line<lines.size();++line) for(unsigned i=0;i<lines[line]->wordCount();++i) {
+    EXPECT_EQ(lines[line]->wordFontSize64(i),768); EXPECT_EQ(lines[line]->wordStyle(i),EpdFontFamily::REGULAR);
+    EXPECT_EQ(lines[line]->wordTypography(i),0); EXPECT_EQ(lines[line]->wordLetterSpacing(i),0);
+  }
+}
+TEST(PartialLineLayout, ExactMetadataFollowsCjkSplitsAndCachedLines) {
+  GfxRenderer renderer; BlockStyle style;style.textIndentDefined=true;
+  ParsedText text(false,false,true,false,false,0,style);
+  text.addWord("甲乙丙丁戊己庚辛",EpdFontFamily::ITALIC,false,false,false,0,0,0,0,false,0,0,3,nullptr,0,717,fontTypography::NoLigatures);
+  std::vector<std::shared_ptr<TextBlock>> lines;
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer,0,24,[&](std::shared_ptr<TextBlock> line,uint32_t,uint32_t){lines.push_back(std::move(line));}));
+  ASSERT_GT(lines.size(),1u);
+  for(const auto& line:lines)for(unsigned i=0;i<line->wordCount();++i) {
+    EXPECT_EQ(line->wordFontSize64(i),717);EXPECT_EQ(line->wordTypography(i),fontTypography::NoLigatures);
+    EXPECT_EQ(line->wordLetterSpacing(i),3);
+  }
+}

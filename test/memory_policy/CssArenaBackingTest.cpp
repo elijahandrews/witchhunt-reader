@@ -235,7 +235,7 @@ TEST_F(CssArenaBackingTest, PublisherFacesShareTheRulesCacheAndDetectTruncation)
   ASSERT_TRUE(CssParser::loadFontFaces("book", faces));
   ASSERT_EQ(faces.size(), 1u);
   EXPECT_EQ(faces[0].family, CssParser::hashFontFamily("Body"));
-  EXPECT_EQ(faces[0].href, "EPUB/css/../font.ttf");
+  EXPECT_EQ(faces[0].href, "EPUB/font.ttf");
   EXPECT_TRUE(faces[0].bold);
   EXPECT_TRUE(css.loadFromCache());
   Storage.data("book/css_rules.cache").bytes.pop_back();

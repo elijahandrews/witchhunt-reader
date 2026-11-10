@@ -1,0 +1,1 @@
+{"name":"SaxParser","version":"1.0.0","build":{"srcFilter":["+<SaxParserYxml.cpp>"],"includeDir":"."},"dependencies":{"Yxml":"*"}}

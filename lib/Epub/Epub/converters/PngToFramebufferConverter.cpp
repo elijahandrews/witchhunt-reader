@@ -35,6 +35,7 @@ struct PngContext {
   int lastDstY{-1};  // Track last rendered destination Y to avoid duplicates
 
   PixelCache cache;
+  bool cancelled = false;
   bool caching{false};
 
   uint8_t* grayLineBuffer{nullptr};
@@ -208,6 +209,10 @@ void convertLineToGray(const uint8_t* pPixels, uint8_t* grayLine, int width, int
 int pngDrawCallback(PNGDRAW* pDraw) {
   PngContext* ctx = reinterpret_cast<PngContext*>(pDraw->pUser);
   if (!ctx || !ctx->config || !ctx->renderer || !ctx->grayLineBuffer) return 0;
+  if (ctx->config->cancelled()) {
+    ctx->cancelled = true;
+    return 0;
+  }
 
   ImageToFramebufferDecoder::yieldDuringDecode(ctx->lastYieldMs);
 
@@ -241,12 +246,16 @@ int pngDrawCallback(PNGDRAW* pDraw) {
 
   // Pre-compute orientation and render-mode state once per callback.
   DirectPixelWriter pw;
-  pw.init(*ctx->renderer, ctx->config->useGrayscale);
+  pw.init(*ctx->renderer, ctx->config->useGrayscale, ctx->config->cacheOnly);
 
   for (int dstY = firstDstY; dstY < endDstY; dstY++) {
+    if (ctx->config->cancelled()) {
+      ctx->cancelled = true;
+      return 0;
+    }
     ctx->lastDstY = dstY;
     int outY = ctx->config->y + dstY;
-    if (outY >= ctx->screenHeight) continue;
+    if (!ctx->config->cacheOnly && (outY < 0 || outY >= ctx->screenHeight)) continue;
 
     pw.beginRow(outY);
 
@@ -266,12 +275,14 @@ int pngDrawCallback(PNGDRAW* pDraw) {
       }
     }
 
+    if (ctx->config->cacheOnly && !caching) return 0;
+
     int srcX = 0;
     int error = 0;
 
     for (int dstX = 0; dstX < dstWidth; dstX++) {
       int outX = outXBase + dstX;
-      if (outX >= 0 && outX < screenWidth) {
+      if (ctx->config->cacheOnly || (outX >= 0 && outX < screenWidth)) {
         uint8_t gray = ctx->grayLineBuffer[srcX];
 
         uint8_t ditheredGray;
@@ -314,6 +325,7 @@ bool PngToFramebufferConverter::getDimensionsStatic(const std::string& imagePath
 
   if (rc != 0) {
     LOG_ERR("PNG", "Failed to open PNG for dimensions: %d", rc);
+    png->close();
     delete png;
     return false;
   }
@@ -328,6 +340,7 @@ bool PngToFramebufferConverter::getDimensionsStatic(const std::string& imagePath
 
 bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath, GfxRenderer& renderer,
                                                     const RenderConfig& config) {
+  if (config.cancelled() || (config.cacheOnly && config.cachePath.empty())) return false;
   if (!MemoryBudget::hasHeapForImageDecoder("PNG", "PNG", PNG_DECODER_APPROX_SIZE)) {
     return false;
   }
@@ -349,8 +362,11 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
                                             static_cast<int>(config.sourceSize), pngDrawCallback)
                              : png->open(imagePath.c_str(), pngOpenWithHandle, pngCloseWithHandle, pngReadWithHandle,
                                          pngSeekWithHandle, pngDrawCallback);
-  if (rc != PNG_SUCCESS) {
+  if (rc != PNG_SUCCESS || ctx.cancelled || config.cancelled()) {
     LOG_ERR("PNG", "Failed to open PNG: %d", rc);
+    // PNGdec's destructor does not close custom file handles, including when
+    // opening fails or cancellation arrives immediately after a valid header.
+    png->close();
     delete png;
     return false;
   }
@@ -442,11 +458,16 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
   }
 
   ctx.lastYieldMs = millis();
+  if (config.cacheOnly && !ctx.caching) {
+    png->close();
+    delete png;
+    return false;
+  }
   rc = png->decode(&ctx, 0);
 
   ctx.grayLineBuffer = nullptr;
 
-  if (rc != PNG_SUCCESS) {
+  if (rc != PNG_SUCCESS || ctx.cancelled || config.cancelled()) {
     LOG_ERR("PNG", "Decode failed: %d", rc);
     if (ctx.caching) ctx.cache.abort();
     png->close();
@@ -459,10 +480,11 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
 
   // Finalize the streamed cache (caching may have been cleared on a flush error).
   if (ctx.caching) {
-    ctx.cache.finalize();
+    const bool complete = ctx.cache.finalize();
+    if (config.cacheOnly) return complete;
   }
 
-  return true;
+  return !config.cacheOnly;
 }
 
 bool PngToFramebufferConverter::supportsFormat(const std::string& extension) {

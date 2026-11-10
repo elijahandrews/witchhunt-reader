@@ -32,6 +32,8 @@ class ScalableFontAccess {
 class HalScalableFont {
  public:
   static constexpr size_t MaxFileBytes = 2 * 1024 * 1024;
+  static constexpr uint16_t MaxPublisherPoints64 = 128 * 64;
+  static constexpr size_t MaxPublisherFileBytes = 8 * 1024 * 1024;
   static constexpr size_t MaxFilenameFileBytes = 32 * 1024 * 1024;
   static constexpr size_t MaxFamilyBytes = 6 * 1024 * 1024;
   static constexpr size_t ReaderReserveBytes = 1024 * 1024;
@@ -42,7 +44,7 @@ class HalScalableFont {
   };
   // Temporary uses a per-open identity and streams large faces; never persist
   // its layouts. Auto and Stream retain content-based reader cache identities.
-  enum class FileMode { Auto, Stream, Temporary, Filename };
+  enum class FileMode { Auto, Stream, Temporary, Filename, Publisher };
   HalScalableFont() = default;
   ~HalScalableFont();
   HalScalableFont(const HalScalableFont&) = delete;
@@ -72,11 +74,20 @@ class HalScalableFont {
   // Reads metadata through the already-owned source; never reopens an SD reader.
   bool copyFamilyName(char* name, size_t capacity);
   const EpdFont* atSize(uint8_t points);
+  const EpdFont* atSize64(uint16_t points64);
+  const EpdFont* atSize64(uint16_t points64, uint8_t style);
+  // Caller must remove every renderer registration borrowing this size first.
+  void releaseSize64(uint16_t points64);
+  bool isVariable() const { return font_.isVariable(); }
+  // Call before registration. Native SD fonts retain default variable instances.
+  bool configurePublisherStyle(uint8_t style);
 
  private:
   struct Size {
     HalScalableFont* owner = nullptr;
-    uint8_t points = 0;
+    uint16_t points = 0;  // typographic point sixty-fourths
+    uint8_t style = 0;
+    uint32_t cacheId = 0;
     EpdFontData data{};
     EpdFont font{&data};
     // Returned metrics survive subsequent lookups in the same draw operation.
@@ -85,9 +96,15 @@ class HalScalableFont {
   };
   static const EpdGlyph* glyph(void* ctx, uint32_t cp);
   static const uint8_t* bitmap(void* ctx, const EpdGlyph* glyph);
+  static bool raster(void* ctx, uint32_t cp, int8_t phase, EpdGlyph& glyph, const uint8_t*& pixels);
+  static bool scaledRaster(void* ctx, uint32_t cp, uint8_t scale64, int8_t phase, EpdGlyph& glyph,
+                           const uint8_t*& pixels);
   static bool covers(void* ctx, uint32_t cp);
   static int8_t kerning(void* ctx, uint32_t left, uint32_t right);
+  static int16_t kerning32(void* ctx, uint32_t left, uint32_t right);
+  static uint32_t smallCaps(void* ctx, uint32_t cp, bool all);
   static uint32_t ligature(void* ctx, uint32_t left, uint32_t right);
+  static uint32_t ligatureSequence(void* ctx, const uint32_t* sequence, unsigned length);
   static unsigned long streamRead(void* ctx, unsigned long offset, unsigned char* buffer, unsigned long count);
   static constexpr size_t StreamWindowBytes = 1024;
   static constexpr size_t StreamWindowCount = 4;
@@ -97,6 +114,13 @@ class HalScalableFont {
   static constexpr uint8_t MinPointSize = ScalableContentMinPointSize;
   static constexpr uint8_t MaxPointSize = ScalableContentMaxPointSize;
   static constexpr size_t SizeCount = MaxPointSize - MinPointSize + 1;
+  bool prepareInstance(uint16_t points64, uint8_t style);
+  const EpdFont* initializeSize(Size& size, uint16_t points64, uint8_t style);
+  static constexpr size_t FractionalSizeCount = 32;
+  static constexpr size_t FractionalSizeBanks = 4;
+  bool publisherInstance_ = false;
+  uint8_t publisherStyle_ = 0;
+  uint8_t currentPublisherStyle_ = 0;
   uint32_t cacheId_ = 0;
   bool metricFailureLogged_ = false;
   bool rasterFailureLogged_ = false;
@@ -113,6 +137,8 @@ class HalScalableFont {
   HeapByteBuffer bytes_;
   HeapByteBuffer sizesStorage_;
   Size* sizes_ = nullptr;
+  HeapByteBuffer fractionalSizesStorage_[FractionalSizeBanks];
+  Size* fractionalSizes_[FractionalSizeBanks] = {};
   char streamPath_[128] = {};
   HalFile streamFile_;
   HeapByteBuffer streamBuffer_;

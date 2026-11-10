@@ -26,6 +26,12 @@ bool ImageDecoderFactory::supportsMemorySource(const std::string& path) {
 }
 
 ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string&) { return nullptr; }
+bool ImageDecoderFactory::supportsMemorySource(ImageFormatDetector::Format format) {
+  return format == ImageFormatDetector::Format::Jpeg || format == ImageFormatDetector::Format::Png;
+}
+ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const uint8_t*, size_t) { return nullptr; }
+ImageFormatDetector::Format ImageFormatDetector::detect(const uint8_t*, size_t) { return Format::Jpeg; }
+bool ImageFormatDetector::isBaselineJpeg(const uint8_t*, size_t) { return true; }
 
 namespace {
 std::vector<uint8_t> cache(int w, int h) {

@@ -17,6 +17,7 @@
 #include "GlobalActions.h"
 #include "MappedInputManager.h"
 #include "QuickActions.h"
+#include "ReaderProgressImportPath.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
@@ -887,12 +888,13 @@ void TxtReaderActivity::renderPage() {
   renderLines();
   renderStatusBar();
 
-  const bool deferred =
-      SETTINGS.textAntiAliasing &&
-      ReaderUtils::displayDeferredGrayscale(renderer, pagesUntilFullRefresh, deferredGrayscalePlanes, [&]() {
-        renderLines();
-        return true;
-      });
+  const bool deferred = SETTINGS.textAntiAliasing && ReaderUtils::displayDeferredGrayscale(
+                                                         renderer, pagesUntilFullRefresh, deferredGrayscalePlanes,
+                                                         [&]() {
+                                                           renderLines();
+                                                           return true;
+                                                         },
+                                                         true);
   if (!deferred) {
     auto request = ReaderUtils::PageRefresh::Blocking;
 #if FREEINK_DEVICE_PICCO || FREEINK_DEVICE_STICKY
@@ -1000,7 +1002,7 @@ bool TxtReaderActivity::flushQueuedProgress() {
 
 void TxtReaderActivity::loadProgress() {
   HalFile f;
-  if (Storage.openFileForRead("TRS", txt->getCachePath() + "/progress.bin", f)) {
+  if (Storage.openFileForRead("TRS", readerProgressImportPath(txt->getCachePath(), txt->getPath(), "txt"), f)) {
     uint8_t data[6]{};
     const int bytes = f.read(data, sizeof(data));
     if (bytes >= 2) {
@@ -1217,7 +1219,7 @@ bool TxtReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gfx
   bool offsetKnown = false;
   {
     FsFile progFile;
-    if (Storage.openFileForRead("SLP", txt.getCachePath() + "/progress.bin", progFile)) {
+    if (Storage.openFileForRead("SLP", readerProgressImportPath(txt.getCachePath(), txt.getPath(), "txt"), progFile)) {
       uint8_t data[6] = {0};
       const int n = progFile.read(data, 6);
       progFile.close();

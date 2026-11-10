@@ -8,6 +8,12 @@ bool ImageDecoderFactory::supportsMemorySource(const std::string& path) {
 
 static ImageToFramebufferDecoder* testDecoder = nullptr;
 ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string&) { return testDecoder; }
+bool ImageDecoderFactory::supportsMemorySource(ImageFormatDetector::Format format) {
+  return format == ImageFormatDetector::Format::Jpeg || format == ImageFormatDetector::Format::Png;
+}
+ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const uint8_t*, size_t) { return testDecoder; }
+ImageFormatDetector::Format ImageFormatDetector::detect(const uint8_t*, size_t) { return Format::Jpeg; }
+bool ImageFormatDetector::isBaselineJpeg(const uint8_t*, size_t) { return true; }
 
 namespace {
 
@@ -79,6 +85,54 @@ TEST_F(RetainedPxcCacheTest, AlternatingImagesAvoidPayloadReadsAndKeepPixelsAcro
   render(renderer, "b.pxc", width, height);
   EXPECT_EQ(Storage.data("b.pxc").readBytes - bBytesBeforeHit, 0u);
   EXPECT_EQ(retainedPxcCapacity, 2u * static_cast<size_t>((width + 3) / 4) * height);
+}
+
+TEST_F(RetainedPxcCacheTest, WarmCacheUsesCacheOnlyDecodeAndRecoversPriorSessionFailure) {
+  class Decoder final : public ImageToFramebufferDecoder {
+   public:
+    unsigned calls = 0;
+    bool decodeToFramebuffer(const std::string&, GfxRenderer&, const RenderConfig& config) override {
+      ++calls;
+      EXPECT_TRUE(config.cacheOnly);
+      EXPECT_TRUE(config.useExactDimensions);
+      EXPECT_EQ(config.x, 17);
+      EXPECT_EQ(config.y, 23);
+      Storage.put(config.cachePath, cache(config.maxWidth, config.maxHeight));
+      return true;
+    }
+    bool getDimensions(const std::string&, ImageDimensions&) const override { return false; }
+    const char* getFormatName() const override { return "test"; }
+  } decoder;
+  testDecoder = &decoder;
+  ImageBlock image("warm.jpg", "", 32, 24);
+  rememberImageFailure("warm.jpg");
+  GfxRenderer renderer(800, 480);
+  EXPECT_EQ(image.warmCache(renderer, 17, 23), ImageBlock::CacheWarmResult::Ready);
+  EXPECT_TRUE(image.hasValidCache());
+  EXPECT_FALSE(imageFailedThisSession("warm.jpg"));
+  EXPECT_EQ(decoder.calls, 1u);
+  EXPECT_EQ(image.warmCache(renderer, 17, 23), ImageBlock::CacheWarmResult::Ready);
+  EXPECT_EQ(decoder.calls, 1u);
+  testDecoder = nullptr;
+}
+
+TEST_F(RetainedPxcCacheTest, CancelledWarmExtractionDoesNotPoisonForegroundRetry) {
+  bool cancelled = false;
+  ImageBlock::setExtractor(
+      &cancelled,
+      [](void* context, const char*, const char*) {
+        *static_cast<bool*>(context) = true;
+        return false;
+      },
+      nullptr);
+  ImageBlock image("cancel.jpg", "OPS/image.jpg", 32, 24);
+  GfxRenderer renderer(800, 480);
+  EXPECT_EQ(image.warmCache(
+                renderer, 0, 0, [](void* context) { return *static_cast<bool*>(context); }, &cancelled),
+            ImageBlock::CacheWarmResult::Cancelled);
+  EXPECT_FALSE(image.hasValidCache());
+  EXPECT_FALSE(imageFailedThisSession("cancel.jpg"));
+  EXPECT_TRUE(image.needsDecode());
 }
 
 TEST_F(RetainedPxcCacheTest, ThirdImageEvictsLruWithoutExceedingAggregateBudget) {
@@ -200,23 +254,23 @@ TEST_F(RetainedPxcCacheTest, RetentionLeavesPsramForTheNextJpegDecoder) {
 TEST_F(RetainedPxcCacheTest, RegeneratingTheSamePathInvalidatesRetainedPixels) {
   constexpr int width = 200;
   constexpr int height = 120;
-  Storage.put("image_v2.pxc", cache(width, height, 0));
+  Storage.put("image.pxc", cache(width, height, 0));
   GfxRenderer renderer(800, 480);
   renderer.orientation = GfxRenderer::LandscapeCounterClockwise;
-  render(renderer, "image_v2.pxc", width, height);
+  render(renderer, "image.pxc", width, height);
   const auto stalePixels = renderer.bw;
 
-  Storage.remove("image_v2.pxc");
+  Storage.remove("image.pxc");
   SeedContext seed{.bytes = cache(width, height, 1)};
   ImageBlock::setExtractor(&seed, nullptr, seedCache);
   ImageBlock image("image.jpg", "source.jpg", width, height);
   image.prepareCache();
   ASSERT_EQ(seed.calls, 1);
 
-  const size_t bytesBeforeReload = Storage.data("image_v2.pxc").readBytes;
-  render(renderer, "image_v2.pxc", width, height);
+  const size_t bytesBeforeReload = Storage.data("image.pxc").readBytes;
+  render(renderer, "image.pxc", width, height);
   EXPECT_NE(renderer.bw, stalePixels);
-  EXPECT_EQ(Storage.data("image_v2.pxc").readBytes - bytesBeforeReload,
+  EXPECT_EQ(Storage.data("image.pxc").readBytes - bytesBeforeReload,
             4u + static_cast<size_t>((width + 3) / 4) * height);
 }
 

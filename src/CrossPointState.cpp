@@ -12,8 +12,9 @@
 namespace {
 constexpr uint8_t STATE_FILE_VERSION = 5;
 constexpr char STATE_FILE_BIN[] = "/.crosspoint/state.bin";
-constexpr char STATE_FILE_JSON[] = "/.crosspoint/state.json";
-constexpr char STATE_FILE_BAK[] = "/.crosspoint/state.bin.bak";
+constexpr char STATE_FILE_JSON[] = "/.crosspoint/crossink-state.json";
+constexpr char STATE_FILE_JSON_BAK[] = "/.crosspoint/crossink-state.json.bak";
+constexpr char LEGACY_STATE_FILE_JSON[] = "/.crosspoint/state.json";
 
 // Hash the existing JSON snapshot without retaining another serialized copy.
 class StateCrcWriter {
@@ -87,29 +88,22 @@ bool CrossPointState::loadFromFile() {
   {
     std::lock_guard<std::mutex> storeLock(storeMutex);
     lastSavedCrcValid = false;
-    // Try JSON first. A reload invalidates the remembered on-disk snapshot.
-    if (Storage.exists(STATE_FILE_JSON)) {
+    // Once the fork has its own snapshot, never resurrect an older Witch Hunt
+    // state after a damaged write. The atomic store can still recover its backup.
+    const bool hasOwnState = Storage.exists(STATE_FILE_JSON) || Storage.exists(STATE_FILE_JSON_BAK);
+    const char* legacyPath =
+        Storage.exists(LEGACY_STATE_FILE_JSON) ? LEGACY_STATE_FILE_JSON : "/.crosspoint/state.json.bak";
+    const char* path = hasOwnState ? STATE_FILE_JSON : legacyPath;
+    if (hasOwnState || Storage.exists(path)) {
       JsonDocument doc;
-      if (PersistableStoreBase::readDocFromFile(STATE_FILE_JSON, doc)) {
-        std::lock_guard<std::mutex> stateLock(_mutex);
-        return fromJson(doc.as<JsonVariantConst>());
-      }
+      if (!PersistableStoreBase::readDocFromFile(path, doc)) return false;
+      std::lock_guard<std::mutex> stateLock(_mutex);
+      return fromJson(doc.as<JsonVariantConst>());
     }
   }
 
-  // Fall back to binary migration
-  if (Storage.exists(STATE_FILE_BIN)) {
-    if (loadFromBinaryFile()) {
-      if (saveToFile()) {
-        Storage.rename(STATE_FILE_BIN, STATE_FILE_BAK);
-        LOG_DBG("CPS", "Migrated state.bin to state.json");
-        return true;
-      } else {
-        LOG_ERR("CPS", "Failed to save state during migration");
-        return false;
-      }
-    }
-  }
+  // Import the old binary read-only. Leave it available to the other firmware.
+  if (Storage.exists(STATE_FILE_BIN) && loadFromBinaryFile()) return saveToFile();
 
   return false;
 }

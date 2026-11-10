@@ -44,6 +44,11 @@ struct PercentResult {
   float percent = 0.0f;
 };
 
+struct BookSearchResult {
+  uint16_t spineIndex = 0;
+  uint32_t sourceOffset = UINT32_MAX;
+};
+
 struct IntervalResult {
   uint32_t value = 0;
 };
@@ -144,11 +149,12 @@ struct ClippingJumpResult {
   bool settingsChanged = false;
 };
 
-using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
-                                   IntervalResult, OptionSelectionResult, PageResult, NetworkModeResult, FootnoteResult,
-                                   BookmarkResult, FileBrowserActionResult, FilePathResult, WordResult,
-                                   ReadingStatsResult, ProgressSyncResult, ClippingResult, TtfRenderOptionsResult,
-                                   DictionaryClippingRequest, ClippingJumpResult, FrontlightPanelResult>;
+using ResultVariant =
+    std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, IntervalResult,
+                 OptionSelectionResult, PageResult, NetworkModeResult, FootnoteResult, BookmarkResult,
+                 FileBrowserActionResult, FilePathResult, WordResult, ReadingStatsResult, ProgressSyncResult,
+                 ClippingResult, TtfRenderOptionsResult, DictionaryClippingRequest, ClippingJumpResult,
+                 FrontlightPanelResult, BookSearchResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

@@ -51,6 +51,10 @@ void updateGrayPalette(const GIFDRAW* pDraw, GifContext& ctx) {
 }
 
 void renderCanvasRow(const uint8_t* grayRow, int srcY, GifContext& ctx) {
+  if (ctx.config->cancelled()) {
+    ctx.success = false;
+    return;
+  }
   // Map source rows using the exact output-height ratio. During downscaling,
   // multiple source rows may map to the same output row; during upscaling, a
   // source row must be repeated across every destination row in its range.
@@ -65,12 +69,16 @@ void renderCanvasRow(const uint8_t* grayRow, int srcY, GifContext& ctx) {
   if (endDstY > ctx.dstHeight) endDstY = ctx.dstHeight;
 
   DirectPixelWriter pw;
-  pw.init(*ctx.renderer, ctx.config->useGrayscale);
+  pw.init(*ctx.renderer, ctx.config->useGrayscale, ctx.config->cacheOnly);
 
   for (int dstY = firstDstY; dstY < endDstY; ++dstY) {
+    if (ctx.config->cancelled()) {
+      ctx.success = false;
+      return;
+    }
     ctx.lastDstY = dstY;
     const int outY = ctx.config->y + dstY;
-    if (outY < 0 || outY >= ctx.screenHeight) continue;
+    if (!ctx.config->cacheOnly && (outY < 0 || outY >= ctx.screenHeight)) continue;
 
     pw.beginRow(outY);
 
@@ -93,7 +101,7 @@ void renderCanvasRow(const uint8_t* grayRow, int srcY, GifContext& ctx) {
 
     for (int dstX = 0; dstX < ctx.dstWidth; ++dstX) {
       const int outX = outXBase + dstX;
-      if (outX >= 0 && outX < ctx.screenWidth) {
+      if (ctx.config->cacheOnly || (outX >= 0 && outX < ctx.screenWidth)) {
         const uint8_t gray = grayRow[srcX];
         uint8_t ditheredGray;
         if (useDithering) {
@@ -126,35 +134,40 @@ void processGapRowsUpTo(int canvasY, GifContext& ctx) {
   }
 }
 
-void* gifOpenWithHandle(const char* filename, int32_t* size) {
-  auto file = makeUniqueNoThrow<FsFile>();
-  if (!file) {
-    LOG_ERR("GIF", "OOM: file handle for %s", filename);
-    return nullptr;
+struct GifReadSource {
+  const std::string& path;
+  GifContext& draw;
+  FsFile file;
+  bool cancelled() {
+    if (!draw.success) return true;
+    if (!draw.config->cancelled()) return false;
+    draw.success = false;
+    return true;
   }
-  if (!Storage.openFileForRead("GIF", std::string(filename), *file)) {
-    LOG_ERR("GIF", "Failed to open decoder source: %s", filename);
-    return nullptr;
-  }
-  *size = static_cast<int32_t>(file->size());
-  // AnimatedGIF owns the callback handle until gifCloseWithHandle releases it.
-  return file.release();
+};
+
+void* gifOpenWithHandle(const char* opaqueSource, int32_t* size) {
+  // AnimatedGIF's custom-open overload forwards this pointer only to our open
+  // callback. Borrow a per-invocation source, avoiding global decoder state.
+  auto* source = reinterpret_cast<GifReadSource*>(const_cast<char*>(opaqueSource));
+  if (source->cancelled() || !Storage.openFileForRead("GIF", source->path, source->file)) return nullptr;
+  *size = static_cast<int32_t>(source->file.size());
+  return source;
 }
 
 void gifCloseWithHandle(void* handle) {
-  auto* file = reinterpret_cast<FsFile*>(handle);
-  if (!file) return;
-  file->close();
-  delete file;
+  auto* source = static_cast<GifReadSource*>(handle);
+  if (source) source->file.close();
 }
 
 int32_t gifReadWithHandle(GIFFILE* pFile, uint8_t* pBuf, int32_t len) {
-  auto* file = reinterpret_cast<FsFile*>(pFile->fHandle);
-  if (!file) {
+  auto* source = static_cast<GifReadSource*>(pFile->fHandle);
+  if (!source) {
     LOG_ERR("GIF", "Read requested without a file handle");
     return 0;
   }
-  int32_t bytesRead = file->read(pBuf, len);
+  if (source->cancelled() || len <= 0) return 0;
+  int32_t bytesRead = source->file.read(pBuf, len);
   if (bytesRead < 0) {
     LOG_ERR("GIF", "Read failed at offset %d for %d bytes", pFile->iPos, len);
     return 0;
@@ -164,14 +177,15 @@ int32_t gifReadWithHandle(GIFFILE* pFile, uint8_t* pBuf, int32_t len) {
 }
 
 int32_t gifSeekWithHandle(GIFFILE* pFile, int32_t position) {
-  auto* file = reinterpret_cast<FsFile*>(pFile->fHandle);
-  if (!file) {
+  auto* source = static_cast<GifReadSource*>(pFile->fHandle);
+  if (!source) {
     LOG_ERR("GIF", "Seek requested without a file handle");
     return -1;
   }
+  if (source->cancelled()) return -1;
   if (position < 0) position = 0;
   if (position >= pFile->iSize) position = pFile->iSize - 1;
-  if (!file->seek(position)) {
+  if (!source->file.seek(position)) {
     LOG_ERR("GIF", "Seek failed at offset %d", position);
     return -1;
   }
@@ -182,6 +196,10 @@ int32_t gifSeekWithHandle(GIFFILE* pFile, int32_t position) {
 void gifDrawCallback(GIFDRAW* pDraw) {
   auto* ctx = reinterpret_cast<GifContext*>(pDraw->pUser);
   if (!ctx || !ctx->success || !ctx->grayRow || !ctx->whiteRow) return;
+  if (ctx->config->cancelled()) {
+    ctx->success = false;
+    return;
+  }
 
   ImageToFramebufferDecoder::yieldDuringDecode(ctx->lastYieldMs);
 
@@ -244,6 +262,7 @@ bool GifToFramebufferConverter::getDimensionsStatic(const std::string& imagePath
 
 bool GifToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath, GfxRenderer& renderer,
                                                     const RenderConfig& config) {
+  if (config.cancelled() || (config.cacheOnly && config.cachePath.empty())) return false;
   LOG_DBG("GIF", "Decoding GIF: %s", imagePath.c_str());
 
   GifBasicInfo info;
@@ -324,8 +343,9 @@ bool GifToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
           info.canvasWidth, info.canvasHeight, info.frameWidth, info.frameHeight, info.frameX, info.frameY,
           info.interlaced ? "yes" : "no", config.maxWidth, config.maxHeight, MAX_WIDTH, ESP.getFreeHeap(),
           imagePath.c_str());
-  const int rcOpen = gif->open(imagePath.c_str(), gifOpenWithHandle, gifCloseWithHandle, gifReadWithHandle,
-                               gifSeekWithHandle, gifDrawCallback);
+  GifReadSource source{imagePath, ctx, {}};
+  const int rcOpen = gif->open(reinterpret_cast<const char*>(&source), gifOpenWithHandle, gifCloseWithHandle,
+                               gifReadWithHandle, gifSeekWithHandle, gifDrawCallback);
   const ScopedCleanup cleanup{[&gif]() { gif->close(); }};
   if (rcOpen != 1) {
     const int err = gif->getLastError();
@@ -345,7 +365,8 @@ bool GifToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
   int delayMs = 0;
   ctx.lastYieldMs = millis();
   const int frameState = gif->playFrame(false, &delayMs, &ctx);
-  if (!ctx.success || (gif->getLastError() != GIF_SUCCESS && gif->getLastError() != GIF_EMPTY_FRAME)) {
+  if (!ctx.success || config.cancelled() ||
+      (gif->getLastError() != GIF_SUCCESS && gif->getLastError() != GIF_EMPTY_FRAME)) {
     LOG_ERR("GIF", "GIF decode failed (state=%d, err=%d)", frameState, gif->getLastError());
     if (ctx.caching) ctx.cache.abort();
     return false;

@@ -513,7 +513,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // time-only syncs do not unlock date display with stale RTC date registers.
   uint8_t clockDateHasBeenSynced = 0;
   // Text rendering settings
-  uint8_t extraParagraphSpacing = 1;
+  uint8_t extraParagraphSpacing = 0;
   uint8_t forceParagraphIndents = 0;
   uint8_t textAntiAliasing = 1;
   // Touch screen reader zones/gestures on boards with a touch controller.
@@ -642,6 +642,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t pwrBtnFootnoteBack = 1;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
   uint8_t embeddedStyle = 1;
+  uint8_t ignorePublisherPageMargins = 0;
   uint8_t publisherFonts = 1;
   // EPUB section indexing policy. The current chapter keeps its active build.
   uint8_t indexingMethod = defaultIndexingMethod();

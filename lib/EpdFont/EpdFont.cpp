@@ -16,6 +16,13 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
   }
 
   int lastBaseX = startX;
+  int penRemainder = 0;
+  const auto advancePixels = [&](int32_t advance) {
+    if (data->fractionalAdvances) advance += penRemainder;
+    const int pixels = fp5::toPixel(advance);
+    penRemainder = advance - pixels * 32;
+    return pixels;
+  };
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
@@ -36,7 +43,7 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
       // Keep cursor movement stable when a base glyph is missing, but don't attach subsequent
       // combining marks to stale base metrics.
       if (!isCombining) {
-        lastBaseX += fp4::toPixel(prevAdvanceFP);  // flush pending advance before resetting
+        lastBaseX += advancePixels(prevAdvanceFP);  // flush pending advance before resetting
         prevCp = 0;
         prevAdvanceFP = 0;
         lastBaseLeft = 0;
@@ -50,8 +57,8 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
     const int raiseBy = isCombining ? combiningMark::raiseAboveBase(anchor, glyph->top, glyph->height, lastBaseTop) : 0;
 
     if (!isCombining && prevCp != 0) {
-      const auto kernFP = getKerning(prevCp, cp);  // 4.4 fixed-point kern
-      lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+      const auto kernFP = getKerningFP5(prevCp, cp);  // 4.4 fixed-point kern
+      lastBaseX += advancePixels(prevAdvanceFP + kernFP);
     }
 
     const int glyphBaseX = isCombining ? combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
@@ -68,7 +75,7 @@ void EpdFont::getTextBounds(const char* string, const int startX, const int star
       lastBaseLeft = glyph->left;
       lastBaseWidth = glyph->width;
       lastBaseTop = glyph->top;
-      prevAdvanceFP = glyph->advanceX;  // 12.4 fixed-point
+      prevAdvanceFP = fp5::advance(*glyph);  // 12.4 fixed-point
       prevCp = cp;
     }
   }
@@ -115,14 +122,19 @@ static uint8_t lookupKernClass(const EpdKernClassEntry* entries, const uint16_t 
   return 0;
 }
 
-int8_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const {
+int16_t EpdFont::getKerning(uint32_t left, uint32_t right) const { return fp5::toFp4(getKerningFP5(left, right)); }
+
+int32_t EpdFont::getKerningFP5(const uint32_t leftCp, const uint32_t rightCp) const {
   if (utf8IsCjkBreakable(leftCp) || utf8IsCjkBreakable(rightCp)) {
     return 0;
   }
 #if CROSSINK_SCALABLE_FONTS
-  if (data->kerningHandler) return data->kerningHandler(data->glyphMissCtx, leftCp, rightCp);
+  if (data->kerning32Handler) return data->kerning32Handler(data->glyphMissCtx, leftCp, rightCp);
+  if (data->kerningHandler) return int32_t(data->kerningHandler(data->glyphMissCtx, leftCp, rightCp)) * 2;
 #endif
-  if (!data->kernMatrix && !data->kernRowOffsets) {
+  if (data->alternateKerningHandler && (leftCp >= 0x110000 || rightCp >= 0x110000))
+    return data->alternateKerningHandler(data->glyphMissCtx, leftCp, rightCp);
+  if (!data->kernMatrix && !data->kernMatrixWide && !data->kernRowOffsets) {
     return 0;
   }
   if (!data->kernLeftClasses && !data->kernLeftCodepoints) {
@@ -150,14 +162,16 @@ int8_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const 
     const uint16_t end = data->kernRowOffsets[lc];
     const auto target = static_cast<uint8_t>(rc - 1);
     for (uint16_t i = begin; i < end; i++) {
-      if (data->kernSparseCols[i] == target) return data->kernSparseValues[i];
+      if (data->kernSparseCols[i] == target) return int32_t(data->kernSparseValues[i]) * 2;
       if (data->kernSparseCols[i] > target) break;
     }
     return 0;
   }
 
   // SD-card fonts retain the dense representation mapped from .cpfont files.
-  return data->kernMatrix[(lc - 1) * data->kernRightClassCount + (rc - 1)];
+  if (lc > data->kernLeftClassCount || rc > data->kernRightClassCount) return 0;
+  const size_t index = (lc - 1) * data->kernRightClassCount + (rc - 1);
+  return data->kernMatrixWide ? data->kernMatrixWide[index] : int32_t(data->kernMatrix[index]) * 2;
 }
 
 // Arabic contextual joining (including Lam-Alef) is resolved earlier by
@@ -200,6 +214,26 @@ uint32_t EpdFont::getLigature(const uint32_t leftCp, const uint32_t rightCp) con
 }
 
 uint32_t EpdFont::applyLigatures(uint32_t cp, const char*& text) const {
+#if CROSSINK_SCALABLE_FONTS
+  if (data->ligatureSequenceHandler && !isArabicPresentationForm(cp)) {
+    const char* afterSecond = text;
+    uint32_t sequence[3] = {cp, utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&afterSecond)), 0};
+    if (!sequence[1] || isArabicPresentationForm(sequence[1])) return cp;
+    const char* afterThird = afterSecond;
+    sequence[2] = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&afterThird));
+    if (sequence[2] && !isArabicPresentationForm(sequence[2])) {
+      if (const auto result = data->ligatureSequenceHandler(data->glyphMissCtx, sequence, 3)) {
+        text = afterThird;
+        return result;
+      }
+    }
+    if (const auto result = data->ligatureSequenceHandler(data->glyphMissCtx, sequence, 2)) {
+      text = afterSecond;
+      return result;
+    }
+    return cp;
+  }
+#endif
   if (
 #if CROSSINK_SCALABLE_FONTS
       !data->ligatureHandler &&

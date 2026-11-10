@@ -45,6 +45,13 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
   }
 
   int lastBaseX = 0;
+  int penRemainder = 0;
+  const auto advancePixels = [&](int32_t advance) {
+    if (getData(style)->fractionalAdvances) advance += penRemainder;
+    const int pixels = fp5::toPixel(advance);
+    penRemainder = advance - pixels * 32;
+    return pixels;
+  };
   int lastBaseLeft = 0;
   int lastBaseWidth = 0;
   int lastBaseTop = 0;
@@ -64,9 +71,9 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
     const bool hasRealGlyph = findGlyphData(cp, style).glyph != nullptr;
 
     if (!isCombining && syntheticGlyph::isBlankSpace(cp, hasRealGlyph)) {
-      lastBaseX += fp4::toPixel(prevAdvanceFP);
+      lastBaseX += advancePixels(prevAdvanceFP);
       prevCp = cp;
-      prevAdvanceFP = getSpaceAdvanceX(cp, style);
+      prevAdvanceFP = int32_t(getSpaceAdvanceX(cp, style)) * 2;
       lastBaseLeft = 0;
       lastBaseWidth = 0;
       lastBaseTop = 0;
@@ -82,8 +89,8 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       const int glyphTop = syntheticGlyph::solidTop(data, cp, glyphHeight);
 
       if (prevCp != 0) {
-        const auto kernFP = getKerning(prevCp, cp, style);
-        lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+        const auto kernFP = getKerningFP5(prevCp, cp, style);
+        lastBaseX += advancePixels(prevAdvanceFP + kernFP);
       }
 
       minX = std::min(minX, lastBaseX + glyphLeft);
@@ -93,7 +100,7 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       lastBaseLeft = glyphLeft;
       lastBaseWidth = glyphWidth;
       lastBaseTop = glyphTop;
-      prevAdvanceFP = advanceX;
+      prevAdvanceFP = int32_t(advanceX) * 2;
       prevCp = cp;
       continue;
     }
@@ -107,8 +114,8 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       const int glyphTop = syntheticGlyph::greekTop(data, cp, glyphHeight);
 
       if (prevCp != 0) {
-        const auto kernFP = getKerning(prevCp, cp, style);
-        lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+        const auto kernFP = getKerningFP5(prevCp, cp, style);
+        lastBaseX += advancePixels(prevAdvanceFP + kernFP);
       }
 
       minX = std::min(minX, lastBaseX + glyphLeft);
@@ -118,7 +125,7 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       lastBaseLeft = glyphLeft;
       lastBaseWidth = glyphWidth;
       lastBaseTop = glyphTop;
-      prevAdvanceFP = advanceX;
+      prevAdvanceFP = int32_t(advanceX) * 2;
       prevCp = cp;
       continue;
     }
@@ -132,8 +139,8 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       const int glyphTop = syntheticGlyph::replacementTop(data, glyphHeight);
 
       if (prevCp != 0) {
-        const auto kernFP = getKerning(prevCp, cp, style);
-        lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+        const auto kernFP = getKerningFP5(prevCp, cp, style);
+        lastBaseX += advancePixels(prevAdvanceFP + kernFP);
       }
 
       minX = std::min(minX, lastBaseX + glyphLeft);
@@ -143,7 +150,7 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       lastBaseLeft = glyphLeft;
       lastBaseWidth = glyphWidth;
       lastBaseTop = glyphTop;
-      prevAdvanceFP = advanceX;
+      prevAdvanceFP = int32_t(advanceX) * 2;
       prevCp = cp;
       continue;
     }
@@ -151,7 +158,7 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
     const EpdGlyph* glyph = getGlyph(cp, style);
     if (!glyph) {
       if (!isCombining) {
-        lastBaseX += fp4::toPixel(prevAdvanceFP);
+        lastBaseX += advancePixels(prevAdvanceFP);
         prevCp = 0;
         prevAdvanceFP = 0;
         lastBaseLeft = 0;
@@ -165,8 +172,8 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
     const int raiseBy = isCombining ? combiningMark::raiseAboveBase(anchor, glyph->top, glyph->height, lastBaseTop) : 0;
 
     if (!isCombining && prevCp != 0) {
-      const auto kernFP = getKerning(prevCp, cp, style);
-      lastBaseX += fp4::toPixel(prevAdvanceFP + kernFP);
+      const auto kernFP = getKerningFP5(prevCp, cp, style);
+      lastBaseX += advancePixels(prevAdvanceFP + kernFP);
     }
 
     const int glyphBaseX = isCombining ? combiningMark::anchorOver(anchor, lastBaseX, lastBaseLeft, lastBaseWidth,
@@ -182,7 +189,7 @@ void EpdFontFamily::getTextDimensions(const char* string, int* w, int* h, const 
       lastBaseLeft = glyph->left;
       lastBaseWidth = glyph->width;
       lastBaseTop = glyph->top;
-      prevAdvanceFP = glyph->advanceX;
+      prevAdvanceFP = fp5::advance(*glyph);
       prevCp = cp;
     }
   }
@@ -272,10 +279,14 @@ bool EpdFontFamily::hasCodepoint(const uint32_t cp, const Style style) const {
          (extra && extra->hasCodepoint(cp)) || (fallbackRegular && fallbackRegular->hasCodepoint(cp));
 }
 
-int8_t EpdFontFamily::getKerning(const uint32_t leftCp, const uint32_t rightCp, const Style style) const {
+int16_t EpdFontFamily::getKerning(uint32_t left, uint32_t right, Style style) const {
+  return fp5::toFp4(getKerningFP5(left, right, style));
+}
+
+int32_t EpdFontFamily::getKerningFP5(const uint32_t leftCp, const uint32_t rightCp, const Style style) const {
   if (syntheticGlyph::isSpaceFallback(leftCp) || syntheticGlyph::isSpaceFallback(rightCp)) return 0;
   const auto primary = getFont(style);
-  if (!fallbackRegular) return primary->getKerning(leftCp, rightCp);
+  if (!fallbackRegular) return primary->getKerningFP5(leftCp, rightCp);
   // Never apply a kerning pair across different faces in a mixed-script filename.
   const auto owner = [&](uint32_t cp) -> const EpdFont* {
     if (primary->hasCodepoint(cp)) return primary;
@@ -286,9 +297,15 @@ int8_t EpdFontFamily::getKerning(const uint32_t leftCp, const uint32_t rightCp, 
     return fallbackRegular->hasCodepoint(cp) ? fallbackRegular : nullptr;
   };
   const auto leftFont = owner(leftCp);
-  return leftFont && leftFont == owner(rightCp) ? leftFont->getKerning(leftCp, rightCp) : 0;
+  return leftFont && leftFont == owner(rightCp) ? leftFont->getKerningFP5(leftCp, rightCp) : 0;
 }
 
 uint32_t EpdFontFamily::applyLigatures(const uint32_t cp, const char*& text, const Style style) const {
+  if (style & SMALL_CAPS) return cp;
   return getFont(style)->applyLigatures(cp, text);
+}
+
+uint32_t EpdFontFamily::smallCapsCodepoint(uint32_t cp, Style style, bool all) const {
+  const auto* data = getData(style);
+  return data && data->smallCapsHandler ? data->smallCapsHandler(data->glyphMissCtx, cp, all) : 0;
 }

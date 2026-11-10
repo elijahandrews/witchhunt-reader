@@ -67,6 +67,57 @@ bool CompactTableLayout::ensureBuffer(const size_t additionalBytes) {
   return true;
 }
 
+bool CompactTableLayout::appendSourceMap(const uint16_t* offsets, const size_t count, uint16_t& start) {
+  start = UINT16_MAX;
+  if (!offsets || !count) return true;
+  bool identity = true;
+  for (size_t i = 0; i < count; ++i) identity = identity && offsets[i] == i;
+  if (identity) return true;
+  const size_t required = sourceMapUsed_ + count;
+  if (required > MAX_ROW_TEXT_BYTES) {
+    LOG_ERR("EHP", "Compact table source map exceeds row limit");
+    return false;
+  }
+  if (required > sourceMapCapacity_) {
+    size_t capacity = std::max<size_t>(128, sourceMapCapacity_ * 2u);
+    while (capacity < required) capacity *= 2;
+    capacity = std::min<size_t>(capacity, MAX_ROW_TEXT_BYTES);
+    auto grown = makeUniqueNoThrow<uint16_t[]>(capacity);
+    if (!grown) {
+      LOG_ERR("EHP", "Compact table source map allocation failed");
+      return false;
+    }
+    if (sourceMapUsed_) std::copy_n(sourceMap_.get(), sourceMapUsed_, grown.get());
+    sourceMap_ = std::move(grown);
+    sourceMapCapacity_ = static_cast<uint16_t>(capacity);
+  }
+  start = sourceMapUsed_;
+  std::copy_n(offsets, count, sourceMap_.get() + start);
+  sourceMapUsed_ = static_cast<uint16_t>(required);
+  return true;
+}
+
+SourceWordSpan CompactTableLayout::sourceForLineToken(const LineToken& line) const {
+  const auto& token = tokens_[line.tokenIndex];
+  auto source = token.source;
+  if (!source.valid()) return source;
+  const auto* cursor = reinterpret_cast<const unsigned char*>(buffer_.get() + token.offset);
+  const auto* const end = reinterpret_cast<const unsigned char*>(buffer_.get() + line.offset);
+  uint16_t characters = 0;
+  while (cursor < end) {
+    utf8NextCodepoint(&cursor);
+    ++characters;
+  }
+  const auto original =
+      token.sourceMapOffset == UINT16_MAX ? characters : sourceMap_[token.sourceMapOffset + characters];
+  source.characterOffset = static_cast<uint16_t>(std::min<unsigned>(UINT16_MAX, source.characterOffset + original));
+  const auto byteOffset = static_cast<uint16_t>(line.offset - token.offset);
+  source.probeByte = source.probeByte >= byteOffset && source.probeByte < byteOffset + line.length
+                         ? static_cast<uint16_t>(source.probeByte - byteOffset)
+                         : UINT16_MAX;
+  return source;
+}
+
 uint16_t CompactTableLayout::tableWidth() const {
   const int inset = tableStyle_.totalHorizontalInset();
   return inset < viewportWidth_ ? static_cast<uint16_t>(viewportWidth_ - inset) : viewportWidth_;
@@ -92,6 +143,7 @@ bool CompactTableLayout::beginRow() {
   if (fatal_ || rowActive_ || cellActive_) return false;
   bufferUsed_ = 0;
   tokenCount_ = 0;
+  sourceMapUsed_ = 0;
   cellCount_ = 0;
   rowFootnoteCount_ = 0;
   effectiveColumnCount_ = 0;
@@ -125,8 +177,17 @@ bool CompactTableLayout::beginCell(const bool isHeader, const uint8_t colSpan, c
   return true;
 }
 
+bool CompactTableLayout::setCellImage(std::shared_ptr<ImageBlock> image, const uint32_t source) {
+  if (!cellActive_ || !cellCount_ || !image || hasCellImage()) return false;
+  cells_[cellCount_ - 1].image = std::move(image);
+  cells_[cellCount_ - 1].imageSource = source;
+  return true;
+}
+
 bool CompactTableLayout::appendWord(const std::string_view text, const EpdFontFamily::Style requestedStyle,
-                                    const bool attachToPrevious, const bool backgroundBlack, const uint8_t linkId) {
+                                    const bool attachToPrevious, const bool backgroundBlack, const uint8_t linkId,
+                                    const SourceWordSpan& source, const uint16_t* sourceOffsets,
+                                    const size_t sourceOffsetCount) {
   if (fatal_ || !rowActive_ || !cellActive_ || text.empty()) return !fatal_;
   if (tokenCount_ >= MAX_ROW_TOKENS) {
     LOG_DBG("EHP", "Compact table row exceeds %u text runs", MAX_ROW_TOKENS);
@@ -157,12 +218,45 @@ bool CompactTableLayout::appendWord(const std::string_view text, const EpdFontFa
   if (!ensureBuffer(bytes)) {
     return false;
   }
+  if (source.valid() && sourceOffsets && sourceOffsetCount) {
+    const auto* cursor = reinterpret_cast<const unsigned char*>(text.data());
+    const auto* const end = cursor + text.size();
+    size_t count = 1;
+    while (cursor < end) {
+      const uint8_t lead = *cursor;
+      const size_t bytes = lead < 0x80                    ? 1
+                           : lead >= 0xC2 && lead <= 0xDF ? 2
+                           : lead >= 0xE0 && lead <= 0xEF ? 3
+                           : lead >= 0xF0 && lead <= 0xF4 ? 4
+                                                          : 0;
+      if (!bytes || bytes > static_cast<size_t>(end - cursor)) {
+        LOG_ERR("EHP", "Invalid UTF-8 in compact table source map");
+        return false;
+      }
+      for (size_t i = 1; i < bytes; ++i) {
+        if ((cursor[i] & 0xC0) != 0x80) {
+          LOG_ERR("EHP", "Invalid UTF-8 continuation in compact table source map");
+          return false;
+        }
+      }
+      cursor += bytes;
+      ++count;
+    }
+    if (count != sourceOffsetCount) {
+      LOG_ERR("EHP", "Invalid compact table source map length");
+      return false;
+    }
+  }
+  uint16_t sourceMapOffset = UINT16_MAX;
+  if (source.valid() && !appendSourceMap(sourceOffsets, sourceOffsetCount, sourceMapOffset)) return false;
   const uint16_t offset = bufferUsed_;
   memcpy(buffer_.get() + offset, text.data(), text.size());
   buffer_[offset + text.size()] = '\0';
   bufferUsed_ = static_cast<uint16_t>(bufferUsed_ + bytes);
 
   auto& token = tokens_[tokenCount_++];
+  token.source = source;
+  token.sourceMapOffset = sourceMapOffset;
   token.offset = offset;
   token.length = static_cast<uint16_t>(text.size());
   token.style = style;
@@ -276,15 +370,16 @@ bool CompactTableLayout::emitLine(std::array<LineToken, MAX_ROW_TOKENS>& line, c
     allocationFailure_ = true;
     return false;
   }
+  for (uint16_t i = 0; i < lineCount; ++i) owned->noteSource(sourceForLineToken(line[i]));
   output.lines.emplace_back(std::move(owned));
   return output.lines.size() <= TableFragmentCell::MAX_SERIALIZED_LINES;
 }
 
 bool CompactTableLayout::appendLineToken(std::array<LineToken, MAX_ROW_TOKENS>& line, uint16_t& lineCount,
-                                         uint16_t& lineWidth, const uint16_t maxWidth, const uint16_t offset,
-                                         const uint16_t length, const EpdFontFamily::Style style, const uint8_t flags,
-                                         const bool attachToPrevious, bool& emittedAny, const BlockStyle& cellStyle,
-                                         TableFragmentCell& output) {
+                                         uint16_t& lineWidth, const uint16_t maxWidth, const uint16_t tokenIndex,
+                                         const uint16_t offset, const uint16_t length, const EpdFontFamily::Style style,
+                                         const uint8_t flags, const bool attachToPrevious, bool& emittedAny,
+                                         const BlockStyle& cellStyle, TableFragmentCell& output) {
   const uint16_t width = measure(offset, length, style);
   const int gap = lineCount > 0 ? gapBefore(line[lineCount - 1], offset, style, attachToPrevious) : 0;
   if (lineCount > 0 && static_cast<int>(lineWidth) + gap + width > maxWidth) {
@@ -294,7 +389,7 @@ bool CompactTableLayout::appendLineToken(std::array<LineToken, MAX_ROW_TOKENS>& 
     emittedAny = true;
   }
   if (lineCount >= MAX_ROW_TOKENS) return false;
-  line[lineCount++] = {offset, length, width, style, flags, attachToPrevious};
+  line[lineCount++] = {tokenIndex, offset, length, width, style, flags, attachToPrevious};
   lineWidth = static_cast<uint16_t>(std::max(0, static_cast<int>(lineWidth) + (lineCount > 1 ? gap : 0) + width));
   return true;
 }
@@ -325,8 +420,9 @@ bool CompactTableLayout::wrapCell(const Cell& cell, const uint16_t maxWidth, Tab
       const uint16_t fullWidth = measure(remainingOffset, remainingLength, style);
       const int gap = lineCount > 0 ? gapBefore(line[lineCount - 1], remainingOffset, style, attach) : 0;
       if (fullWidth <= maxWidth && (lineCount == 0 || static_cast<int>(lineWidth) + gap + fullWidth <= maxWidth)) {
-        if (!appendLineToken(line, lineCount, lineWidth, maxWidth, remainingOffset, remainingLength, style, token.flags,
-                             attach, emittedAny, cell.style, output)) {
+        if (!appendLineToken(line, lineCount, lineWidth, maxWidth, static_cast<uint16_t>(cell.firstToken + i),
+                             remainingOffset, remainingLength, style, token.flags, attach, emittedAny, cell.style,
+                             output)) {
           return false;
         }
         break;
@@ -370,7 +466,13 @@ bool CompactTableLayout::wrapCell(const Cell& cell, const uint16_t maxWidth, Tab
       }
       const uint16_t chunkLen = best;
       const uint16_t chunkWidth = measure(remainingOffset, chunkLen, style);
-      line[lineCount++] = {remainingOffset, chunkLen, chunkWidth, style, token.flags, attach};
+      line[lineCount++] = {static_cast<uint16_t>(cell.firstToken + i),
+                           remainingOffset,
+                           chunkLen,
+                           chunkWidth,
+                           style,
+                           token.flags,
+                           attach};
       lineWidth = chunkWidth;
       if (!flush()) return false;
       remainingOffset = static_cast<uint16_t>(remainingOffset + chunkLen);
@@ -408,8 +510,15 @@ CompactTableLayout::RowResult CompactTableLayout::finishRowInternal(const bool f
   }
 
   if (flatten) {
+    gridRow.cells.clear();
     for (uint8_t i = 0; i < cellCount_; ++i) {
-      if (!flattenCell(cells_[i], flatLines)) return RowResult::Abort;
+      TableFragmentCell cell;
+      if (!wrapCell(cells_[i], tableWidth() > cellPadding_ * 2 ? tableWidth() - cellPadding_ * 2 : 1, cell))
+        return RowResult::Abort;
+      cell.image = cells_[i].image;
+      cell.imageSource = cells_[i].imageSource;
+      flatLines.insert(flatLines.end(), cell.lines.begin(), cell.lines.end());
+      gridRow.cells.push_back(std::move(cell));
     }
     flattened_ = true;
   } else {
@@ -430,7 +539,7 @@ CompactTableLayout::RowResult CompactTableLayout::finishRowInternal(const bool f
     fragmentColumnCount_ = fullWidth ? 1 : columnCount_;
     bool hasHeader = false;
     bool hasData = false;
-    uint16_t rowHeight = lineHeight_ + cellPadding_ * 2;
+    uint32_t rowHeight = lineHeight_ + cellPadding_ * 2;
     uint8_t logicalColumn = 0;
     for (uint8_t i = 0; i < cellCount_; ++i) {
       auto& destination = gridRow.cells[i];
@@ -449,8 +558,17 @@ CompactTableLayout::RowResult CompactTableLayout::finishRowInternal(const bool f
         flatLines.clear();
         return finishRowInternal(true, gridRow, flatLines, footnotes, visibleTextOffset);
       }
-      const uint16_t cellHeight =
-          static_cast<uint16_t>(std::max<size_t>(1, destination.lines.size()) * lineHeight_ + cellPadding_ * 2);
+      if (cells_[i].image) {
+        destination.image =
+            cells_[i].image->fittedTo(innerWidthForSpan(columnCount_, logicalColumn, destination.colSpan),
+                                      std::min<int>(TableFragmentCell::MAX_IMAGE_HEIGHT,
+                                                    std::max(1, int(viewportHeight_) - cellPadding_ * 2 - 1)));
+        if (!destination.image) return RowResult::Abort;
+        destination.imageSource = cells_[i].imageSource;
+      }
+      const uint32_t cellHeight =
+          (destination.image ? destination.lines.size() : std::max<size_t>(1, destination.lines.size())) * lineHeight_ +
+          cellPadding_ * 2 + (destination.image ? destination.image->getHeight() : 0);
       rowHeight = std::max(rowHeight, cellHeight);
       logicalColumn = static_cast<uint8_t>(logicalColumn + destination.colSpan);
     }

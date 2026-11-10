@@ -23,7 +23,7 @@ extern uint32_t testHyphenationIdentity;
 extern std::vector<BookMetadataCache::TocEntry> testTocEntries;
 
 namespace {
-constexpr uint8_t kFullVersion = 104;
+constexpr uint8_t kFullVersion = 110;
 constexpr uint8_t kPreRoundingFullVersion = 100;
 constexpr uint8_t kPreRoundingPartialVersion = 0xD5;
 constexpr uint8_t kStablePageFullVersion = 99;
@@ -35,7 +35,7 @@ constexpr uint8_t kPreImageAlignmentPartialVersion = 0xCF;
 constexpr uint8_t kPreFieldsetFullVersion = 93;
 constexpr uint8_t kPreFieldsetPartialVersion = 0xCE;
 constexpr uint8_t kS3BitmapFullVersion = 90;
-constexpr uint8_t kPartialVersion = 0xD9;
+constexpr uint8_t kPartialVersion = 0xDF;
 constexpr uint8_t kS3BitmapPartialVersion = 0xCB;
 constexpr uint8_t kC3BitmapFullVersion = 89;
 constexpr uint8_t kC3BitmapPartialVersion = 0xCA;
@@ -97,6 +97,13 @@ struct SectionHarness {
       section.build_->pageIndex.appendPrepared({offset, static_cast<uint16_t>(i * 3U), static_cast<uint16_t>(i * 5U),
                                                 static_cast<uint32_t>(i * 17U), static_cast<uint32_t>(i * 13U)});
     }
+  }
+
+  void appendSourcePage(SourceAnchor anchor, SourceRange range) {
+    ASSERT_EQ(section.build_->pageIndex.prepareAppend(), SectionPageIndex::PrepareResult::Ready);
+    const uint32_t offset = section.onPageComplete(std::make_unique<Page>());
+    ASSERT_NE(offset, 0u);
+    section.build_->pageIndex.appendPrepared({offset, 0, 0, 100, 100, anchor, range});
   }
 
   bool commit(const uint8_t version, const uint32_t consumed = 0, const uint32_t total = 0) {
@@ -191,7 +198,9 @@ TEST_F(SectionPersistenceTest, FailedCommitKeepsThePreviousReadableCache) {
 }
 
 TEST_F(SectionPersistenceTest, RejectsCachesFromPreviousLayoutRevisions) {
-  for (const uint8_t staleVersion : {uint8_t{103},
+  for (const uint8_t staleVersion : {uint8_t{109}, uint8_t{0xDE}, uint8_t{104},
+                                     uint8_t{0xD9},
+                                     uint8_t{103},
                                      uint8_t{0xD8},
                                      uint8_t{102},
                                      uint8_t{0xD7},
@@ -440,7 +449,7 @@ TEST_F(SectionPersistenceTest, PublisherFaceStateSurvivesCompleteAndPartialCommi
     harness.renderer.publisherSignature = 1111;
     harness.appendPages(1);
     const auto firstPageSignature = harness.section.layoutSignature();
-    harness.renderer.publisherUsage = 3;
+    harness.renderer.publisherUsage = 3 | (uint64_t{1} << 63);
     harness.renderer.publisherSignature = 1234;
     harness.appendPages(1);
     EXPECT_NE(harness.section.layoutSignature(), firstPageSignature);
@@ -452,7 +461,7 @@ TEST_F(SectionPersistenceTest, PublisherFaceStateSurvivesCompleteAndPartialCommi
     harness.renderer.publisherSignature = 1234;
     Section reopened(harness.epub, 0, harness.renderer);
     ASSERT_TRUE(reopened.loadSectionFile(harness.spec));
-    EXPECT_EQ(harness.renderer.restoredPublisherUsage, 3u);
+    EXPECT_EQ(harness.renderer.restoredPublisherUsage, 3 | (uint64_t{1} << 63));
     EXPECT_EQ(reopened.layoutSignature(), harness.section.layoutSignature());
     EXPECT_NE(reopened.layoutSignature(), readerRenderSpecSignature(harness.spec));
     EXPECT_EQ(reopened.isPartial(), version == kPartialVersion);
@@ -513,4 +522,97 @@ TEST_F(SectionPersistenceTest, PreviousReferenceLessCachesAreRejected) {
     Section reopened(harness.epub, 0, harness.renderer);
     EXPECT_FALSE(reopened.loadSectionFile(harness.spec));
   }
+}
+
+TEST_F(SectionPersistenceTest, OriginalSourceAnchorsSurviveColdAndPartialCaches) {
+  for (const auto version : {kFullVersion, kPartialVersion}) {
+    Storage.reset(); SectionHarness harness; harness.begin();
+    harness.appendSourcePage({100, 0}, {100, 200});
+    harness.appendSourcePage({200, 0}, {200, 300});
+    EXPECT_EQ(harness.section.getSourceAnchorForPage(1)->sourceOffset, 200u);
+    EXPECT_EQ(harness.section.getPageForSourceAnchor({100, 0}), 0);
+    ASSERT_TRUE(harness.commit(version, 300, 1000)); harness.finishSuccessfulCommit();
+    Section reopened(harness.epub, 0, harness.renderer);
+    ASSERT_TRUE(reopened.loadSectionFile(harness.spec));
+    const auto anchor = reopened.getSourceAnchorForPage(1); ASSERT_TRUE(anchor);
+    EXPECT_EQ(anchor->sourceOffset, 200u); EXPECT_EQ(anchor->characterOffset, 0u);
+    EXPECT_EQ(reopened.getPageForSourceAnchor({100, 0}), 0);
+    EXPECT_EQ(reopened.getPageForSourceAnchor({150, 0}), 0);
+    EXPECT_EQ(reopened.getPageForSourceAnchor({200, 0}), 1);
+    EXPECT_FALSE(reopened.getPageForSourceAnchor({400, 0}));
+    EXPECT_FALSE(reopened.getSourceAnchorForPage(2));
+  }
+}
+TEST_F(SectionPersistenceTest, SplitWordsAndOverlappingFloatsRequireProbeExceptExactAnchor) {
+  SectionHarness harness; harness.begin();
+  harness.appendSourcePage({100, 0}, {100, 220});
+  harness.appendSourcePage({100, 9}, {100, 300});
+  ASSERT_TRUE(harness.commit(kFullVersion)); harness.finishSuccessfulCommit();
+  Section reopened(harness.epub, 0, harness.renderer); ASSERT_TRUE(reopened.loadSectionFile(harness.spec));
+  EXPECT_EQ(reopened.getPageForSourceAnchor({100, 0}), 0);
+  EXPECT_EQ(reopened.getPageForSourceAnchor({100, 9}), 1);
+  EXPECT_FALSE(reopened.getPageForSourceAnchor({100, 7}));
+  EXPECT_FALSE(reopened.getPageForSourceAnchor({150, 0}));
+  EXPECT_EQ(reopened.getPageForSourceAnchor({250, 0}), 1);
+}
+TEST_F(SectionPersistenceTest, TruncatedSourceIndexNeverProducesAnAnchor) {
+  SectionHarness harness; harness.begin(); harness.appendSourcePage({100, 3}, {100, 200});
+  ASSERT_TRUE(harness.commit(kFullVersion)); harness.finishSuccessfulCommit();
+  auto bytes = Storage.bytes(harness.section.filePath); bytes.resize(bytes.size() - 2);
+  Storage.put(harness.section.filePath, bytes);
+  EXPECT_FALSE(harness.section.getSourceAnchorForPage(0));
+  EXPECT_FALSE(harness.section.getPageForSourceAnchor({100, 3}));
+}
+
+TEST_F(SectionPersistenceTest, TemporaryFallbackCacheStaysReadableButIsNotReused) {
+  for (const bool alreadyPending : {false, true}) {
+    Storage.reset(); SectionHarness h;
+    h.renderer.pendingFontFailure = alreadyPending;
+    h.begin(); h.appendPages(2);
+    if (!alreadyPending) ++h.renderer.failureEpoch;
+    ASSERT_TRUE(h.commit(kFullVersion)); h.finishSuccessfulCommit();
+    EXPECT_TRUE(Storage.exists((h.section.filePath + ".layout-retry").c_str()));
+    EXPECT_NE(h.section.loadPage(0), nullptr);
+    Section reopened(h.epub, 0, h.renderer);
+    EXPECT_FALSE(reopened.loadSectionFile(h.spec));
+  }
+}
+TEST_F(SectionPersistenceTest, RetryMarkerRemovedOnlyAfterStableReplacementPromotes) {
+  SectionHarness first; first.begin(); first.appendPages(2);
+  ++first.renderer.failureEpoch;
+  ASSERT_TRUE(first.commit(kFullVersion)); first.finishSuccessfulCommit();
+  const auto marker = first.section.filePath + ".layout-retry";
+  ASSERT_TRUE(Storage.exists(marker.c_str()));
+  {
+    SectionHarness failed; failed.begin(); failed.appendPages(3);
+    Storage.failRenameFrom = failed.section.binTmpPath();
+    EXPECT_FALSE(failed.commit(kFullVersion));
+    EXPECT_TRUE(Storage.exists(marker.c_str()));
+  }
+  SectionHarness recovered; recovered.begin(); recovered.appendPages(3);
+  ASSERT_TRUE(recovered.commit(kFullVersion)); recovered.finishSuccessfulCommit();
+  EXPECT_FALSE(Storage.exists(marker.c_str()));
+  Section reopened(recovered.epub, 0, recovered.renderer);
+  ASSERT_TRUE(reopened.loadSectionFile(recovered.spec));
+  EXPECT_EQ(reopened.pageCount, 3);
+}
+TEST_F(SectionPersistenceTest, FailureToPublishRetryMarkerPreservesPreviousCache) {
+  SectionHarness first; first.begin(); first.appendPages(2);
+  ASSERT_TRUE(first.commit(kFullVersion)); first.finishSuccessfulCommit();
+  const auto previous = Storage.bytes(first.section.filePath);
+  SectionHarness replacement; replacement.begin(); replacement.appendPages(3);
+  ++replacement.renderer.failureEpoch;
+  Storage.failWrite = true;
+  EXPECT_FALSE(replacement.commit(kFullVersion));
+  EXPECT_EQ(Storage.bytes(first.section.filePath), previous);
+}
+
+TEST_F(SectionPersistenceTest, IncompleteDocumentStylesRequireAStableRebuild) {
+  SectionHarness h; h.begin(); h.appendPages(2);
+  h.section.build_->parser->setDocumentStyleCache("", "doc0:", true, true);
+  ASSERT_TRUE(h.commit(kFullVersion)); h.finishSuccessfulCommit();
+  EXPECT_TRUE(Storage.exists((h.section.filePath + ".layout-retry").c_str()));
+  EXPECT_NE(h.section.loadPage(0), nullptr);
+  Section reopened(h.epub, 0, h.renderer);
+  EXPECT_FALSE(reopened.loadSectionFile(h.spec));
 }

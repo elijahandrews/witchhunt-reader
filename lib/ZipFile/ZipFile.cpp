@@ -5,6 +5,7 @@
 #include <InflateStream.h>
 #include <Logging.h>
 #include <Memory.h>
+#include <MinizConfig.h>
 
 #include <algorithm>
 #include <cstring>
@@ -951,6 +952,62 @@ bool ZipFile::readStoredFileToStream(const char* filename, Print& out) {
       return false;
     }
     remaining -= n;
+  }
+  return true;
+}
+
+bool ZipFile::readFileToStreamValidated(const char* filename, Print& out, const size_t chunkSize) {
+  if (!filename || !filename[0] || chunkSize == 0) {
+    LOG_ERR("ZIP", "Invalid validated stream request");
+    return false;
+  }
+  const size_t length = std::strlen(filename);
+  if (length > UINT16_MAX) {
+    LOG_ERR("ZIP", "Validated stream path too long");
+    return false;
+  }
+  // Publication must use the current archive, including after an interrupted
+  // replacement. Never trust remembered directory offsets or entry metadata.
+  zipDetails = {};
+  fileStatSlimCache.clear();
+  lastCentralDirPosValid = false;
+  struct BypassDirectoryCache {
+    ZipDirectoryCache*& slot;
+    ZipDirectoryCache* saved;
+    ~BypassDirectoryCache() { slot = saved; }
+  } restoreCache{directoryCache, directoryCache};
+  directoryCache = nullptr;
+  const EntryTarget target{fnvHash64(filename, length), static_cast<uint16_t>(length), 0, filename};
+  EntryIdentity identity;
+  if (fillEntryIdentities(&target, 1, &identity, 1) != 1 || !identity.found) {
+    LOG_ERR("ZIP", "Cannot find validated stream identity: %s", filename);
+    return false;
+  }
+  class CheckedSink final : public Print {
+   public:
+    CheckedSink(Print& destination, uint32_t expected) : destination_(destination), expected_(expected) {}
+    size_t write(uint8_t byte) override { return write(&byte, 1); }
+    size_t write(const uint8_t* data, size_t size) override {
+      if (size > expected_ - count_) return 0;
+      const size_t written = destination_.write(data, size);
+      if (written != size) return 0;
+      crc_ = static_cast<uint32_t>(mz_crc32(crc_, data, size));
+      count_ += static_cast<uint32_t>(size);
+      return size;
+    }
+    bool matches(uint32_t crc) const { return count_ == expected_ && crc_ == crc; }
+
+   private:
+    Print& destination_;
+    uint32_t expected_;
+    uint32_t count_ = 0;
+    uint32_t crc_ = 0;
+  } checked(out, identity.uncompressedSize);
+  // Reuse the existing bounded inflate buffers; no full-font allocation.
+  const bool streamed = readFileToStream(filename, checked, std::min<size_t>(chunkSize, 4096));
+  if (!streamed || !checked.matches(identity.crc32)) {
+    LOG_ERR("ZIP", "Validated stream length, CRC or output failed: %s", filename);
+    return false;
   }
   return true;
 }

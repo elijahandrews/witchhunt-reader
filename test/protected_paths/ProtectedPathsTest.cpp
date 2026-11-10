@@ -58,3 +58,24 @@ TEST(ProtectedPaths, LegacyStoresAndDirectoryMutationsStayProtected) {
   EXPECT_FALSE(isPluginPath(std::string("/books/new.epub\0/other", 22)));
   EXPECT_FALSE(isPluginPath("/books\\..\\.crosspoint\\wifi.json"));
 }
+
+TEST(ProtectedPaths, PlutoPairingAndCrossInkWifiStoresAndSiblingsAreProtected) {
+  for (const auto* file : {"book-sync.json", "book-sync-ca.pem", "crossink-wifi.json"}) {
+    const std::string path = std::string("/.crosspoint/") + file;
+    EXPECT_TRUE(isSensitivePath(path.c_str()));
+    EXPECT_TRUE(isSensitivePath((path + ".tmp").c_str()));
+    EXPECT_TRUE(isSensitivePath((path + ".bak").c_str()));
+    EXPECT_TRUE(isSensitivePath((path + ".part").c_str()));
+    EXPECT_FALSE(isPluginPath(path));
+    EXPECT_TRUE(isSensitivePath((std::string("//.CrossPoint//./") + file + " .").c_str()));
+    EXPECT_TRUE(isSensitivePath((std::string("/.crosspoint/plugins/../") + file).c_str()));
+    EXPECT_TRUE(isSensitivePath((std::string("/ .crosspoint/ ") + file).c_str()));
+    EXPECT_FALSE(isSensitivePath((std::string("/Books/") + file).c_str()));
+  }
+  EXPECT_TRUE(isSensitivePath("/.CROSSPOINT/BOOK-SYNC.JSON"));
+  EXPECT_TRUE(isSensitivePath("/.CROSSPOINT/BOOK-SYNC-CA.PEM"));
+  EXPECT_TRUE(isSensitivePath("/.CROSSPOINT/CROSSINK-WIFI.JSON"));
+  EXPECT_TRUE(isSensitivePath("/.crosspoint/BOOK-S~1.JSO"));
+  EXPECT_TRUE(isSensitivePath("/.crosspoint", true));
+  EXPECT_FALSE(isSensitivePath("/.crosspoint/book-sync/last-run.json"));
+}

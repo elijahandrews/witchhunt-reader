@@ -11,6 +11,10 @@ class HalFile {
  public:
   explicit HalFile(String content = {}) : content(std::move(content)) {}
   explicit HalFile(std::string* output) : output(output) {}
+  int read() {
+    uint8_t byte = 0;
+    return read(&byte, 1) == 1 ? byte : -1;
+  }
   int read(void* output, size_t length) {
     const size_t count = std::min(length, content.size() - position);
     memcpy(output, content.data() + position, count);
@@ -76,7 +80,7 @@ class HalStorage {
 
   String readFile(const char* path) const {
     const auto file = files.find(path);
-    return file == files.end() ? String() : String(file->second.c_str());
+    return file == files.end() ? String() : String(file->second);
   }
 
   void put(const std::string& path, std::string content) { files[path] = std::move(content); }

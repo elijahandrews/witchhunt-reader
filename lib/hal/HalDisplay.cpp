@@ -256,3 +256,27 @@ bool HalDisplay::displayGrayscaleBaseAsync(RefreshMode fallback) {
   return einkDisplay.displayGrayscaleBaseAsync(convertRefreshMode(fallback));
 #endif
 }
+
+bool HalDisplay::supportsTextAa() const {
+#ifdef SIMULATOR
+  return false;
+#else
+  return einkDisplay.supportsTextAa();
+#endif
+}
+
+bool HalDisplay::tryDisplayTextAa(const uint8_t* lsb, const uint8_t* msb, size_t bytes, bool turnOffScreen) {
+#ifdef SIMULATOR
+  return false;
+#else
+  HalSpiBus::Lock spiLock;
+  return einkDisplay.tryDisplayTextAa(lsb, msb, bytes, turnOffScreen);
+#endif
+}
+
+void HalDisplay::releaseTextAa() {
+#ifndef SIMULATOR
+  HalSpiBus::Lock spiLock;
+  einkDisplay.releaseTextAa();
+#endif
+}

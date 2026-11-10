@@ -71,17 +71,19 @@ namespace BidiUtils { bool isTransparentMark(uint32_t cp) { return cp == 0x05b0;
 struct EpdFontFamily {
   enum Style { REGULAR=0, SMALL_CAPS=4, SUP=8, SUB=16 };
   int kern = 0;
+  uint32_t smallCapsCodepoint(uint32_t, Style, bool) const { return 0; }
   int getKerning(uint32_t, uint32_t, Style) const { return kern; }
 };
 struct SdCardFont {
   int advance = 17;
   bool hasAdvanceTable() const { return true; }
+  uint8_t rasterDensity() const { return 1; }
 };
 uint8_t resolveSdCardStyle(const SdCardFont&, EpdFontFamily::Style) { return 0; }
 int32_t resolveSdCardAdvanceFP(const SdCardFont& font, const EpdFontFamily&, uint32_t, EpdFontFamily::Style, uint8_t) {
   return font.advance;
 }
-bool isSmallCapsLowercase(EpdFontFamily::Style style, uint32_t cp) { return (style & EpdFontFamily::SMALL_CAPS) && cp >= 'a' && cp <= 'z'; }
+bool isSmallCapsLowercase(EpdFontFamily::Style style, uint32_t cp, bool all) { return (style & EpdFontFamily::SMALL_CAPS) && ((cp >= 'a' && cp <= 'z') || (all && cp >= 'A' && cp <= 'Z')); }
 uint32_t smallCapsUppercaseCodepoint(uint32_t cp) { return cp - 'a' + 'A'; }
 '''
 for signature in ['bool characterSpacingBoundary(', 'int characterSpacingPixels(', 'int32_t halfAdvanceFP(', 'int32_t smallCapsAdvanceFP(']:
@@ -90,7 +92,7 @@ start = gfx.index('  // Advance table fast-path for SD card fonts during layout.
 end = gfx.index('\n  const auto fontIt = fontMap.find(resolvedFontId);', start + 300)
 source += r'''
 int measure(const char* text, int advance = 17, EpdFontFamily::Style style = EpdFontFamily::REGULAR,
-            int8_t characterSpacing = 0, uint32_t followingCp = 0, int kern = 0) {
+            int8_t characterSpacing = 0, uint32_t followingCp = 0, int kern = 0, int16_t letterSpacing = 0, bool allSmallCaps = false) {
   const int resolvedFontId = 1;
   SdCardFont sd{advance};
   std::map<int, SdCardFont*> sdCardFonts_{{1, &sd}};
@@ -133,7 +135,7 @@ int main() {
   assert(measure("aaaaaaaaaa") == 10); // Previously rounds 170/16 once, giving 11.
   assert(measure("a\u0301\ufe0fb\u05b0c") == 3);
   assert(measure("abc", 23, EpdFontFamily::SUP) == 3);
-  assert(measure("abc", 23, EpdFontFamily::SMALL_CAPS) == 3);
+  // SMALL_CAPS deliberately uses the full production walker (tested by font raster tests).
   for (int level = -5; level <= 5; ++level) {
     assert(measure("abcd", 17, EpdFontFamily::REGULAR, level) == 4 + fp4::toPixel(3*level*8));
     assert(measure("abcd", 17, EpdFontFamily::REGULAR, level, 'e', 7) == 3 + fp4::toPixel(24) + fp4::toPixel(4*level*8));

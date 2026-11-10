@@ -24,6 +24,66 @@ std::shared_ptr<TextBlock> makeLine(std::initializer_list<const char*> words, co
 
 }  // namespace
 
+TEST(TouchReaderPreviewModel, PublisherLineHeightMatchesPageAfterSpacingChange) {
+  for (const float publisherHeight : {0.8f, 1.5f}) {
+    Page page;
+    BlockStyle style;
+    style.lineHeightMultiplier = publisherHeight;
+    style.lineHeight = static_cast<uint16_t>(10 * publisherHeight);
+    page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(
+        std::vector<TextBlock::Word>{{"aa", 0}, {"bb", 3}}, style), 0, 0));
+    page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(
+        std::vector<TextBlock::Word>{{"cc", 0}, {"dd", 3}}, style), 0, style.lineHeight));
+    GfxRenderer renderer;
+    TouchReaderPreviewModel model;
+    ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+    model.renderText(renderer, 1, 0, 0, 5, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+    ASSERT_EQ(renderer.drawCalls.size(), 4u);
+    EXPECT_EQ(renderer.drawCalls[2].y, publisherHeight < 1 ? 8 : 16);
+    // A wider line must rejoin the source lines: a publisher's tall line box
+    // is not a paragraph break or an extra paragraph margin.
+    renderer.drawCalls.clear();
+    model.renderText(renderer, 1, 0, 0, 20, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+    EXPECT_EQ(renderer.drawCalls[2].y, 0);
+  }
+}
+
+TEST(TouchReaderPreviewModel, SmallerPublisherParagraphDoesNotUseReaderFontHeightAsMinimum) {
+  Page page;
+  BlockStyle style;
+  style.fontSize64 = 672;  // 87.5% of the 12-point reader font.
+  style.lineHeightMultiplier = 0.8f;
+  style.lineHeight = 7;
+  page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(
+      std::vector<TextBlock::Word>{{"aa", 0}, {"bb", 3}}, style), 0, 0));
+  GfxRenderer renderer;
+  renderer.sizedFonts = true;
+  TouchReaderPreviewModel model;
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  model.renderText(renderer, 1, 0, 0, 2, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+  ASSERT_EQ(renderer.drawCalls.size(), 2u);
+  EXPECT_EQ(renderer.drawCalls[0].fontId, 672);
+  EXPECT_EQ(renderer.drawCalls[0].y, 0);
+  EXPECT_EQ(renderer.drawCalls[1].y, 8);
+}
+
+TEST(TouchReaderPreviewModel, PreservesRealParagraphGapWithoutCountingPublisherLineBoxTwice) {
+  Page page;
+  BlockStyle style;
+  style.lineHeightMultiplier = 1.5f;
+  style.lineHeight = 15;
+  page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(
+      std::vector<TextBlock::Word>{{"aa", 0}}, style), 0, 0));
+  page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(
+      std::vector<TextBlock::Word>{{"bb", 0}}, style), 0, 20));
+  GfxRenderer renderer;
+  TouchReaderPreviewModel model;
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  model.renderText(renderer, 1, 0, 0, 20, 105, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+  ASSERT_EQ(renderer.drawCalls.size(), 2u);
+  EXPECT_EQ(renderer.drawCalls[1].y, 21);  // 16-pixel line plus the real five-pixel gap.
+}
+
 TEST(TouchReaderPreviewModel, ReflowsAcrossCapturedLineBreaksBeforeJustifying) {
   Page page;
   page.elements.push_back(std::make_unique<PageLine>(makeLine({"aa", "bb"}), 0, 0));
@@ -438,4 +498,28 @@ TEST(WordSpacing, SavedValuesAndSliderRoundTrip) {
       previous = adjusted;
     }
   }
+}
+
+TEST(TouchReaderPreviewModel, ExactPublisherSizesSurviveZoomAndIncreaseLineHeight) {
+  Page page;
+  std::vector<TextBlock::Word> words{{"A", 0}, {"b", 2}};
+  words[0].points64 = 1536;
+  words[1].points64 = 719;
+  words[1].hasSpaceBefore = true;
+  page.elements.push_back(std::make_unique<PageLine>(std::make_shared<TextBlock>(std::move(words)), 0, 0));
+  GfxRenderer renderer;
+  renderer.sizedFonts = true;
+  TouchReaderPreviewModel model;
+  ASSERT_TRUE(model.capture(page, renderer, 1, 100));
+  model.renderText(renderer, 2, 0, 0, 1, 100, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+  ASSERT_EQ(renderer.drawCalls.size(), 2u);
+  EXPECT_EQ(renderer.drawCalls[0].fontId, 1664);
+  EXPECT_EQ(renderer.drawCalls[1].fontId, 779);
+  EXPECT_EQ(renderer.drawCalls[0].y, 0);
+  EXPECT_EQ(renderer.drawCalls[1].y, 23);  // line top22 + body ascender9 - word ascender8
+  renderer.drawCalls.clear();
+  ASSERT_TRUE(model.captureParagraph("c"));
+  model.renderText(renderer, 2, 0, 0, 10, 100, 0, static_cast<uint8_t>(CssTextAlign::Left), false, false, true);
+  ASSERT_EQ(renderer.drawCalls.size(), 1u);
+  EXPECT_EQ(renderer.drawCalls[0].fontId, 2);
 }

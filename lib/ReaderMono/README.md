@@ -1,0 +1,3 @@
+Witch Mono is a compact four-style subset of Roboto Mono for code and CSS `monospace` text. The source is pinned in `manifest.json`, and the included SIL Open Font License applies to these font data. The renamed subset retains Latin-1 and common code punctuation; the original copyright and license names remain in the fonts.
+
+Regenerate with `scripts/build_monospace_fallback.py --cache /tmp/witch-reader-mono` using fontTools 4.66.1. The script downloads only the pinned upstream files and verifies source checksums (including cached inputs) and records subset checksums. Generated arrays are linked once by `ReaderMono.cpp` and need no SD installation.

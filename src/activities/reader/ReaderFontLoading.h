@@ -17,22 +17,14 @@ inline bool shouldShowFontPreviewLoading(const char* familyName) {
   return !sdFontSystem.canResizeResidentScalableFamilyWithoutReload(familyName);
 }
 
-// Gesture/button callers run on the main loop. Publish feedback before cold
-// metadata reads, then leave the caller's existing reflow/indexing flow in charge.
+// Gesture/button callers run on the main loop. Resolve the size first so
+// clamped gestures remain silent. Changing the in-memory setting does not load
+// a font or save settings; the caller performs those and reflow after feedback.
 inline bool changeReaderFontSizeWithFeedback(GfxRenderer& renderer, const bool larger,
                                              const FontSizeStepMode mode = FontSizeStepMode::Wrap) {
   RenderLock lock;
-  const auto& registry = sdFontSystem.registry();
-  bool showLoading = false;
-  if (SETTINGS.sdFontFamilyName[0] != '\0') {
-    const auto* summary = registry.findSummary(SETTINGS.sdFontFamilyName);
-    showLoading = registry.needsRefresh() || !summary || summary->files.empty();
-  }
-  if (showLoading) GUI.drawPopup(renderer, tr(STR_LOADING), true);
-  const bool changed = sdFontSystem.changeReaderFontSize(larger, mode);
-  // A clamped step or discovery failure has no subsequent reflow to clear the
-  // physical popup. Its backing pixels have already been restored.
-  if (showLoading && !changed) renderer.displayBuffer();
-  return changed;
+  if (!sdFontSystem.changeReaderFontSize(larger, mode)) return false;
+  GUI.drawPopup(renderer, tr(STR_LOADING), true);
+  return true;
 }
 }  // namespace ReaderUtils

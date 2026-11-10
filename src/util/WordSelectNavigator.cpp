@@ -555,6 +555,11 @@ void WordSelectNavigator::drawSingleHighlight(const GfxRenderer& renderer, int l
   if (!w) return;
   renderer.fillRect(w->screenX - 2, w->screenY - 2, w->width + 4, w->heightOr(lineHeight) + 4, foregroundBlack);
   const char* displayedText = getDisplay(*w);
+#ifdef CROSSINK_SCALABLE_FONTS
+  const int resolvedFont = renderer.resolveBookFont64(w->fontId, w->fontFamily, w->points64);
+#else
+  const int resolvedFont = w->fontId;
+#endif
   const auto baseDir = w->isRtl ? BidiUtils::BidiBaseDir::RTL : BidiUtils::BidiBaseDir::LTR;
   if (w->focusBoundary > 0 && w->focusSuffixX > 0) {
     const auto boldStyle = static_cast<EpdFontFamily::Style>(w->style | EpdFontFamily::BOLD);
@@ -564,18 +569,20 @@ void WordSelectNavigator::drawSingleHighlight(const GfxRenderer& renderer, int l
     memcpy(boldBuf, displayedText, boldLen);
     boldBuf[boldLen] = '\0';
     if (w->isRtl) {
-      renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText + boldLen, !foregroundBlack, w->style,
-                        baseDir);
-      renderer.drawText(w->fontId, w->screenX + w->focusSuffixX, w->screenY, boldBuf, !foregroundBlack, boldStyle,
-                        baseDir);
+      renderer.drawText(resolvedFont, w->screenX, w->screenY, displayedText + boldLen, !foregroundBlack, w->style, baseDir,
+                        w->characterSpacing, w->letterSpacing, w->typography);
+      renderer.drawText(resolvedFont, w->screenX + w->focusSuffixX, w->screenY, boldBuf, !foregroundBlack, boldStyle,
+                        baseDir, w->characterSpacing, w->letterSpacing, w->typography);
     } else {
-      renderer.drawText(w->fontId, w->screenX, w->screenY, boldBuf, !foregroundBlack, boldStyle, baseDir);
-      renderer.drawText(w->fontId, w->screenX + w->focusSuffixX, w->screenY, displayedText + boldLen, !foregroundBlack,
-                        w->style, baseDir);
+      renderer.drawText(resolvedFont, w->screenX, w->screenY, boldBuf, !foregroundBlack, boldStyle, baseDir,
+                        w->characterSpacing, w->letterSpacing, w->typography);
+      renderer.drawText(resolvedFont, w->screenX + w->focusSuffixX, w->screenY, displayedText + boldLen, !foregroundBlack,
+                        w->style, baseDir, w->characterSpacing, w->letterSpacing, w->typography);
     }
     return;
   }
-  renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText, !foregroundBlack, w->style, baseDir);
+  renderer.drawText(resolvedFont, w->screenX, w->screenY, displayedText, !foregroundBlack, w->style, baseDir,
+                    w->characterSpacing, w->letterSpacing, w->typography);
 }
 
 void WordSelectNavigator::drawTouchDragCursor(const GfxRenderer& renderer, int lineHeight, int wordIndex,

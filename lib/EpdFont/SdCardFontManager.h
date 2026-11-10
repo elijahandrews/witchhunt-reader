@@ -6,6 +6,7 @@
 #include <vector>
 #if CROSSINK_SCALABLE_FONTS
 #include <HalScalableFont.h>
+#include <ScalableSizeCache.h>
 #endif
 
 class GfxRenderer;
@@ -106,12 +107,16 @@ class SdCardFontManager {
   // renderer registrations are replaced because metrics and cache identity
   // depend on these options.
   bool setScalableRenderOptions(GfxRenderer& renderer, const freeink::font::FtFont::RenderOptions& renderOptions);
+  int resolveScalableSize64(GfxRenderer& renderer, int baseId, uint16_t points64);
+  void retryScalableSizes() { extraSizes_.retryFailures(); }
 #endif
 
  private:
 #if CROSSINK_SCALABLE_FONTS
   std::unique_ptr<HalScalableFont> scalable_[4];
   uint32_t scalableHash_ = 0;
+  ScalableSizeCache extraSizes_;
+  void clearExtraSizes(GfxRenderer& renderer);
   int activeScalableId_ = 0;
   bool lastLoadHadIntegrityWarning_ = false;
   bool temporaryScalable_ = false;

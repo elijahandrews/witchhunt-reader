@@ -18,6 +18,7 @@
 #include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "activities/ActivityManager.h"
+#include "activities/network/BookSyncActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "activities/network/StatsUploadActivity.h"
 #include "components/CompactHeader.h"
@@ -180,6 +181,21 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
     return;
   }
 
+  if (mode == NetworkMode::PLUTO_BOOK_SYNC) {
+    auto sync = makeUniqueNoThrow<BookSyncActivity>(renderer, mappedInput);
+    if (!sync) {
+      exitToOrigin();
+      return;
+    }
+    sync->setReturnToFileTransfer(returnBookPath, networkBootReady);
+    if (WiFi.getMode() != WIFI_MODE_NULL) {
+      WiFi.disconnect(false);
+      WiFi.mode(WIFI_OFF);
+    }
+    activityManager.replaceActivity(std::move(sync));
+    return;
+  }
+
   if (mode == NetworkMode::SYNC_BOOKS || mode == NetworkMode::SYNC_READING_STATS ||
       mode == NetworkMode::SYNC_CLIPPINGS) {
     // Sync Books asks first; the targeted uploads start straight away. Each
@@ -239,6 +255,7 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
       case NetworkMode::OPDS_BROWSER:
       case NetworkMode::NEARBY_STATS_SYNC:
       case NetworkMode::NEARBY_BOOK_RECEIVE:
+      case NetworkMode::PLUTO_BOOK_SYNC:
       case NetworkMode::SYNC_BOOKS:
       case NetworkMode::SYNC_READING_STATS:
       case NetworkMode::SYNC_CLIPPINGS:

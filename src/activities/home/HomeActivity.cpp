@@ -132,10 +132,10 @@ std::string getRecentBookCachePath(const RecentBook& book) {
     return Epub::resolveCachePathForFilePath(book.path, "/.crosspoint");
   }
   if (FsHelpers::hasXtcExtension(book.path)) {
-    return "/.crosspoint/xtc_" + std::to_string(std::hash<std::string>{}(book.path));
+    return "/.crosspoint/crossink_xtc_" + std::to_string(std::hash<std::string>{}(book.path));
   }
   if (FsHelpers::hasTxtExtension(book.path) || FsHelpers::hasMarkdownExtension(book.path)) {
-    return "/.crosspoint/txt_" + std::to_string(std::hash<std::string>{}(book.path));
+    return "/.crosspoint/crossink_txt_" + std::to_string(std::hash<std::string>{}(book.path));
   }
   return "";
 }

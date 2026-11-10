@@ -101,10 +101,6 @@ FontLoadError FilenameFontSystem::scanFamily(const char* name, SdCardFontFamilyI
         }
         continue;
       }
-      if (scratch->info.variable) {
-        if (!failed) error = FontLoadError::Unsupported;
-        continue;
-      }
       style = scratch->info.style;
     }
     if (style > 1) {

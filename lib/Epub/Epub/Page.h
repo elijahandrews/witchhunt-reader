@@ -63,6 +63,7 @@ class PageImage final : public PageElement {
   PageElementTag getTag() const override { return TAG_PageImage; }
   static std::unique_ptr<PageImage> deserialize(FsFile& file);
   const ImageBlock& getImageBlock() const { return *imageBlock; }
+  ImageBlock& getImageBlock() { return *imageBlock; }
   bool isInlineImage() const { return inlineImage; }
 };
 
@@ -110,6 +111,8 @@ class PageBorderBox final : public PageElement {
   uint16_t height;
   CssBorderSide sides[4];  // top, right, bottom, left
   bool shaded;
+  uint16_t backgroundGray = 256;
+  uint8_t backgroundLayer = 0;
 
  public:
   PageBorderBox(uint16_t width, uint16_t height, const CssBorderSide (&sides)[4], bool shaded, int16_t xPos,
@@ -122,14 +125,25 @@ class PageBorderBox final : public PageElement {
   void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool foregroundBlack = true) override;
   bool serialize(Print& file) override;
   PageElementTag getTag() const override { return TAG_PageBorderBox; }
+  void configureBackground(uint16_t gray, uint8_t layer = 0) {
+    backgroundGray = std::min<uint16_t>(gray, 256);
+    backgroundLayer = std::min<uint8_t>(layer, 7);
+  }
+  uint8_t paintLayer() const { return backgroundLayer; }
+  uint16_t getWidth() const { return width; }
+  uint16_t getHeight() const { return height; }
+  bool paintsPixel(int localX, int localY, int screenX, int screenY, bool& dark) const;
   static std::unique_ptr<PageBorderBox> deserialize(FsFile& file);
 };
 
 struct TableFragmentCell {
   static constexpr uint8_t MAX_SERIALIZED_LINES = 64;
+  static constexpr uint16_t MAX_IMAGE_HEIGHT = 240;
   bool isHeader = false;
   uint8_t colSpan = 1;
   std::vector<std::shared_ptr<TextBlock>> lines;
+  std::shared_ptr<ImageBlock> image;
+  uint32_t imageSource = UINT32_MAX;
 
   bool serialize(Print& file) const;
   static bool deserialize(FsFile& file, TableFragmentCell& outCell);
@@ -162,6 +176,13 @@ struct PageTextLine {
 };
 
 using PageTextLineVisitor = bool (*)(const PageTextLine& line, void* context);
+struct PageImagePlacement {
+  ImageBlock* block = nullptr;
+  int x = 0, y = 0;
+  bool inlineImage = false;
+  bool inTable = false;
+};
+using PageImageVisitor = bool (*)(const PageImagePlacement& image, void* context);
 
 class PageTableFragment final : public PageElement {
   friend class Page;
@@ -191,14 +212,61 @@ class PageTableFragment final : public PageElement {
   PageElementTag getTag() const override { return TAG_PageTableFragment; }
   static std::unique_ptr<PageTableFragment> deserialize(FsFile& file);
   uint16_t getHeight() const;
+  bool hasImages() const {
+    for (const auto& row : rows)
+      for (const auto& cell : row.cells)
+        if (cell.image) return true;
+    return false;
+  }
 };
 
 class Page {
+  SourceAnchor sourceAnchor_;
+  SourceRange sourceRange_;
+  bool sourceHasText_ = false;
+  bool sourceProbeMatched_ = false;
+
  public:
+  void noteSourceSpan(SourceWordSpan source) {
+    if (!source.valid()) return;
+    if (!sourceHasText_ || source.start < sourceAnchor_.sourceOffset)
+      sourceAnchor_ = {source.start, source.characterOffset};
+    sourceHasText_ = true;
+    sourceRange_.first = std::min(sourceRange_.first, source.start);
+    sourceRange_.end = std::max(sourceRange_.end, source.end);
+    sourceProbeMatched_ |= source.probeByte != UINT16_MAX;
+  }
+  void noteSourceLine(const TextBlock& line) {
+    if (!line.sourceAnchor().valid()) return;
+    noteSourceSpan({line.sourceAnchor().sourceOffset, line.sourceEnd(), line.sourceAnchor().characterOffset,
+                    static_cast<uint16_t>(line.sourceProbeMatched() ? 0 : UINT16_MAX)});
+    sourceRange_.first = std::min(sourceRange_.first, line.sourceMin());
+  }
+  void noteSourcePoint(uint32_t offset) {
+    if (offset == UINT32_MAX) return;
+    if (!sourceAnchor_.valid()) sourceAnchor_ = {offset, 0};
+    sourceRange_.first = std::min(sourceRange_.first, offset);
+    sourceRange_.end = std::max(sourceRange_.end, offset + 1);
+  }
+  void mergeSource(const Page& other) {
+    if (other.sourceHasText_ && (!sourceHasText_ || other.sourceAnchor_.sourceOffset < sourceAnchor_.sourceOffset))
+      sourceAnchor_ = other.sourceAnchor_;
+    else if (!sourceAnchor_.valid())
+      sourceAnchor_ = other.sourceAnchor_;
+    sourceHasText_ |= other.sourceHasText_;
+    sourceRange_.first = std::min(sourceRange_.first, other.sourceRange_.first);
+    sourceRange_.end = std::max(sourceRange_.end, other.sourceRange_.end);
+    sourceProbeMatched_ |= other.sourceProbeMatched_;
+  }
+  SourceAnchor sourceAnchor() const { return sourceAnchor_; }
+  SourceRange sourceRange() const { return sourceRange_; }
+  bool sourceProbeMatched() const { return sourceProbeMatched_; }
   struct PublisherPageMarker {
     int16_t yPos = 0;
     char label[16] = {};
   };
+
+  static constexpr uint16_t MAX_ELEMENTS = 1024;
 
   // the list of block index and line numbers on this page
   // Page elements have one owner: their page. Text blocks remain shared by
@@ -252,6 +320,7 @@ class Page {
                                    bool foregroundBlack = true, bool renderCachedImages = true,
                                    bool imageGrayscale = true) const;
   bool forEachTextLine(PageTextLineVisitor visitor, void* context) const;
+  bool forEachImage(PageImageVisitor visitor, void* context, bool* invalidGeometry = nullptr) const;
   bool serialize(Print& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);
 
@@ -261,10 +330,7 @@ class Page {
   uint16_t imageEstimateUnits(uint16_t viewportWidth, uint16_t viewportHeight) const;
 
   // Check if page contains any images (used to force full refresh)
-  bool hasImages() const {
-    return std::any_of(elements.begin(), elements.end(),
-                       [](const std::unique_ptr<PageElement>& el) { return el->getTag() == TAG_PageImage; });
-  }
+  bool hasImages() const;
 
   bool hasText() const {
     return std::any_of(elements.begin(), elements.end(), [](const std::unique_ptr<PageElement>& element) {
@@ -273,39 +339,13 @@ class Page {
   }
 
   void prepareImageCaches() const;
+  ImageBlock::CacheWarmResult warmImageCaches(GfxRenderer& renderer, int xOffset, int yOffset,
+                                              bool (*shouldCancel)(void*), void* context,
+                                              bool* cacheChanged = nullptr) const;
 
-  bool hasImagesNeedingDecode() const {
-    return std::any_of(elements.begin(), elements.end(), [](const std::unique_ptr<PageElement>& element) {
-      return element->getTag() == TAG_PageImage &&
-             static_cast<const PageImage&>(*element).getImageBlock().needsDecode();
-    });
-  }
+  bool hasImagesNeedingDecode() const;
 
   // Get bounding box of all images on the page (union of image rects)
   // Returns false if no images. Coordinates are relative to page origin.
-  bool getImageBoundingBox(int16_t& outX, int16_t& outY, int16_t& outW, int16_t& outH) const {
-    bool found = false;
-    int16_t minX = INT16_MAX, minY = INT16_MAX, maxX = INT16_MIN, maxY = INT16_MIN;
-    for (const auto& el : elements) {
-      if (el->getTag() == TAG_PageImage) {
-        const auto& img = static_cast<const PageImage&>(*el);
-        int16_t x = img.xPos;
-        int16_t y = img.yPos;
-        int16_t right = x + img.getImageBlock().getWidth();
-        int16_t bottom = y + img.getImageBlock().getHeight();
-        minX = std::min(minX, x);
-        minY = std::min(minY, y);
-        maxX = std::max(maxX, right);
-        maxY = std::max(maxY, bottom);
-        found = true;
-      }
-    }
-    if (found) {
-      outX = minX;
-      outY = minY;
-      outW = maxX - minX;
-      outH = maxY - minY;
-    }
-    return found;
-  }
+  bool getImageBoundingBox(int16_t& outX, int16_t& outY, int16_t& outW, int16_t& outH) const;
 };

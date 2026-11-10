@@ -66,7 +66,7 @@ COPY_OLD = """            while (buf < pEnd) {
             }
 """
 
-COPY_NEW = """#ifdef ALLOWS_UNALIGNED
+COPY_INTERMEDIATE = """#ifdef ALLOWS_UNALIGNED
             while (pEnd - buf >= (int)sizeof(BIGUINT)) {
                 BIGUINT tmp = *(BIGUINT *) s;
                 s += sizeof(BIGUINT);
@@ -78,6 +78,75 @@ COPY_NEW = """#ifdef ALLOWS_UNALIGNED
                 *buf++ = *s++;
             }
 """
+
+COPY_NEW = COPY_INTERMEDIATE.replace(
+    "                BIGUINT tmp = *(BIGUINT *) s;\n"
+    "                s += sizeof(BIGUINT);\n"
+    "                *(BIGUINT *)buf = tmp;\n",
+    "                memcpy(buf, s, sizeof(BIGUINT));\n"
+    "                s += sizeof(BIGUINT);\n",
+)
+
+LOAD_OLD = """#if (INTPTR_MAX == INT64_MAX)
+#define ALLOWS_UNALIGNED
+#define INTELSHORT(p) (*(uint16_t *)p)
+#define INTELLONG(p) (*(uint64_t *)p)
+#define REGISTER_WIDTH 64
+#define BIGINT int64_t
+#define BIGUINT uint64_t
+#else
+#define REGISTER_WIDTH 32
+#ifdef ALLOWS_UNALIGNED
+#define INTELSHORT(p) (*(uint16_t *)p)
+#define INTELLONG(p) (*(uint32_t *)p)
+#else
+// Due to unaligned memory causing an exception, we have to do these macros the slow way
+#define INTELSHORT(p) ((*p) + (*(p+1)<<8))
+#define INTELLONG(p) ((*p) + (*(p+1)<<8) + (*(p+2)<<16) + (*(p+3)<<24))
+#endif // ALLOWS_UNALIGNED
+#define BIGINT int32_t
+#define BIGUINT uint32_t
+#endif // 64 vs 32-bit native register size
+"""
+
+LOAD_NEW = """// Byte streams have no alignment guarantee, even on CPUs supporting unaligned loads.
+static inline uint16_t gifLoad16(const void *p) { uint16_t v; memcpy(&v, p, sizeof(v)); return v; }
+static inline uint32_t gifLoad32(const void *p) { uint32_t v; memcpy(&v, p, sizeof(v)); return v; }
+#if (INTPTR_MAX == INT64_MAX)
+static inline uint64_t gifLoad64(const void *p) { uint64_t v; memcpy(&v, p, sizeof(v)); return v; }
+#define ALLOWS_UNALIGNED
+#define INTELSHORT(p) gifLoad16(p)
+#define INTELLONG(p) gifLoad64(p)
+#define REGISTER_WIDTH 64
+#define BIGINT int64_t
+#define BIGUINT uint64_t
+#else
+#define REGISTER_WIDTH 32
+#ifdef ALLOWS_UNALIGNED
+#define INTELSHORT(p) gifLoad16(p)
+#define INTELLONG(p) gifLoad32(p)
+#else
+// Cast before the high-byte shift so all byte patterns remain unsigned.
+#define INTELSHORT(p) ((uint16_t)(p)[0] | ((uint16_t)(p)[1]<<8))
+#define INTELLONG(p) ((uint32_t)(p)[0] | ((uint32_t)(p)[1]<<8) | ((uint32_t)(p)[2]<<16) | ((uint32_t)(p)[3]<<24))
+#endif // ALLOWS_UNALIGNED
+#define BIGINT int32_t
+#define BIGUINT uint32_t
+#endif // 64 vs 32-bit native register size
+"""
+
+
+def _patch_loads(header_path):
+    with open(header_path, "r", encoding="utf-8") as file:
+        text = file.read()
+    if text.count(LOAD_NEW) == 1:
+        return True
+    if text.count(LOAD_OLD) != 1:
+        raise RuntimeError("AnimatedGIF byte-load patch does not match %s" % header_path)
+    with open(header_path, "w", encoding="utf-8") as file:
+        file.write(text.replace(LOAD_OLD, LOAD_NEW, 1))
+    print("Patched AnimatedGIF byte-stream alignment")
+    return True
 
 
 def _patch_header(header_path):
@@ -123,6 +192,8 @@ def _patch_decoder(source_path):
     ):
         if after in text:
             continue
+        if name == "bounded scanline copy" and text.count(COPY_INTERMEDIATE) == 1:
+            before = COPY_INTERMEDIATE
         if text.count(before) != 1:
             raise RuntimeError("AnimatedGIF %s patch does not match %s" % (name, source_path))
         text = text.replace(before, after, 1)
@@ -134,7 +205,8 @@ def _patch_decoder(source_path):
 
 
 def patch_library(library_path):
-    return _patch_header(os.path.join(library_path, "src", "AnimatedGIF.h")) and _patch_decoder(
+    header = os.path.join(library_path, "src", "AnimatedGIF.h")
+    return _patch_header(header) and _patch_loads(header) and _patch_decoder(
         os.path.join(library_path, "src", "gif.inl")
     )
 

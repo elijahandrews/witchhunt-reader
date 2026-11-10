@@ -25,6 +25,7 @@
 #include "GlobalActions.h"
 #include "MappedInputManager.h"
 #include "QuickActions.h"
+#include "ReaderProgressImportPath.h"
 #include "ReaderUtils.h"
 #include "ReadingSessionStats.h"
 #include "RecentBooksStore.h"
@@ -1574,7 +1575,7 @@ bool XtcReaderActivity::flushQueuedProgress() {
 
 void XtcReaderActivity::loadProgress() {
   HalFile f;
-  if (Storage.openFileForRead("XTR", xtc->getCachePath() + "/progress.bin", f)) {
+  if (Storage.openFileForRead("XTR", readerProgressImportPath(xtc->getCachePath(), xtc->getPath(), "xtc"), f)) {
     uint8_t data[4];
     if (f.read(data, 4) == 4) {
       currentPage = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
@@ -1598,7 +1599,7 @@ bool XtcReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gfx
   // Load saved page number
   uint32_t savedPage = 0;
   FsFile f;
-  if (Storage.openFileForRead("SLP", xtc.getCachePath() + "/progress.bin", f)) {
+  if (Storage.openFileForRead("SLP", readerProgressImportPath(xtc.getCachePath(), xtc.getPath(), "xtc"), f)) {
     uint8_t data[4];
     if (f.read(data, 4) == 4) {
       savedPage = (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);

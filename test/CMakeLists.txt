@@ -29,6 +29,8 @@ target_include_directories(crosspoint_test_common INTERFACE
   ${REPO_ROOT}
   ${REPO_ROOT}/lib
   ${REPO_ROOT}/lib/MemoryBudget
+  ${REPO_ROOT}/lib/ImageFormatDetector
+  ${REPO_ROOT}/lib/Epub
 )
 target_compile_options(crosspoint_test_common INTERFACE
   -Wall
@@ -38,6 +40,10 @@ target_compile_options(crosspoint_test_common INTERFACE
 
 enable_testing()
 include(GoogleTest)
+
+# Shared bounded HTML parser and byte-origin tracking for HTML consumers.
+add_subdirectory(${REPO_ROOT}/lib/SaxParser ${CMAKE_BINARY_DIR}/sax_parser_lib)
+target_link_libraries(crosspoint_test_common INTERFACE SaxParser)
 
 add_subdirectory(streaming_json_parser)
 add_subdirectory(release_json_parser)
@@ -190,6 +196,15 @@ add_subdirectory(input_wake)
 add_subdirectory(button_navigation)
 add_subdirectory(button_capture)
 
+add_test(NAME PublisherBackgroundRegression
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/scripts/test_publisher_backgrounds.py)
+
+add_test(NAME ReaderImageWarmingRegression
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/scripts/test_reader_image_warming.py)
+
+add_test(NAME ReaderSourceRepositionRegression
+  COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/scripts/test_reader_source_reposition.py)
+
 add_test(NAME ReaderRestartStatsRegression
   COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/scripts/test_reader_restart_stats.py)
 
@@ -212,3 +227,24 @@ add_test(NAME PiccoDisplayIdleRegression
   COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/scripts/test_picco_display_idle.py)
 add_test(NAME PluginNetworkBootRegression
   COMMAND ${Python3_EXECUTABLE} ${REPO_ROOT}/test/scripts/test_plugin_network_boot.py)
+
+# Local improvements replayed onto the native CrossInk base.
+add_subdirectory(book_sync)
+add_subdirectory(cpfont_hd)
+add_subdirectory(text_aa)
+add_subdirectory(font_resize_feedback)
+add_subdirectory(book_text_search)
+
+add_subdirectory(css_media)
+
+add_subdirectory(css_parity)
+add_subdirectory(book_font_system)
+add_subdirectory(image_backends)
+add_subdirectory(progressive_jpeg)
+
+add_subdirectory(zip_validation)
+
+add_subdirectory(sax_parser)
+
+add_subdirectory(epub_metadata)
+add_subdirectory(epub_font_contents)

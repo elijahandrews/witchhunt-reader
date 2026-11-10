@@ -26,7 +26,9 @@
 #include "ManualPageTurnQueue.h"
 #include "PluginReaderEvents.h"
 #include "ReaderButtonShortcuts.h"
+#include "ReaderJumpBack.h"
 #include "ReaderProgressSaveDebouncer.h"
+#include "ReaderWordHold.h"
 #include "ReadingSessionJournal.h"
 #include "ReadingSessionStats.h"
 #include "StableReadingPace.h"
@@ -47,6 +49,9 @@ struct ToastRect {
 };
 
 class EpubReaderActivity final : public Activity {
+  uint32_t pendingSourceTarget = UINT32_MAX;
+  uint16_t pendingSourceTargetCharacter = 0;
+  std::optional<uint16_t> pendingResolvedSourcePage;
   PluginReaderEvents pluginEvents;
 #ifdef SIMULATOR
   friend struct BookmarkListSmokeTest;
@@ -70,12 +75,13 @@ class EpubReaderActivity final : public Activity {
     uint8_t publisherPageNumbers = 0;
     uint8_t paragraphAlignment = 0;
     uint8_t embeddedStyle = 1;
+    uint8_t ignorePublisherPageMargins = 0;
     uint8_t publisherFonts = 0;
     uint8_t hyphenationEnabled = 0;
     uint8_t textAntiAliasing = 1;
     uint8_t imageRendering = 0;
     uint8_t imageGrayscale = 1;
-    uint8_t extraParagraphSpacing = 1;
+    uint8_t extraParagraphSpacing = 0;
     uint8_t forceParagraphIndents = 0;
     uint8_t focusReadingEnabled = 0;
     uint8_t guideReadingEnabled = 0;
@@ -197,6 +203,15 @@ class EpubReaderActivity final : public Activity {
   int idlePrewarmSpine = -1;
   int idlePrewarmPage = -1;
   int idlePrewarmFontId = 0;
+  struct ImageWarmMiss {
+    int spine = -1;
+    int page = -1;
+    uint8_t attempts = 0;
+  };
+  std::array<ImageWarmMiss, 8> imageWarmMisses{};
+  uint8_t imageWarmMissNext = 0;
+  int imageWarmSpine = -1;
+  int imageWarmPage = -1;
   bool paceSampleWarmupPending = true;
   uint32_t sessionStartPaceMillis = 0;
   uint16_t sessionStartPaceSampleCount = 0;
@@ -273,6 +288,14 @@ class EpubReaderActivity final : public Activity {
   OptionPopup quickActionsPopup;
   ReaderButtonShortcuts readerButtonShortcuts;
   bool touchDictionaryLookupHandled = false;
+  ReaderWordHold touchDictionaryHold;
+  ReaderJumpBack jumpBack;
+  mutable ToastRect jumpBackTapRegion;
+  mutable int jumpBackTapOrientation = -1;
+  EpubLinkReturnState::Position captureJumpOrigin() const;
+  void rememberJumpOrigin(bool followedLink = false);
+  void restoreJumpOrigin(const EpubLinkReturnState::Position& position);
+  void goBackFromJump();
   int pageLoadRetryCount = 0;
   enum class BookmarkFeedbackType : uint8_t {
     Added,
@@ -356,8 +379,8 @@ class EpubReaderActivity final : public Activity {
   bool backgroundBuildCanUsePageBuffer() const;
   bool renderQuickActionsPopup();
   void restoreStalePageBufferForInputLock();
-  // Full-section next-chapter prefetch is speculative. A forward page turn may
-  // stop it, but the visible build at the chapter boundary remains full-section.
+  // Image warming and full-section next-chapter prefetch are speculative. Input
+  // cancels either; the visible chapter-boundary build remains full-section.
   std::atomic<bool> silentPrefetchBuildActive{false};
   std::atomic<bool> silentPrefetchCancelRequested{false};
   std::atomic<bool> sectionBuildCancelRequested{false};
@@ -445,7 +468,8 @@ class EpubReaderActivity final : public Activity {
   // position cannot overwrite the reader's. Set allowDuringFootnotePreview for the
   // deliberate on-exit save of the pre-footnote origin, which is the position the
   // suppression exists to protect.
-  bool saveProgress(int spineIndex, int currentPage, int pageCount, bool allowDuringFootnotePreview = false);
+  bool saveProgress(int spineIndex, int currentPage, int pageCount, bool allowDuringFootnotePreview = false,
+                    std::optional<uint32_t> savedVisibleOffset = std::nullopt, SourceAnchor sourceAnchor = {});
   bool queueProgressSave(int spineIndex, int currentPage, int pageCount, bool forceSave = false);
   // Caller holds RenderLock, including the render-task low-memory path.
   bool checkpointReadingStatsBeforeRestart();
@@ -517,7 +541,7 @@ class EpubReaderActivity final : public Activity {
   void handleClippingJump(const ClippingJumpResult& clipping);
   bool handleTouchDictionaryLookup();
   void openWordSelect(bool framebufferContainsPage, int initialTouchX = -1, int initialTouchY = -1,
-                      bool autoLookupInitialWord = false);
+                      bool autoLookupInitialWord = false, const ReaderWordHold::Page* heldPage = nullptr);
   std::unique_ptr<Page> reloadDictionaryLookupPage(int pageOffset = 0);
   static std::unique_ptr<Page> reloadDictionaryLookupPageCallback(void* context, int pageOffset);
   void onReaderMenuConfirm(EpubReaderMenuAction action, bool returnToReaderMenu = false,
@@ -604,6 +628,7 @@ class EpubReaderActivity final : public Activity {
   }
   bool backgroundSectionBuildHasHeap();
   void idlePrewarmNextPage();
+  void warmUpcomingImageCaches();
   bool skipLoopDelay() override {
     return backgroundBuildCanUsePageBuffer() && sectionBuildWantsTick() && !backgroundBuildPausedForLowMemory &&
            !backgroundBuildYieldForInput.load(std::memory_order_relaxed);

@@ -6,6 +6,7 @@ add_executable(CompactTableLayoutTest
 target_include_directories(CompactTableLayoutTest PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/stubs
   ${REPO_ROOT}/lib/Epub/Epub/tables
+  ${REPO_ROOT}/lib/Epub
 )
 
 target_compile_definitions(CompactTableLayoutTest PRIVATE

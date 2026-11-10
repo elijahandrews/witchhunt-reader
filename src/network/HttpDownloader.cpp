@@ -25,6 +25,17 @@
 #include "network/WifiPowerSaveGuard.h"
 #include "util/UrlUtils.h"
 
+struct HttpDownloader::Session::Impl {
+  esp_http_client_handle_t client = nullptr;
+  HttpRedirectPolicy::Url origin;
+  std::string ca;
+  ~Impl() {
+    if (client) esp_http_client_cleanup(client);
+  }
+};
+HttpDownloader::Session::Session() : impl_(makeUniqueNoThrow<Impl>()) {}
+HttpDownloader::Session::~Session() = default;
+
 namespace {
 constexpr size_t PROGRESS_UPDATE_BYTES = 64 * 1024;
 constexpr uint32_t PROGRESS_UPDATE_MS = 250;
@@ -386,6 +397,28 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
 }
 #endif
 
+// Every error destroys the possibly half-consumed connection. Only a complete,
+// verified, same-origin response may be retained for the next private request.
+struct HttpClientLease {
+  esp_http_client_handle_t client;
+  HttpDownloader::Session::Impl* session;
+  bool retained = false;
+  void close() {
+    if (!client) return;
+    if (session) session->client = nullptr;
+    esp_http_client_cleanup(client);
+    client = nullptr;
+  }
+  ~HttpClientLease() {
+    if (!retained) close();
+  }
+  void keep() {
+    if (!session) return;
+    esp_http_client_set_user_data(client, nullptr);
+    retained = true;
+  }
+};
+
 HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::string& username,
                                             const std::string& password,
                                             const HttpRedirectPolicy::Url& credentialOrigin, const bool hasCredentials,
@@ -408,12 +441,43 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     config.buffer_size = HTTP_RX_BUF;
     config.buffer_size_tx = HTTP_TX_BUF;
     config.timeout_ms = HTTP_TIMEOUT_MS;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
-    config.keep_alive_enable = false;
+    if (sink.options->privateCa)
+      config.cert_pem = sink.options->privateCa;
+    else
+      config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.keep_alive_enable = sink.options->session != nullptr;
     config.event_handler = captureLocationHeader;
     config.user_data = &responseHeaders;
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+    auto* session = sink.options->session ? sink.options->session->impl() : nullptr;
+    if (session && session->client &&
+        (!HttpRedirectPolicy::sameOrigin(session->origin, currentOrigin) || session->ca != sink.options->privateCa)) {
+      esp_http_client_cleanup(session->client);
+      session->client = nullptr;
+    }
+    esp_http_client_handle_t client = session ? session->client : nullptr;
+    if (client) {
+      if (esp_http_client_set_url(client, currentUrl.c_str()) != ESP_OK ||
+          esp_http_client_set_user_data(client, &responseHeaders) != ESP_OK) {
+        esp_http_client_cleanup(client);
+        session->client = nullptr;
+        return HttpDownloader::HTTP_ERROR;
+      }
+      esp_http_client_delete_header(client, "Authorization");
+      esp_http_client_delete_header(client, "Range");
+      esp_http_client_delete_header(client, "If-Range");
+#ifdef ESP_ERR_HTTP_EAGAIN
+      esp_http_client_set_timeout_ms(client, HTTP_TIMEOUT_MS);
+#endif
+    } else {
+      client = esp_http_client_init(&config);
+      if (session && client) {
+        session->client = client;
+        session->origin = currentOrigin;
+        session->ca = sink.options->privateCa;
+      }
+    }
+    HttpClientLease lease{client, session};
     if (!client) {
       LOG_ERR("HTTP", "Client init failed");
       logNetworkState("Client init failure");
@@ -421,6 +485,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     }
 
     setRequestHeaders(client, username, password, sink.resumeOffset, sendAuthorization);
+    if (session) esp_http_client_set_header(client, "Connection", "keep-alive");
     if (sink.headers && currentParsed &&
         HttpRedirectPolicy::shouldSendAuthorization(currentOrigin, credentialOrigin, true)) {
       for (const auto& h : *sink.headers) esp_http_client_set_header(client, h.first.c_str(), h.second.c_str());
@@ -438,7 +503,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       sink.retryable = true;
       logTlsError(client, "Open failure");
       logNetworkState("Open failure");
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::HTTP_ERROR;
     }
 
@@ -449,19 +514,19 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       LOG_ERR("HTTP", "Fetch headers failed: %lld", static_cast<long long>(responseLength));
       sink.retryable = true;
       logNetworkState("Fetch headers failure");
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::HTTP_ERROR;
     }
 
     if (status == 401 || status == 403) {
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::UNAUTHORIZED;
     }
     if (isRedirect(status)) {
       if (responseHeaders.location.empty()) {
         LOG_ERR("HTTP", "Redirect missing Location header");
         logNetworkState("Redirect missing Location");
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::HTTP_ERROR;
       }
 
@@ -469,17 +534,17 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       HttpRedirectPolicy::Url redirect;
       if (!HttpRedirectPolicy::parseUrl(redirectUrl, redirect)) {
         LOG_ERR("HTTP", "Rejected redirect with unsupported Location");
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::HTTP_ERROR;
       }
       if (currentParsed && !HttpRedirectPolicy::isAllowedRedirect(currentOrigin, redirect)) {
         LOG_ERR("HTTP", "Rejected HTTPS downgrade redirect to %s", redirect.host.c_str());
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::HTTP_ERROR;
       }
       currentUrl = redirectUrl;
       LOG_DBG("HTTP", "Redirecting to: %s", redirect.host.c_str());
-      esp_http_client_cleanup(client);
+      lease.close();
       continue;
     }
 
@@ -487,14 +552,14 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
         !prepareResponse(sink, status, responseHeaders.range, responseLength > 0, static_cast<size_t>(responseLength),
                          responseHeaders.validator, responseHeaders.disposition)) {
       LOG_ERR("HTTP", "Rejected response: %d", status);
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::HTTP_ERROR;
     }
 #ifdef ESP_ERR_HTTP_EAGAIN
     err = esp_http_client_set_timeout_ms(client, HTTP_READ_POLL_TIMEOUT_MS);
     if (err != ESP_OK) {
       LOG_ERR("HTTP", "Failed to set read timeout: %s", esp_err_to_name(err));
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::HTTP_ERROR;
     }
 #endif
@@ -503,7 +568,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     if (!buffer) {
       LOG_ERR("HTTP", "Failed to allocate %zu byte download buffer", bufferSize);
       logNetworkState("Download buffer allocation failure");
-      esp_http_client_cleanup(client);
+      lease.close();
       return HttpDownloader::HTTP_ERROR;
     }
 
@@ -514,7 +579,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
 #endif
     while (true) {
       if (isCancelRequested(sink.cancelFlag, sink.shouldCancel)) {
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::ABORTED;
       }
 
@@ -526,7 +591,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
           if (idleMs >= DOWNLOAD_IDLE_TIMEOUT_MS) {
             sink.retryable = true;
             logDownloadState("Read timed out", sink.downloaded, sink.total, idleMs);
-            esp_http_client_cleanup(client);
+            lease.close();
             return HttpDownloader::HTTP_ERROR;
           }
           delay(1);
@@ -536,7 +601,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
         LOG_ERR("HTTP", "Read error after %zu/%zu bytes", sink.downloaded, sink.total);
         sink.retryable = true;
         logNetworkState("Read error");
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::HTTP_ERROR;
       }
       if (bytesRead == 0) break;
@@ -544,14 +609,14 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       if (!acceptsBody(sink, static_cast<size_t>(bytesRead))) {
         LOG_ERR("HTTP", "Response exceeds download size policy");
         sink.invalidResponse = true;
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::HTTP_ERROR;
       }
       if (!sink.write(reinterpret_cast<const uint8_t*>(buffer.get()), static_cast<size_t>(bytesRead))) {
         if (sink.diagnostics) sink.diagnostics->callbackRejected = true;
         LOG_ERR("HTTP", "Write failed after %zu/%zu bytes", sink.downloaded, sink.total);
         logNetworkState("Write failure");
-        esp_http_client_cleanup(client);
+        lease.close();
         return HttpDownloader::FILE_ERROR;
       }
 
@@ -567,7 +632,6 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     }
 
     const bool complete = esp_http_client_is_complete_data_received(client);
-    esp_http_client_cleanup(client);
     progressNotifier.notify(sink.downloaded, true);
     if (!complete || (sink.total && sink.downloaded != sink.total)) {
       sink.retryable = true;
@@ -577,6 +641,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     }
 
     if (!hasExpectedSize(sink)) return HttpDownloader::HTTP_ERROR;
+    lease.keep();
     return HttpDownloader::OK;
   }
 
@@ -588,6 +653,14 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
 HttpDownloader::DownloadError runGet(const std::string& url, const std::string& username, const std::string& password,
                                      const std::string_view authorizationOrigin, Sink& sink, const size_t bufferSize,
                                      const HttpDownloader::Transport transport) {
+  if (sink.options->session && (!sink.options->privateCa || !sink.options->session->impl() || sink.options->headers))
+    return HttpDownloader::HTTP_ERROR;
+  if (sink.options->privateCa) {
+    HttpRedirectPolicy::Url parsed;
+    if (!*sink.options->privateCa || sink.options->maxRedirects != 0 ||
+        transport != HttpDownloader::Transport::ESP_HTTP || !HttpRedirectPolicy::parseUrl(url, parsed) || !parsed.https)
+      return HttpDownloader::HTTP_ERROR;
+  }
   HttpRedirectPolicy::Url credentialOrigin;
   const std::string_view credentialUrl = authorizationOrigin.empty() ? std::string_view(url) : authorizationOrigin;
   const bool originValid = HttpRedirectPolicy::parseUrl(credentialUrl, credentialOrigin);

@@ -10,10 +10,11 @@
 #include <limits>
 
 #include "FsHelpers.h"
+#include "SpineHrefResolver.h"
 
 namespace {
 constexpr uint32_t BOOK_CACHE_MAGIC = 0x425843FF;  // bytes: 0xFF, "CXB"
-constexpr uint8_t BOOK_CACHE_VERSION = 10;         // v10: namespace-aware OPF parsing
+constexpr uint8_t BOOK_CACHE_VERSION = 11;         // v11: cover wrappers and exact/unique TOC fallback
 constexpr char bookBinFile[] = "/book.bin";
 constexpr char tmpSpineBinFile[] = "/spine.bin.tmp";
 constexpr char tmpTocBinFile[] = "/toc.bin.tmp";
@@ -79,6 +80,7 @@ bool BookMetadataCache::beginWrite() {
   buildMode = true;
   spineCount = 0;
   tocCount = 0;
+  tocMappedCount = 0;
   return true;
 }
 
@@ -164,6 +166,17 @@ bool BookMetadataCache::endTocPass() {
   useSpineHrefIndex = false;
 
   return flushed;
+}
+
+bool BookMetadataCache::resetTocPassOutput() {
+  if (!buildMode || !spineFile || !tocFile) return false;
+  const bool flushed = !passOut || passOut->flush();
+  passOut.reset();
+  const bool closed = tocFile.close();
+  if (!flushed || !closed || !Storage.openFileForWrite("BMC", cachePath + tmpTocBinFile, tocFile)) return false;
+  tocCount = tocMappedCount = 0;
+  passOut = makeUniqueNoThrow<serialization::BufferedFileWriter>(tocFile, BUILD_IO_BUFFER_SIZE);
+  return true;
 }
 
 bool BookMetadataCache::endWrite() {
@@ -473,15 +486,11 @@ void BookMetadataCache::createTocEntry(const std::string& title, const std::stri
     if (spineIndex == -1) {
       LOG_DBG("BMC", "createTocEntry: Could not find spine item for TOC href %s", href.c_str());
     }
-  } else {
-    spineFile.seek(0);
-    for (int i = 0; i < spineCount; i++) {
-      auto spineEntry = readSpineEntry(spineFile);
-      if (spineEntry.href == href) {
-        spineIndex = static_cast<int16_t>(i);
-        break;
-      }
-    }
+  }
+  if (spineIndex == -1) {
+    if (!spineFile.seek(0)) return;
+    spineIndex = static_cast<int16_t>(
+        spine_href::resolve(href, spineCount, [&](int) { return readSpineEntry(spineFile).href; }));
     if (spineIndex == -1) {
       LOG_DBG("BMC", "createTocEntry: Could not find spine item for TOC href %s", href.c_str());
     }
@@ -496,6 +505,7 @@ void BookMetadataCache::createTocEntry(const std::string& title, const std::stri
     writeTocEntry(tocFile, entry);
   }
   tocCount++;
+  if (spineIndex >= 0) tocMappedCount++;
 }
 
 /* ============= READING / LOADING FUNCTIONS ================ */

@@ -96,3 +96,63 @@ if(SANITIZE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_link_options(font_byte_digest_test PRIVATE -fsanitize=address,undefined)
 endif()
 add_test(NAME font_byte_digest COMMAND font_byte_digest_test)
+
+# Original runtime-generated geometric fonts verify authored glyph IDs survive
+# the native adapter and final-grid raster without synthetic small-cap scaling.
+add_executable(scalable_font_caps_test ScalableFontCapsTest.cpp ../../lib/ReaderMono/ReaderMono.cpp
+  ../../lib/ScalableFont/HalScalableFont.cpp ../../lib/EpdFont/EpdFont.cpp
+  ../../lib/EpdFont/EpdFontFamily.cpp ../../lib/Utf8/Utf8.cpp ${SOURCES})
+set_property(TARGET scalable_font_caps_test PROPERTY CXX_STANDARD 20)
+target_compile_options(scalable_font_caps_test PRIVATE -UNDEBUG)
+target_include_directories(scalable_font_caps_test PRIVATE ../../lib/ReaderMono stubs ../../lib/ScalableFont ../../lib/EpdFont
+  ../../lib/Memory ../../lib/Utf8 ${SDK}/include ${SDK}/third_party/freetype/include ${SDK}/third_party/stb)
+target_compile_definitions(scalable_font_caps_test PRIVATE CROSSINK_SCALABLE_FONTS=1 SIMULATOR=1 FREEINK_FONT_ENABLE_CFF=1
+  FREEINK_FONT_ENABLE_AUTOHINT=1 FREEINK_FONT_ENABLE_NATIVE_HINTING=1 FREEINK_FONT_ENABLE_MONOCHROME=1)
+if(SANITIZE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(scalable_font_caps_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(scalable_font_caps_test PRIVATE -fsanitize=address,undefined)
+endif()
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME scalable_font_caps COMMAND ${Python3_EXECUTABLE}
+  ${CMAKE_CURRENT_SOURCE_DIR}/run_caps_fixture.py $<TARGET_FILE:scalable_font_caps_test>)
+
+add_executable(scalable_font_variable_test ScalableFontVariableTest.cpp
+  ../../lib/ScalableFont/HalScalableFont.cpp ../../lib/EpdFont/EpdFont.cpp
+  ../../lib/EpdFont/EpdFontFamily.cpp ../../lib/Utf8/Utf8.cpp ${SOURCES})
+set_property(TARGET scalable_font_variable_test PROPERTY CXX_STANDARD 20)
+target_compile_options(scalable_font_variable_test PRIVATE -UNDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(scalable_font_variable_test PRIVATE -fsanitize=address,undefined)
+target_include_directories(scalable_font_variable_test PRIVATE stubs ../../lib/ScalableFont ../../lib/EpdFont
+  ../../lib/Memory ../../lib/Utf8 ${SDK}/include ${SDK}/third_party/freetype/include ${SDK}/third_party/stb)
+target_compile_definitions(scalable_font_variable_test PRIVATE CROSSINK_SCALABLE_FONTS=1 SIMULATOR=1
+  FREEINK_FONT_ENABLE_CFF=1 FREEINK_FONT_ENABLE_AUTOHINT=1 FREEINK_FONT_ENABLE_NATIVE_HINTING=1 FREEINK_FONT_ENABLE_MONOCHROME=1)
+add_test(NAME scalable_font_variable COMMAND ${Python3_EXECUTABLE}
+  ${CMAKE_CURRENT_SOURCE_DIR}/run_variable_fixture.py $<TARGET_FILE:scalable_font_variable_test>)
+add_executable(scalable_gpos_variation_test GposVariationTest.cpp ${SDK}/src/Gpos.cpp)
+target_compile_features(scalable_gpos_variation_test PRIVATE cxx_std_17)
+target_include_directories(scalable_gpos_variation_test PRIVATE ${SDK}/include)
+target_compile_options(scalable_gpos_variation_test PRIVATE -UNDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(scalable_gpos_variation_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME scalable_gpos_variation COMMAND scalable_gpos_variation_test)
+
+get_target_property(GENERIC_SOURCES scalable_font_caps_test SOURCES)
+list(REMOVE_ITEM GENERIC_SOURCES ScalableFontCapsTest.cpp)
+get_target_property(GENERIC_INCLUDES scalable_font_caps_test INCLUDE_DIRECTORIES)
+get_target_property(GENERIC_DEFINITIONS scalable_font_caps_test COMPILE_DEFINITIONS)
+add_executable(scalable_generic_font_test ScalableGenericFontTest.cpp ../../lib/ScalableFont/ScalableBuiltins.cpp ${GENERIC_SOURCES})
+set_property(TARGET scalable_generic_font_test PROPERTY CXX_STANDARD 20)
+target_include_directories(scalable_generic_font_test PRIVATE generic_stubs ${GENERIC_INCLUDES})
+target_compile_definitions(scalable_generic_font_test PRIVATE ${GENERIC_DEFINITIONS})
+target_compile_options(scalable_generic_font_test PRIVATE -UNDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(scalable_generic_font_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME scalable_generic_font COMMAND scalable_generic_font_test)
+
+add_executable(scalable_size_cache_test ScalableSizeCacheTest.cpp)
+target_include_directories(scalable_size_cache_test PRIVATE cache_stubs ../../lib/ScalableFont)
+target_compile_definitions(scalable_size_cache_test PRIVATE CROSSINK_SCALABLE_FONTS=1)
+target_compile_options(scalable_size_cache_test PRIVATE -UNDEBUG)
+if(SANITIZE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(scalable_size_cache_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(scalable_size_cache_test PRIVATE -fsanitize=address,undefined)
+endif()
+add_test(NAME scalable_size_cache COMMAND scalable_size_cache_test)

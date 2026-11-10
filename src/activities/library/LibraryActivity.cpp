@@ -550,17 +550,7 @@ void LibraryActivity::applyFilter() {
           filteredCount = 0;
           break;
         }
-        cachePath = "/.crosspoint/epub_" + std::to_string(pathHash);
-        if (!Storage.exists(cachePath.c_str())) {
-          // Older EPUB caches used std::hash. Reading their stats here avoids
-          // requiring the user to open each finished book to migrate its cache.
-          if (!readIndexedPath(record)) {
-            filterFailed = true;
-            filteredCount = 0;
-            break;
-          }
-          cachePath = "/.crosspoint/epub_" + std::to_string(std::hash<std::string>{}(path));
-        }
+        cachePath = "/.crosspoint/crossink_epub_" + std::to_string(pathHash);
       } else if (type == library::FileXtc) {
         if (!readIndexedPath(record)) {
           filterFailed = true;

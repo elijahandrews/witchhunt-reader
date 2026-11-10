@@ -13,6 +13,7 @@
 
 #include "../GfxRenderer/ImageToneProfile.h"
 #include "Epub/BookMetadataCache.h"
+#include "Epub/StreamCancellation.h"
 #include "Epub/css/CssParser.h"
 #include "Epub/image/PxcV2.h"
 
@@ -28,6 +29,7 @@ class Epub {
   bool loadSyncMetadata(SyncMetadata& metadata);
 
  private:
+  mutable StreamCancellation readCancellation_;
   mutable std::unique_ptr<freeink::content::ContentDecryptor> decryptor;
   bool openProtection() const;
   mutable std::string protectionError;
@@ -49,6 +51,10 @@ class Epub {
   std::unique_ptr<CssParser> cssParser;
   // CSS files
   std::vector<std::string> cssFiles;
+  bool collectCssMediaUsage(std::vector<uint8_t>& usage) const;
+  bool compileDocumentStyles() const;
+  bool documentStyleCachesValid() const;
+  std::string findCoverImageInDocument(const std::string& document) const;
   struct LocationSpineEntry {
     uint32_t startLocation = 0;
     uint32_t endLocation = 0;
@@ -63,6 +69,14 @@ class Epub {
   };
 
  public:
+  // Caller owns the reader's RenderLock; all stream callbacks remain on that task.
+  class ScopedReadCancellation {
+   public:
+    ScopedReadCancellation(const Epub& epub, StreamCancellation::Check check, void* context)
+        : scope_(epub.readCancellation_, check, context) {}
+   private:
+    StreamCancellation::Scope scope_;
+  };
   bool ensureOptimizerImageIndex();
   enum class OpenFailure : uint8_t {
     None,
@@ -117,6 +131,8 @@ class Epub {
   };
 
   bool findContentOpfFile(std::string* contentOpfFile) const;
+  bool readFontContentsToStreamImpl(const std::string& itemHref, Print& out, size_t chunkSize,
+                                    bool validate) const;
   bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, bool writeSpineEntries = true,
                        bool collectCssFiles = true, bool metadataOnly = false, std::string* seriesIndex = nullptr,
                        SyncMetadata* syncMetadata = nullptr);
@@ -135,9 +151,11 @@ class Epub {
   explicit Epub(std::string filepath, const std::string& cacheDir);
   ~Epub() = default;
   static std::string cachePathForFilePath(const std::string& filepath, const std::string& cacheDir);
-  // Resolve the stable cache path and migrate an older hash-named directory if
-  // needed, without opening the EPUB or loading its metadata/location indexes.
+  // Resolve this fork's stable cache path without touching another firmware's
+  // cache or opening the EPUB.
   static std::string resolveCachePathForFilePath(const std::string& filepath, const std::string& cacheDir);
+  // Read-only import source. Never rename or write this firmware's legacy cache.
+  std::string getWitchCachePath() const;
 
   // True when a metadata cache already exists for this book, i.e. load() will
   // hit the fast path instead of rebuilding. Cheap: no parsing, just a stat.
@@ -202,6 +220,9 @@ class Epub {
                                 bool allowEarlyStop = false) const;
   // Publisher-font access also reverses declared Adobe font obfuscation.
   bool readFontContentsToStream(const std::string& itemHref, Print& out, size_t chunkSize) const;
+  // Fresh exact ZIP identity: 1 present, 0 absent, -1 directory/read failure.
+  int getFontItemSize(const std::string& itemHref, size_t* size) const;
+  bool readFontContentsValidatedToStream(const std::string& itemHref, Print& out, size_t chunkSize) const;
   bool extractItemToFile(const std::string& itemHref, const std::string& destPath, size_t chunkSize = 4096) const;
   // Transient image source, PSRAM only; an empty result uses the SD fallback.
   HeapByteBuffer readItemToPsram(const std::string& itemHref, size_t& size) const;
@@ -245,6 +266,7 @@ class Epub {
   bool findCurrentSpineForSource(int sourceIndex, uint8_t containerDepth, const char* childName,
                                  uint16_t sourceSiblingIndex, int& currentSpineIndex,
                                  uint16_t& currentSiblingIndex) const;
+  bool documentStyleCache(int spineIndex, std::string& path, bool& truncated) const;
   CssParser* getCssParser() const { return cssParser.get(); }
   int resolveHrefToSpineIndex(const std::string& href) const;
 

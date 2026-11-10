@@ -16,29 +16,35 @@ class GfxRenderer {
     int x = 0;
     int y = 0;
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
+    int fontId = 0;
   };
 
   mutable std::vector<DrawCall> drawCalls;
   int spaceWidth = 1;
+  bool sizedFonts = false;
+  uint16_t getFontPointSize64(int id) const { return sizedFonts ? id==1?768:id==2?832:id : 0; }
+  int resolveBookFont64(int id, uint32_t, uint16_t points = 0, uint8_t = 0) const { return sizedFonts && points ? points : id; }
 
   bool isFontCacheScanning() const { return false; }
 
-  int getLineHeight(int) const { return 10; }
-  int getTextHeight(int) const { return 10; }
+  int getFontAscenderSize(int id) const { return sizedFonts ? (getFontPointSize64(id)*8+384)/768 : 8; }
+  int getLineHeight(int id) const { return sizedFonts ? (getFontPointSize64(id)*10+384)/768 : 10; }
+  int getTextHeight(int id) const { return getLineHeight(id); }
   int getSpaceWidth(int, EpdFontFamily::Style) const { return spaceWidth; }
   int getSpaceAdvance(int, uint32_t, uint32_t, EpdFontFamily::Style) const { return spaceWidth; }
-  int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style, int8_t = 0) const { return 0; }
+  int getKerning(int, uint32_t, uint32_t, EpdFontFamily::Style, int8_t = 0, int16_t = 0, uint8_t = 0) const { return 0; }
 
   int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style) const {
-    return static_cast<int>(std::string(text).size()) * (fontId == 2 ? 2 : 1);
+    return static_cast<int>(std::string(text).size()) * (sizedFonts ? getFontPointSize64(fontId)>1400?2:1 : fontId == 2 ? 2 : 1);
   }
 
-  int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style style, uint32_t, int8_t = 0) const {
+  int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style style, uint32_t, int8_t = 0,
+                      int16_t = 0, uint8_t = 0) const {
     return getTextAdvanceX(fontId, text, style);
   }
 
-  void drawText(int, int x, int y, const char* text, bool, EpdFontFamily::Style style,
-                BidiUtils::BidiBaseDir = BidiUtils::BidiBaseDir::AUTO, int8_t = 0) const {
-    drawCalls.push_back({text, x, y, style});
+  void drawText(int fontId, int x, int y, const char* text, bool, EpdFontFamily::Style style,
+                BidiUtils::BidiBaseDir = BidiUtils::BidiBaseDir::AUTO, int8_t = 0, int16_t = 0, uint8_t = 0) const {
+    drawCalls.push_back({text, x, y, style,fontId});
   }
 };

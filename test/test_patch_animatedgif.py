@@ -28,7 +28,7 @@ class PatchAnimatedGifTest(unittest.TestCase):
         library = self.root / name / "AnimatedGIF"
         source = library / "src"
         source.mkdir(parents=True)
-        (source / "AnimatedGIF.h").write_text(PATCH.OLD_SNIPPET)
+        (source / "AnimatedGIF.h").write_text(PATCH.OLD_SNIPPET + PATCH.LOAD_OLD)
         (source / "gif.inl").write_text(PATCH.PALETTE_OLD + PATCH.COPY_OLD)
         return library
 
@@ -40,10 +40,25 @@ class PatchAnimatedGifTest(unittest.TestCase):
         first = {p.name: p.read_bytes() for p in (active / "src").iterdir()}
         self.assertTrue(PATCH.patch_animatedgif(env, require_found=True))
         self.assertEqual(first, {p.name: p.read_bytes() for p in (active / "src").iterdir()})
-        self.assertEqual((sibling / "src" / "AnimatedGIF.h").read_text(), PATCH.OLD_SNIPPET)
+        self.assertEqual((sibling / "src" / "AnimatedGIF.h").read_text(), PATCH.OLD_SNIPPET + PATCH.LOAD_OLD)
         self.assertEqual((sibling / "src" / "gif.inl").read_text(), PATCH.PALETTE_OLD + PATCH.COPY_OLD)
         self.assertIn(PATCH.PALETTE_NEW, first["gif.inl"].decode())
         self.assertIn(PATCH.COPY_NEW, first["gif.inl"].decode())
+        self.assertIn(PATCH.LOAD_NEW, first["AnimatedGIF.h"].decode())
+
+    def test_previously_bounded_copy_upgrades_to_alignment_safe_copy(self):
+        library = self.library()
+        source = library / "src" / "gif.inl"
+        source.write_text(PATCH.PALETTE_NEW + PATCH.COPY_INTERMEDIATE)
+        PATCH.patch_library(library)
+        self.assertEqual(source.read_text(), PATCH.PALETTE_NEW + PATCH.COPY_NEW)
+
+    def test_unknown_byte_load_source_fails_without_rewriting_it(self):
+        header = self.library() / "src" / "AnimatedGIF.h"
+        header.write_text("unknown upstream implementation")
+        with self.assertRaises(RuntimeError):
+            PATCH._patch_loads(header)
+        self.assertEqual(header.read_text(), "unknown upstream implementation")
 
     def test_unknown_decoder_source_fails_without_rewriting_it(self):
         source = self.library() / "src" / "gif.inl"

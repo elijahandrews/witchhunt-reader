@@ -12,7 +12,6 @@
 namespace {
 constexpr uint8_t WIFI_FILE_VERSION = 2;
 constexpr char WIFI_FILE_BIN[] = "/.crosspoint/wifi.bin";
-constexpr char WIFI_FILE_BAK[] = "/.crosspoint/wifi.bin.bak";
 constexpr uint8_t LEGACY_OBFUSCATION_KEY[] = {0x43, 0x72, 0x6F, 0x73, 0x73, 0x50, 0x6F, 0x69, 0x6E, 0x74};
 constexpr size_t LEGACY_KEY_LENGTH = sizeof(LEGACY_OBFUSCATION_KEY);
 
@@ -99,7 +98,7 @@ bool WifiCredentialStore::loadFromFile() {
     lastConnectedSsid.clear();
   }
 
-  const bool hasStoreFile = Storage.exists(getFilePath());
+  const bool hasStoreFile = Storage.exists(getFilePath()) || Storage.exists("/.crosspoint/crossink-wifi.json.bak");
   if (PersistableStore<WifiCredentialStore>::loadFromFile()) {
     LOG_INF("WCS", "load JSON complete");
     return true;
@@ -109,6 +108,19 @@ bool WifiCredentialStore::loadFromFile() {
     return false;
   }
 
+  // Import credentials into our own store; the old firmware must retain its
+  // original encoding and fields for a future rollback.
+  const char* legacyPath =
+      Storage.exists("/.crosspoint/wifi.json") ? "/.crosspoint/wifi.json" : "/.crosspoint/wifi.json.bak";
+  if (Storage.exists(legacyPath)) {
+    JsonDocument doc;
+    const String legacy = Storage.readFile(legacyPath);
+    if (deserializeJson(doc, legacy) || !doc.is<JsonObject>()) return false;
+    if (!fromJson(doc.as<JsonVariantConst>())) return false;
+    resaveRequested = false;
+    return saveToFile();
+  }
+
   if (Storage.exists(WIFI_FILE_BIN)) {
     LOG_INF("WCS", "load legacy migration attempted");
     if (!loadFromBinaryFile()) {
@@ -116,7 +128,6 @@ bool WifiCredentialStore::loadFromFile() {
       return false;
     }
     if (saveToFile()) {
-      Storage.rename(WIFI_FILE_BIN, WIFI_FILE_BAK);
       LOG_INF("WCS", "load legacy migration complete");
       return true;
     }

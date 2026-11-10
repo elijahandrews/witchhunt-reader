@@ -928,3 +928,107 @@ TEST_P(HttpDownloaderTest, SmallRequestsDoNotReserveTlsRecordsByDefault) {
             HttpDownloader::OK);
   if (GetParam() == HttpDownloader::Transport::WOLFSSL) EXPECT_EQ(recordReservations, (std::vector<bool>{false}));
 }
+
+class PrivateSyncTransportTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    files.clear();
+    replies.clear();
+    requests.clear();
+    requestUrls.clear();
+    requestCas.clear();
+    requestBundles.clear();
+    recordReservations.clear();
+    nextReply = 0;
+    clientInitializations = clientCleanups = 0;
+    failWrite = failSync = false;
+    failRemovePaths.clear();
+    failRenameSources.clear();
+  }
+  static HttpDownloader::DownloadOptions options(HttpDownloader::Session* session = nullptr) {
+    HttpDownloader::DownloadOptions result;
+    result.privateCa = "synthetic private CA";
+    result.maxRedirects = 0;
+    result.maxBytes = result.expectedBytes = 3;
+    result.session = session;
+    return result;
+  }
+  static auto get(const char* url, HttpDownloader::DownloadOptions opts, const char* user = "reader") {
+    return HttpDownloader::downloadToFile(url, "/stage", nullptr, nullptr, user, "synthetic-token", opts);
+  }
+};
+TEST_F(PrivateSyncTransportTest, PrivateRootReplacesPublicBundleAndNeverUsesInsecureTransport) {
+  replies = {{200, "abc", 3, "", true}};
+  ASSERT_EQ(get("https://private.example/book", options()), HttpDownloader::OK);
+  ASSERT_EQ(requestCas, std::vector<std::string>{"synthetic private CA"});
+  ASSERT_EQ(requestBundles, std::vector<bool>{false});
+  EXPECT_TRUE(recordReservations.empty());
+  EXPECT_EQ(clientInitializations, clientCleanups);
+}
+TEST_F(PrivateSyncTransportTest, RejectsHTTPRedirectPermissionAndWolfSSLBeforeConnection) {
+  replies = {{200, "abc", 3, "", true}};
+  EXPECT_EQ(get("http://private.example/book", options()), HttpDownloader::HTTP_ERROR);
+  auto redirect = options();
+  redirect.maxRedirects = 1;
+  EXPECT_EQ(get("https://private.example/book", redirect), HttpDownloader::HTTP_ERROR);
+  auto insecure = options();
+  insecure.transport = HttpDownloader::Transport::WOLFSSL;
+  EXPECT_EQ(get("https://private.example/book", insecure), HttpDownloader::HTTP_ERROR);
+  EXPECT_TRUE(requests.empty());
+  EXPECT_EQ(clientInitializations, 0U);
+}
+TEST_F(PrivateSyncTransportTest, RejectsServerRedirectWithoutSendingCredentialsToTarget) {
+  replies = {{302, "", 0, "", true, "https://other.example/book"}, {200, "abc", 3, "", true}};
+  EXPECT_EQ(get("https://private.example/book", options()), HttpDownloader::HTTP_ERROR);
+  EXPECT_EQ(requestUrls, std::vector<std::string>{"https://private.example/book"});
+  EXPECT_EQ(clientInitializations, clientCleanups);
+}
+TEST_F(PrivateSyncTransportTest, VerificationFailureNeverFallsBackToUnverifiedClient) {
+  replies = {{-1, "", 0, "", false}};
+  EXPECT_EQ(get("https://private.example/book", options()), HttpDownloader::HTTP_ERROR);
+  EXPECT_EQ(requestCas, std::vector<std::string>{"synthetic private CA"});
+  EXPECT_EQ(requestBundles, std::vector<bool>{false});
+  EXPECT_TRUE(recordReservations.empty());
+}
+TEST_F(PrivateSyncTransportTest, CompleteResponsesReuseOneVerifiedClientAndDropStaleCredentials) {
+  replies = {{200, "abc", 3, "", true}, {200, "def", 3, "", true}};
+  {
+    HttpDownloader::Session session;
+    ASSERT_EQ(get("https://private.example/a", options(&session)), HttpDownloader::OK);
+    ASSERT_EQ(get("https://private.example/b", options(&session), ""), HttpDownloader::OK);
+    EXPECT_EQ(clientInitializations, 1U);
+    EXPECT_EQ(clientCleanups, 0U);
+    ASSERT_EQ(requests.size(), 2U);
+    EXPECT_TRUE(requests[0].count("Authorization"));
+    EXPECT_FALSE(requests[1].count("Authorization"));
+    EXPECT_EQ(requests[1]["Connection"], "keep-alive");
+    EXPECT_EQ(files["/stage"], "def");
+  }
+  EXPECT_EQ(clientCleanups, 1U);
+}
+TEST_F(PrivateSyncTransportTest, ChangedPrivateRootOrOriginRequiresFreshConnection) {
+  replies = {{200, "abc", 3, "", true}, {200, "def", 3, "", true}, {200, "ghi", 3, "", true}};
+  HttpDownloader::Session session;
+  ASSERT_EQ(get("https://private.example/a", options(&session)), HttpDownloader::OK);
+  auto changed = options(&session);
+  changed.privateCa = "replacement synthetic CA";
+  ASSERT_EQ(get("https://private.example/b", changed), HttpDownloader::OK);
+  ASSERT_EQ(get("https://other.example/c", changed), HttpDownloader::OK);
+  EXPECT_EQ(clientInitializations, 3U);
+  EXPECT_EQ(clientCleanups, 2U);
+}
+TEST_F(PrivateSyncTransportTest, RejectedBodyCannotLeaveReusableConnection) {
+  replies = {{200, "abcd", 4, "", true}, {200, "def", 3, "", true}};
+  HttpDownloader::Session session;
+  EXPECT_EQ(get("https://private.example/a", options(&session)), HttpDownloader::HTTP_ERROR);
+  EXPECT_EQ(clientCleanups, 1U);
+  ASSERT_EQ(get("https://private.example/b", options(&session)), HttpDownloader::OK);
+  EXPECT_EQ(clientInitializations, 2U);
+}
+TEST_F(PrivateSyncTransportTest, SessionCannotChangeTheDefaultPublicTransport) {
+  HttpDownloader::Session session;
+  HttpDownloader::DownloadOptions opts;
+  opts.session = &session;
+  EXPECT_EQ(get("https://private.example/book", opts), HttpDownloader::HTTP_ERROR);
+  EXPECT_EQ(clientInitializations, 0U);
+}

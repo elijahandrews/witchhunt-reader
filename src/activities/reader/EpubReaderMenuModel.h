@@ -6,6 +6,8 @@
 
 enum class EpubReaderMenuAction : uint8_t {
   SELECT_CHAPTER,
+  GO_BACK,
+  SEARCH_BOOK,
   FOOTNOTES,
   GO_TO_PERCENT,
   GO_TO_STABLE_PAGE,
@@ -110,9 +112,12 @@ enum class ReaderDrawerCatalogItem : uint8_t {
   ExtraSpacing,
   ForceIndents,
   EmbeddedStyle,
+  IgnorePublisherMargins,
   PublisherFonts,
   Images,
   SelectChapter,
+  GoBack,
+  SearchBook,
   GoToPercent,
   GoToStablePage,
   BookmarkToggle,
@@ -165,6 +170,7 @@ struct ReaderDrawerAvailability {
   bool buttonDevice = false;
   bool globalStatsEnabled = true;
   bool bookStatsEnabled = true;
+  bool canGoBack = false;
 };
 
 struct ReaderDrawerTabCatalog {
@@ -199,13 +205,16 @@ constexpr ReaderDrawerCatalog makeReaderDrawerCatalog(const ReaderDrawerAvailabi
   layout.add(ReaderDrawerCatalogItem::ExtraSpacing);
   layout.add(ReaderDrawerCatalogItem::ForceIndents);
   layout.add(ReaderDrawerCatalogItem::EmbeddedStyle);
+  layout.add(ReaderDrawerCatalogItem::IgnorePublisherMargins);
 
   auto& more = catalog[static_cast<size_t>(ReaderDrawerTab::More)];
   if (available.hasDictionary) {
     more.add(ReaderDrawerCatalogItem::Lookup);
     more.add(ReaderDrawerCatalogItem::LookupHistory);
   }
+  if (available.canGoBack) more.add(ReaderDrawerCatalogItem::GoBack);
   more.add(ReaderDrawerCatalogItem::SelectChapter);
+  more.add(ReaderDrawerCatalogItem::SearchBook);
   more.add(ReaderDrawerCatalogItem::GoToPercent);
   if (available.hasStablePageNumbers) more.add(ReaderDrawerCatalogItem::GoToStablePage);
   more.add(ReaderDrawerCatalogItem::AutoPageTurn);
@@ -347,6 +356,7 @@ struct ReaderSettingsDraft {
   uint8_t extraParagraphSpacing = 0;
   uint8_t forceParagraphIndents = 0;
   uint8_t embeddedStyle = 0;
+  uint8_t ignorePublisherPageMargins = 0;
   uint8_t publisherFonts = 0;
   uint8_t imageRendering = 0;
   uint8_t imageGrayscale = 1;

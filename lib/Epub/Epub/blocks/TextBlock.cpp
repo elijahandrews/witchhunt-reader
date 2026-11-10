@@ -8,6 +8,7 @@
 #include <Serialization.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "../../../ScalableFont/ScalableFontSizing.h"
@@ -17,11 +18,13 @@ namespace {
 constexpr uint16_t MAX_WORDS_PER_TEXT_BLOCK = 512;
 
 uint16_t measureBackgroundWidth(const GfxRenderer& renderer, const int fontId, const char* word,
-                                const EpdFontFamily::Style style, const int8_t characterSpacing) {
+                                const EpdFontFamily::Style style, const int8_t characterSpacing,
+                                const int16_t letterSpacing, const uint8_t typography) {
   if (word[0] == ' ' && word[1] == '\0') {
     return renderer.getSpaceWidth(fontId, style);
   }
-  return static_cast<uint16_t>(std::max(0, renderer.getTextAdvanceX(fontId, word, style, 0, characterSpacing)));
+  return static_cast<uint16_t>(
+      std::max(0, renderer.getTextAdvanceX(fontId, word, style, 0, characterSpacing, letterSpacing, typography)));
 }
 
 bool isWhitespaceOnlyBackgroundToken(const char* word) {
@@ -118,7 +121,8 @@ TextBlock::TextBlock(const std::vector<std::string>& words, const std::vector<in
                      const std::vector<uint8_t>& wordFlags, const std::vector<bool>& wordHasSpaceBefore,
                      const BlockStyle& blockStyle, std::vector<std::string> rubyTexts,
                      const std::vector<uint8_t>& wordSizes, const char* initialLetter, const int8_t characterSpacing,
-                     const std::vector<uint32_t>& fontFamilies)
+                     const std::vector<uint32_t>& fontFamilies, const std::vector<int16_t>& letterSpacings,
+                     const std::vector<uint16_t>& points64, const std::vector<uint8_t>& typography)
     : blockStyle(blockStyle), characterSpacing(characterSpacing), rubyTexts(std::move(rubyTexts)) {
   // A ruby-less line needs no per-word ruby vector. ParsedText passes one for
   // every extracted line once a book contains any ruby, so free all-empty
@@ -137,6 +141,35 @@ TextBlock::TextBlock(const std::vector<std::string>& words, const std::vector<in
       return;
     }
     std::copy(fontFamilies.begin(), fontFamilies.end(), wordFamilies.get());
+  }
+  if (!letterSpacings.empty()) {
+    // Two bytes per token only for styled lines; ordinary pages keep no extra array.
+    wordLetterSpacings = makeUniqueNoThrow<int16_t[]>(words.size());
+    if (!wordLetterSpacings || letterSpacings.size() != words.size() ||
+        std::any_of(letterSpacings.begin(), letterSpacings.end(), [](int16_t v) { return v < -512 || v > 512; })) {
+      LOG_ERR("TXB", "Invalid CSS letter spacing");
+      isValid = false;
+      return;
+    }
+    std::copy(letterSpacings.begin(), letterSpacings.end(), wordLetterSpacings.get());
+  }
+  if (!points64.empty()) {
+    wordPoints64 = makeUniqueNoThrow<uint16_t[]>(words.size());
+    if (!wordPoints64 || points64.size() != words.size() ||
+        std::any_of(points64.begin(), points64.end(), [](uint16_t v) { return v > 8192; })) {
+      isValid = false;
+      return;
+    }
+    std::copy(points64.begin(), points64.end(), wordPoints64.get());
+  }
+  if (!typography.empty()) {
+    wordTypographyFlags = makeUniqueNoThrow<uint8_t[]>(words.size());
+    if (!wordTypographyFlags || typography.size() != words.size() ||
+        std::any_of(typography.begin(), typography.end(), [](uint8_t v) { return (v & ~fontTypography::Mask) != 0; })) {
+      isValid = false;
+      return;
+    }
+    std::copy(typography.begin(), typography.end(), wordTypographyFlags.get());
   }
   wordSizesPresent = !wordSizes.empty();
   if (wordSizesPresent && wordSizes.size() != words.size()) {
@@ -263,19 +296,24 @@ bool TextBlock::hasRuby() const {
 }
 
 int TextBlock::wordFontId(const GfxRenderer& renderer, int fontId, uint16_t i) const {
-  return renderer.resolveBookFont(resolvedFontId(renderer, fontId), wordFamilies ? wordFamilies[i] : 0,
-                                  wordFontSize(i));
+  const uint16_t points = wordFontSize64(i);
+  return renderer.resolveBookFont64(fontId, wordFamilies ? wordFamilies[i] : 0,
+                                    points                  ? points
+                                    : blockStyle.fontSize64 ? blockStyle.fontSize64
+                                                            : uint16_t(blockStyle.fontSize) * 64);
 }
 int TextBlock::maxAscender(const GfxRenderer& renderer, int fontId) const {
-  int height = renderer.getFontAscenderSize(resolvedFontId(renderer, fontId));
-  if (wordSizesPresent || wordFamilies)
+  return maxAscender(renderer, fontId, renderer.getFontAscenderSize(resolvedFontId(renderer, fontId)));
+}
+int TextBlock::maxAscender(const GfxRenderer& renderer, int fontId, int height) const {
+  if (wordSizesPresent || wordFamilies || wordPoints64)
     for (uint16_t i = 0; i < numWords; ++i)
       height = std::max(height, renderer.getFontAscenderSize(wordFontId(renderer, fontId, i)));
   return height;
 }
 int TextBlock::maxLineHeight(const GfxRenderer& renderer, int fontId) const {
   int height = renderer.getLineHeight(resolvedFontId(renderer, fontId));
-  if (wordSizesPresent || wordFamilies)
+  if (wordSizesPresent || wordFamilies || wordPoints64)
     for (uint16_t i = 0; i < numWords; ++i)
       height = std::max(height, renderer.getLineHeight(wordFontId(renderer, fontId, i)));
   return height;
@@ -283,21 +321,24 @@ int TextBlock::maxLineHeight(const GfxRenderer& renderer, int fontId) const {
 
 int TextBlock::wordYOffset(const GfxRenderer& renderer, int fontId, uint16_t i) const {
   const int ascender = renderer.getFontAscenderSize(wordFontId(renderer, fontId, i));
-  const int baseline = maxAscender(renderer, fontId);
-  return baselineOffset(baseline, ascender, wordStyle(i));
+  const int blockAscender = renderer.getFontAscenderSize(resolvedFontId(renderer, fontId));
+  const int baseline = maxAscender(renderer, fontId, blockAscender);
+  return baselineOffset(baseline, ascender, wordStyle(i),
+                        (wordTypography(i) & fontTypography::ScriptSizeResolved) ? blockAscender : ascender);
 }
 
-int TextBlock::baselineOffset(int baseline, int ascender, EpdFontFamily::Style style) const {
+int TextBlock::baselineOffset(int baseline, int ascender, EpdFontFamily::Style style, int blockAscender) const {
   int offset = baseline - ascender + getRubyShift(baseline);
   if (style & EpdFontFamily::SUP)
-    offset -= ascender * 2 / 5;
+    offset -= blockAscender * 2 / 5;
   else if (style & EpdFontFamily::SUB)
-    offset += ascender / 4;
+    offset += blockAscender / 4;
   return offset;
 }
 
 int TextBlock::resolvedFontId(const GfxRenderer& renderer, const int fontId) const {
-  return renderer.getFontIdForSize(fontId, blockStyle.fontSize);
+  return renderer.getFontIdForSize64(
+      fontId, blockStyle.fontSize64 ? blockStyle.fontSize64 : uint16_t(blockStyle.fontSize) * 64);
 }
 
 void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, const int y,
@@ -307,10 +348,10 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
     return;
   }
 
-  fontId = resolvedFontId(renderer, fontId);
-  const bool scanning = renderer.isFontCacheScanning();
   const int baseFont = fontId;
-  const int baseline = maxAscender(renderer, baseFont);
+  const int blockAscender = renderer.getFontAscenderSize(resolvedFontId(renderer, baseFont));
+  const bool scanning = renderer.isFontCacheScanning();
+  const int baseline = maxAscender(renderer, baseFont, blockAscender);
   for (uint16_t i = 0; i < numWords; i++) {
     fontId = wordFontId(renderer, baseFont, i);
     const int ascender = renderer.getFontAscenderSize(fontId);
@@ -323,13 +364,16 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
         static_cast<BidiUtils::BidiBaseDir>(BidiUtils::detectParagraphLevel(word, blockStyle.isRtl ? 1 : 0));
 
     if ((wordFlags(i) & WORD_FLAG_BACKGROUND_BLACK) != 0 && isWhitespaceOnlyBackgroundToken(word)) {
-      const uint16_t backgroundWidth = measureBackgroundWidth(renderer, fontId, word, currentStyle, characterSpacing);
+      const uint16_t backgroundWidth = measureBackgroundWidth(renderer, fontId, word, currentStyle, characterSpacing,
+                                                              wordLetterSpacing(i), wordTypography(i));
       if (backgroundWidth > 0) {
         renderer.fillRect(wordX, y, backgroundWidth, renderer.getFontAscenderSize(fontId), true);
       }
     }
 
-    const int wordY = y + baselineOffset(baseline, ascender, currentStyle);
+    const int wordY =
+        y + baselineOffset(baseline, ascender, currentStyle,
+                           (wordTypography(i) & fontTypography::ScriptSizeResolved) ? blockAscender : ascender);
 
     if (boundary > 0) {
       const auto boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
@@ -341,15 +385,18 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
       const int secondRunX = wordX + focusRunOffset(i);
       if (baseDir == BidiUtils::BidiBaseDir::RTL) {
         renderer.drawText(fontId, wordX, wordY, word + boldLen, foregroundBlack, currentStyle, baseDir,
-                          characterSpacing);
-        renderer.drawText(fontId, secondRunX, wordY, boldBuf, foregroundBlack, boldStyle, baseDir, characterSpacing);
+                          characterSpacing, wordLetterSpacing(i), wordTypography(i));
+        renderer.drawText(fontId, secondRunX, wordY, boldBuf, foregroundBlack, boldStyle, baseDir, characterSpacing,
+                          wordLetterSpacing(i), wordTypography(i));
       } else {
-        renderer.drawText(fontId, wordX, wordY, boldBuf, foregroundBlack, boldStyle, baseDir, characterSpacing);
+        renderer.drawText(fontId, wordX, wordY, boldBuf, foregroundBlack, boldStyle, baseDir, characterSpacing,
+                          wordLetterSpacing(i), wordTypography(i));
         renderer.drawText(fontId, secondRunX, wordY, word + boldLen, foregroundBlack, currentStyle, baseDir,
-                          characterSpacing);
+                          characterSpacing, wordLetterSpacing(i), wordTypography(i));
       }
     } else {
-      renderer.drawText(fontId, wordX, wordY, word, foregroundBlack, currentStyle, baseDir, characterSpacing);
+      renderer.drawText(fontId, wordX, wordY, word, foregroundBlack, currentStyle, baseDir, characterSpacing,
+                        wordLetterSpacing(i), wordTypography(i));
     }
 
     if (i < rubyTexts.size() && !rubyTexts[i].empty() && (currentStyle & EpdFontFamily::RUBY_CONTINUE) == 0) {
@@ -360,36 +407,43 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
       int groupWidth = 0;
       for (uint16_t j = 0; j < groupWords; ++j) {
         groupWidth += renderer.getTextAdvanceX(wordFontId(renderer, baseFont, i + j), wordText(i + j), wordStyle(i + j),
-                                               0, characterSpacing);
+                                               0, characterSpacing, wordLetterSpacing(i + j), wordTypography(i + j));
       }
+      fontId = wordFontId(renderer, baseFont, i);
       const int rubyWidth =
-          renderer.getTextAdvanceX(fontId, rubyTexts[i].c_str(), EpdFontFamily::SUP, 0, characterSpacing);
+          renderer.getTextAdvanceX(fontId, rubyTexts[i].c_str(), EpdFontFamily::SUP, 0, characterSpacing,
+                                   wordLetterSpacing(i), (wordTypography(i) & ~fontTypography::ScriptSizeResolved));
       // ParsedText reserves any edge overhang in the line layout, so the ruby
       // can remain centered over its base text without screen-edge clamping.
       const int rubyX = wordX + (groupWidth - rubyWidth) / 2;
       renderer.drawText(fontId, rubyX, wordY - ascender, rubyTexts[i].c_str(), foregroundBlack, EpdFontFamily::SUP,
-                        baseDir, characterSpacing);
+                        baseDir, characterSpacing, wordLetterSpacing(i),
+                        (wordTypography(i) & ~fontTypography::ScriptSizeResolved));
     }
 
     const uint16_t dotOffset = guideDotXOffset(i);
     if (dotOffset > 0) {
       renderer.drawText(fontId, wordX + dotOffset, wordY, "\xc2\xb7", foregroundBlack, EpdFontFamily::REGULAR, baseDir,
-                        characterSpacing);
+                        characterSpacing, wordLetterSpacing(i), wordTypography(i));
     }
 
     if (!scanning && (currentStyle & EpdFontFamily::UNDERLINE) != 0) {
       int startX = wordX;
-      int underlineWidth = renderer.getTextWidth(fontId, word, currentStyle, baseDir, characterSpacing);
+      int underlineWidth = renderer.getTextWidth(fontId, word, currentStyle, baseDir, characterSpacing,
+                                                 wordLetterSpacing(i), wordTypography(i));
       const int underlineY = wordY + ascender + 2;
 
       if (hasSyntheticIndentPrefix(word, wordLen)) {
         const char* visiblePtr = word + 3;
-        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle, 0, characterSpacing);
+        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle, 0, characterSpacing,
+                                                         wordLetterSpacing(i), wordTypography(i));
         startX = wordX + prefixWidth;
-        underlineWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle, baseDir, characterSpacing);
+        underlineWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle, baseDir, characterSpacing,
+                                               wordLetterSpacing(i), wordTypography(i));
       }
 
-      if (characterSpacing == 0 && (currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
+      if ((characterSpacing == 0 && wordLetterSpacing(i) == 0 && wordTypography(i) == 0) &&
+          (currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
         underlineWidth = (underlineWidth + 1) / 2;
       }
 
@@ -410,14 +464,16 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
 
     if ((currentStyle & EpdFontFamily::STRIKETHROUGH) != 0) {
       int startX = wordX;
-      int strikeWidth = renderer.getTextWidth(fontId, word, currentStyle, baseDir, characterSpacing);
+      int strikeWidth = renderer.getTextWidth(fontId, word, currentStyle, baseDir, characterSpacing,
+                                              wordLetterSpacing(i), wordTypography(i));
       int32_t unusedAdvance = 0;
       int height = 0;
       const bool smallCaps = (currentStyle & EpdFontFamily::SMALL_CAPS) != 0;
       if (!renderer.getCodepointMetrics(fontId, smallCaps ? 'X' : 'x', currentStyle, unusedAdvance, height) ||
           height <= 0)
         height = ascender * 2 / 3;
-      if ((currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0)
+      if ((currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0 &&
+          !(wordTypography(i) & fontTypography::ScriptSizeResolved))
         height = (height + 1) / 2;
       else if (smallCaps)
         height = (height * 3 + 3) / 4;
@@ -425,12 +481,15 @@ void TextBlock::render(const GfxRenderer& renderer, int fontId, const int x, con
 
       if (hasSyntheticIndentPrefix(word, wordLen)) {
         const char* visiblePtr = word + 3;
-        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle, 0, characterSpacing);
+        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle, 0, characterSpacing,
+                                                         wordLetterSpacing(i), wordTypography(i));
         startX = wordX + prefixWidth;
-        strikeWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle, baseDir, characterSpacing);
+        strikeWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle, baseDir, characterSpacing,
+                                            wordLetterSpacing(i), wordTypography(i));
       }
 
-      if (characterSpacing == 0 && (currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
+      if ((characterSpacing == 0 && wordLetterSpacing(i) == 0 && wordTypography(i) == 0) &&
+          (currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
         strikeWidth = (strikeWidth + 1) / 2;
       }
 
@@ -483,6 +542,19 @@ bool TextBlock::serialize(Print& file) const {
                          numWords * sizeof(uint32_t))
     return false;
 
+  const uint8_t hasTracking = wordLetterSpacings ? 1 : 0;
+  if (!serialization::tryWritePod(file, hasTracking)) return false;
+  if (hasTracking && file.write(reinterpret_cast<const uint8_t*>(wordLetterSpacings.get()),
+                                numWords * sizeof(int16_t)) != numWords * sizeof(int16_t))
+    return false;
+
+  const uint8_t hasExactSizes = wordPoints64 ? 1 : 0, hasTypography = wordTypographyFlags ? 1 : 0;
+  if (!serialization::tryWritePod(file, hasExactSizes) || !serialization::tryWritePod(file, hasTypography))
+    return false;
+  if (hasExactSizes && file.write(reinterpret_cast<const uint8_t*>(wordPoints64.get()), numWords * sizeof(uint16_t)) !=
+                           numWords * sizeof(uint16_t))
+    return false;
+  if (hasTypography && file.write(wordTypographyFlags.get(), numWords) != numWords) return false;
   uint16_t rubyCount = 0;
   for (uint16_t i = 0; i < numWords && i < rubyTexts.size(); ++i) {
     if (!rubyTexts[i].empty()) ++rubyCount;
@@ -508,7 +580,9 @@ bool TextBlock::serialize(Print& file) const {
          serialization::tryWritePod(file, blockStyle.isRtl) &&
          serialization::tryWritePod(file, blockStyle.directionDefined) &&
          serialization::tryWritePod(file, blockStyle.fontSize) &&
-         serialization::tryWritePod(file, blockStyle.lineHeight);
+         serialization::tryWritePod(file, blockStyle.fontSize64) &&
+         serialization::tryWritePod(file, blockStyle.lineHeight) &&
+         serialization::tryWritePod(file, blockStyle.lineHeightMultiplier);
 }
 
 std::unique_ptr<TextBlock> TextBlock::deserialize(HalFile& file) {
@@ -616,6 +690,34 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(HalFile& file) {
       return nullptr;
     }
   }
+  uint8_t hasTracking = 0;
+  if (!serialization::tryReadPod(file, hasTracking) || hasTracking > 1) return nullptr;
+  if (hasTracking) {
+    block->wordLetterSpacings = makeUniqueNoThrow<int16_t[]>(wc);
+    if (!block->wordLetterSpacings ||
+        file.read(block->wordLetterSpacings.get(), wc * sizeof(int16_t)) != wc * sizeof(int16_t))
+      return nullptr;
+    for (uint16_t i = 0; i < wc; ++i) {
+      if (block->wordLetterSpacings[i] < -512 || block->wordLetterSpacings[i] > 512) return nullptr;
+    }
+  }
+  uint8_t hasExactSizes = 0, hasTypography = 0;
+  if (!serialization::tryReadPod(file, hasExactSizes) || hasExactSizes > 1 ||
+      !serialization::tryReadPod(file, hasTypography) || hasTypography > 1)
+    return nullptr;
+  if (hasExactSizes) {
+    block->wordPoints64 = makeUniqueNoThrow<uint16_t[]>(wc);
+    if (!block->wordPoints64 || file.read(block->wordPoints64.get(), wc * sizeof(uint16_t)) != wc * sizeof(uint16_t))
+      return nullptr;
+    for (uint16_t i = 0; i < wc; ++i)
+      if (block->wordPoints64[i] > 8192) return nullptr;
+  }
+  if (hasTypography) {
+    block->wordTypographyFlags = makeUniqueNoThrow<uint8_t[]>(wc);
+    if (!block->wordTypographyFlags || file.read(block->wordTypographyFlags.get(), wc) != wc) return nullptr;
+    for (uint16_t i = 0; i < wc; ++i)
+      if (block->wordTypographyFlags[i] & ~fontTypography::Mask) return nullptr;
+  }
   uint16_t rubyCount = 0;
   if (!serialization::tryReadPod(file, rubyCount) || rubyCount > wc) {
     LOG_ERR("TXB", "Deserialization failed: invalid ruby count %u", rubyCount);
@@ -648,7 +750,12 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(HalFile& file) {
       !serialization::tryReadPod(file, blockStyle.isRtl) ||
       !serialization::tryReadPod(file, blockStyle.directionDefined) ||
       !serialization::tryReadPod(file, blockStyle.fontSize) ||
+      !serialization::tryReadPod(file, blockStyle.fontSize64) || blockStyle.fontSize64 > 8192 ||
       !serialization::tryReadPod(file, blockStyle.lineHeight) ||
+      !serialization::tryReadPod(file, blockStyle.lineHeightMultiplier) ||
+      !std::isfinite(blockStyle.lineHeightMultiplier) ||
+      (blockStyle.lineHeightMultiplier != 0 &&
+       (blockStyle.lineHeightMultiplier < 0.7f || blockStyle.lineHeightMultiplier > 2.0f)) ||
       (blockStyle.fontSize != 0 &&
        (blockStyle.fontSize < ScalableContentMinPointSize || blockStyle.fontSize > ScalableContentMaxPointSize))) {
     LOG_ERR("TXB", "Deserialization failed: truncated block style metadata");

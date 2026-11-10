@@ -77,6 +77,9 @@ class HalDisplay {
   // True when the normal async refresh is equivalent to the panel's grayscale
   // base pass. X3 has a dedicated grayscale waveform and must stay blocking.
   bool supportsAsyncGrayscaleBase() const;
+  void releaseTextAa();
+  bool supportsTextAa() const;
+  bool tryDisplayTextAa(const uint8_t* lsb, const uint8_t* msb, size_t bytes, bool turnOffScreen);
   bool supportsDeferredGrayscaleBase() const;
   bool displayGrayscaleBaseAsync(RefreshMode fallback);
   void refreshDisplay(RefreshMode mode = RefreshMode::FAST_REFRESH, bool turnOffScreen = false);

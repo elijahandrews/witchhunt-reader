@@ -1,73 +1,78 @@
 #include "ImageDecoderFactory.h"
 
-#include <Arduino.h>
 #include <FsHelpers.h>
 #include <Logging.h>
 #include <Memory.h>
 
-#include <memory>
-#include <string>
-
 #include "GifToFramebufferConverter.h"
 #include "JpegToFramebufferConverter.h"
 #include "PngToFramebufferConverter.h"
+#include "SvgToFramebufferConverter.h"
 
-std::unique_ptr<JpegToFramebufferConverter> ImageDecoderFactory::jpegDecoder = nullptr;
-std::unique_ptr<PngToFramebufferConverter> ImageDecoderFactory::pngDecoder = nullptr;
-std::unique_ptr<GifToFramebufferConverter> ImageDecoderFactory::gifDecoder = nullptr;
+namespace {
+using Format = ImageFormatDetector::Format;
+Format nameHint(const std::string& path) {
+  if (FsHelpers::hasJpgExtension(path)) return Format::Jpeg;
+  if (FsHelpers::hasPngExtension(path)) return Format::Png;
+  if (FsHelpers::hasGifExtension(path)) return Format::Gif;
+  const auto end = path.size();
+  if (end >= 4 && path[end - 4] == '.' && (path[end - 3] == 's' || path[end - 3] == 'S') &&
+      (path[end - 2] == 'v' || path[end - 2] == 'V') && (path[end - 1] == 'g' || path[end - 1] == 'G'))
+    return Format::Svg;
+  return Format::Unknown;
+}
+}  // namespace
+
+std::unique_ptr<JpegToFramebufferConverter> ImageDecoderFactory::jpegDecoder;
+std::unique_ptr<PngToFramebufferConverter> ImageDecoderFactory::pngDecoder;
+std::unique_ptr<GifToFramebufferConverter> ImageDecoderFactory::gifDecoder;
+std::unique_ptr<SvgToFramebufferConverter> ImageDecoderFactory::svgDecoder;
 
 ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& imagePath) {
-  std::string ext = imagePath;
-  size_t dotPos = ext.rfind('.');
-  if (dotPos != std::string::npos) {
-    ext = ext.substr(dotPos);
-    for (auto& c : ext) {
-      c = tolower(c);
-    }
-  } else {
-    ext = "";
-  }
-
-  if (JpegToFramebufferConverter::supportsFormat(ext)) {
-    if (!jpegDecoder) {
-      jpegDecoder = makeUniqueNoThrow<JpegToFramebufferConverter>();
-      if (!jpegDecoder) {
-        LOG_ERR("DEC", "OOM: JPEG framebuffer decoder (%u free, %u max alloc)", ESP.getFreeHeap(),
-                ESP.getMaxAllocHeap());
-        return nullptr;
-      }
-    }
-    return jpegDecoder.get();
-  } else if (PngToFramebufferConverter::supportsFormat(ext)) {
-    if (!pngDecoder) {
-      pngDecoder = makeUniqueNoThrow<PngToFramebufferConverter>();
-      if (!pngDecoder) {
-        LOG_ERR("DEC", "OOM: PNG framebuffer decoder (%u free, %u max alloc)", ESP.getFreeHeap(),
-                ESP.getMaxAllocHeap());
-        return nullptr;
-      }
-    }
-    return pngDecoder.get();
-  } else if (GifToFramebufferConverter::supportsFormat(ext)) {
-    if (!gifDecoder) {
-      gifDecoder = makeUniqueNoThrow<GifToFramebufferConverter>();
-      if (!gifDecoder) {
-        LOG_ERR("DEC", "OOM: GIF decoder");
-        return nullptr;
-      }
-    }
-    return gifDecoder.get();
-  }
-
-  LOG_ERR("DEC", "No decoder found for image: %s", imagePath.c_str());
-  return nullptr;
+  // Existing memory-source callers can have no extracted file yet; preserve
+  // their name hint until they pass their borrowed bytes to the overload below.
+  // An existing file is always dispatched by contents, never its extension.
+  if (!Storage.exists(imagePath.c_str())) return getDecoder(nameHint(imagePath));
+  return getDecoder(ImageFormatDetector::detectPath(imagePath));
 }
 
-bool ImageDecoderFactory::isFormatSupported(const std::string& imagePath) {
-  return FsHelpers::hasJpgExtension(imagePath) || FsHelpers::hasPngExtension(imagePath) ||
-         FsHelpers::hasGifExtension(imagePath);
+ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const uint8_t* data, size_t size) {
+  return getDecoder(ImageFormatDetector::detect(data, size));
 }
 
-bool ImageDecoderFactory::supportsMemorySource(const std::string& imagePath) {
-  return FsHelpers::hasJpgExtension(imagePath) || FsHelpers::hasPngExtension(imagePath);
+ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const Format format) {
+  // Factory objects are tiny, lazy and reused; expensive decoder workspaces
+  // stay scoped to each actual decode in the native implementations.
+  ImageToFramebufferDecoder* decoder = nullptr;
+  switch (format) {
+    case Format::Jpeg:
+      if (!jpegDecoder) jpegDecoder = makeUniqueNoThrow<JpegToFramebufferConverter>();
+      decoder = jpegDecoder.get();
+      break;
+    case Format::Png:
+      if (!pngDecoder) pngDecoder = makeUniqueNoThrow<PngToFramebufferConverter>();
+      decoder = pngDecoder.get();
+      break;
+    case Format::Gif:
+      if (!gifDecoder) gifDecoder = makeUniqueNoThrow<GifToFramebufferConverter>();
+      decoder = gifDecoder.get();
+      break;
+    case Format::Svg:
+      if (!svgDecoder) svgDecoder = makeUniqueNoThrow<SvgToFramebufferConverter>();
+      decoder = svgDecoder.get();
+      break;
+    case Format::Unknown:
+      return nullptr;
+  }
+  if (!decoder) LOG_ERR("DEC", "OOM allocating image decoder (%u)", unsigned(format));
+  return decoder;
+}
+
+bool ImageDecoderFactory::isFormatSupported(const std::string& path) { return nameHint(path) != Format::Unknown; }
+bool ImageDecoderFactory::isFormatSupported(const uint8_t* data, size_t size) {
+  return ImageFormatDetector::detect(data, size) != Format::Unknown;
+}
+bool ImageDecoderFactory::supportsMemorySource(const std::string& path) { return supportsMemorySource(nameHint(path)); }
+bool ImageDecoderFactory::supportsMemorySource(const Format format) {
+  return format == Format::Jpeg || format == Format::Png;
 }

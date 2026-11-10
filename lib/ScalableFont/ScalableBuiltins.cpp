@@ -3,15 +3,18 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include <algorithm>
 #include <optional>
 
 #include "../../src/ReaderFontSizeStep.h"
 #include "../../src/fontIds.h"
 #include "HalScalableFont.h"
 #include "ScalableAssets.generated.h"
+#include "ScalableSizeCache.h"
 namespace {
 std::optional<HalScalableFont> faces[8];
 bool ready[2] = {};
+ScalableSizeCache extraSizes[2];
 const uint8_t* const assets[] = {lexenddeca_regularOutline,    lexenddeca_boldOutline,  lexenddeca_italicOutline,
                                  lexenddeca_bolditalicOutline, bitter_regularOutline,   bitter_boldOutline,
                                  bitter_italicOutline,         bitter_bolditalicOutline};
@@ -35,6 +38,51 @@ int scalableBuiltinReaderFontId(unsigned family, unsigned points) {
   for (unsigned s = 0; s < 4; ++s)
     if (points == 10 + s * 2) return scalableBuiltinFontId(ids[family][s]);
   return scalableBuiltinFontId(0x54540000 | (family << 8) | points);
+}
+unsigned prepareScalableGenericFonts(GfxRenderer& renderer) {
+  ensureScalableBuiltinFamily(renderer, 0);
+  ensureScalableBuiltinFamily(renderer, 1);
+  return (ready[0] ? 1u : 0u) | (ready[1] ? 2u : 0u);
+}
+int resolveScalableGenericFont(GfxRenderer& renderer, const int readerFontId, const bool sans, unsigned points) {
+  return resolveScalableGenericFont64(renderer, readerFontId, sans, uint16_t(points * 64));
+}
+void retryScalableBuiltinSizes() {
+  for (auto& cache : extraSizes) cache.retryFailures();
+}
+int resolveScalableBuiltinSize64(GfxRenderer& renderer, const int readerFontId, const uint16_t points) {
+  const auto it = renderer.getFontMap().find(readerFontId);
+  if (it == renderer.getFontMap().end() || !points) return 0;
+  const auto* data = it->second.getData();
+  if (!data) return 0;
+  for (unsigned family = 0; family < 2; ++family) {
+    if (!faces[family * 4] || data->sizeFamily != &*faces[family * 4]) continue;
+    if (points % 64 == 0 && points / 64 >= ScalableContentMinPointSize && points / 64 <= ScalableContentMaxPointSize) {
+      const int id = scalableBuiltinReaderFontId(family, points / 64);
+      return renderer.getFontMap().count(id) ? id : 0;
+    }
+    HalScalableFont* styles[4] = {};
+    for (unsigned style = 0; style < 4; ++style)
+      if (faces[family * 4 + style]) styles[style] = &*faces[family * 4 + style];
+    const int id = 0x40000000 | (family << 16) | points;
+    return extraSizes[family].resolve(renderer, styles, points, id);
+  }
+  return 0;
+}
+int resolveScalableGenericFont64(GfxRenderer& renderer, const int readerFontId, const bool sans, uint16_t points) {
+  const auto it = renderer.getFontMap().find(readerFontId);
+  if (it == renderer.getFontMap().end()) return 0;
+  bool builtIn = false;
+  const auto* data = it->second.getData();
+  if (!data) return 0;
+  for (unsigned family = 0; family < 2; ++family)
+    if (faces[family * 4] && data->sizeFamily == &*faces[family * 4]) builtIn = true;
+  // A custom reader face is the user's serif preference.
+  if (!sans && !builtIn) return renderer.getFontIdForSize64(readerFontId, points);
+  const unsigned target = sans ? 0 : 1;
+  if (!(renderer.genericFontMask() & (1u << target))) return 0;
+  if (!points) points = 12 * 64;
+  return resolveScalableBuiltinSize64(renderer, scalableBuiltinReaderFontId(target, 12), points);
 }
 void ensureScalableBuiltinFamily(GfxRenderer& renderer, unsigned family) {
   ScalableFontAccess access;

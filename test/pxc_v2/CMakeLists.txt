@@ -43,3 +43,9 @@ add_executable(PxcHeaderSinkTest PxcHeaderSinkTest.cpp)
 target_include_directories(PxcHeaderSinkTest PRIVATE stubs)
 target_link_libraries(PxcHeaderSinkTest PRIVATE gtest_main crosspoint_test_common)
 gtest_discover_tests(PxcHeaderSinkTest)
+
+# Zip integrity validation uses the real CRC implementation even in stored-only fixtures.
+foreach(target StoredZipTest ZipCentralDirectoryTest)
+  target_sources(${target} PRIVATE ${PXC_ROOT}/lib/miniz/src/miniz_impl.c)
+  target_include_directories(${target} PRIVATE ${PXC_ROOT}/lib/miniz/src)
+endforeach()

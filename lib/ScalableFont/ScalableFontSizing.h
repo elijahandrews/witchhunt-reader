@@ -20,3 +20,9 @@ constexpr uint32_t scalableFontPixelSize26_6ForPpi(const uint8_t points, const u
 constexpr uint32_t scalableFontPixelSize26_6(const uint8_t points) {
   return scalableFontPixelSize26_6ForPpi(points, ScalableFontCompatibilityPpi);
 }
+
+// Exact publisher sizes are in typographic point sixty-fourths. Reader controls
+// retain their existing whole-point labels.
+constexpr uint32_t scalableFontPixelSizeFromPoints64(const uint16_t points64) {
+  return (uint32_t(points64) * ScalableFontCompatibilityPpi + 36) / 72;
+}

@@ -1,0 +1,34 @@
+#pragma once
+
+#include <cstdint>
+
+// Stable within the unmodified chapter XHTML. The optional character offset selects a
+// fragment of a layout-split word, in the original decoded word, independently of font metrics and text-transform.
+// Layout-inserted hyphens and generated CSS content never advance this offset.
+struct SourceAnchor {
+  uint32_t sourceOffset = UINT32_MAX;
+  uint16_t characterOffset = 0;
+  bool valid() const { return sourceOffset != UINT32_MAX; }
+};
+
+// Half-open chapter-source interval. Navigation uses only ranges whose neighboring page
+// intervals do not overlap; a split word or out-of-order float is not a unique page range.
+struct SourceRange {
+  uint32_t first = UINT32_MAX;
+  uint32_t end = 0;
+  bool valid() const { return first != UINT32_MAX && first < end; }
+  bool overlaps(const SourceRange& other) const {
+    return valid() && other.valid() && first < other.end && other.first < end;
+  }
+};
+
+// Transient word provenance, bounded by the parser's existing word buffers. Layout splits
+// retain the source interval and adjust characterOffset/probeByte to preserve exact targets.
+// Only page summaries are persisted; this never adds a per-word field to the page cache.
+struct SourceWordSpan {
+  uint32_t start = UINT32_MAX;
+  uint32_t end = UINT32_MAX;  // exclusive source-byte boundary
+  uint16_t characterOffset = 0;
+  uint16_t probeByte = UINT16_MAX;  // target byte within the current cooked UTF-8 fragment
+  bool valid() const { return start != UINT32_MAX && end != UINT32_MAX && start < end; }
+};

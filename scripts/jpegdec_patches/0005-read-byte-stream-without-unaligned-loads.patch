@@ -1,0 +1,39 @@
+diff --git a/src/JPEGDEC.h b/src/JPEGDEC.h
+--- a/src/JPEGDEC.h
++++ b/src/JPEGDEC.h
+@@ -311,13 +311,29 @@
+ 
+ #ifndef MOTOLONG
+ #ifdef ALLOWS_UNALIGNED
+-#define INTELSHORT(p) (*(uint16_t *)p)
+-#define INTELLONG(p) (*(uint32_t *)p)
+-#define MOTOSHORT(p) __builtin_bswap16(*(uint16_t *)p)
++/* Byte streams need not be aligned; memcpy also avoids typed-aliasing UB. */
++static inline uint16_t jpegLoad16(const void *p) {
++    uint16_t value;
++    memcpy(&value, p, sizeof(value));
++    return value;
++}
++static inline uint32_t jpegLoad32(const void *p) {
++    uint32_t value;
++    memcpy(&value, p, sizeof(value));
++    return value;
++}
++#define INTELSHORT(p) jpegLoad16(p)
++#define INTELLONG(p) jpegLoad32(p)
++#define MOTOSHORT(p) __builtin_bswap16(jpegLoad16(p))
+ #if REGISTER_WIDTH == 64
+-#define MOTOLONG(p) __builtin_bswap64(*(uint64_t *)p)
+-#else
+-#define MOTOLONG(p) __builtin_bswap32(*(uint32_t *)p)
++static inline uint64_t jpegLoad64(const void *p) {
++    uint64_t value;
++    memcpy(&value, p, sizeof(value));
++    return value;
++}
++#define MOTOLONG(p) __builtin_bswap64(jpegLoad64(p))
++#else
++#define MOTOLONG(p) __builtin_bswap32(jpegLoad32(p))
+ #endif
+ #else
+ // Due to unaligned memory causing an exception, we have to do these macros the slow way

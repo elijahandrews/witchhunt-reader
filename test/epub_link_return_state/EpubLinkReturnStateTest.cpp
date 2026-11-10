@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 
 #include "EpubLinkReturnState.h"
+#include "ReaderJumpBack.h"
 #include "ReaderProgressSaveDebouncer.h"
 
 using namespace EpubLinkReturnState;
@@ -21,6 +22,48 @@ TEST_F(EpubLinkReturnStateTest, FourthJumpKeepsThreeNewestOrigins) {
     EXPECT_EQ(pos.spineIndex, i);
     EXPECT_EQ(pos.pageNumber, i * 11);
   }
+}
+
+TEST_F(EpubLinkReturnStateTest, NativeTextAnchorSurvivesSleepAndLayoutChanges) {
+  push(positions, depth, {2, 40, 120, 43210});
+  ASSERT_TRUE(save("book", positions, depth, false));
+  ASSERT_TRUE(load("book", positions, depth, 10));
+  ASSERT_EQ(depth, 1);
+  EXPECT_EQ(positions[0].pageCount, 120);
+  EXPECT_EQ(positions[0].visibleTextOffset, 43210U);
+  ReaderProgressSaveDebouncer progress;
+  progress.observe((4U << 16) | 1, 200);
+  const auto reading = readingProgress(positions, depth, true, progress, 4, 200);
+  ASSERT_TRUE(reading);
+  EXPECT_EQ(reading->pageCount, 120);
+  EXPECT_EQ(reading->visibleTextOffset, 43210U);
+}
+
+TEST_F(EpubLinkReturnStateTest, OldPageOnlyStackRemainsReadableWithoutInventingTextPosition) {
+  Storage.files["book/links.bin"] = {1, 2, 0, 40, 0};
+  ASSERT_TRUE(load("book", positions, depth, 10));
+  ASSERT_EQ(depth, 1);
+  EXPECT_EQ(positions[0].pageNumber, 40);
+  EXPECT_EQ(positions[0].pageCount, 0);
+  EXPECT_EQ(positions[0].visibleTextOffset, UINT32_MAX);
+}
+
+TEST(ReaderJumpBack, OneShotExpiresAfterFiveOrdinaryTurnsAndDoesNotBounce) {
+  ReaderJumpBack history;
+  history.remember({2, 40, 120, 43210}, true);
+  for (int i = 0; i < 5; ++i) {
+    history.pageTurn();
+    ASSERT_TRUE(history.available());
+  }
+  const auto result = history.take();
+  ASSERT_TRUE(result);
+  EXPECT_EQ(result->position.visibleTextOffset, 43210U);
+  EXPECT_TRUE(result->followedLink);
+  EXPECT_FALSE(history.available());
+  EXPECT_FALSE(history.take());
+  history.remember({3, 5});
+  for (int i = 0; i < 6; ++i) history.pageTurn();
+  EXPECT_FALSE(history.available());
 }
 
 TEST_F(EpubLinkReturnStateTest, DebouncedDestinationIsIndependentOfPersistedOrigins) {
@@ -171,4 +214,25 @@ TEST_F(EpubLinkReturnStateTest, PreviewMetadataFallbackNeverUsesAnotherSpinesCou
   saved = readingProgress(positions, depth, true, progress, 1, 100);
   ASSERT_TRUE(saved);
   EXPECT_EQ(saved->pageCount, 0);
+}
+
+TEST_F(EpubLinkReturnStateTest, SourceAnchorSurvivesNestedHistoryAndPreviewCheckpoint) {
+  push(positions, depth, {2, 40, 120, 43210, {98765, 9}});
+  ASSERT_TRUE(save("book", positions, depth, false));
+  ASSERT_TRUE(load("book", positions, depth, 10));
+  ASSERT_EQ(depth, 1);
+  EXPECT_EQ(positions[0].sourceAnchor.sourceOffset, 98765u);
+  EXPECT_EQ(positions[0].sourceAnchor.characterOffset, 9u);
+  ReaderProgressSaveDebouncer progress;
+  const auto reading = readingProgress(positions, depth, true, progress, 4, 200);
+  ASSERT_TRUE(reading);
+  EXPECT_EQ(reading->sourceAnchor.sourceOffset, 98765u);
+  EXPECT_EQ(reading->sourceAnchor.characterOffset, 9u);
+}
+TEST_F(EpubLinkReturnStateTest, PreviousTextOnlyVersionRemainsReadable) {
+  Storage.files["book/links.bin"] = {'L','R',2,1, 2,0,40,0,120,0, 0x78,0x56,0x34,0x12};
+  ASSERT_TRUE(load("book", positions, depth, 10));
+  ASSERT_EQ(depth, 1);
+  EXPECT_EQ(positions[0].visibleTextOffset, 0x12345678u);
+  EXPECT_FALSE(positions[0].sourceAnchor.valid());
 }

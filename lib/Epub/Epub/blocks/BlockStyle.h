@@ -18,8 +18,23 @@ struct BlockStyle {
   // Zero keeps the reader font. Scale is layout-only Q8 relative to the
   // user's body size; cached lines retain only the resolved size and height.
   uint16_t fontScale = 256;
+  float cssFontScale = 1.0f;
   uint8_t fontSize = 0;
+  uint16_t fontSize64 = 0;  // exact publisher points, 0 inherits the reader size
+  uint32_t firstLineFontFamily = 0;
+  uint16_t firstLinePoints64 = 0;
+  int16_t firstLineLetterSpacing = 0;
+  uint8_t firstLineStyle = 0, firstLineStyleMask = 0;
+  uint8_t firstLineTypography = 0, firstLineTypographyMask = 0;
+  bool firstLineFontFamilyDefined = false;
+  bool firstLineLetterSpacingDefined = false;
   uint16_t lineHeight = 0;
+  CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
+  bool whiteSpaceDefined = false;
+  float lineHeightMultiplier = 0;
+  CssHyphens hyphens = CssHyphens::Inherit;
+  bool hyphensDefined = false;
+  uint8_t hyphenateLimitBefore = 2, hyphenateLimitAfter = 2, hyphenateLimitLines = 0;
 
   CssTextAlign alignment = CssTextAlign::Justify;
   // Layout-only source alignment, kept separately from the reader prose override.
@@ -113,6 +128,15 @@ struct BlockStyle {
     // fromBrElement is consumed by startNewTextBlock and should not leak through ancestor style merging.
     result.fromBrElement = false;
 
+    if (!child.whiteSpaceDefined) {
+      result.whiteSpace = whiteSpace;
+      result.whiteSpaceDefined = whiteSpaceDefined;
+    }
+    if (!child.lineHeightMultiplier) result.lineHeightMultiplier = lineHeightMultiplier;
+    if (!child.hyphensDefined) {
+      result.hyphens = hyphens;
+      result.hyphensDefined = hyphensDefined;
+    }
     // Direction is inherited independently of the horizontal/vertical box model.
     if (!child.directionDefined && directionDefined) {
       result.isRtl = isRtl;
@@ -127,6 +151,21 @@ struct BlockStyle {
   static BlockStyle fromCssStyle(const CssStyle& cssStyle, const float emSize, const CssTextAlign paragraphAlignment,
                                  const uint16_t viewportWidth = 0) {
     BlockStyle blockStyle;
+    if (cssStyle.hasWhiteSpace() && cssStyle.whiteSpace != CssWhiteSpace::Inherit) {
+      blockStyle.whiteSpace = cssStyle.whiteSpace;
+      blockStyle.whiteSpaceDefined = true;
+    }
+    if (cssStyle.hasLineHeight()) blockStyle.lineHeightMultiplier = cssStyle.lineHeightMultiplier;
+    if (cssStyle.hasHyphens()) {
+      blockStyle.hyphens = cssStyle.hyphens;
+      blockStyle.hyphensDefined = true;
+    }
+    if (cssStyle.hasHyphenateLimitBefore() && cssStyle.hyphenateLimitBefore != 255)
+      blockStyle.hyphenateLimitBefore = cssStyle.hyphenateLimitBefore;
+    if (cssStyle.hasHyphenateLimitAfter() && cssStyle.hyphenateLimitAfter != 255)
+      blockStyle.hyphenateLimitAfter = cssStyle.hyphenateLimitAfter;
+    if (cssStyle.hasHyphenateLimitLines() && cssStyle.hyphenateLimitLines != 255)
+      blockStyle.hyphenateLimitLines = cssStyle.hyphenateLimitLines;
     const float vw = viewportWidth;
     const auto maxHorizontalInsetPx = static_cast<int16_t>(emSize * MAX_HORIZONTAL_INSET_EM);
     // Resolve all CssLength values to pixels using the current font's em size and viewport width
@@ -153,6 +192,16 @@ struct BlockStyle {
       blockStyle.alignment = blockStyle.textAlignDefined ? cssStyle.textAlign : CssTextAlign::Justify;
     } else {
       blockStyle.alignment = paragraphAlignment;
+    }
+    if (blockStyle.whiteSpace == CssWhiteSpace::Pre || blockStyle.whiteSpace == CssWhiteSpace::PreWrap) {
+      if (!cssStyle.hasTextAlign()) {
+        blockStyle.alignment = CssTextAlign::Left;
+        blockStyle.textAlignDefined = true;
+      }
+      if (!cssStyle.hasTextIndent()) {
+        blockStyle.textIndent = 0;
+        blockStyle.textIndentDefined = true;
+      }
     }
     if (cssStyle.hasDirection()) {
       blockStyle.isRtl = cssStyle.direction == CssTextDirection::Rtl;

@@ -53,6 +53,7 @@ class BookMetadataCache {
   uint32_t lutOffset;
   uint16_t spineCount;
   uint16_t tocCount;
+  uint16_t tocMappedCount = 0;
   bool loaded;
   bool buildMode;
   bool cacheCumulativeSizes;
@@ -121,6 +122,7 @@ class BookMetadataCache {
   void createSpineEntry(const std::string& href);
   bool endContentOpfPass();
   bool beginTocPass();
+  bool resetTocPassOutput();
   void createTocEntry(const std::string& title, const std::string& href, const std::string& anchor, uint8_t level);
   bool endTocPass();
   bool endWrite();
@@ -141,5 +143,6 @@ class BookMetadataCache {
   TocEntry getTocEntry(int index);
   int getSpineCount() const { return spineCount; }
   int getTocCount() const { return tocCount; }
+  int getTocMappedCount() const { return tocMappedCount; }
   bool isLoaded() const { return loaded; }
 };

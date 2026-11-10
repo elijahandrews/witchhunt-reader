@@ -14,6 +14,7 @@
 
 #include "FixedArenaAllocator.h"
 #include "FontByteDigest.h"
+#include "OpenTypeCaps.h"
 #include "ScalableFontSizing.h"
 #include "TrueTypeFormat.h"
 
@@ -31,7 +32,7 @@ constexpr size_t PixelBytes = 512 * 1024;
 constexpr size_t PixelCacheSlots = 512;
 constexpr size_t MetricCacheSlots = 512;
 constexpr size_t KerningCacheSlots = 512;
-constexpr uint32_t AdapterRevision = 9;
+constexpr uint32_t AdapterRevision = 12;
 constexpr uint32_t SfntChecksumMagic = 0xB1B0AFBAu;
 // Unicode ends at 0x10FFFF, so the high bit safely marks a shaped glyph ID in
 // EpdGlyph::dataOffset without adding renderer-specific state to the SDK.
@@ -97,17 +98,24 @@ const char* initFailureName(const freeink::font::FtFont::InitFailure failure) {
 struct PixelEntry {
   uint64_t key = 0;
   size_t offset = 0;
+  int8_t phase = 0;
+  uint8_t scale64 = 64;
+  uint16_t points = 0;
 };
 
 struct MetricEntry {
   uint64_t key = 0;
   EpdGlyph glyph{};
+  int8_t phase = 0;
+  uint8_t scale64 = 64;
+  uint16_t points = 0;
 };
 
 struct KerningEntry {
   uint64_t leftKey = 0;
   uint32_t rightGlyph = 0;
-  int8_t value = 0;
+  int16_t value = 0;
+  uint16_t points = 0;
 };
 
 constexpr size_t PixelTableBytes = alignSize(sizeof(PixelEntry) * PixelCacheSlots, alignof(std::max_align_t));
@@ -135,11 +143,11 @@ struct Runtime {
   uint16_t lastBitmapWidth = 0;
   uint16_t lastBitmapHeight = 0;
 
-  static uint64_t cacheKey(const uint32_t cacheId, const uint32_t glyphOrCodepoint, const uint8_t points) {
-    return (uint64_t(cacheId) << 40) | (uint64_t(points) << 32) | glyphOrCodepoint;
+  static uint64_t cacheKey(const uint32_t cacheId, const uint32_t glyphOrCodepoint, const uint16_t points) {
+    return (uint64_t(cacheId) << 32) | glyphOrCodepoint;
   }
 
-  static size_t cacheIndex(const uint32_t cacheId, const uint32_t glyphOrCodepoint, const uint8_t points,
+  static size_t cacheIndex(const uint32_t cacheId, const uint32_t glyphOrCodepoint, const uint16_t points,
                            const size_t slots) {
     return (glyphOrCodepoint * 31u + points * 7u + cacheId) % slots;
   }
@@ -163,20 +171,21 @@ struct Runtime {
   }
 
   bool glyphMetrics(freeink::font::FtFont& font, const uint32_t cacheId, const uint32_t glyphOrCodepoint,
-                    const uint8_t points, EpdGlyph& glyph) {
+                    const uint16_t points, EpdGlyph& glyph, const int8_t phase = 0, const uint8_t scale64 = 64) {
     const uint64_t key = cacheKey(cacheId, glyphOrCodepoint, points);
-    auto& entry = metricEntries[cacheIndex(cacheId, glyphOrCodepoint, points, MetricCacheSlots)];
-    if (entry.key == key) {
+    auto& entry = metricEntries[cacheIndex(cacheId, glyphOrCodepoint, points, MetricCacheSlots) ^
+                                (uint8_t(phase) % MetricCacheSlots)];
+    if (entry.key == key && entry.phase == phase && entry.points == points && entry.scale64 == scale64) {
       glyph = entry.glyph;
       return true;
     }
 
+    const auto pixels26_6 = std::max<uint32_t>(1, (scalableFontPixelSizeFromPoints64(points) * scale64 + 32) / 64);
     freeink::font::FtFont::GlyphMetrics metrics;
     allocator.clearFailure();
-    const bool measured =
-        glyphOrCodepoint & GlyphIdMarker
-            ? font.metricsGlyph26_6(glyphOrCodepoint & ~GlyphIdMarker, scalableFontPixelSize26_6(points), metrics)
-            : font.metrics26_6(glyphOrCodepoint, scalableFontPixelSize26_6(points), metrics);
+    const bool measured = glyphOrCodepoint & GlyphIdMarker
+                              ? font.metricsGlyph26_6(glyphOrCodepoint & ~GlyphIdMarker, pixels26_6, metrics, phase * 4)
+                              : font.metrics26_6(glyphOrCodepoint, pixels26_6, metrics, phase * 4);
     failedMetricWidth = metrics.width;
     failedMetricHeight = metrics.height;
     if (!measured || metrics.width > UINT8_MAX || metrics.height > UINT8_MAX) return false;
@@ -189,34 +198,40 @@ struct Runtime {
              metrics.top,
              uint16_t((unsigned(metrics.width) * metrics.height + 3) / 4),
              glyphOrCodepoint};
-    entry = {key, glyph};
+    const auto advance32 = std::clamp<int32_t>((metrics.advance26_6 + 1) / 2, 0, UINT16_MAX * 2);
+    glyph.advanceX = advance32 / 2;
+    glyph.advanceRemainder = advance32 & 1;
+    entry = {key, glyph, phase, scale64, points};
     return true;
   }
 
-  int8_t kerning(freeink::font::FtFont& font, const uint32_t cacheId, const uint32_t leftGlyph,
-                 const uint32_t rightGlyph, const uint8_t points) {
+  int16_t kerning(freeink::font::FtFont& font, const uint32_t cacheId, const uint32_t leftGlyph,
+                  const uint32_t rightGlyph, const uint16_t points) {
     if (!leftGlyph || !rightGlyph) return 0;
     const uint64_t leftKey = cacheKey(cacheId, leftGlyph, points);
     auto& entry = kerningEntries[(leftGlyph * 31u + rightGlyph * 17u + points * 7u + cacheId) % KerningCacheSlots];
-    if (entry.leftKey == leftKey && entry.rightGlyph == rightGlyph) return entry.value;
+    if (entry.leftKey == leftKey && entry.rightGlyph == rightGlyph && entry.points == points) return entry.value;
 
-    const auto measured = font.kerningGlyphs26_6(leftGlyph, rightGlyph, scalableFontPixelSize26_6(points));
-    const auto value = int8_t(std::clamp<int32_t>(round26_6To16(measured), -128, 127));
-    entry = {leftKey, rightGlyph, value};
+    const auto measured = font.kerningGlyphs26_6(leftGlyph, rightGlyph, scalableFontPixelSizeFromPoints64(points));
+    const int32_t rounded = measured >= 0 ? (int64_t(measured) + 1) / 2 : -((-int64_t(measured) + 1) / 2);
+    const auto value = int16_t(std::clamp<int32_t>(rounded, INT16_MIN, INT16_MAX));
+    entry = {leftKey, rightGlyph, value, points};
     return value;
   }
 
   const uint8_t* packedBitmap(freeink::font::FtFont& font, const uint32_t cacheId, uint32_t glyphOrCodepoint,
-                              uint8_t points, uint8_t width, uint8_t height) {
+                              uint16_t points, uint8_t width, uint8_t height, int8_t phase = 0, uint8_t scale64 = 64) {
     const uint64_t key = cacheKey(cacheId, glyphOrCodepoint, points);
-    auto& entry = pixelEntries[cacheIndex(cacheId, glyphOrCodepoint, points, PixelCacheSlots)];
-    if (entry.key == key) return pixelData + entry.offset;
+    auto& entry = pixelEntries[cacheIndex(cacheId, glyphOrCodepoint, points, PixelCacheSlots) ^
+                               (uint8_t(phase) % PixelCacheSlots)];
+    if (entry.key == key && entry.phase == phase && entry.points == points && entry.scale64 == scale64)
+      return pixelData + entry.offset;
 
+    const auto pixels26_6 = std::max<uint32_t>(1, (scalableFontPixelSizeFromPoints64(points) * scale64 + 32) / 64);
     allocator.clearFailure();
-    const auto* bitmap =
-        glyphOrCodepoint & GlyphIdMarker
-            ? font.rasterizeGlyph26_6(glyphOrCodepoint & ~GlyphIdMarker, scalableFontPixelSize26_6(points))
-            : font.rasterize26_6(glyphOrCodepoint, scalableFontPixelSize26_6(points));
+    const auto* bitmap = glyphOrCodepoint & GlyphIdMarker
+                             ? font.rasterizeGlyph26_6(glyphOrCodepoint & ~GlyphIdMarker, pixels26_6, phase * 4)
+                             : font.rasterize26_6(glyphOrCodepoint, pixels26_6, phase * 4);
     lastBitmapWidth = bitmap ? bitmap->width : 0;
     lastBitmapHeight = bitmap ? bitmap->height : 0;
     if (!bitmap || bitmap->width != width || bitmap->height != height) return nullptr;
@@ -229,15 +244,14 @@ struct Runtime {
     for (unsigned y = 0; y < bitmap->height; ++y) {
       const uint8_t* row = bitmap->pixels + size_t(y) * bitmap->width;
       for (unsigned x = 0; x < bitmap->width; ++x) {
-        const unsigned value = row[x] >> 4;
-        // Match the default .cpfont converter's 4/8/12 cutoffs so the same
-        // outline keeps its stroke weight when installed in either format.
-        const uint8_t coverage = value < 4 ? 0 : value < 8 ? 1 : value < 12 ? 2 : 3;
+        // Preserve the full outline coverage through the sole quantization.
+        // This matches the reviewed Witch Hunt final-grid raster path.
+        const uint8_t coverage = (unsigned(row[x]) * 3 + 127) / 255;
         const size_t index = size_t(y) * bitmap->width + x;
         dest[index / 4] |= coverage << (6 - (index % 4) * 2);
       }
     }
-    entry = {key, pixelUsed};
+    entry = {key, pixelUsed, phase, scale64, points};
     pixelUsed += bytes;
     return dest;
   }
@@ -289,8 +303,12 @@ struct Runtime {
   }
 };
 Runtime& runtime() {
-  static Runtime value;
-  return value;
+  // SDK allocator callbacks and global built-in faces outlive local-static
+  // destruction order. Keep the fixed shared arena for the process lifetime;
+  // otherwise simulator shutdown destroys faces after freeing their memory.
+  alignas(Runtime) static uint8_t storage[sizeof(Runtime)];
+  static Runtime* value = new (storage) Runtime;
+  return *value;
 }
 truetype::Result inspectFormat(HalFile& file, size_t size) {
   return truetype::inspect(size, [&](size_t offset, uint8_t* bytes, size_t count) {
@@ -334,7 +352,7 @@ uint32_t HalScalableFont::renderingRevision() { return AdapterRevision; }
 
 bool HalScalableFont::openMemory(const uint8_t* bytes, size_t size) {
   freeink::font::FtFont::RenderOptions options;
-  options.hinting = freeink::font::FtFont::HintingMode::Auto;
+  options.hinting = freeink::font::FtFont::HintingMode::Light;
   return openMemory(bytes, size, options);
 }
 
@@ -381,7 +399,7 @@ bool HalScalableFont::openSource(const uint8_t* bytes, size_t size, const bool s
   }
   runtime().allocator.clearFailure();
   const bool opened =
-      streamed ? font_.initStream(streamRead, this, size, 1) : font_.init(bytes, static_cast<uint32_t>(size), 1);
+      streamed ? font_.initStream(streamRead, this, size, 1, 0) : font_.init(bytes, static_cast<uint32_t>(size), 1, 0);
   const bool optionsAccepted = opened && font_.setRenderOptions(options);
   if (!optionsAccepted) {
     lastLoadError_ = streamFailureLogged_                      ? FontLoadError::Read
@@ -405,10 +423,18 @@ bool HalScalableFont::openSource(const uint8_t* bytes, size_t size, const bool s
   }
   renderOptions_ = options;
   streamed_ = streamed;
-  // Large streamed fonts can carry multi-hundred-KiB GPOS tables. CrossPoint
-  // skips these in streamed mode, keeping the shared FreeType arena for glyphs.
-  if (streamed) font_.setGposByteBudget(0);
-  font_.setGsubByteBudget(48 * 1024);
+  // All present layout tables are admitted together. This preserves authored
+  // spacing for streamed fonts while bounding their shared-arena cost to 512 KiB.
+  if (!font_.retainLayoutTables(512 * 1024) || streamFailureLogged_) {
+    lastLoadError_ = streamFailureLogged_                      ? FontLoadError::Read
+                     : runtime().allocator.lastFailedRequest() ? FontLoadError::Memory
+                                                               : FontLoadError::Unsupported;
+    LOG_ERR("TTF", "Cannot retain bounded font layout tables");
+    font_.deinit();
+    sizesStorage_.reset();
+    sizes_ = nullptr;
+    return false;
+  }
   static constexpr uint32_t sequences[5][3] = {
       {'f', 'f', 0}, {'f', 'i', 0}, {'f', 'l', 0}, {'f', 'f', 'i'}, {'f', 'f', 'l'}};
   for (unsigned i = 0; i < 5; ++i) {
@@ -417,7 +443,6 @@ bool HalScalableFont::openSource(const uint8_t* bytes, size_t size, const bool s
     const unsigned length = sequences[i][2] ? 3 : 2;
     ligatureGlyphs_[i] = font_.ligatureGlyphId(sequences[i], length);
   }
-  font_.releaseLigatureTable();
   cacheId_ = runtime().nextCacheId++;
   if (!cacheId_) cacheId_ = runtime().nextCacheId++;
   // Temporary dictionary layouts never enter the EPUB cache. A fresh identity
@@ -431,7 +456,7 @@ bool HalScalableFont::openSource(const uint8_t* bytes, size_t size, const bool s
   hashOption(static_cast<uint32_t>(options.embolden26_6));
   hashOption(static_cast<uint32_t>(options.slant16_16));
   hashOption(options.stemDarkening ? 1u : 0u);
-  // Streamed faces skip GPOS: their layout identity must reflect that.
+  // Keep storage policy in the identity for compatibility with previous caches.
   hashOption(streamed_ ? 1u : 0u);
   lastLoadError_ = FontLoadError::None;
   return true;
@@ -445,6 +470,10 @@ bool HalScalableFont::setRenderOptions(const freeink::font::FtFont::RenderOption
     sizes_[i].~Size();
     new (sizes_ + i) Size{};
   }
+  for (size_t i = 0; i < FractionalSizeBanks; ++i) {
+    fractionalSizesStorage_[i].reset();
+    fractionalSizes_[i] = nullptr;
+  }
   rasterFailureLogged_ = false;
   metricFailureLogged_ = false;
   streamFailureLogged_ = false;
@@ -457,8 +486,9 @@ bool HalScalableFont::setRenderOptions(const freeink::font::FtFont::RenderOption
   hashOption(static_cast<uint32_t>(options.embolden26_6));
   hashOption(static_cast<uint32_t>(options.slant16_16));
   hashOption(options.stemDarkening ? 1u : 0u);
-  // Streamed faces skip GPOS: their layout identity must reflect that.
+  // Keep storage policy in the identity for compatibility with previous caches.
   hashOption(streamed_ ? 1u : 0u);
+  if (publisherInstance_) hash_ ^= 0x70627500u | publisherStyle_;
   return true;
 }
 bool HalScalableFont::fileSize(const char* path, size_t& size, size_t limit, FontLoadError* error) {
@@ -496,7 +526,7 @@ bool HalScalableFont::prepareFamily(size_t bytes, size_t faces) {
 }
 bool HalScalableFont::openFile(const char* path, size_t remainingBytes) {
   freeink::font::FtFont::RenderOptions options;
-  options.hinting = freeink::font::FtFont::HintingMode::Auto;
+  options.hinting = freeink::font::FtFont::HintingMode::Light;
   return openFile(path, remainingBytes, options);
 }
 bool HalScalableFont::openFile(const char* path, size_t remainingBytes,
@@ -521,8 +551,13 @@ bool HalScalableFont::openFile(const char* path, size_t remainingBytes,
     return false;
   }
   const size_t size = file.size();
-  if (!validFileSize(path, size, mode == FileMode::Filename ? MaxFilenameFileBytes : MaxFileBytes)) {
-    lastLoadError_ = size > (mode == FileMode::Filename ? MaxFilenameFileBytes : MaxFileBytes)
+  if (!validFileSize(path, size,
+                     mode == FileMode::Filename    ? MaxFilenameFileBytes
+                     : mode == FileMode::Publisher ? MaxPublisherFileBytes
+                                                   : MaxFileBytes)) {
+    lastLoadError_ = size > (mode == FileMode::Filename    ? MaxFilenameFileBytes
+                             : mode == FileMode::Publisher ? MaxPublisherFileBytes
+                                                           : MaxFileBytes)
                          ? FontLoadError::TooLarge
                          : FontLoadError::Unsupported;
     file.close();
@@ -566,8 +601,10 @@ bool HalScalableFont::openFile(const char* path, size_t remainingBytes,
   // tiny glyph reads. Cap temporary residency at 256 KiB per style (1 MiB per
   // family); large dictionary fonts should not scan megabytes before opening.
   constexpr size_t TemporaryResidentLimit = 256 * 1024;
-  const bool allowResident = mode == FileMode::Auto || ((mode == FileMode::Temporary || mode == FileMode::Filename) &&
-                                                        size <= TemporaryResidentLimit);
+  const bool allowResident =
+      mode == FileMode::Auto ||
+      ((mode == FileMode::Temporary || mode == FileMode::Filename || mode == FileMode::Publisher) &&
+       size <= TemporaryResidentLimit);
   const bool canReside = allowResident && size <= heap.free - reserve && heap.largest >= size;
   if (canReside) {
     auto bytes = makeAlignedByteBufferNoThrow(size, Pool);
@@ -833,28 +870,126 @@ bool HalScalableFont::inspectFile(const char* path, Info& info, bool* unavailabl
     return failed(FontLoadError::Unsupported);
   }
   info.style = (details.weight >= 600 ? 1 : 0) | (details.italic ? 2 : 0);
+  info.variable = details.variable;
   return info.family[0] != '\0';
 }
-const EpdFont* HalScalableFont::atSize(uint8_t points) {
+bool HalScalableFont::configurePublisherStyle(const uint8_t style) {
   ScalableFontAccess access;
-  if (!font_.ready() || points < MinPointSize || points > MaxPointSize) return nullptr;
-  auto& size = sizes_[points - MinPointSize];
+  // Descriptors become borrowed by the renderer once atSize is called.
+  if (!font_.ready()) return false;
+  for (size_t i = 0; i < SizeCount; ++i)
+    if (sizes_[i].owner) return false;
+  for (const auto* bank : fractionalSizes_)
+    if (bank)
+      for (size_t i = 0; i < FractionalSizeCount; ++i)
+        if (bank[i].owner) return false;
+  runtime().allocator.clearFailure();
+  if (!font_.setVariationStyle((style & 1) ? 700 : 400, (style & 2) != 0)) {
+    lastLoadError_ = streamFailureLogged_                      ? FontLoadError::Read
+                     : runtime().allocator.lastFailedRequest() ? FontLoadError::Memory
+                                                               : FontLoadError::Unsupported;
+    return false;
+  }
+  lastLoadError_ = FontLoadError::None;
+  if (publisherInstance_) hash_ ^= 0x70627500u | publisherStyle_;
+  publisherInstance_ = true;
+  currentPublisherStyle_ = publisherStyle_ = style & 3;
+  hash_ ^= 0x70627500u | publisherStyle_;
+  runtime().clearCaches();
+  return true;
+}
+bool HalScalableFont::prepareInstance(const uint16_t points, const uint8_t style) {
+  if (!publisherInstance_) return true;
+  if (currentPublisherStyle_ != style) {
+    if (!font_.setVariationStyle((style & 1) ? 700 : 400, (style & 2) != 0)) return false;
+    currentPublisherStyle_ = style;
+  }
+  return font_.setOpticalSize26_6(points);
+}
+const EpdFont* HalScalableFont::atSize(uint8_t points) {
+  if (points < MinPointSize || points > MaxPointSize) return nullptr;
+  return atSize64(uint16_t(points) * 64);
+}
+const EpdFont* HalScalableFont::atSize64(const uint16_t points) { return atSize64(points, publisherStyle_); }
+const EpdFont* HalScalableFont::atSize64(const uint16_t points, uint8_t style) {
+  ScalableFontAccess access;
+  if (!publisherInstance_ || !font_.isVariable()) style = publisherStyle_;
+  if (!font_.ready() || !points || points > MaxPublisherPoints64 || !prepareInstance(points, style)) return nullptr;
+  if (style == publisherStyle_ && points % 64 == 0 && points / 64 >= MinPointSize && points / 64 <= MaxPointSize)
+    return initializeSize(sizes_[points / 64 - MinPointSize], points, style);
+  // Stable descriptors are borrowed by layout and rendering. Allocate at most
+  // four 32-size PSRAM banks lazily; no moving/evicting a borrowed descriptor.
+  // Each bank is ~30 KiB, so it cannot live on a render-task stack.
+  Size* free = nullptr;
+  size_t emptyBank = FractionalSizeBanks;
+  for (size_t bank = 0; bank < FractionalSizeBanks; ++bank) {
+    if (!fractionalSizes_[bank]) {
+      if (emptyBank == FractionalSizeBanks) emptyBank = bank;
+      continue;
+    }
+    for (size_t i = 0; i < FractionalSizeCount; ++i) {
+      auto& item = fractionalSizes_[bank][i];
+      if (item.owner && item.points == points && item.style == style) return &item.font;
+      if (!item.owner && !free) free = &item;
+    }
+  }
+  if (!free && emptyBank < FractionalSizeBanks) {
+    fractionalSizesStorage_[emptyBank] = makeAlignedByteBufferNoThrow(sizeof(Size) * FractionalSizeCount, Pool);
+    auto* bank = reinterpret_cast<Size*>(fractionalSizesStorage_[emptyBank].get());
+    if (bank) {
+      fractionalSizes_[emptyBank] = bank;
+      for (size_t i = 0; i < FractionalSizeCount; ++i) new (bank + i) Size{};
+      free = bank;
+    }
+  }
+  if (!free) {
+    lastLoadError_ = FontLoadError::Memory;
+    LOG_ERR("TTF", "Fractional size descriptor budget unavailable");
+    return nullptr;
+  }
+  return initializeSize(*free, points, style);
+}
+void HalScalableFont::releaseSize64(const uint16_t points) {
+  ScalableFontAccess access;
+  const auto release = [&](Size& size) {
+    if (size.owner && size.points == points) {
+      size.~Size();
+      new (&size) Size{};
+    }
+  };
+  if (sizes_)
+    for (size_t i = 0; i < SizeCount; ++i) release(sizes_[i]);
+  for (auto* bank : fractionalSizes_)
+    if (bank)
+      for (size_t i = 0; i < FractionalSizeCount; ++i) release(bank[i]);
+}
+const EpdFont* HalScalableFont::initializeSize(Size& size, const uint16_t points, const uint8_t style) {
   if (!size.owner) {
     size.points = points;
+    size.style = style;
+    size.cacheId = runtime().nextCacheId++;
+    if (!size.cacheId) size.cacheId = runtime().nextCacheId++;
     auto& d = size.data;
     d.is2Bit = true;
     d.sizeFamily = this;
-    d.pointSize = points;
+    d.pointSize = (points + 32) / 64;
+    d.pointSize64 = points;
     d.glyphMissCtx = &size;
     d.dynamicGlyphHandler = glyph;
     d.bitmapHandler = bitmap;
+    d.rasterHandler = raster;
+    d.scaledRasterHandler = scaledRaster;
+    d.fractionalAdvances = true;
     d.coverageHandler = covers;
     d.kerningHandler = kerning;
+    d.kerning32Handler = kerning32;
     d.ligatureHandler = ligature;
+    d.ligatureSequenceHandler = ligatureSequence;
+    d.smallCapsHandler = smallCaps;
     freeink::font::FtFont::LineMetrics metrics;
-    if (!font_.lineMetrics26_6(scalableFontPixelSize26_6(points), metrics)) {
+    if (!font_.lineMetrics26_6(scalableFontPixelSizeFromPoints64(points), metrics)) {
       LOG_ERR("TTF", "Line metrics failed at %u pt: %s (size=%u)", unsigned(points), streamPath_,
-              unsigned(scalableFontPixelSize26_6(points)));
+              unsigned(scalableFontPixelSizeFromPoints64(points)));
       return nullptr;
     }
     d.ascender = ceil26_6(metrics.ascender26_6);
@@ -879,10 +1014,13 @@ const EpdGlyph* HalScalableFont::glyph(void* ctx, uint32_t cp) {
   ScalableFontAccess access;
   auto& s = *static_cast<Size*>(ctx);
   s.owner->fontDataFailure_ = false;
-  const auto ligatureGlyph = cp >= 0xfb00 && cp <= 0xfb04 ? s.owner->ligatureGlyphs_[cp - 0xfb00] : 0;
+  if (!s.owner->prepareInstance(s.points, s.style)) return nullptr;
+  const auto ligatureGlyph = cp >= 0x110000 && cp < 0x120000
+                                 ? cp - 0x110000
+                                 : (cp >= 0xfb00 && cp <= 0xfb04 ? s.owner->ligatureGlyphs_[cp - 0xfb00] : 0);
   auto& g = s.glyphs[s.cursor++ % 32];
-  if (!runtime().glyphMetrics(s.owner->font_, s.owner->cacheId_, ligatureGlyph ? GlyphIdMarker | ligatureGlyph : cp,
-                              s.points, g)) {
+  if (!runtime().glyphMetrics(s.owner->font_, s.cacheId, ligatureGlyph ? GlyphIdMarker | ligatureGlyph : cp, s.points,
+                              g)) {
     const auto failure = s.owner->font_.lastGlyphFailure();
     const int error = s.owner->font_.lastGlyphError();
     s.owner->fontDataFailure_ = !s.owner->streamFailureLogged_ && runtime().allocator.lastFailedRequest() == 0 &&
@@ -899,7 +1037,7 @@ const EpdGlyph* HalScalableFont::glyph(void* ctx, uint32_t cp) {
               "largest=%u",
               unsigned(cp), unsigned(s.points), s.owner->streamPath_,
               glyphFailureName(s.owner->font_.lastGlyphFailure()), unsigned(s.owner->font_.lastGlyphError()),
-              unsigned(scalableFontPixelSize26_6(s.points)), unsigned(s.owner->font_.glyphId(cp)),
+              unsigned(scalableFontPixelSizeFromPoints64(s.points)), unsigned(s.owner->font_.glyphId(cp)),
               unsigned(runtime().failedMetricWidth), unsigned(runtime().failedMetricHeight),
               unsigned(s.owner->streamFailureLogged_), unsigned(s.owner->renderOptions_.hinting),
               unsigned(s.owner->renderOptions_.monochrome), int(s.owner->renderOptions_.embolden26_6),
@@ -914,8 +1052,8 @@ const uint8_t* HalScalableFont::bitmap(void* ctx, const EpdGlyph* g) {
   ScalableFontAccess access;
   auto& s = *static_cast<Size*>(ctx);
   s.owner->fontDataFailure_ = false;
-  const auto* pixels =
-      runtime().packedBitmap(s.owner->font_, s.owner->cacheId_, g->dataOffset, s.points, g->width, g->height);
+  if (!s.owner->prepareInstance(s.points, s.style)) return nullptr;
+  const auto* pixels = runtime().packedBitmap(s.owner->font_, s.cacheId, g->dataOffset, s.points, g->width, g->height);
   if (!pixels && g->width && g->height) {
     const auto failure = s.owner->font_.lastGlyphFailure();
     const int error = s.owner->font_.lastGlyphError();
@@ -940,17 +1078,30 @@ const uint8_t* HalScalableFont::bitmap(void* ctx, const EpdGlyph* g) {
 bool HalScalableFont::covers(void* ctx, uint32_t cp) {
   ScalableFontAccess access;
   auto& s = *static_cast<Size*>(ctx);
+  if (cp > 0x110000 && cp < 0x120000) return true;
   if (cp >= 0xfb00 && cp <= 0xfb04 && s.owner->ligatureGlyphs_[cp - 0xfb00]) return true;
   return s.owner->font_.hasGlyph(cp);
 }
 int8_t HalScalableFont::kerning(void* ctx, uint32_t a, uint32_t b) {
+  return int8_t(std::clamp<int32_t>(fp5::toFp4(kerning32(ctx, a, b)), -128, 127));
+}
+int16_t HalScalableFont::kerning32(void* ctx, uint32_t a, uint32_t b) {
   ScalableFontAccess access;
   auto& s = *static_cast<Size*>(ctx);
   const auto glyph = [&](uint32_t cp) {
+    if (cp >= 0x110000 && cp < 0x120000) return cp - 0x110000;
     const auto ligature = cp >= 0xfb00 && cp <= 0xfb04 ? s.owner->ligatureGlyphs_[cp - 0xfb00] : 0;
     return ligature ? ligature : s.owner->font_.glyphId(cp);
   };
-  return runtime().kerning(s.owner->font_, s.owner->cacheId_, glyph(a), glyph(b), s.points);
+  if (!s.owner->prepareInstance(s.points, s.style)) return 0;
+  return runtime().kerning(s.owner->font_, s.cacheId, glyph(a), glyph(b), s.points);
+}
+uint32_t HalScalableFont::ligatureSequence(void* ctx, const uint32_t* sequence, const unsigned length) {
+  ScalableFontAccess access;
+  auto& size = *static_cast<Size*>(ctx);
+  if (!size.owner->prepareInstance(size.points, size.style)) return 0;
+  const uint32_t glyph = size.owner->font_.ligatureGlyphId(sequence, length);
+  return glyph && glyph < 0x10000 ? 0x110000 + glyph : 0;
 }
 uint32_t HalScalableFont::ligature(void* ctx, uint32_t a, uint32_t b) {
   ScalableFontAccess access;
@@ -970,5 +1121,43 @@ uint32_t HalScalableFont::ligature(void* ctx, uint32_t a, uint32_t b) {
       codepoint = 0xfb04;
   }
   return codepoint && s.owner->ligatureGlyphs_[codepoint - 0xfb00] ? codepoint : 0;
+}
+#endif
+
+#if CROSSINK_SCALABLE_FONTS
+bool HalScalableFont::raster(void* ctx, uint32_t cp, int8_t phase, EpdGlyph& glyph, const uint8_t*& pixels) {
+  return scaledRaster(ctx, cp, 64, phase, glyph, pixels);
+}
+bool HalScalableFont::scaledRaster(void* ctx, uint32_t cp, uint8_t scale64, int8_t phase, EpdGlyph& glyph,
+                                   const uint8_t*& pixels) {
+  ScalableFontAccess access;
+  auto& size = *static_cast<Size*>(ctx);
+  pixels = nullptr;
+  if (!scale64 || scale64 > 64 || phase < -8 || phase > 7 || !size.owner->prepareInstance(size.points, size.style))
+    return false;
+  const auto ligature = cp >= 0x110000 && cp < 0x120000
+                            ? cp - 0x110000
+                            : (cp >= 0xfb00 && cp <= 0xfb04 ? size.owner->ligatureGlyphs_[cp - 0xfb00] : 0);
+  const uint32_t key = ligature ? GlyphIdMarker | ligature : cp;
+  if (!runtime().glyphMetrics(size.owner->font_, size.cacheId, key, size.points, glyph, phase, scale64)) return false;
+  if (!glyph.width || !glyph.height) return true;
+  pixels = runtime().packedBitmap(size.owner->font_, size.cacheId, key, size.points, glyph.width, glyph.height, phase,
+                                  scale64);
+  return pixels != nullptr;
+}
+#endif
+
+#if CROSSINK_SCALABLE_FONTS
+uint32_t HalScalableFont::smallCaps(void* ctx, uint32_t cp, bool all) {
+  ScalableFontAccess access;
+  auto& size = *static_cast<Size*>(ctx);
+  if (cp >= 0x110000) return 0;
+  const auto gid = size.owner->font_.glyphId(cp);
+  if (!gid || gid > UINT16_MAX) return 0;
+  size_t length = 0;
+  const auto* table = size.owner->font_.substitutionTable(length);
+  uint16_t alternate = crossink_caps::substitute(table, length, gid, 0x736d6370);
+  if (!alternate && all) alternate = crossink_caps::substitute(table, length, gid, 0x63327363);
+  return alternate ? 0x110000 + alternate : 0;
 }
 #endif

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "SourceAnchor.h"
 #include "blocks/BlockStyle.h"
 #include "blocks/TextBlock.h"
 
@@ -39,6 +40,43 @@ class ParsedText {
   char initialLetter[13] = {};
   std::deque<std::string> words;
   std::vector<EpdFontFamily::Style> wordStyles;
+  std::vector<uint16_t> wordPoints64;
+  std::vector<uint8_t> wordTypography;
+  size_t firstLineEnd_ = 0;
+  bool hasFirstLineStyle() const {
+    return blockStyle.firstLinePoints64 || blockStyle.firstLineFontFamilyDefined ||
+           blockStyle.firstLineLetterSpacingDefined || blockStyle.firstLineStyleMask ||
+           blockStyle.firstLineTypographyMask;
+  }
+  EpdFontFamily::Style applyFirstLineStyle(size_t i, EpdFontFamily::Style style) const {
+    return i < firstLineEnd_
+               ? static_cast<EpdFontFamily::Style>((style & ~blockStyle.firstLineStyleMask) |
+                                                   (blockStyle.firstLineStyle & blockStyle.firstLineStyleMask))
+               : style;
+  }
+  EpdFontFamily::Style styleAt(size_t i) const { return applyFirstLineStyle(i, wordStyles[i]); }
+  uint8_t typographyAt(size_t i) const {
+    const auto flags = wordTypography.empty() ? 0 : wordTypography[i];
+    return i < firstLineEnd_ ? (flags & ~blockStyle.firstLineTypographyMask) |
+                                   (blockStyle.firstLineTypography & blockStyle.firstLineTypographyMask)
+                             : flags;
+  }
+  uint16_t points64At(size_t i) const {
+    if (i < firstLineEnd_ && blockStyle.firstLinePoints64) return blockStyle.firstLinePoints64;
+    if (!wordPoints64.empty() && wordPoints64[i]) return wordPoints64[i];
+    return wordFontSizes.empty() ? 0 : uint16_t(wordFontSizes[i]) * 64;
+  }
+  uint32_t familyAt(size_t i) const {
+    return i < firstLineEnd_ && blockStyle.firstLineFontFamilyDefined ? blockStyle.firstLineFontFamily
+           : wordFontFamilies.empty()                                 ? 0
+                                                                      : wordFontFamilies[i];
+  }
+  std::vector<int16_t> wordLetterSpacings;  // allocated only for CSS tracking; 1/16 display pixel
+  int16_t letterSpacingAt(size_t i) const {
+    return i < firstLineEnd_ && blockStyle.firstLineLetterSpacingDefined ? blockStyle.firstLineLetterSpacing
+           : wordLetterSpacings.empty()                                  ? 0
+                                                                         : wordLetterSpacings[i];
+  }
   std::vector<uint32_t> wordFontFamilies;  // allocated only for publisher fonts
   std::vector<uint8_t> wordFontSizes;      // empty for ordinary paragraphs; one byte per token otherwise
   int wordFontId(const GfxRenderer& renderer, int base, size_t index) const;
@@ -63,6 +101,19 @@ class ParsedText {
   std::vector<uint16_t> wordVisibleOffsetDeltas;
   uint32_t visibleOffsetBase = 0;
   std::vector<VisibleOffsetRebase> visibleOffsetRebases;
+  struct WordSourceMap {
+    size_t wordIndex;
+    std::vector<uint16_t> offsets;
+  };
+  std::vector<WordSourceMap> wordSourceMaps;
+  // Transient provenance follows pending tokens only. Chunked storage avoids a
+  // large contiguous request for CJK paragraphs; pages persist one summary.
+  std::deque<SourceWordSpan> wordSources_;
+  SourceWordSpan nextWordSource_;
+  void splitWordSource(size_t wordIndex, size_t splitByte, uint32_t sourceCharacters);
+
+  uint32_t sourcePrefixLength(size_t wordIndex, uint32_t renderedCount) const;
+  void splitSourceMap(size_t wordIndex, size_t renderedPrefix, bool insertedHyphen);
   // Populated only during a stable-page jump build. Chunked storage avoids a
   // large contiguous request for long CJK paragraphs on constrained devices.
   std::deque<uint32_t> wordReferenceOffsets;
@@ -70,6 +121,7 @@ class ParsedText {
   bool extraParagraphSpacing;
   bool forceParagraphIndents;
   bool hyphenationEnabled;
+  uint8_t consecutiveHyphenLines_ = 0;
   bool focusReadingEnabled;
   bool guideReadingEnabled;
   uint8_t wordSpacing;
@@ -153,10 +205,13 @@ class ParsedText {
         trackReferenceOffsets(trackReferenceOffsets) {}
   ~ParsedText() = default;
 
+  void setNextWordSource(SourceWordSpan source) { nextWordSource_ = source; }
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false,
                bool backgroundBlack = false, uint8_t linkId = 0, uint32_t visibleTextOffset = 0,
                uint32_t referenceTextOffset = 0, int16_t leadingPadding = 0, bool noSpaceBefore = false,
-               uint8_t pointSize = 0, uint32_t fontFamily = 0);
+               uint8_t pointSize = 0, uint32_t fontFamily = 0, int16_t letterSpacing = 0,
+               const uint16_t* sourceMap = nullptr, size_t sourceMapCount = 0, uint16_t points64 = 0,
+               uint8_t typography = 0);
   void addInlineImage(uint16_t id, uint16_t width, uint16_t height, bool attachToPrevious, uint32_t visibleTextOffset,
                       uint32_t referenceTextOffset);
   const std::vector<InlineImagePlacement>& currentLineImages() const { return lineImagesScratch; }
@@ -169,6 +224,10 @@ class ParsedText {
   void ensureRubyCapacity();
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   BlockStyle& getBlockStyle() { return blockStyle; }
+  uint32_t firstVisibleOffset() const { return words.empty() ? UINT32_MAX : visibleOffsetAt(0); }
+  uint32_t firstReferenceOffset() const {
+    return wordReferenceOffsets.empty() ? UINT32_MAX : wordReferenceOffsets.front();
+  }
   size_t size() const { return words.size(); }
   bool isEmpty() const { return words.empty(); }
   bool isContinuation() const { return isContinuation_; }

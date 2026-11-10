@@ -1,6 +1,6 @@
 #pragma once
 
-#include <expat.h>
+#include <SaxParser/SaxParser.h>
 
 #include <cstdint>
 
@@ -25,13 +25,12 @@ class PreviewBlockLocator {
 
   // anchorId must outlive the locator.
   PreviewBlockLocator(const char* anchorId, IsBlockTagFn isBlockTag);
-  ~PreviewBlockLocator();
 
   PreviewBlockLocator(const PreviewBlockLocator&) = delete;
   PreviewBlockLocator& operator=(const PreviewBlockLocator&) = delete;
 
   // False if the parser could not be created; feed() is a no-op in that case.
-  bool ok() const { return parser_ != nullptr; }
+  bool ok() const { return parser_.isActive(); }
 
   // True once the anchor has been resolved. Stop feeding.
   bool done() const { return startOrdinal_ != 0; }
@@ -48,12 +47,12 @@ class PreviewBlockLocator {
   // block-style stack depth in ChapterHtmlSlimParser.
   static constexpr uint8_t MAX_BLOCK_NESTING = 16;
 
-  static void XMLCALL handleStartElement(void* userData, const XML_Char* name, const XML_Char** atts);
-  static void XMLCALL handleEndElement(void* userData, const XML_Char* name);
+  static void handleStartElement(void* userData, const XML_Char* name, const XML_Char** atts);
+  static void handleEndElement(void* userData, const XML_Char* name);
 
   const char* anchorId_;
   IsBlockTagFn isBlockTag_;
-  XML_Parser parser_ = nullptr;
+  SaxParser parser_;
   int depth_ = 0;
   uint32_t ordinal_ = 0;
   uint32_t startOrdinal_ = 0;

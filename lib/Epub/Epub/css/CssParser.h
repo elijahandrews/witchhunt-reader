@@ -5,12 +5,14 @@
 
 #include <array>
 #include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "CssFontCatalog.h"
 #include "CssStyle.h"
 
 /**
@@ -65,7 +67,7 @@ class CssParser {
 
   // Bump when CSS cache format or rules change; section caches are invalidated when this changes
   static constexpr uint32_t CSS_CACHE_MAGIC = 0x435843FF;  // bytes: 0xFF, "CXC"
-  static constexpr uint8_t CSS_CACHE_VERSION = 23;
+  static constexpr uint8_t CSS_CACHE_VERSION = 25;
 
   // Source text is streamed, never loaded as one allocation. PSRAM readers
   // can admit larger publisher stylesheets; rule-count and internal-heap
@@ -75,7 +77,8 @@ class CssParser {
   static constexpr size_t MAX_DESCENDANT_RULES = 100;
   static constexpr size_t CSS_INDEX_BYTES_PER_RULE = 8;
 
-  explicit CssParser(std::string cachePath) : cachePath(std::move(cachePath)) {}
+  explicit CssParser(std::string cachePath, const CssParser* fontCatalogOwner = nullptr)
+      : fontCatalogOwner_(fontCatalogOwner), cachePath(std::move(cachePath)) {}
   ~CssParser() = default;
 
   // Non-copyable
@@ -88,7 +91,17 @@ class CssParser {
    * @param source Open file handle to read from
    * @return true if parsing completed (even if no rules found)
    */
-  bool loadFromStream(HalFile& source, std::string_view baseDir = {});
+  bool loadFromStream(HalFile& source, std::string_view baseDir = {}, bool fontsOnly = false, bool includeFaces = true);
+  const CssFontCatalog& fontCatalog() const;
+  bool fontCatalogReady() const {
+    return fontCatalogOwner_ ? fontCatalogOwner_->fontCatalogReady() : fontCatalogLoaded_;
+  }
+  static bool loadFontCatalog(const std::string& cachePath, CssFontCatalog& out);
+  void resetFontCatalog() const;
+  bool saveFontCatalog() const;
+  void setFontScope(std::string prefix) { fontScope_ = std::move(prefix); }
+  CssStyle parseInlineStyleWithFonts(std::string_view styleValue, std::optional<std::string_view> base = {}) const;
+  std::optional<std::string> backgroundImageForStyle(const CssStyle& style) const;
   static uint32_t hashFontFamily(std::string_view name);
   static bool loadFontFaces(const std::string& cachePath, std::vector<CssFontFace>& out);
 
@@ -103,13 +116,23 @@ class CssParser {
    */
   [[nodiscard]] CssStyle resolveStyle(std::string_view tagName, std::string_view classAttr,
                                       const std::vector<CssAncestorEntry>& ancestors = {}, std::string_view idAttr = {},
-                                      bool firstLetter = false) const;
+                                      bool firstLetter = false, const CssParser* overlay = nullptr) const;
 
   /**
    * Parse an inline style attribute string.
    * @param styleValue The value of a style="" attribute
    * @return Parsed style properties
    */
+  CssStyle resolvePseudoStyle(std::string_view tagName, std::string_view classAttr, std::string_view pseudo,
+                              const std::vector<CssAncestorEntry>& ancestors = {}, std::string_view idAttr = {},
+                              const CssParser* overlay = nullptr) const;
+  std::optional<std::string> pseudoContentFor(std::string_view tagName, std::string_view classAttr,
+                                              std::string_view pseudo,
+                                              const std::vector<CssAncestorEntry>& ancestors = {},
+                                              std::string_view idAttr = {}, const CssParser* overlay = nullptr) const;
+  std::optional<std::string> backgroundImageFor(std::string_view tagName, std::string_view classAttr,
+                                                const std::vector<CssAncestorEntry>& ancestors = {},
+                                                std::string_view idAttr = {}, const CssParser* overlay = nullptr) const;
   [[nodiscard]] static CssStyle parseInlineStyle(std::string_view styleValue);
 
   /**
@@ -128,7 +151,8 @@ class CssParser {
    * Clear all loaded rules
    */
   void clear() {
-    decltype(fontFaces_){}.swap(fontFaces_);
+    decltype(resources_){}.swap(resources_);
+    // The shared catalog lives for the book; inline stacks remain available after layout.
     // These buffers can grow large during chapter indexing. Swap with empty
     // vectors so the capacity is released back to the heap, matching the old
     // post-index cleanup behavior callers relied on.
@@ -187,7 +211,28 @@ class CssParser {
   [[nodiscard]] bool isCachePartial() const { return cachePartial_; }
 
  private:
-  std::vector<CssFontFace> fontFaces_;
+  struct Resource {
+    uint32_t token;
+    uint8_t kind;
+    std::string text;
+  };
+  mutable std::vector<Resource> resources_;
+  std::string stylesheetBase_;
+  uint32_t internResource(uint8_t kind, std::string text) const;
+  const std::string* resource(uint32_t token, uint8_t kind) const;
+  void parseResourceDeclaration(std::string_view name, std::string_view value, CssStyle& style,
+                                std::optional<std::string_view> base = {}) const;
+  bool writeResources(HalFile& file) const;
+  static bool readResources(HalFile& file, std::vector<Resource>* out = nullptr);
+  CssStyle resolveStyleImpl(std::string_view tagName, std::string_view classAttr,
+                            const std::vector<CssAncestorEntry>& ancestors, std::string_view idAttr,
+                            std::string_view pseudo, const CssParser* overlay) const;
+  mutable CssFontCatalog fontCatalog_;
+  mutable bool fontCatalogLoaded_ = false;
+  const CssParser* fontCatalogOwner_ = nullptr;
+  std::string fontScope_;
+  CssFontCatalog& mutableFontCatalog() const;
+
   bool parseFontFace(std::string_view declarations, std::string_view baseDir);
   static constexpr uint8_t CSS_CACHE_FLAG_PARTIAL = 1 << 0;
 
@@ -275,8 +320,10 @@ class CssParser {
   // Internal parsing helpers
   [[nodiscard]] bool processRuleBlockWithStyle(std::string_view selectorGroup, const CssStyle& style);
   static bool selectorMatchesElement(std::string_view selector, std::string_view tag, std::string_view classAttr);
-  static CssStyle parseDeclarations(std::string_view declBlock);
-  static void parseDeclarationIntoStyle(std::string_view decl, CssStyle& style);
+  static CssStyle parseDeclarations(std::string_view declBlock, const CssParser* context = nullptr,
+                                    std::optional<std::string_view> base = {});
+  static void parseDeclarationIntoStyle(std::string_view decl, CssStyle& style, const CssParser* context = nullptr,
+                                        std::optional<std::string_view> base = {});
 
   // Individual property value parsers
   static CssTextAlign interpretAlignment(std::string_view val);
@@ -294,6 +341,7 @@ class CssParser {
   bool readRuleFromDiskAtOffset(uint32_t ruleOffset, std::string_view selector, CssStyle& outStyle) const;
   static bool readCssStylePayload(FsFile& file, CssStyle& style);
   bool writeFontFaces(HalFile& file) const;
-  static bool readFontFaces(HalFile& file, std::vector<CssFontFace>* out = nullptr);
+  static bool readFontFaces(HalFile& file, std::vector<CssFontFace>* out = nullptr,
+                            std::vector<Resource>* resources = nullptr);
   static bool writeCssStylePayload(FsFile& file, const CssStyle& style);
 };

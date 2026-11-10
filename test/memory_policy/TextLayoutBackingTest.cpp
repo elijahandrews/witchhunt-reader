@@ -2,6 +2,7 @@
 #include <Epub/ParsedText.h>
 #include <Epub/hyphenation/Hyphenator.h>
 #include <GfxRenderer.h>
+#include <FontTypography.h>
 #include <HalStorage.h>
 #include <gtest/gtest.h>
 
@@ -180,6 +181,21 @@ TEST_F(TextLayoutBackingTest, MixedWordBaselinesAndScriptOffsetsMatchHighlightRe
   EXPECT_EQ(block.wordYOffset(renderer, 0, 2), 12 - 24 * 2 / 5);
 }
 
+TEST_F(TextLayoutBackingTest, ResolvedScriptsUseBlockShiftAndLegacyScriptsKeepNativeShift) {
+  GfxRenderer renderer;
+  renderer.scalable = true;
+  for (const auto script : {EpdFontFamily::SUP, EpdFontFamily::SUB}) {
+    TextBlock block({"large", "legacy", "resolved"}, {0, 40, 100},
+        {EpdFontFamily::REGULAR, script, script}, {}, {}, {}, {}, {},
+        BlockStyle{}, {}, {24, 12, 12}, "", 0, {}, {}, {}, {0, 0, fontTypography::ScriptSizeResolved});
+    ASSERT_TRUE(block.valid());
+    const int legacyShift = script == EpdFontFamily::SUP ? -24 * 2 / 5 : 24 / 4;
+    const int blockShift = script == EpdFontFamily::SUP ? -12 * 2 / 5 : 12 / 4;
+    EXPECT_EQ(block.wordYOffset(renderer, 0, 1), 12 + legacyShift);
+    EXPECT_EQ(block.wordYOffset(renderer, 0, 2), 12 + blockShift);
+  }
+}
+
 TEST_F(TextLayoutBackingTest, CharacterSpacingSurvivesCacheRoundTrip) {
   for (int8_t spacing : {-5, 0, 5}) {
     ParsedText text(false, false, false, false, false, 0, BlockStyle{}, false, spacing);
@@ -232,4 +248,85 @@ TEST_F(TextLayoutBackingTest, PublisherBaselineIsComputedOncePerRender) {
   ASSERT_TRUE(block.valid());
   block.render(renderer, 0, 0, 0);
   EXPECT_LE(renderer.ascenderCalls, count * 2 + 1);
+}
+
+TEST_F(TextLayoutBackingTest, MixedPublisherTrackingSurvivesSplitsAndCache) {
+  GfxRenderer renderer;
+  ParsedText text(false, false, false, false, false, 0, BlockStyle{});
+  for (int16_t tracking : {0, 19, -8, 0})
+    text.addWord("ABCD", EpdFontFamily::REGULAR, false, false, false, 0, 0, 0, 0, false, 0, 0, tracking);
+  unsigned count = 0;
+  const int16_t expected[] = {0, 19, -8, 0};
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer, 0, 50, [&](std::shared_ptr<TextBlock> block, uint32_t, uint32_t) {
+    FsFile output;
+    ASSERT_TRUE(Storage.openFileForWrite("test", "css-tracking", output));
+    ASSERT_TRUE(block->serialize(output));
+    output.close();
+    FsFile input;
+    ASSERT_TRUE(Storage.openFileForRead("test", "css-tracking", input));
+    auto copy = TextBlock::deserialize(input);
+    input.close();
+    ASSERT_NE(copy, nullptr);
+    for (uint16_t i = 0; i < block->wordCount(); ++i) {
+      ASSERT_LT(count, 4U);
+      EXPECT_EQ(block->wordLetterSpacing(i), expected[count]);
+      EXPECT_EQ(copy->wordLetterSpacing(i), expected[count++]);
+    }
+  }));
+  EXPECT_EQ(count, 4U);
+}
+
+TEST_F(TextLayoutBackingTest, RawWordProvenanceSurvivesCjkReflowAndPartialFlush) {
+  ParsedText text(false);
+  text.setNextWordSource({100, 118, 0, 12});
+  text.addWord("日本語読書中", EpdFontFamily::REGULAR);
+  GfxRenderer renderer;
+  std::vector<SourceAnchor> anchors;
+  size_t probes = 0;
+  auto collect = [&](std::shared_ptr<TextBlock> line, uint32_t, uint32_t) {
+    ASSERT_TRUE(line->sourceAnchor().valid());
+    EXPECT_EQ(line->sourceAnchor().sourceOffset, 100u);
+    EXPECT_EQ(line->sourceMin(), 100u); EXPECT_EQ(line->sourceEnd(), 118u);
+    anchors.push_back(line->sourceAnchor());
+    probes += line->sourceProbeMatched();
+  };
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer, 0, 12, collect, true, 1));
+  ASSERT_GT(text.size(), 0u);
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer, 0, 12, collect));
+  ASSERT_EQ(anchors.size(), 3u);
+  EXPECT_EQ(anchors[0].characterOffset, 0u);
+  EXPECT_EQ(anchors[1].characterOffset, 2u);
+  EXPECT_EQ(anchors[2].characterOffset, 4u);
+  EXPECT_EQ(probes, 1u);
+}
+TEST_F(TextLayoutBackingTest, SyntheticWordsCannotBecomeResumeAnchors) {
+  ParsedText text(false);
+  text.addWord("generated", EpdFontFamily::REGULAR);
+  text.setNextWordSource({600, 604, 0, UINT16_MAX});
+  text.addWord("real", EpdFontFamily::REGULAR);
+  text.addWord("after", EpdFontFamily::REGULAR);
+  GfxRenderer renderer;
+  std::vector<SourceAnchor> anchors;
+  ASSERT_TRUE(text.layoutAndExtractLines(renderer, 0, 240,
+    [&](std::shared_ptr<TextBlock> line, uint32_t, uint32_t) { anchors.push_back(line->sourceAnchor()); }));
+  ASSERT_EQ(anchors.size(), 1u);
+  EXPECT_EQ(anchors[0].sourceOffset, 600u);
+}
+TEST_F(TextLayoutBackingTest, TransformedWordSplitsKeepOriginalCharacterOrdinals) {
+  ParsedText text(false, false, true);
+  const uint16_t map[] = {0,1,1,2,3}; // a + sharp-s + b -> ASSB
+  text.setNextWordSource({300, 304, 0, 2});
+  text.addWord("ASSB", EpdFontFamily::REGULAR, false, false, false, 0, 0, 0, 0, false, 0, 0, 0, map, 5);
+  GfxRenderer renderer;
+  std::vector<SourceAnchor> anchors;
+  size_t probes = 0;
+  ASSERT_TRUE(text.layoutAndExtractLinesPreservingSource(renderer, 0, 6,
+    [&](std::shared_ptr<TextBlock> line) { anchors.push_back(line->sourceAnchor()); probes += line->sourceProbeMatched(); }, true));
+  ASSERT_EQ(anchors.size(), 4u);
+  EXPECT_EQ(anchors[0].characterOffset, 0u);
+  EXPECT_EQ(anchors[1].characterOffset, 1u);
+  EXPECT_EQ(anchors[2].characterOffset, 1u);
+  EXPECT_EQ(anchors[3].characterOffset, 2u);
+  EXPECT_EQ(probes, 1u);
+  EXPECT_EQ(text.size(), 1u);
 }

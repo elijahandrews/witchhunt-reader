@@ -423,9 +423,9 @@ bool isBookCacheDirectoryName(const char* name) {
     return false;
   }
 
-  constexpr char EPUB_PREFIX[] = "epub_";
-  constexpr char TXT_PREFIX[] = "txt_";
-  constexpr char XTC_PREFIX[] = "xtc_";
+  constexpr char EPUB_PREFIX[] = "crossink_epub_";
+  constexpr char TXT_PREFIX[] = "crossink_txt_";
+  constexpr char XTC_PREFIX[] = "crossink_xtc_";
 
   return strncmp(name, EPUB_PREFIX, std::size(EPUB_PREFIX) - 1) == 0 ||
          strncmp(name, TXT_PREFIX, std::size(TXT_PREFIX) - 1) == 0 ||

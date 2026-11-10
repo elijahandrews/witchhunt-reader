@@ -24,6 +24,7 @@ struct ReaderRenderSpec {
   uint16_t viewportHeight = 0;
   bool hyphenationEnabled = false;
   bool embeddedStyle = true;
+  bool ignorePublisherPageMargins = false;
   uint8_t imageRendering = 0;
   bool focusReadingEnabled = false;
   bool guideReadingEnabled = false;
@@ -49,6 +50,7 @@ inline uint32_t readerRenderSpecSignature(const ReaderRenderSpec& spec) {
   mix(spec.viewportHeight);
   mix(spec.hyphenationEnabled);
   mix(spec.embeddedStyle);
+  mix(spec.ignorePublisherPageMargins);
   mix(spec.imageRendering);
   mix(spec.focusReadingEnabled);
   mix(spec.guideReadingEnabled);

@@ -24,6 +24,11 @@
 namespace progress_record {
 
 constexpr size_t RECORD_BYTES = 20;
+// Optional original-source anchor: marker C6, original 16-byte prefix, u32 raw
+// byte offset + u16 original character offset, then CRC over all 22 preceding bytes.
+constexpr size_t SOURCE_RECORD_BYTES = 26;
+constexpr size_t MAX_RECORD_BYTES = SOURCE_RECORD_BYTES;
+constexpr uint8_t SOURCE_RECORD_MARKER = 0xC6;
 constexpr uint8_t RECORD_MARKER = 0xC5;
 constexpr uint8_t FLAG_HAS_VISIBLE_TEXT_OFFSET = 0x01;
 
@@ -34,6 +39,8 @@ struct Fields {
   bool hasPageCount = false;
   uint32_t visibleTextOffset = 0;
   bool hasVisibleTextOffset = false;
+  uint32_t sourceOffset = UINT32_MAX;
+  uint16_t sourceCharacter = 0;
 };
 
 enum class SlotKind : uint8_t { Invalid, Legacy, Versioned };
@@ -81,15 +88,35 @@ inline void encode(const Fields& fields, const uint32_t seq, uint8_t out[RECORD_
   writeU32(out + 16, crc32(out, 16));
 }
 
-// `data` holds the first min(fileSize, RECORD_BYTES) bytes of the file.
+// New readers can publish the extended slot without changing the legacy
+// 20-byte encoder used by callers that have no source provenance.
+inline size_t encodeWithSource(const Fields& fields, uint32_t seq, uint8_t out[MAX_RECORD_BYTES]) {
+  encode(fields, seq, out);
+  if (fields.sourceOffset == UINT32_MAX) return RECORD_BYTES;
+  out[10] = SOURCE_RECORD_MARKER;
+  writeU32(out + 16, fields.sourceOffset);
+  writeU16(out + 20, fields.sourceCharacter);
+  writeU32(out + 22, crc32(out, 22));
+  return SOURCE_RECORD_BYTES;
+}
+
+// `data` holds the first min(fileSize, MAX_RECORD_BYTES) bytes of the file.
 inline Slot decode(const uint8_t* data, const size_t fileSize) {
   Slot slot;
-  if (fileSize == RECORD_BYTES) {
-    if (data[10] != RECORD_MARKER || (data[11] & ~FLAG_HAS_VISIBLE_TEXT_OFFSET) != 0 ||
-        readU32(data + 16) != crc32(data, 16))
+  if (fileSize == RECORD_BYTES || fileSize == SOURCE_RECORD_BYTES) {
+    const bool source = fileSize == SOURCE_RECORD_BYTES;
+    const size_t checksumOffset = source ? 22 : 16;
+    if (data[10] != (source ? SOURCE_RECORD_MARKER : RECORD_MARKER) ||
+        (data[11] & ~FLAG_HAS_VISIBLE_TEXT_OFFSET) != 0 ||
+        readU32(data + checksumOffset) != crc32(data, checksumOffset))
       return slot;
     slot.kind = SlotKind::Versioned;
     slot.seq = readU32(data + 12);
+    if (source) {
+      slot.fields.sourceOffset = readU32(data + 16);
+      slot.fields.sourceCharacter = readU16(data + 20);
+      if (slot.fields.sourceOffset == UINT32_MAX) return {};
+    }
     slot.fields.hasPageCount = true;
     slot.fields.hasVisibleTextOffset = (data[11] & FLAG_HAS_VISIBLE_TEXT_OFFSET) != 0;
   } else if (fileSize == 4 || fileSize == 6 || fileSize == 10) {
@@ -138,7 +165,8 @@ inline uint32_t nextSeq(const Slot& primary, const Slot& backup) {
 inline bool sameFields(const Fields& a, const Fields& b) {
   return a.spineIndex == b.spineIndex && a.pageNumber == b.pageNumber && a.hasPageCount == b.hasPageCount &&
          (!a.hasPageCount || a.pageCount == b.pageCount) && a.hasVisibleTextOffset == b.hasVisibleTextOffset &&
-         (!a.hasVisibleTextOffset || a.visibleTextOffset == b.visibleTextOffset);
+         (!a.hasVisibleTextOffset || a.visibleTextOffset == b.visibleTextOffset) && a.sourceOffset == b.sourceOffset &&
+         (a.sourceOffset == UINT32_MAX || a.sourceCharacter == b.sourceCharacter);
 }
 
 }  // namespace progress_record

@@ -260,12 +260,10 @@ bool isBookCompleted(const std::string& fullPath) {
 bool isBookCompletedForList(const std::string& fullPath) {
   std::string cachePath;
   if (FsHelpers::hasEpubExtension(fullPath)) {
-    // Epub's constructor may rename a legacy cache folder; list rendering
-    // should only read, so probe the stable path and then the legacy one.
+    // Another firmware's cached statistics are not this fork's state.
     cachePath = Epub::cachePathForFilePath(fullPath, "/.crosspoint");
     if (!Storage.exists(cachePath.c_str())) {
-      cachePath = "/.crosspoint/epub_" + std::to_string(std::hash<std::string>{}(fullPath));
-      if (!Storage.exists(cachePath.c_str())) return false;
+      return false;
     }
   } else if (FsHelpers::hasXtcExtension(fullPath)) {
     cachePath = Xtc(fullPath, "/.crosspoint").getCachePath();

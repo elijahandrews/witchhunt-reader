@@ -33,8 +33,43 @@ int main(int argc, char** argv) {
     assert(builtin[i].openMemory(bytes[i].data(), bytes[i].size()));
     assert(builtin[i].probeGlyph('T', 12));
   }
+  // Compare every final-grid phase against SDK alpha8 outlines, before their
+  // one quantization. Interleave phases and glyphs to exercise cache identity
+  // and verify phased transforms never contaminate ordinary raster requests.
+  {
+    freeink::font::FtFont reference;
+    assert(reference.init(bytes[0].data(), bytes[0].size(), 1));
+    freeink::font::FtFont::RenderOptions light;
+    light.hinting = freeink::font::FtFont::HintingMode::Light;
+    assert(reference.setRenderOptions(light));
+    for (uint8_t points : {10, 11, 12, 16, 22}) {
+      const auto* data = builtin[0].atSize(points)->data;
+      assert(data->rasterHandler);
+      for (uint32_t cp : {'A', 'e', 'v', 'j', ' '})
+        for (int phase = -8; phase <= 7; ++phase) {
+          EpdGlyph actual{};
+          const uint8_t* packed = nullptr;
+          assert(data->rasterHandler(data->glyphMissCtx, cp, phase, actual, packed));
+          const auto* expected = reference.rasterize26_6(cp, scalableFontPixelSize26_6(points), phase * 4);
+          assert(expected && actual.width == expected->width && actual.height == expected->height);
+          assert(actual.left == expected->xoff && actual.top == -expected->yoff);
+          for (size_t pixel = 0; pixel < size_t(actual.width) * actual.height; ++pixel) {
+            const unsigned value = (packed[pixel / 4] >> (6 - 2 * (pixel % 4))) & 3;
+            assert(value == (unsigned(expected->pixels[pixel]) * 3 + 127) / 255);
+          }
+          EpdGlyph restored{};
+          const uint8_t* restoredPixels = nullptr;
+          assert(data->rasterHandler(data->glyphMissCtx, cp, 0, restored, restoredPixels));
+          const auto* baseline = reference.rasterize26_6(cp, scalableFontPixelSize26_6(points));
+          assert(restored.width == baseline->width && restored.left == baseline->xoff);
+          for (size_t pixel = 0; pixel < size_t(restored.width) * restored.height; ++pixel)
+            assert(((restoredPixels[pixel / 4] >> (6 - 2 * (pixel % 4))) & 3) ==
+                   (unsigned(baseline->pixels[pixel]) * 3 + 127) / 255);
+        }
+    }
+  }
   freeink::font::FtFont::RenderOptions options;
-  options.hinting = freeink::font::FtFont::HintingMode::Auto;
+  options.hinting = freeink::font::FtFont::HintingMode::Light;
   uint32_t residentIdentity = 0;
   uint64_t residentPixels = 0;
   uint32_t temporaryIdentity = 0;

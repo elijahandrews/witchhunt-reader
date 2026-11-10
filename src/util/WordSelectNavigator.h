@@ -39,17 +39,23 @@ class WordSelectNavigator {
     // the canonical reader word for clipping.
     uint16_t sourceWordByteOffset = 0;
     uint8_t sourcePrefixBytes = 0;  // logical initial letter omitted from highlight display
+    int8_t characterSpacing = 0;    // cached source-layout tracking level (uses alignment padding)
     int16_t screenX = 0;
     int16_t screenY = 0;
     int16_t width = 0;
     int16_t row = 0;
+    int16_t letterSpacing = 0;   // CSS tracking in 1/16 pixel (uses alignment padding)
     int continuationIndex = -1;  // index of hyphenated second half (EPUB only)
     int continuationOf = -1;     // index of hyphenated first half (EPUB only)
     EpdFontFamily::Style style = EpdFontFamily::REGULAR;
     bool isIpa = false;
     // Use the two padding bytes before fontId; C3 word records do not grow.
     uint16_t lineHeight = 0;
-    int fontId = 0;  // resolved at extraction time; used by renderHighlight()
+    int fontId = 0;  // stable reader base; optional EPUB token/size rehydrate evicted registrations
+#ifdef CROSSINK_SCALABLE_FONTS
+    uint32_t fontFamily = 0;
+    uint16_t points64 = 0;
+#endif
     // Pack display and compound-separator metadata into the byte that already
     // preceded focusBoundary without separate boolean storage.
     uint8_t isRtl : 1;
@@ -60,12 +66,13 @@ class WordSelectNavigator {
     // not participate in the body-text hyphen continuation heuristic.
     uint8_t isTableText : 1;
     uint8_t compoundSeparatorBefore : 2;
+    uint8_t typography : 3;
     uint8_t focusBoundary = 0;
     uint16_t focusSuffixX = 0;
     int heightOr(const int fallback) const { return lineHeight ? lineHeight : fallback; }
     void setLineHeight(const uint16_t height) { lineHeight = height; }
 
-    WordInfo() : isRtl(0), joinWithoutSpaceBefore(0), isTableText(0), compoundSeparatorBefore(0) {}
+    WordInfo() : isRtl(0), joinWithoutSpaceBefore(0), isTableText(0), compoundSeparatorBefore(0), typography(0) {}
   };
 
   struct Row {

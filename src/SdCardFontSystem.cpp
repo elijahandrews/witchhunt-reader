@@ -103,6 +103,54 @@ bool findInstalledFontFile(const char* familyName, const uint8_t targetPointSize
 }  // namespace
 
 void SdCardFontSystem::begin(GfxRenderer& renderer, const bool loadReaderFont) {
+  renderer_ = &renderer;
+  renderer.setFontSizeResolver(
+      this,
+      [](void* context, int id, uint16_t points) {
+#if CROSSINK_SCALABLE_FONTS
+        auto& system = *static_cast<SdCardFontSystem*>(context);
+        auto& gfx = *system.renderer_;
+        if (const int result = system.manager_.resolveScalableSize64(gfx, id, points)) return result;
+        return resolveScalableBuiltinSize64(gfx, id, points);
+#else
+        (void)context;
+        (void)id;
+        (void)points;
+        return 0;
+#endif
+      },
+      [](void* context) {
+#if CROSSINK_SCALABLE_FONTS
+        static_cast<SdCardFontSystem*>(context)->manager_.retryScalableSizes();
+        retryScalableBuiltinSizes();
+#else
+        (void)context;
+#endif
+      });
+  renderer.setGenericFontResolver(
+      &renderer,
+      [](void* context, int readerId, bool sans, uint16_t points) {
+        auto& gfx = *static_cast<GfxRenderer*>(context);
+#if CROSSINK_SCALABLE_FONTS
+        return resolveScalableGenericFont64(gfx, readerId, sans, points);
+#else
+        const auto it = gfx.getFontMap().find(readerId);
+        if (it == gfx.getFontMap().end()) return 0;
+        const auto base = it->second.sizeFamilyId();
+        if (!sans && base != BITTER_10_FONT_ID && base != LEXENDDECA_10_FONT_ID)
+          return gfx.getFontIdForSize64(readerId, points);
+        const int target = sans ? LEXENDDECA_12_FONT_ID : BITTER_12_FONT_ID;
+        return gfx.getFontMap().count(target) ? gfx.getFontIdForSize64(target, points) : 0;
+#endif
+      },
+      [](void* context) -> uint8_t {
+#if CROSSINK_SCALABLE_FONTS
+        return prepareScalableGenericFonts(*static_cast<GfxRenderer*>(context));
+#else
+        (void)context;
+        return 3;
+#endif
+      });
   // Register this system as the SD font ID resolver in settings.
   // Uses a static trampoline since CrossPointSettings stores a plain function pointer.
   SETTINGS.sdFontIdResolver = [](void* ctx, const char* familyName, uint8_t pointSize) -> int {
@@ -334,6 +382,8 @@ void SdCardFontSystem::releaseRegistry() {
 }
 
 void SdCardFontSystem::releaseForNetwork(GfxRenderer& renderer) {
+  renderer.releaseBitmapFontSizes();
+  renderer.releaseTextAa();
 #if CROSSINK_SCALABLE_FONTS
   ScalableFontAccess access;
 #endif

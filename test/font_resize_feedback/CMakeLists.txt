@@ -1,0 +1,4 @@
+add_executable(font_resize_feedback FontResizeFeedbackTest.cpp)
+target_include_directories(font_resize_feedback PRIVATE stubs ${REPO_ROOT}/src)
+target_compile_options(font_resize_feedback PRIVATE -UNDEBUG)
+add_test(NAME font_resize_feedback COMMAND font_resize_feedback)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <EpdFontFamily.h>
+#include <GenericFontFamily.h>
 #include <HalDisplay.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -13,6 +14,7 @@ namespace BidiUtils {
 enum class BidiBaseDir : signed char { AUTO = -1, LTR = 0, RTL = 1 };
 }  // namespace BidiUtils
 
+class BitmapFontScaleCache;
 class FontCacheManager;
 class SdCardFont;
 
@@ -66,12 +68,26 @@ class GfxRenderer {
   uint32_t frameBufferSize = HalDisplay::BUFFER_SIZE;
   std::vector<uint8_t*> bwBufferChunks;
   std::map<int, EpdFontFamily> fontMap;
+#if CROSSINK_SCALABLE_FONTS
+  mutable BitmapFontScaleCache* bitmapSizeCache_ = nullptr;
+#endif
+  int bitmapSourceFontId(int fontId) const;
+  void* genericFontContext_ = nullptr;
+  int (*genericFontResolver_)(void*, int, bool, uint16_t) = nullptr;
+  uint8_t (*genericFontPrepare_)(void*) = nullptr;
+  uint8_t genericFontMask_ = 0;
   void* bookFontContext_ = nullptr;
-  int (*bookFontResolver_)(void*, uint32_t, uint8_t) = nullptr;
-  uint32_t (*bookFontUsage_)(void*) = nullptr;
-  uint32_t (*bookFontLoaded_)(void*) = nullptr;
-  uint32_t (*bookFontSignature_)(void*, uint32_t) = nullptr;
-  bool (*bookFontRestore_)(void*, uint32_t, uint32_t, uint32_t) = nullptr;
+  int (*bookFontResolver_)(void*, uint32_t, uint16_t) = nullptr;
+  void* fontSizeContext_ = nullptr;
+  int (*fontSizeResolver_)(void*, int, uint16_t) = nullptr;
+  mutable uint32_t fontFailureEpoch_ = 0;
+  mutable bool fontTemporaryFailure_ = false;
+  void (*fontSizeRetry_)(void*) = nullptr;
+  bool (*bookFontNeedsRetry_)(void*) = nullptr;
+  uint64_t (*bookFontUsage_)(void*) = nullptr;
+  uint64_t (*bookFontLoaded_)(void*) = nullptr;
+  uint32_t (*bookFontSignature_)(void*, uint64_t) = nullptr;
+  bool (*bookFontRestore_)(void*, uint64_t, uint64_t, uint32_t) = nullptr;
   // Shared bitmap row buffers. Every read/write must be inside BitmapScratchLock;
   // ensureBitmapScratchBuffers() asserts that contract before exposing them.
   mutable SemaphoreHandle_t bitmapScratchMutex_ = nullptr;
@@ -155,6 +171,9 @@ class GfxRenderer {
   GfxRenderer(GfxRenderer&&) = delete;
   GfxRenderer& operator=(GfxRenderer&&) = delete;
   ~GfxRenderer() {
+#if CROSSINK_SCALABLE_FONTS
+    releaseBitmapFontSizes();
+#endif
     freeBwBufferChunks();
     freeBitmapScratchBuffers();
   }
@@ -170,10 +189,8 @@ class GfxRenderer {
   // Clears both the flash-font map and any SD-font registration for fontId.
   // Coupled to avoid dangling SdCardFont* in sdCardFonts_ when callers free
   // the underlying SdCardFont and forget the SD-side unregister.
-  void removeFont(int fontId) {
-    fontMap.erase(fontId);
-    sdCardFonts_.erase(fontId);
-  }
+  void removeFont(int fontId);
+  void releaseBitmapFontSizes();
   void setFontCacheManager(FontCacheManager* m) { fontCacheManager_ = m; }
   FontCacheManager* getFontCacheManager() const { return fontCacheManager_; }
   bool isFontCacheScanning() const;
@@ -228,6 +245,9 @@ class GfxRenderer {
   // scaffolding (e.g. whole-plane grayscale buffers) when false.
   bool supportsAsyncRefresh() const;
   bool supportsAsyncGrayscaleBase() const;
+  void releaseTextAa() const { display.releaseTextAa(); }
+  bool supportsTextAa() const;
+  bool tryDisplayTextAa(const uint8_t* lsb, const uint8_t* msb);
   bool supportsDeferredGrayscaleBase() const;
   bool displayGrayscaleBaseAsync(HalDisplay::RefreshMode fallback) const;
   void copyGrayscalePlanes(const uint8_t* lsb, const uint8_t* msb) const;
@@ -303,13 +323,15 @@ class GfxRenderer {
   // Visible regular-text glyph bounds relative to the y coordinate passed to drawText().
   TextVerticalBounds getTextVerticalBounds(int fontId, const char* text) const;
   int getTextWidth(int fontId, const char* text, EpdFontFamily::Style style = EpdFontFamily::REGULAR,
-                   BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t characterSpacing = 0) const;
+                   BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t characterSpacing = 0,
+                   int16_t letterSpacing = 0, uint8_t typography = 0) const;
   void drawCenteredText(int fontId, int y, const char* text, bool black = true,
                         EpdFontFamily::Style style = EpdFontFamily::REGULAR,
                         BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO) const;
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR,
-                BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t characterSpacing = 0) const;
+                BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO, int8_t characterSpacing = 0,
+                int16_t letterSpacing = 0, uint8_t typography = 0) const;
   // Guard text/background pixels while a table cell is rendered. The guard is
   // intentionally single-level and scoped by the caller; nested use is a
   // programming error caught in debug builds.
@@ -321,44 +343,88 @@ class GfxRenderer {
   /// snapped separately and then added as integers.
   int getSpaceAdvance(int fontId, uint32_t leftCp, uint32_t rightCp, EpdFontFamily::Style style) const;
   /// Returns the kerning adjustment between two adjacent codepoints.
-  int getKerning(int fontId, uint32_t leftCp, uint32_t rightCp, EpdFontFamily::Style style,
-                 int8_t characterSpacing = 0) const;
+  int getKerning(int fontId, uint32_t leftCp, uint32_t rightCp, EpdFontFamily::Style style, int8_t characterSpacing = 0,
+                 int16_t letterSpacing = 0, uint8_t typography = 0) const;
   /// Returns the rendered advance of \p text. When \p followingCp is supplied,
   /// includes its kerning with the final glyph in the same fixed-point rounding
   /// step that drawText() uses, without drawing or consuming that codepoint.
   int getTextAdvanceX(int fontId, const char* text, EpdFontFamily::Style style, uint32_t followingCp = 0,
-                      int8_t characterSpacing = 0) const;
+                      int8_t characterSpacing = 0, int16_t letterSpacing = 0, uint8_t typography = 0) const;
   bool getCodepointMetrics(int fontId, uint32_t cp, EpdFontFamily::Style style, int32_t& advanceFP, int& top) const;
   int drawScaledCodepoint(int fontId, uint32_t cp, EpdFontFamily::Style style, int x, int baselineY, int scale256,
                           bool pixelState = true) const;
   int getFontAscenderSize(int fontId) const;
   int getLineHeight(int fontId) const;
-  // Zero means bitmap font: EPUB content sizing stays disabled.
+  // Zero means an un-sized UI font; content families expose their registered point size.
   uint8_t getFontPointSize(int fontId) const;
+  uint16_t getFontPointSize64(int fontId) const;
+  int getFontIdForSize64(int fontId, uint16_t points64) const;
+  void setFontSizeResolver(void* context, int (*resolve)(void*, int, uint16_t), void (*retry)(void*) = nullptr) {
+    fontSizeContext_ = context;
+    fontSizeResolver_ = resolve;
+    fontSizeRetry_ = retry;
+  }
+  uint32_t fontFailureEpoch() const { return fontFailureEpoch_; }
+  bool hasTemporaryFontFailures() const { return fontTemporaryFailure_; }
+  bool fontsNeedRetry() const {
+    return fontTemporaryFailure_ || (bookFontNeedsRetry_ && bookFontNeedsRetry_(bookFontContext_));
+  }
+  void retryUnavailableFontSizes();
+  void noteFontFailure() const {
+    fontTemporaryFailure_ = true;
+    if (fontFailureEpoch_ != UINT32_MAX) ++fontFailureEpoch_;
+  }
   int getFontIdForSize(int fontId, uint8_t points) const;
-  void setBookFontResolver(void* context, int (*resolve)(void*, uint32_t, uint8_t), uint32_t (*usage)(void*) = nullptr,
-                           uint32_t (*loaded)(void*) = nullptr, uint32_t (*signature)(void*, uint32_t) = nullptr,
-                           bool (*restore)(void*, uint32_t, uint32_t, uint32_t) = nullptr) {
+  void setBookFontResolver(void* context, int (*resolve)(void*, uint32_t, uint16_t), uint64_t (*usage)(void*) = nullptr,
+                           uint64_t (*loaded)(void*) = nullptr, uint32_t (*signature)(void*, uint64_t) = nullptr,
+                           bool (*restore)(void*, uint64_t, uint64_t, uint32_t) = nullptr,
+                           bool (*needsRetry)(void*) = nullptr) {
     bookFontContext_ = context;
     bookFontResolver_ = resolve;
     bookFontUsage_ = usage;
     bookFontLoaded_ = loaded;
     bookFontSignature_ = signature;
     bookFontRestore_ = restore;
+    bookFontNeedsRetry_ = needsRetry;
   }
-  uint32_t bookFontUsage() const { return bookFontUsage_ ? bookFontUsage_(bookFontContext_) : 0; }
-  uint32_t bookFontLoaded() const { return bookFontLoaded_ ? bookFontLoaded_(bookFontContext_) : 0; }
-  uint32_t bookFontSignature(uint32_t mask) const {
+  uint64_t bookFontUsage() const { return bookFontUsage_ ? bookFontUsage_(bookFontContext_) : 0; }
+  uint64_t bookFontLoaded() const { return bookFontLoaded_ ? bookFontLoaded_(bookFontContext_) : 0; }
+  uint32_t bookFontSignature(uint64_t mask) const {
     return bookFontSignature_ ? bookFontSignature_(bookFontContext_, mask) : 0;
   }
-  bool restoreBookFonts(uint32_t mask, uint32_t loaded, uint32_t signature) const {
+  bool restoreBookFonts(uint64_t mask, uint64_t loaded, uint32_t signature) const {
     return bookFontRestore_ ? bookFontRestore_(bookFontContext_, mask, loaded, signature)
                             : mask == 0 && loaded == 0 && signature == 0;
   }
+  void setGenericFontResolver(void* context, int (*resolve)(void*, int, bool, uint16_t),
+                              uint8_t (*prepare)(void*) = nullptr) {
+    genericFontContext_ = context;
+    genericFontResolver_ = resolve;
+    genericFontPrepare_ = prepare;
+    genericFontMask_ = 0;
+  }
+  uint8_t prepareGenericFontFamilies() {
+    genericFontMask_ = genericFontPrepare_ ? genericFontPrepare_(genericFontContext_) : 0;
+    return genericFontMask_;
+  }
+  uint8_t genericFontMask() const { return genericFontMask_; }
   int resolveBookFont(int readerFontId, uint32_t family, uint8_t points = 0) const {
-    if (!points) points = getFontPointSize(readerFontId);
-    const int id = family && bookFontResolver_ ? bookFontResolver_(bookFontContext_, family, points) : 0;
-    return id ? id : getFontIdForSize(readerFontId, points);
+    return resolveBookFont64(readerFontId, family, uint16_t(points) * 64);
+  }
+  int resolveBookFont64(int readerFontId, uint32_t family, uint16_t points64 = 0) const {
+    if (!points64) points64 = getFontPointSize64(readerFontId);
+    int id = 0;
+    uint32_t generic = family == genericFont::Serif || family == genericFont::SansSerif ? family : 0;
+    if (!generic && family && bookFontResolver_) {
+      id = bookFontResolver_(bookFontContext_, family, points64);
+      generic = genericFont::fromResolverResult(id);
+    }
+    if (generic) {
+      id = genericFontResolver_
+               ? genericFontResolver_(genericFontContext_, readerFontId, generic == genericFont::SansSerif, points64)
+               : 0;
+    }
+    return id ? id : getFontIdForSize64(readerFontId, points64);
   }
   std::string truncatedText(int fontId, const char* text, int maxWidth,
                             EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;

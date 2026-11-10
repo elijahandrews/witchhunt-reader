@@ -210,3 +210,33 @@ When new features are added or issues are fixed, make sure to add an entry to `C
 - Removed - for now removed features.
 - Fixed - for any bug fixes.
 - Security - in case of vulnerabilities.
+
+## Local CrossInk fork workspace
+
+This worktree is the user's `cross-ink-fork` branch. Keep CrossInk's own UI and
+adapt local reading/rendering/library improvements at its native interfaces.
+See `docs/cross-ink-fork.md` for the port map, remaining differences and source
+state. Do not push without explicit permission.
+
+Private device backups, logs, source snapshots and release binaries belong in
+`.local-device/` in the primary checkout, currently
+`/Users/elijah/src/witch-hunt/.local-device`. Resolve that primary checkout from
+the parent of `git rev-parse --path-format=absolute --git-common-dir`; do not
+create a second private workspace under this linked worktree. Verify the ignore
+rule from the primary checkout with `git check-ignore .local-device/reader-backup`
+before writing private material. Never stage or force-add that directory, private
+EPUBs, photos, credentials or device settings. New test books/fonts are original
+synthetic runtime fixtures.
+
+The Picco build was flashed on 2026-11-09, with its own settings and reading
+state preserved. A corrected storage-mode build passed independent flash and
+runtime checks; physical book rendering still needs owner confirmation.
+The later EPUB parity update was flashed on 2026-11-09 with a fresh backup of the
+Picco's own current card; application/protected-flash verification and runtime
+boot checks passed. Its candidate and validation are in `docs/epub-parity.md`.
+Installation/rollback records live in the shared workspace. The separate
+`crossink-ui` worktree and X4 installation remain independent. A future flash
+requires an explicit user request and fresh device identity, active partition,
+rollback image and current state checks; never restore older reading progress
+over newer device state. SDK source edits and the parent gitlink must be committed
+together when a committed integration is requested.

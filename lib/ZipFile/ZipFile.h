@@ -145,6 +145,8 @@ class ZipFile {
   uint8_t* readFileToMemory(const char* filename, size_t* size = nullptr, bool trailingNullByte = false);
   bool readStoredFileToStream(const char* filename, Print& out);
   bool readFileToStream(const char* filename, Print& out, size_t chunkSize, bool allowEarlyStop = false);
+  // Output may be partial on failure; publish an extraction only after true.
+  bool readFileToStreamValidated(const char* filename, Print& out, size_t chunkSize);
   std::unique_ptr<ZipFileStreamReader> openFileStream(const char* filename, size_t chunkSize);
 
   template <typename F>

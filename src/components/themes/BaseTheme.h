@@ -53,6 +53,10 @@ struct ReaderStatusBarContent {
   int previewOriginY = -1;
   // Optional borrowed bounds, used only during this draw call.
   const Rect* horizontalBounds = nullptr;
+  // Optional bottom-bar action. Draw only in an existing text lane so showing
+  // a recent jump never changes page layout. Caller records the drawn bounds.
+  bool showGoBack = false;
+  Rect* goBackBounds = nullptr;
 };
 
 enum class ThemeTabBarAppearance : uint8_t {

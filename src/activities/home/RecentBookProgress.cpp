@@ -16,6 +16,7 @@
 
 #include "RecentBooksStore.h"
 #include "activities/reader/EpubReaderUtils.h"
+#include "activities/reader/ReaderProgressImportPath.h"
 #include "util/FileContentEquals.h"
 
 namespace {
@@ -148,7 +149,7 @@ float loadXtcProgressPercent(const RecentBook& book) {
   }
 
   FsFile file;
-  if (!Storage.openFileForRead("RBPR", xtc.getCachePath() + "/progress.bin", file)) {
+  if (!Storage.openFileForRead("RBPR", readerProgressImportPath(xtc.getCachePath(), xtc.getPath(), "xtc"), file)) {
     return -1.0f;
   }
 
@@ -171,7 +172,8 @@ float loadTxtProgressPercent(const RecentBook& book) {
   }
 
   FsFile progressFile;
-  if (!Storage.openFileForRead("RBPR", txt.getCachePath() + "/progress.bin", progressFile)) {
+  if (!Storage.openFileForRead("RBPR", readerProgressImportPath(txt.getCachePath(), txt.getPath(), "txt"),
+                               progressFile)) {
     return -1.0f;
   }
 
@@ -250,7 +252,22 @@ float RecentBookProgress::loadCachedEpubPercent(const RecentBook& book) {
   if (cachedProgress >= 0.0f) {
     return cachedProgress;
   }
-  return loadEpubSizeProgressPercentFromCachePath(cachePath);
+  const float indexedProgress = loadEpubSizeProgressPercentFromCachePath(cachePath);
+  if (indexedProgress >= 0.0f || Storage.exists((cachePath + "/progress.bin").c_str()) ||
+      Storage.exists((cachePath + "/progress.bin.bak").c_str()))
+    return indexedProgress;
+  // This is a read-only preview. Never migrate or delete the old firmware's
+  // cache just because Home asks for a progress badge.
+  Epub epub(book.path, "/.crosspoint");
+  const auto legacy = epub.getWitchCachePath();
+  const float legacyCached = loadCachedEpubPercentFromCachePath(legacy);
+  if (legacyCached >= 0.0f) return legacyCached;
+  FsFile file;
+  if (!Storage.openFileForRead("RBPR", legacy + "/progress.bin", file)) return -1.0f;
+  uint8_t prefix[7]{};
+  const int read = file.read(prefix, sizeof(prefix));
+  file.close();
+  return read == sizeof(prefix) && prefix[6] <= 100 ? prefix[6] : -1.0f;
 }
 
 void RecentBookProgress::saveCachedEpubPercent(const std::string& cachePath, const float progress) {

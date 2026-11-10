@@ -4928,11 +4928,13 @@ class SimulatorSmokeTest {
     if (legacy == current || Storage.exists(book.path.c_str())) fail("Invalid legacy Home fixture");
     if (!Storage.mkdir(legacy.c_str())) fail("Cannot create legacy Home cache");
     RecentBookProgress::saveCachedEpubPercent(legacy, 42.5f);
-    // There is deliberately no EPUB or book.bin. This must migrate and read the
-    // tiny saved percentage without attempting to open, parse or index a book.
-    if (RecentBookProgress::loadCachedEpubPercent(book) != 42.5f || Storage.exists(legacy.c_str()) ||
-        !Storage.exists(current.c_str()) || BookMetadataCache::exists(current))
-      fail("Home did not recover legacy cached progress without opening the EPUB");
+    // There is deliberately no EPUB or book.bin. Home imports the percentage
+    // read-only, leaving the old firmware's whole cache intact.
+    if (RecentBookProgress::loadCachedEpubPercent(book) != 42.5f || !Storage.exists(legacy.c_str()) ||
+        Storage.exists(current.c_str()))
+      fail("Home changed a legacy cache while reading its progress");
+    if (!Storage.mkdir(current.c_str())) fail("Cannot create isolated Home cache");
+    RecentBookProgress::saveCachedEpubPercent(current, 42.5f);
     const std::string percentFile = current + "/progress_percent.bin";
     const std::string hostPercentFile = "fs_" + percentFile;
     // Force an old timestamp so this check does not depend on filesystem clock resolution.
@@ -4951,7 +4953,6 @@ class SimulatorSmokeTest {
     if (!Storage.remove(percentFile.c_str())) fail("Cannot remove Home percent fixture");
     RecentBookProgress::saveCachedEpubPercent(current, 42.5f);
     LOG_INF("SMOKE", "Home percentage skips unchanged writes and repairs missing/truncated caches");
-    if (!Storage.mkdir(legacy.c_str())) fail("Cannot recreate stale legacy Home cache");
     RecentBookProgress::saveCachedEpubPercent(legacy, 90.0f);
     if (RecentBookProgress::loadCachedEpubPercent(book) != 42.5f || !Storage.exists(legacy.c_str()))
       fail("Stale legacy progress replaced the current Home cache");
@@ -5125,24 +5126,46 @@ class SimulatorSmokeTest {
             const char* word = block.wordText(0);
             const int requested = std::strcmp(word, "Heading") == 0 ? 24
                                   : std::strcmp(word, "Large") == 0 ? 18
-                                  : std::strcmp(word, "Small") == 0 ? 8
+                                  : std::strcmp(word, "Small") == 0 ? 6
                                                                     : 12;
-            const int expected = renderer.getFontPointSize(renderer.getFontIdForSize(baseFont, requested));
+            // Fractional-capable backends honor 50% of 12pt as exactly 6pt;
+            // C3 selects its nearest installed bitmap size through this API.
+            const int expectedFont = renderer.getFontIdForSize64(baseFont, requested * 64);
+            const int expected = renderer.getFontPointSize(expectedFont);
+            const uint16_t expected64 = renderer.getFontPointSize64(expectedFont);
             if (requested > 12 && expected <= 12) fail("Heading/CSS enlargement did not apply");
             const int actualFont = block.resolvedFontId(renderer, baseFont);
-            if (block.getBlockStyle().fontSize != expected || renderer.getFontPointSize(actualFont) != expected ||
+#if !CROSSINK_SCALABLE_FONTS
+            const int legacyExpected = renderer.getFontPointSize(renderer.getFontIdForSize(baseFont, requested));
+            if (block.getBlockStyle().fontSize != legacyExpected)
+              fail("C3 fallback size mismatch: %s requested=%dpt cached=%upt expected=%dpt", word, requested,
+                   unsigned(block.getBlockStyle().fontSize), legacyExpected);
+#endif
+            // On scalable builds, fontSize is a recovery snapshot from before
+            // exact-size registration. Its later integer lookup can differ;
+            // the cached fontSize64 and effective metrics are authoritative.
+            if (block.getBlockStyle().fontSize64 != requested * 64 ||
+                renderer.getFontPointSize64(actualFont) != expected64 ||
                 block.getBlockStyle().lineHeight < renderer.getLineHeight(actualFont))
-              fail("Sized page metrics mismatch: %s", word);
+              fail(
+                  "Sized page metrics mismatch: %s requested=%dpt legacy=%upt "
+                  "cached=%u/64pt actual=%u/64pt expected=%u/64pt line=%d required=%d base=%d resolved=%d",
+                  word, requested, unsigned(block.getBlockStyle().fontSize), unsigned(block.getBlockStyle().fontSize64),
+                  unsigned(renderer.getFontPointSize64(actualFont)), unsigned(expected64),
+                  int(block.getBlockStyle().lineHeight), renderer.getLineHeight(actualFont), baseFont, actualFont);
             for (uint16_t i = 0; i < block.wordCount(); ++i) {
               const char* text = block.wordText(i);
               const int wanted = std::strcmp(text, "Heading") == 0 ? 24
                                  : std::strcmp(text, "Large") == 0 ? 18
-                                 : std::strcmp(text, "Small") == 0 ? 8
+                                 : std::strcmp(text, "Small") == 0 ? 6
                                                                    : 12;
               const int chosen = block.wordFontId(renderer, baseFont, i);
-              if (renderer.getFontPointSize(chosen) !=
-                  renderer.getFontPointSize(renderer.getFontIdForSize(baseFont, wanted)))
-                fail("Inline bitmap size was lost in page cache");
+              const uint16_t wanted64 = renderer.getFontPointSize64(renderer.getFontIdForSize64(baseFont, wanted * 64));
+              if (renderer.getFontPointSize64(chosen) != wanted64)
+                fail(
+                    "Inline size lost in page cache: %s requested=%dpt actual=%u/64pt expected=%u/64pt "
+                    "base=%d resolved=%d",
+                    text, wanted, unsigned(renderer.getFontPointSize64(chosen)), unsigned(wanted64), baseFont, chosen);
               if (block.getBlockStyle().lineHeight < renderer.getLineHeight(chosen)) fail("Inline size height clipped");
             }
             if (line.yPos < bottom || line.yPos + block.getBlockStyle().lineHeight > height)
@@ -10051,20 +10074,33 @@ class SimulatorSmokeTest {
       const int drawerTop = height / 2;
       constexpr int rootRowStep = 60;
       constexpr int rootRowCenterOffset = 31;
+      // This fixture has no jump history or publisher page list. Resolve its
+      // native catalog instead of assuming rows from before Search was added.
+      const auto moreCatalog = makeReaderDrawerCatalog({})[static_cast<size_t>(ReaderDrawerTab::More)];
+      const auto rootRowCenter = [&](ReaderDrawerCatalogItem item) {
+        for (uint8_t index = 0; index < moreCatalog.count; ++index) {
+          if (moreCatalog.items[index] == item)
+            return drawerTop + rootRowStep * index + rootRowCenterOffset;
+        }
+        fail("Missing expected touch drawer row");
+        return 0;
+      };
+      const int percentRowY = rootRowCenter(ReaderDrawerCatalogItem::GoToPercent);
+      const int autoPageTurnRowY = rootRowCenter(ReaderDrawerCatalogItem::AutoPageTurn);
       inputScript.push_back(touchDown(moreTabX, tabY));
       inputScript.push_back(touchRelease(moreTabX, tabY));
       inputScript.push_back(render("Touch Reader Menu More tab", 3));
-      inputScript.push_back(touchDown(width / 2, drawerTop + rootRowStep + rootRowCenterOffset));
-      inputScript.push_back(touchRelease(width / 2, drawerTop + rootRowStep + rootRowCenterOffset));
+      inputScript.push_back(touchDown(width / 2, percentRowY));
+      inputScript.push_back(touchRelease(width / 2, percentRowY));
       inputScript.push_back(render("Touch Reader Go to Percent pane", 4));
-      inputScript.push_back(assertActivity("EpubReaderDrawer"));
+      inputScript.push_back(assertReaderMenu(ReaderDrawerTab::More, ReaderDrawerPane::Percent, 0));
       inputScript.push_back(touchDown(20, drawerTop + 26));
       inputScript.push_back(touchRelease(20, drawerTop + 26));
       inputScript.push_back(render("Touch Reader More tab restored", 3));
-      inputScript.push_back(touchDown(width / 2, drawerTop + rootRowStep * 2 + rootRowCenterOffset));
-      inputScript.push_back(touchRelease(width / 2, drawerTop + rootRowStep * 2 + rootRowCenterOffset));
+      inputScript.push_back(touchDown(width / 2, autoPageTurnRowY));
+      inputScript.push_back(touchRelease(width / 2, autoPageTurnRowY));
       inputScript.push_back(render("Touch Reader Auto Page Turn pane", 4));
-      inputScript.push_back(assertActivity("EpubReaderDrawer"));
+      inputScript.push_back(assertReaderMenu(ReaderDrawerTab::More, ReaderDrawerPane::AutoPageTurn, 0));
       inputScript.push_back(touchDown(20, drawerTop + 26));
       inputScript.push_back(touchRelease(20, drawerTop + 26));
       inputScript.push_back(render("Touch Reader More tab restored", 3));

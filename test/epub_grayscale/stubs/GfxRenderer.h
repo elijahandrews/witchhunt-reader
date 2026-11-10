@@ -53,6 +53,8 @@ class GfxRenderer {
     origin = rows = 0;
   }
   void clearScreen(uint8_t c) { memset(getWriteTarget(), c, size_t(stride) * getWriteRows()); }
+  bool supportsTextAa() const { return false; }
+  bool tryDisplayTextAa(const uint8_t*, const uint8_t*, size_t = 0, bool = false) { return false; }
   bool supportsDeferredGrayscaleBase() const { return deferredSupported && !inverted; }
   void displayGrayscaleBaseAsync(int) { events.push_back("base"); }
   void copyGrayscalePlanes(const uint8_t* low, const uint8_t* high) {

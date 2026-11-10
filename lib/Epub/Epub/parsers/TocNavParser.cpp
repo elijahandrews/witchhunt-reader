@@ -2,59 +2,31 @@
 
 #include <FsHelpers.h>
 #include <Logging.h>
-#include <XmlParserUtils.h>
+
+#include <algorithm>
+#include <cstring>
 
 #include "Epub/BookMetadataCache.h"
 
 bool TocNavParser::setup() {
-  parser = XML_ParserCreate(nullptr);
-  if (!parser) {
-    LOG_DBG("NAV", "Couldn't allocate memory for parser");
-    return false;
-  }
-
-  XML_SetUserData(parser, this);
-  XML_SetElementHandler(parser, startElement, endElement);
-  XML_SetCharacterDataHandler(parser, characterData);
-  return true;
+  failed = false;
+  return parser.init(this, startElement, endElement, characterData, nullptr, true);
 }
-
-TocNavParser::~TocNavParser() { destroyXmlParser(parser); }
 
 size_t TocNavParser::write(const uint8_t data) { return write(&data, 1); }
 
 size_t TocNavParser::write(const uint8_t* buffer, const size_t size) {
-  if (!parser) return 0;
-
-  const uint8_t* currentBufferPos = buffer;
-  auto remainingInBuffer = size;
-
-  while (remainingInBuffer > 0) {
-    void* const buf = XML_GetBuffer(parser, 1024);
-    if (!buf) {
-      LOG_DBG("NAV", "Couldn't allocate memory for buffer");
-      destroyXmlParser(parser);
-      return 0;
-    }
-
-    const auto toRead = remainingInBuffer < 1024 ? remainingInBuffer : 1024;
-    memcpy(buf, currentBufferPos, toRead);
-
-    if (XML_ParseBuffer(parser, static_cast<int>(toRead), remainingSize == toRead) == XML_STATUS_ERROR) {
-      LOG_DBG("NAV", "Parse error at line %lu: %s", XML_GetCurrentLineNumber(parser),
-              XML_ErrorString(XML_GetErrorCode(parser)));
-      destroyXmlParser(parser);
-      return 0;
-    }
-
-    currentBufferPos += toRead;
-    remainingInBuffer -= toRead;
-    remainingSize -= toRead;
+  if (failed || !parser.isActive() || size > remainingSize) return 0;
+  remainingSize -= size;
+  if (!parser.feed(buffer, size) || failed || (!remainingSize && !parser.finalize())) {
+    failed = true;
+    LOG_DBG("NAV", "Parse error at line %d: %s", parser.errorLine(), parser.errorString());
+    return 0;
   }
   return size;
 }
 
-void XMLCALL TocNavParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
+void TocNavParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
   auto* self = static_cast<TocNavParser*>(userData);
 
   // Track HTML structure loosely - we mainly care about finding <nav epub:type="toc">
@@ -85,6 +57,11 @@ void XMLCALL TocNavParser::startElement(void* userData, const XML_Char* name, co
   }
 
   if (strcmp(name, "ol") == 0) {
+    if (self->olDepth == UINT8_MAX) {
+      self->failed = true;
+      self->parser.stop();
+      return;
+    }
     self->olDepth++;
     self->state = IN_OL;
     return;
@@ -102,6 +79,11 @@ void XMLCALL TocNavParser::startElement(void* userData, const XML_Char* name, co
     // Get href attribute
     for (int i = 0; atts[i]; i += 2) {
       if (strcmp(atts[i], "href") == 0) {
+        if (strlen(atts[i + 1]) > 512) {
+          self->failed = true;
+          self->parser.stop();
+          return;
+        }
         self->currentHref = atts[i + 1];
         break;
       }
@@ -110,16 +92,16 @@ void XMLCALL TocNavParser::startElement(void* userData, const XML_Char* name, co
   }
 }
 
-void XMLCALL TocNavParser::characterData(void* userData, const XML_Char* s, const int len) {
+void TocNavParser::characterData(void* userData, const XML_Char* s, const int len) {
   auto* self = static_cast<TocNavParser*>(userData);
 
   // Only collect text when inside an anchor within the TOC nav
   if (self->state == IN_ANCHOR) {
-    self->currentLabel.append(s, len);
+    if (len > 0) self->currentLabel.append(s, std::min<size_t>(len, 1024 - self->currentLabel.size()));
   }
 }
 
-void XMLCALL TocNavParser::endElement(void* userData, const XML_Char* name) {
+void TocNavParser::endElement(void* userData, const XML_Char* name) {
   auto* self = static_cast<TocNavParser*>(userData);
 
   if (strcmp(name, "a") == 0 && self->state == IN_ANCHOR) {
@@ -153,7 +135,7 @@ void XMLCALL TocNavParser::endElement(void* userData, const XML_Char* name) {
   }
 
   if (strcmp(name, "ol") == 0 && self->state >= IN_NAV_TOC) {
-    self->olDepth--;
+    if (self->olDepth) self->olDepth--;
     if (self->olDepth == 0) {
       self->state = IN_NAV_TOC;
     } else {

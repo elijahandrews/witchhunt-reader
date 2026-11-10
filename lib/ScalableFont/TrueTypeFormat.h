@@ -17,7 +17,7 @@ inline uint32_t u32(const uint8_t* p) {
 // Bounded preflight, before FreeType or large allocations. No font-data copy:
 // one 16-byte record on the stack, checked offsets, no unaligned integer reads.
 // This enforces app policy; FreeType still validates the face and Unicode cmap.
-// Accepts static TrueType (glyf/loca) and, when enabled, static OpenType CFF outlines.
+// Accepts TrueType and opt-in CFF/CFF2; variable faces have at most 16 axes.
 template <typename Read>
 Result inspect(size_t size, Read read) {
   if (size < 12) return Result::Unsupported;
@@ -31,6 +31,7 @@ Result inspect(size_t size, Read read) {
   if (!tables || directoryEnd > size) return Result::Unsupported;
   uint32_t previous = 0;
   unsigned required = 0;
+  bool variable = false, gvar = false;
   for (unsigned i = 0; i < tables; ++i) {
     if (!read(12 + size_t(i) * 16, record, sizeof(record))) return Result::Unavailable;
     const uint32_t tag = u32(record);
@@ -38,9 +39,33 @@ Result inspect(size_t size, Read read) {
     // SFNT records must be sorted by tag. This also rejects duplicate tables.
     if (tag <= previous || offset < directoryEnd || offset > size || length > size - offset) return Result::Unsupported;
     previous = tag;
-    if (tag == 0x43464632 || tag == 0x66766172 || tag == 0x67766172)
-      return Result::Unsupported;  // CFF2, fvar, gvar: variable faces.
     switch (tag) {
+      case 0x66766172: {
+        uint8_t header[16];
+        if (length < sizeof(header)) return Result::Unsupported;
+        if (!read(offset, header, sizeof(header))) return Result::Unavailable;
+        const auto u16 = [](const uint8_t* p) { return unsigned(p[0]) * 256 + p[1]; };
+        const unsigned axesOffset = u16(header + 4), axes = u16(header + 8), axisSize = u16(header + 10);
+        const unsigned instances = u16(header + 12), instanceSize = u16(header + 14);
+        if (u32(header) != 0x10000 || u16(header + 6) != 2 || axesOffset < 16 || !axes || axes > 16 || axisSize < 20 ||
+            instanceSize < 4 + axes * 4 ||
+            uint64_t(axesOffset) + uint64_t(axes) * axisSize + uint64_t(instances) * instanceSize > length)
+          return Result::Unsupported;
+        variable = true;
+        break;
+      }
+      case 0x67766172:
+        gvar = true;
+        break;
+      case 0x43464632: {
+        uint8_t header[5];
+        if (!cff || length < sizeof(header)) return Result::Unsupported;
+        if (!read(offset, header, sizeof(header))) return Result::Unavailable;
+        const unsigned dictSize = unsigned(header[3]) * 256 + header[4];
+        if (header[0] != 2 || header[2] < 5 || uint64_t(header[2]) + dictSize > length) return Result::Unsupported;
+        required |= 128;
+        break;
+      }
       case 0x43464620:
         if (!length) return Result::Unsupported;
         required |= 128;
@@ -78,6 +103,6 @@ Result inspect(size_t size, Read read) {
   }
   // CFF: CFF, head, maxp, cmap, hhea, hmtx. TrueType: glyf, loca, head, maxp, cmap, hhea, hmtx.
   const unsigned needed = cff ? 128 | 124 : 127;
-  return (required & needed) == needed ? Result::Supported : Result::Unsupported;
+  return (required & needed) == needed && (!gvar || variable) ? Result::Supported : Result::Unsupported;
 }
 }  // namespace truetype

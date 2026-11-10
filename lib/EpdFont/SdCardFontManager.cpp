@@ -226,6 +226,9 @@ int SdCardFontManager::loadFamilyExtraFile(const char* path, const char* familyN
 }
 
 void SdCardFontManager::unloadAll(GfxRenderer& renderer) {
+#if CROSSINK_SCALABLE_FONTS
+  clearExtraSizes(renderer);
+#endif
   renderer.clearSdCardFonts();
   for (auto& lf : loaded_) {
     renderer.removeFont(lf.fontId);
@@ -251,6 +254,23 @@ int SdCardFontManager::getFontId(const std::string& familyName) const {
 }
 
 #if CROSSINK_SCALABLE_FONTS
+void SdCardFontManager::clearExtraSizes(GfxRenderer& renderer) {
+  HalScalableFont* faces[4] = {};
+  for (unsigned i = 0; i < 4; ++i) faces[i] = scalable_[i].get();
+  extraSizes_.clear(renderer, faces);
+}
+int SdCardFontManager::resolveScalableSize64(GfxRenderer& renderer, const int baseId, const uint16_t points) {
+  const auto it = renderer.getFontMap().find(baseId);
+  if (!scalable_[0] || it == renderer.getFontMap().end() || !points) return 0;
+  const auto* data = it->second.getData();
+  if (!data || data->sizeFamily != scalable_[0].get()) return 0;
+  if (points % 64 == 0 && points / 64 >= ScalableContentMinPointSize && points / 64 <= ScalableContentMaxPointSize)
+    return registerScalableSize(renderer, points / 64);
+  HalScalableFont* faces[4] = {};
+  for (unsigned i = 0; i < 4; ++i) faces[i] = scalable_[i].get();
+  const int id = int(0x50000000u | (((scalableHash_ ^ points) * 16777619u) & 0x0fffffffu));
+  return extraSizes_.resolve(renderer, faces, points, id);
+}
 int SdCardFontManager::registerScalableSize(GfxRenderer& renderer, uint8_t size) {
   for (const auto& f : loaded_)
     if (f.size == size) return f.fontId;
@@ -290,6 +310,7 @@ bool SdCardFontManager::setScalableRenderOptions(GfxRenderer& renderer,
                                                  const freeink::font::FtFont::RenderOptions& renderOptions) {
   if (!scalable_[0] || loadedFamilyName_.empty() || loadedPointSize_ == 0) return false;
 
+  clearExtraSizes(renderer);
   renderer.clearSdCardFonts();
   for (auto& loaded : loaded_) renderer.removeFont(loaded.fontId);
   loaded_.clear();

@@ -1,6 +1,6 @@
 #pragma once
 #include <Print.h>
-#include <expat.h>
+#include <SaxParser/SaxParser.h>
 
 #include <string>
 
@@ -21,7 +21,8 @@ class TocNavParser final : public Print {
 
   const std::string& baseContentPath;
   size_t remainingSize;
-  XML_Parser parser = nullptr;
+  SaxParser parser;
+  bool failed = false;
   ParserState state = START;
   BookMetadataCache* cache;
 
@@ -38,7 +39,7 @@ class TocNavParser final : public Print {
  public:
   explicit TocNavParser(const std::string& baseContentPath, const size_t xmlSize, BookMetadataCache* cache)
       : baseContentPath(baseContentPath), remainingSize(xmlSize), cache(cache) {}
-  ~TocNavParser() override;
+  ~TocNavParser() override = default;
 
   bool setup();
 

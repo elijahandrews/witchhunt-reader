@@ -7,6 +7,7 @@
 #include <Logging.h>
 #include <Memory.h>
 #include <MemoryBudget.h>
+#include <ProgressiveJpeg.h>
 
 #include <cstddef>
 
@@ -44,6 +45,8 @@ struct JpegContext {
   int32_t invScaleFPY{1 << 16};   // Y: dst -> src row mapping
 
   PixelCache cache;
+  bool cancelled = false;
+  bool emitted = false;
   bool caching{false};
   uint32_t lastYieldMs{0};
 };
@@ -182,6 +185,10 @@ constexpr int32_t FP_MASK = FP_ONE - 1;
 int jpegDrawCallback(JPEGDRAW* pDraw) {
   JpegContext* ctx = reinterpret_cast<JpegContext*>(pDraw->pUser);
   if (!ctx || !ctx->config || !ctx->renderer) return 0;
+  if (ctx->config->cancelled()) {
+    ctx->cancelled = true;
+    return 0;
+  }
 
   ImageToFramebufferDecoder::yieldDuringDecode(ctx->lastYieldMs);
 
@@ -217,20 +224,20 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
   // Pre-clamp destination ranges to screen bounds (eliminates per-pixel screen checks)
   int clampYMax = ctx->dstHeight;
-  if (ctx->screenHeight - cfgY < clampYMax) clampYMax = ctx->screenHeight - cfgY;
-  if (dstYStart < -cfgY) dstYStart = -cfgY;
+  if (!ctx->config->cacheOnly && ctx->screenHeight - cfgY < clampYMax) clampYMax = ctx->screenHeight - cfgY;
+  if (!ctx->config->cacheOnly && dstYStart < -cfgY) dstYStart = -cfgY;
   if (dstYEnd > clampYMax) dstYEnd = clampYMax;
 
   int clampXMax = ctx->dstWidth;
-  if (ctx->screenWidth - cfgX < clampXMax) clampXMax = ctx->screenWidth - cfgX;
-  if (dstXStart < -cfgX) dstXStart = -cfgX;
+  if (!ctx->config->cacheOnly && ctx->screenWidth - cfgX < clampXMax) clampXMax = ctx->screenWidth - cfgX;
+  if (!ctx->config->cacheOnly && dstXStart < -cfgX) dstXStart = -cfgX;
   if (dstXEnd > clampXMax) dstXEnd = clampXMax;
 
   if (dstYStart >= dstYEnd || dstXStart >= dstXEnd) return 1;
 
   // Pre-compute orientation and render-mode state once per callback invocation
   DirectPixelWriter pw;
-  pw.init(renderer, ctx->config->useGrayscale);
+  pw.init(renderer, ctx->config->useGrayscale, ctx->config->cacheOnly);
 
   // The cache streams to disk one MCU-row band at a time. Flushing rows below
   // this block (raster order guarantees they are final) repositions the band;
@@ -249,9 +256,14 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
     }
   }
 
+  if (ctx->config->cacheOnly && !caching) return 0;
   // === 1:1 fast path: no scaling math ===
   if (fineScaleFPX == FP_ONE && fineScaleFPY == FP_ONE) {
     for (int dstY = dstYStart; dstY < dstYEnd; dstY++) {
+      if (ctx->config->cancelled()) {
+        ctx->cancelled = true;
+        return 0;
+      }
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, cacheOriginY);
@@ -286,6 +298,10 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
     if (safeXStart > safeXEnd) safeXEnd = safeXStart;
 
     for (int dstY = dstYStart; dstY < dstYEnd; dstY++) {
+      if (ctx->config->cancelled()) {
+        ctx->cancelled = true;
+        return 0;
+      }
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, cacheOriginY);
@@ -383,6 +399,10 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
   // === Nearest-neighbor (downscale: fineScale < 1.0) ===
   for (int dstY = dstYStart; dstY < dstYEnd; dstY++) {
+    if (ctx->config->cancelled()) {
+      ctx->cancelled = true;
+      return 0;
+    }
     const int outY = cfgY + dstY;
     pw.beginRow(outY);
     if (caching) cw.beginRow(outY, cacheOriginY);
@@ -417,6 +437,116 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
 }  // namespace
 
+namespace {
+enum class ProgressiveAttempt { Complete, Failed, Fallback };
+
+ProgressiveAttempt decodeFullProgressive(FsFile& source, const ProgressiveJpeg::ImageInfo& info,
+                                         GfxRenderer& renderer, const RenderConfig& config) {
+  auto context = makeUniqueNoThrow<JpegContext>();
+  if (!context) return ProgressiveAttempt::Fallback;
+  auto& ctx = *context;
+  ctx.renderer = &renderer;
+  ctx.config = &config;
+  ctx.screenWidth = renderer.getScreenWidth();
+  ctx.screenHeight = renderer.getScreenHeight();
+  float targetScale;
+  if (config.useExactDimensions && config.maxWidth > 0 && config.maxHeight > 0) {
+    ctx.dstWidth = config.maxWidth;
+    ctx.dstHeight = config.maxHeight;
+    targetScale = static_cast<float>(ctx.dstWidth) / info.width;
+  } else {
+    targetScale = std::min(1.0f, std::min(config.maxWidth > 0 ? static_cast<float>(config.maxWidth) / info.width : 1.0f,
+                                        config.maxHeight > 0 ? static_cast<float>(config.maxHeight) / info.height : 1.0f));
+    ctx.dstWidth = static_cast<int>(info.width * targetScale);
+    ctx.dstHeight = static_cast<int>(info.height * targetScale);
+  }
+  if (ctx.dstWidth <= 0 || ctx.dstHeight <= 0) return ProgressiveAttempt::Failed;
+  unsigned shift = 0;
+  while (shift < 3 && targetScale <= 1.0f / (2u << shift) && (info.width >> (shift + 1)) && (info.height >> (shift + 1))) ++shift;
+
+  // One bounded coefficient band, never a whole-image coefficient/frame buffer.
+  // Prefer PSRAM; internal fallback keeps room for native cache bands and input.
+  constexpr size_t maximumWorkspace = 384U * 1024U;
+  constexpr size_t internalReserve = 32U * 1024U;
+  HeapByteBuffer workspace;
+  size_t workspaceSize = 0;
+  for (; shift <= 3; ++shift) {
+    if (!(info.width >> shift) || !(info.height >> shift)) break;
+    workspaceSize = ProgressiveJpeg::workspaceBytes(info, static_cast<uint8_t>(shift));
+    if (!workspaceSize || workspaceSize > maximumWorkspace) continue;
+    const auto psram = byteHeapSnapshot(MemoryPool::Psram);
+    if (psram.free >= workspaceSize + MemoryBudget::EPUB_PSRAM_RESERVE && psram.largest >= workspaceSize)
+      workspace = makePsramByteBufferNoThrow(workspaceSize);
+    if (!workspace) {
+      const auto internal = byteHeapSnapshot(MemoryPool::Internal);
+      if (internal.free >= workspaceSize + internalReserve && internal.largest >= workspaceSize)
+        workspace = makeInternalByteBufferNoThrow(workspaceSize);
+    }
+    if (workspace) break;
+  }
+  if (!workspace) return ProgressiveAttempt::Fallback;
+  ctx.scaledSrcWidth = info.width >> shift;
+  ctx.scaledSrcHeight = info.height >> shift;
+  ctx.fineScaleFPX = static_cast<int32_t>((int64_t(ctx.dstWidth) * FP_ONE) / ctx.scaledSrcWidth);
+  ctx.fineScaleFPY = static_cast<int32_t>((int64_t(ctx.dstHeight) * FP_ONE) / ctx.scaledSrcHeight);
+  ctx.invScaleFPX = static_cast<int32_t>((int64_t(ctx.scaledSrcWidth) * FP_ONE) / ctx.dstWidth);
+  ctx.invScaleFPY = static_cast<int32_t>((int64_t(ctx.scaledSrcHeight) * FP_ONE) / ctx.dstHeight);
+  ctx.lastYieldMs = millis();
+  ProgressiveJpeg::DecodeOptions options;
+  options.scaleShift = static_cast<uint8_t>(shift);
+  options.workspace = workspace.get();
+  options.workspaceSize = workspaceSize;
+  options.abortUser = &ctx;
+  options.shouldAbort = [](void* user) {
+    auto& state = *static_cast<JpegContext*>(user);
+    ImageToFramebufferDecoder::yieldDuringDecode(state.lastYieldMs);
+    if (state.config->cancelled()) state.cancelled = true;
+    return state.cancelled;
+  };
+  ProgressiveJpeg::Decoder decoder;
+  auto result = decoder.begin(source, options,
+      [](void* user, uint16_t y, const uint8_t* gray, uint16_t width, uint16_t rows, uint16_t stride) {
+        auto& state = *static_cast<JpegContext*>(user);
+        state.emitted = true;
+        JPEGDRAW draw{};
+        draw.pUser = user;
+        draw.y = y;
+        draw.iWidth = stride;
+        draw.iWidthUsed = width;
+        draw.iHeight = rows;
+        draw.pPixels = reinterpret_cast<uint16_t*>(const_cast<uint8_t*>(gray));
+        return jpegDrawCallback(&draw) != 0;
+      }, &ctx);
+  if (result != ProgressiveJpeg::Result::Ok) {
+    return result == ProgressiveJpeg::Result::Unsupported || result == ProgressiveJpeg::Result::OutOfMemory
+               ? ProgressiveAttempt::Fallback : ProgressiveAttempt::Failed;
+  }
+  if (!config.cachePath.empty()) {
+    const int bandRows = static_cast<int>((int64_t(16) * ctx.fineScaleFPY) >> FP_SHIFT) + 2;
+    ctx.caching = ctx.cache.begin(config.cachePath, ctx.dstWidth, ctx.dstHeight, config.x, config.y, bandRows);
+  }
+  if (config.cacheOnly && !ctx.caching) return ProgressiveAttempt::Failed;
+  do {
+    result = decoder.step(1);
+    // Bounded index/band steps yield even when a small file has no abort checkpoint.
+    ImageToFramebufferDecoder::yieldDuringDecode(ctx.lastYieldMs);
+    if (config.cancelled()) ctx.cancelled = true;
+  } while (result == ProgressiveJpeg::Result::Pending && !ctx.cancelled);
+  decoder.end();
+  if (ctx.cancelled) return ProgressiveAttempt::Failed;
+  if (result != ProgressiveJpeg::Result::Ok) {
+    return !ctx.emitted && (result == ProgressiveJpeg::Result::Unsupported || result == ProgressiveJpeg::Result::OutOfMemory)
+               ? ProgressiveAttempt::Fallback : ProgressiveAttempt::Failed;
+  }
+  if (!source.close() || config.cancelled()) return ProgressiveAttempt::Failed;
+  if (ctx.caching) {
+    const bool complete = ctx.cache.finalize();
+    if (config.cacheOnly && !complete) return ProgressiveAttempt::Failed;
+  } else if (config.cacheOnly) return ProgressiveAttempt::Failed;
+  return ProgressiveAttempt::Complete;
+}
+}  // namespace
+
 bool JpegToFramebufferConverter::getDimensionsStatic(const std::string& imagePath, ImageDimensions& out) {
   HeapObject<JPEGDEC> jpeg;
   if (!initJpegDecoder(jpeg, imagePath.c_str())) {
@@ -441,6 +571,19 @@ bool JpegToFramebufferConverter::getDimensionsStatic(const std::string& imagePat
 
 bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath, GfxRenderer& renderer,
                                                      const RenderConfig& config) {
+  if (config.cancelled() || (config.cacheOnly && config.cachePath.empty())) return false;
+  if (!config.sourceData) {
+    FsFile source;
+    if (!Storage.openFileForRead("JPG", imagePath, source)) return false;
+    const auto closeSource = ScopedCleanup{[&source] { source.close(); }};
+    ProgressiveJpeg::ImageInfo info;
+    if (ProgressiveJpeg::probe(source, info) == ProgressiveJpeg::Result::Ok) {
+      if (!validateImageDimensions(info.width, info.height, "JPEG", MAX_JPEG_SOURCE_WIDTH)) return false;
+      const auto result = decodeFullProgressive(source, info, renderer, config);
+      if (result != ProgressiveAttempt::Fallback) return result == ProgressiveAttempt::Complete;
+      LOG_DBG("JPG", "Full progressive decoder unavailable; trying native DC preview");
+    }
+  }
   HeapObject<JPEGDEC> jpeg;
   if (!initJpegDecoder(jpeg, imagePath.c_str())) {
     LOG_ERR("JPG", "Failed to allocate JPEG decoder");
@@ -459,7 +602,7 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   int rc = config.sourceData ? jpeg->openRAM(const_cast<uint8_t*>(config.sourceData),
                                              static_cast<int>(config.sourceSize), jpegDrawCallback)
                              : jpeg->open(imagePath.c_str(), jpegOpen, jpegClose, jpegRead, jpegSeek, jpegDrawCallback);
-  if (rc != 1) {
+  if (rc != 1 || ctx.cancelled || config.cancelled()) {
     LOG_ERR("JPG", "Failed to open JPEG (err=%d): %s", jpeg->getLastError(), imagePath.c_str());
     return false;
   }
@@ -550,12 +693,13 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   }
 
   ctx.lastYieldMs = millis();
+  if (config.cacheOnly && !ctx.caching) return false;
   const uint32_t decodeStarted = millis();
   rc = jpeg->decode(0, 0, jpegScaleOption);
   LOG_DBG("JPG", "Decoded %s: ok=%d time=%ums", imagePath.c_str(), rc == 1,
           static_cast<unsigned>(millis() - decodeStarted));
 
-  if (rc != 1) {
+  if (rc != 1 || ctx.cancelled || config.cancelled()) {
     LOG_ERR("JPG", "Decode failed (rc=%d, lastError=%d)", rc, jpeg->getLastError());
     if (ctx.caching) ctx.cache.abort();
     return false;
@@ -564,10 +708,11 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   // Finalize the streamed cache file. Note: a flush failure mid-decode clears
   // ctx.caching (the partial file is dropped), so re-read the flag here.
   if (ctx.caching) {
-    ctx.cache.finalize();
+    const bool complete = ctx.cache.finalize();
+    if (config.cacheOnly) return complete;
   }
 
-  return true;
+  return !config.cacheOnly;
 }
 
 bool JpegToFramebufferConverter::supportsFormat(const std::string& extension) {

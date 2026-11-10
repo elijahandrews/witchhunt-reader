@@ -11,7 +11,7 @@
 #include <vector>
 
 struct TtfRenderProfile {
-  uint8_t hinting = 2;      // None, Native, Auto, Light
+  uint8_t hinting = 3;      // None, Native, Auto, Light
   uint8_t raster = 0;       // Grayscale, Monochrome
   uint8_t interpreter = 0;  // Default, FreeType 35, FreeType 40
   uint8_t weight = 2;       // -0.5 px through +1 px; 2 is unchanged

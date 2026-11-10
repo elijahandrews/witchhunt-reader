@@ -831,6 +831,7 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 void BaseTheme::drawReaderStatusBar(const GfxRenderer& renderer, const ReaderStatusBarPosition position,
                                     const ReaderStatusBarContent& content,
                                     const ReaderStatusBarConfig* overrideConfig) const {
+  if (content.goBackBounds) *content.goBackBounds = Rect{};
   const ReaderStatusBarConfig config = overrideConfig ? *overrideConfig : SETTINGS.readerStatusBar(position);
   if (config.hidden) return;
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
@@ -998,6 +999,21 @@ void BaseTheme::drawReaderStatusBar(const GfxRenderer& renderer, const ReaderSta
                          content.horizontalBounds->x + content.horizontalBounds->width - StatusBarMetrics::sideInset);
   }
   const int available = std::max(0, rightEdge - leftEdge);
+  if (!top && content.showGoBack && available > 48) {
+    constexpr int inset = 5;
+    const int maxLabelWidth = std::max(0, (available - bookmarkReserve) / 3 - 2 * inset);
+    const std::string label = renderer.truncatedText(fontId, tr(STR_GO_BACK), maxLabelWidth);
+    const int labelWidth = renderer.getTextWidth(fontId, label.c_str());
+    const int width = labelWidth + 2 * inset;
+    const int x = leftEdge + bookmarkReserve;
+    if (labelWidth > 0) {
+      renderer.drawText(fontId, x + inset, textY, label.c_str(), foregroundBlack);
+      renderer.drawLine(x + inset, textY + renderer.getLineHeight(fontId) - 1, x + inset + labelWidth,
+                        textY + renderer.getLineHeight(fontId) - 1, foregroundBlack);
+      if (content.goBackBounds) *content.goBackBounds = Rect{x, edgeY, width, textHeight};
+      bookmarkReserve += width + itemGap;
+    }
+  }
 
   if (config.centered) {
     // One centered group in slot order; the bottom bar's auto-turn label still replaces the center item.

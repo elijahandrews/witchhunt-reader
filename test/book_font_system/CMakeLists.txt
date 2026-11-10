@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.16)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  project(BookFontSystemTests CXX)
+  enable_testing()
+endif()
+add_executable(book_font_system_test BookFontSystemTest.cpp ../../src/BookFontSystem.cpp
+  ../../lib/Epub/Epub/css/CssFontCatalog.cpp ../../lib/ReaderMono/ReaderMono.cpp)
+set_property(TARGET book_font_system_test PROPERTY CXX_STANDARD 20)
+target_include_directories(book_font_system_test PRIVATE stubs ../book_text_search/stubs ../section_persistence/stubs ../../src
+  ../../lib/Epub ../../lib/EpdFont ../../lib/ReaderMono ../../lib/ScalableFont)
+target_compile_definitions(book_font_system_test PRIVATE CROSSINK_SCALABLE_FONTS=1)
+target_compile_options(book_font_system_test PRIVATE -UNDEBUG)
+if(SANITIZE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(book_font_system_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(book_font_system_test PRIVATE -fsanitize=address,undefined)
+endif()
+add_test(NAME book_font_system COMMAND book_font_system_test)

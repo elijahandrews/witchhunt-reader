@@ -115,6 +115,8 @@ const std::vector<SettingInfo>& getBaseSettingsList() {
 #endif
     add(SettingInfo::Toggle(StrId::STR_EMBEDDED_STYLE, &CrossPointSettings::embeddedStyle, "embeddedStyle",
                             StrId::STR_CAT_READER));
+    add(SettingInfo::Toggle(StrId::STR_IGNORE_PUBLISHER_PAGE_MARGINS, &CrossPointSettings::ignorePublisherPageMargins,
+                            "ignorePublisherPageMargins", StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled, "hyphenationEnabled",
                             StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",

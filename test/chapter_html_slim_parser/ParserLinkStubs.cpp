@@ -10,7 +10,8 @@
 
 #include <algorithm>
 
-std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string&, bool) { return {}; }
+std::vector<Hyphenator::BreakInfo> parserTestHyphenBreaks;
+std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string&, bool) { return parserTestHyphenBreaks; }
 
 namespace BidiUtils {
 bool startsWithRtl(const char*, int) { return false; }
@@ -27,17 +28,44 @@ TextBlock::TextBlock(const std::vector<std::string>& words, const std::vector<in
                      const std::vector<uint16_t>&, const std::vector<uint16_t>&, const std::vector<uint8_t>& wordFlags,
                      const std::vector<bool>&, const BlockStyle& blockStyle, std::vector<std::string> rubyTexts,
                      const std::vector<uint8_t>& wordSizes, const char*, int8_t characterSpacing,
-                     const std::vector<uint32_t>& fontFamilies)
+                     const std::vector<uint32_t>& fontFamilies, const std::vector<int16_t>& letterSpacings,
+                     const std::vector<uint16_t>& points64, const std::vector<uint8_t>& typography)
     : blockStyle(blockStyle),
       characterSpacing(characterSpacing),
       numWords(static_cast<uint16_t>(words.size())),
       rubyTexts(std::move(rubyTexts)) {
+  if (!points64.empty()) {
+    wordPoints64 = std::make_unique<uint16_t[]>(points64.size());
+    std::copy(points64.begin(), points64.end(), wordPoints64.get());
+  }
+  if (!typography.empty()) {
+    wordTypographyFlags = std::make_unique<uint8_t[]>(typography.size());
+    std::copy(typography.begin(), typography.end(), wordTypographyFlags.get());
+  }
+  if (!letterSpacings.empty()) {
+    wordLetterSpacings = std::make_unique<int16_t[]>(letterSpacings.size());
+    std::copy(letterSpacings.begin(), letterSpacings.end(), wordLetterSpacings.get());
+  }
   if (!fontFamilies.empty()) {
     wordFamilies = std::make_unique<uint32_t[]>(fontFamilies.size());
     std::copy(fontFamilies.begin(), fontFamilies.end(), wordFamilies.get());
   }
   if (wordXpos.empty()) return;
-  arena = std::make_unique<uint8_t[]>(wordXpos.size() * sizeof(int16_t) + wordFlags.size() + wordSizes.size());
+  const size_t headerBytes = (wordXpos.size() * sizeof(int16_t) + wordFlags.size() + wordSizes.size() + 1) & ~size_t(1);
+  size_t characters = 0;
+  for (const auto& word : words) characters += word.size() + 1;
+  arena = std::make_unique<uint8_t[]>(headerBytes + words.size() * sizeof(uint16_t) + characters);
+  auto* offsets = reinterpret_cast<uint16_t*>(arena.get() + headerBytes);
+  auto* text = reinterpret_cast<char*>(offsets + words.size());
+  size_t at = 0;
+  for (size_t i = 0; i < words.size(); ++i) {
+    offsets[i] = at;
+    std::memcpy(text + at, words[i].c_str(), words[i].size() + 1);
+    at += words[i].size() + 1;
+  }
+  textOffArr = offsets;
+  textArr = text;
+  textBytes = characters;
   auto* positions = reinterpret_cast<int16_t*>(arena.get());
   std::copy(wordXpos.begin(), wordXpos.end(), positions);
   xposArr = positions;
@@ -55,6 +83,15 @@ TextBlock::TextBlock(const std::vector<std::string>& words, const std::vector<in
   }
 }
 bool TextBlock::hasRuby() const { return false; }
+
+bool Page::hasImages() const {
+  for (const auto& element : elements) {
+    if (element->getTag() == TAG_PageImage) return true;
+    if (element->getTag() == TAG_PageTableFragment && static_cast<const PageTableFragment&>(*element).hasImages())
+      return true;
+  }
+  return false;
+}
 
 bool ImageDecoderFactory::isFormatSupported(const std::string& path) { return path.ends_with(".jpg"); }
 namespace {
@@ -83,7 +120,6 @@ void PageImage::renderPlaceholder(GfxRenderer&, int, int, bool) const {}
 bool PageImage::serialize(Print&) { return false; }
 
 PreviewBlockLocator::PreviewBlockLocator(const char*, IsBlockTagFn) {}
-PreviewBlockLocator::~PreviewBlockLocator() = default;
 bool PreviewBlockLocator::feed(const char*, int, bool) { return false; }
 
 CompactTableLayout::CompactTableLayout(GfxRenderer& renderer, int, uint16_t, uint16_t, uint16_t, uint8_t,
@@ -91,8 +127,12 @@ CompactTableLayout::CompactTableLayout(GfxRenderer& renderer, int, uint16_t, uin
     : renderer_(renderer), tableStyle_(tableStyle), characterSpacing_(characterSpacing) {}
 bool CompactTableLayout::beginRow() { return true; }
 bool CompactTableLayout::beginCell(bool, uint8_t, uint32_t, const BlockStyle&) { return true; }
-bool CompactTableLayout::appendWord(std::string_view, EpdFontFamily::Style, bool, bool, uint8_t) { return true; }
+bool CompactTableLayout::appendWord(std::string_view, EpdFontFamily::Style, bool, bool, uint8_t, const SourceWordSpan&,
+                                    const uint16_t*, size_t) {
+  return true;
+}
 bool CompactTableLayout::endCell(const std::vector<std::pair<int, FootnoteEntry>>&) { return true; }
+bool CompactTableLayout::setCellImage(std::shared_ptr<ImageBlock>, uint32_t) { return false; }
 CompactTableLayout::RowResult CompactTableLayout::finishRow(TableFragmentRow&, std::vector<std::shared_ptr<TextBlock>>&,
                                                             std::vector<FootnoteEntry>&, uint32_t&) {
   return RowResult::Ok;
@@ -116,10 +156,10 @@ void PageBorderBox::render(GfxRenderer&, int, int, int, bool) {}
 bool PageBorderBox::serialize(Print&) { return false; }
 
 int TextBlock::resolvedFontId(const GfxRenderer& r, int font) const {
-  return r.getFontIdForSize(font, blockStyle.fontSize);
+  return r.getFontIdForSize64(font, blockStyle.fontSize64 ? blockStyle.fontSize64 : uint16_t(blockStyle.fontSize) * 64);
 }
 int TextBlock::wordFontId(const GfxRenderer& r, int font, uint16_t i) const {
-  return r.resolveBookFont(resolvedFontId(r, font), wordFamilies ? wordFamilies[i] : 0, wordFontSize(i));
+  return r.resolveBookFont64(resolvedFontId(r, font), wordFamilies ? wordFamilies[i] : 0, wordFontSize64(i));
 }
 int TextBlock::maxAscender(const GfxRenderer& r, int font) const {
   int result = r.getFontAscenderSize(resolvedFontId(r, font));

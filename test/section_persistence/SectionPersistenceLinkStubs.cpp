@@ -10,6 +10,7 @@
 Epub::Epub(std::string path, const std::string& cacheDir) : filepath(std::move(path)), cachePath(cacheDir) {}
 
 const std::string& Epub::getCachePath() const { return cachePath; }
+std::string Epub::getWitchCachePath() const { return "/witch"; }
 const std::string& Epub::getLanguage() const {
   static const std::string language = "en";
   return language;
@@ -22,6 +23,9 @@ int Epub::getTocIndexForSpineIndex(int spine) const {
   for (size_t i = 0; i < testTocEntries.size(); ++i)
     if (testTocEntries[i].spineIndex == spine) return i;
   return -1;
+}
+bool Epub::documentStyleCache(int, std::string& path, bool& truncated) const {
+  path.clear(); truncated = false; return true;
 }
 bool Epub::readItemContentsToStream(const std::string&, Print&, size_t, bool) const { return false; }
 

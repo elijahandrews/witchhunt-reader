@@ -9,6 +9,7 @@ gtest_discover_tests(EpubGrayscaleTest PROPERTIES ENVIRONMENT "UBSAN_OPTIONS=hal
 
 # Real text/glyph rasterization with a memory-only display and storage backend.
 add_executable(EpubTextGrayscaleTest EpubTextGrayscaleTest.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/Page.cpp
   ${REPO_ROOT}/lib/GfxRenderer/GfxRenderer.cpp
   ${REPO_ROOT}/lib/GfxRenderer/Bitmap.cpp
   ${REPO_ROOT}/lib/GfxRenderer/BitmapHelpers.cpp
@@ -30,9 +31,10 @@ target_include_directories(EpubTextGrayscaleTest PRIVATE raster_stubs
   ${REPO_ROOT}/freeink-sdk/libs/display/FreeInkDisplay/include
   ${REPO_ROOT}/lib/GfxRenderer ${REPO_ROOT}/lib/ScreenCalibration ../memory_policy/stubs
   ${REPO_ROOT}/lib/Epub ${REPO_ROOT}/lib/EpdFont ${REPO_ROOT}/lib/Memory
+  ${REPO_ROOT}/lib/MemoryBudget
   ${REPO_ROOT}/lib/Serialization ${REPO_ROOT}/lib/Utf8 ${REPO_ROOT}/lib/MiniBidi
   ${REPO_ROOT}/lib/miniz/src ${REPO_ROOT}/lib/InflateReader ${REPO_ROOT}/lib/uzlib/src)
-target_compile_definitions(EpubTextGrayscaleTest PRIVATE ARDUINO_ARCH_ESP32=1 CROSSINK_MEMORY_TEST=1
+target_compile_definitions(EpubTextGrayscaleTest PRIVATE CROSSINK_SCALABLE_FONTS=1 ARDUINO_ARCH_ESP32=1 CROSSINK_MEMORY_TEST=1
   CROSSINK_APP_CAP_TOUCH=0 CROSSINK_APP_CAP_USB_DRIVE=0)
 target_link_libraries(EpubTextGrayscaleTest PRIVATE crosspoint_test_common GTest::gtest_main)
 gtest_discover_tests(EpubTextGrayscaleTest PROPERTIES ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1")

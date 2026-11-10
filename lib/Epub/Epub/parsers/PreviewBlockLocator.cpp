@@ -8,34 +8,17 @@ PreviewBlockLocator::PreviewBlockLocator(const char* anchorId, const IsBlockTagF
     return;
   }
 
-  parser_ = XML_ParserCreate(nullptr);
-  if (!parser_) {
-    return;
-  }
-  XML_SetUserData(parser_, this);
-  XML_SetElementHandler(parser_, handleStartElement, handleEndElement);
-}
-
-PreviewBlockLocator::~PreviewBlockLocator() {
-  if (parser_) {
-    XML_ParserFree(parser_);
-  }
+  parser_.init(this, handleStartElement, handleEndElement, nullptr, nullptr, true);
 }
 
 bool PreviewBlockLocator::feed(const char* data, const int len, const bool isFinal) {
-  if (!parser_ || done()) {
-    return true;
-  }
-
-  const XML_Status status = XML_Parse(parser_, data, len, isFinal ? XML_TRUE : XML_FALSE);
-  if (status != XML_STATUS_OK) {
-    // XML_StopParser in the start handler reports XML_ERROR_ABORTED; that is our success path.
-    return XML_GetErrorCode(parser_) == XML_ERROR_ABORTED;
-  }
-  return true;
+  if (!ok()) return false;
+  if (done()) return true;
+  if (len < 0 || !parser_.feed(reinterpret_cast<const uint8_t*>(data), static_cast<size_t>(len))) return false;
+  return !isFinal || parser_.finalize();
 }
 
-void XMLCALL PreviewBlockLocator::handleStartElement(void* userData, const XML_Char* name, const XML_Char** atts) {
+void PreviewBlockLocator::handleStartElement(void* userData, const XML_Char* name, const XML_Char** atts) {
   auto* self = static_cast<PreviewBlockLocator*>(userData);
   self->ordinal_ += 1;
 
@@ -53,7 +36,7 @@ void XMLCALL PreviewBlockLocator::handleStartElement(void* userData, const XML_C
     self->startOrdinal_ = (self->isBlockTag_(name) || self->openBlockCount_ == 0)
                               ? self->ordinal_
                               : self->openBlockOrdinals_[self->openBlockCount_ - 1];
-    XML_StopParser(self->parser_, XML_FALSE);
+    self->parser_.stop();
     return;
   }
 
@@ -65,7 +48,7 @@ void XMLCALL PreviewBlockLocator::handleStartElement(void* userData, const XML_C
   self->depth_ += 1;
 }
 
-void XMLCALL PreviewBlockLocator::handleEndElement(void* userData, const XML_Char* name) {
+void PreviewBlockLocator::handleEndElement(void* userData, const XML_Char* name) {
   (void)name;
   auto* self = static_cast<PreviewBlockLocator*>(userData);
   if (self->depth_ > 0) {

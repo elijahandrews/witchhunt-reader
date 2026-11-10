@@ -32,6 +32,10 @@ def harness():
     validation_start = settings.index('  if (normalizeTwoFingerSwipeActions(*this))')
     validation = settings[validation_start:settings.index('\n\n', validation_start)]
     startup = (ROOT / 'src/main.cpp').read_text().split('void setup() {', 1)[1].split('void loop()', 1)[0]
+    # USB-power wake returns to sleep before loading settings; exercise the
+    # normal startup path whose detection/load/restore ordering is under test.
+    startup = re.sub(r'case HalGPIO::WakeupReason::AfterUSBPower:.*?(?=case HalGPIO::WakeupReason::AfterFlash:)',
+                     '', startup, flags=re.S)
     calls = re.findall(r'\b(?:Frontlight\.(?:initializeHardware|begin)|SETTINGS\.loadFromFile)\([^;]*\);', startup)
     # Use the real ordering, so moving detection below load reproduces the loss.
     assert sum('SETTINGS.loadFromFile' in call for call in calls) == 1

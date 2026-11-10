@@ -39,6 +39,10 @@ inline const char* userAgent() { return "test"; }
 #define LOG_INF(...) ((void)0)
 #define LOG_DBG(...) ((void)0)
 template <class T>
+auto makeUniqueNoThrow() {
+  return std::make_unique<T>();
+}
+template <class T>
 auto makeUniqueNoThrow(size_t n) {
   return std::unique_ptr<T>(new std::remove_extent_t<T>[n]);
 }
@@ -123,29 +127,57 @@ struct esp_http_client_event_t {
 };
 struct esp_http_client_config_t {
   const char* url = nullptr;
+  const char* cert_pem = nullptr;
   int buffer_size = 0, buffer_size_tx = 0, timeout_ms = 0;
   void (*crt_bundle_attach)() = nullptr;
   bool keep_alive_enable = false;
   esp_err_t (*event_handler)(esp_http_client_event_t*) = nullptr;
   void* user_data = nullptr;
 };
+inline unsigned clientInitializations = 0, clientCleanups = 0;
+inline std::vector<std::string> requestCas;
+inline std::vector<bool> requestBundles;
 struct FakeHttp {
   esp_http_client_config_t config;
   Reply reply;
   size_t position = 0;
   size_t request;
+  std::map<std::string, std::string> headers;
 };
 using esp_http_client_handle_t = FakeHttp*;
 inline const char* esp_err_to_name(int) { return "fake"; }
 inline void esp_crt_bundle_attach() {}
 inline esp_http_client_handle_t esp_http_client_init(esp_http_client_config_t* config) {
   if (nextReply >= replies.size()) return nullptr;
+  ++clientInitializations;
+  requestCas.emplace_back(config->cert_pem ? config->cert_pem : "");
+  requestBundles.push_back(config->crt_bundle_attach != nullptr);
   auto* h = new FakeHttp{*config, replies[nextReply++], 0, requests.size()};
   requests.emplace_back();
   requestUrls.emplace_back(config->url);
   return h;
 }
-inline void esp_http_client_set_header(FakeHttp* h, const char* k, const char* v) { requests[h->request][k] = v; }
+inline int esp_http_client_set_user_data(FakeHttp* h, void* value) {
+  h->config.user_data = value;
+  return 0;
+}
+inline int esp_http_client_set_url(FakeHttp* h, const char* url) {
+  if (nextReply >= replies.size()) return -1;
+  h->reply = replies[nextReply++];
+  h->position = 0;
+  h->request = requests.size();
+  requests.push_back(h->headers);
+  requestUrls.emplace_back(url);
+  return 0;
+}
+inline void esp_http_client_delete_header(FakeHttp* h, const char* key) {
+  requests[h->request].erase(key);
+  h->headers.erase(key);
+}
+inline void esp_http_client_set_header(FakeHttp* h, const char* k, const char* v) {
+  requests[h->request][k] = v;
+  h->headers[k] = v;
+}
 inline int esp_http_client_open(FakeHttp* h, int) { return h->reply.status < 0 ? -1 : 0; }
 inline int64_t esp_http_client_fetch_headers(FakeHttp* h) {
   for (auto kv : {std::pair{"Location", h->reply.location}, std::pair{"Content-Range", h->reply.range},
@@ -170,7 +202,10 @@ inline int esp_http_client_read(FakeHttp* h, char* p, size_t len) {
   return n;
 }
 inline bool esp_http_client_is_complete_data_received(FakeHttp* h) { return h->reply.complete; }
-inline void esp_http_client_cleanup(FakeHttp* h) { delete h; }
+inline void esp_http_client_cleanup(FakeHttp* h) {
+  ++clientCleanups;
+  delete h;
+}
 inline int esp_http_client_get_and_clear_last_tls_error(FakeHttp*, int*, int*) { return 0; }
 namespace freeink {
 class SecureHttpClient {

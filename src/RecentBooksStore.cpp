@@ -14,7 +14,6 @@
 namespace {
 constexpr uint8_t RECENT_BOOKS_FILE_VERSION = 3;
 constexpr char RECENT_BOOKS_FILE_BIN[] = "/.crosspoint/recent.bin";
-constexpr char RECENT_BOOKS_FILE_BAK[] = "/.crosspoint/recent.bin.bak";
 }  // namespace
 
 void RecentBooksStore::toJson(JsonDocument& doc) const {
@@ -190,7 +189,7 @@ RecentBook RecentBooksStore::getDataFromBook(std::string path) const {
 }
 
 bool RecentBooksStore::loadFromFile() {
-  const bool hasStoreFile = Storage.exists(getFilePath());
+  const bool hasStoreFile = Storage.exists(getFilePath()) || Storage.exists("/.crosspoint/crossink-recent.json.bak");
   if (PersistableStore<RecentBooksStore>::loadFromFile()) {
     return true;
   }
@@ -198,11 +197,24 @@ bool RecentBooksStore::loadFromFile() {
     return false;
   }
 
+  // Import a copy once. The legacy file also contains Witch Hunt's per-book
+  // preferences, which this store does not understand and must never rewrite.
+  const char* legacyJsonPath =
+      Storage.exists("/.crosspoint/recent.json") ? "/.crosspoint/recent.json" : "/.crosspoint/recent.json.bak";
+  if (Storage.exists(legacyJsonPath)) {
+    FsFile file;
+    if (!Storage.openFileForRead("RBS", legacyJsonPath, file)) return false;
+    JsonDocument doc;
+    const auto error = deserializeJson(doc, file);
+    const bool closed = file.close();
+    if (error || !closed || !fromJson(doc.as<JsonVariantConst>())) return false;
+    return saveToFile();
+  }
+
   if (Storage.exists(RECENT_BOOKS_FILE_BIN)) {
     if (loadFromBinaryFile()) {
       saveToFile();
-      Storage.rename(RECENT_BOOKS_FILE_BIN, RECENT_BOOKS_FILE_BAK);
-      LOG_DBG("RBS", "Migrated recent.bin to recent.json");
+      LOG_DBG("RBS", "Imported legacy recent.bin into crossink-recent.json");
       return true;
     }
   }

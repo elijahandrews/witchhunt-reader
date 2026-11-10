@@ -8,7 +8,8 @@ namespace fontcatalog {
 inline constexpr char Path[] = "/.crosspoint/font-catalog.bin";
 inline constexpr char TempPath[] = "/.crosspoint/font-catalog.tmp";
 inline constexpr uint32_t Magic = 0x46434931;
-inline constexpr uint32_t Version = 3;
+// Variable TTF/CFF2 admission changed: rescan faces omitted by the older policy.
+inline constexpr uint32_t Version = 4;
 #if CROSSINK_SCALABLE_FONTS
 inline constexpr uint32_t Mode = 1;
 #else

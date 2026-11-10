@@ -206,3 +206,106 @@ TEST(CompactTableLayoutTest, UnsupportedRowsFlattenDeterministically) {
 }
 
 }  // namespace
+
+TEST(CompactTableLayoutTest, SplitTableWordsKeepOriginalAnchorsAndExactProbe) {
+  for (const bool flatten : {false, true}) {
+    GfxRenderer renderer;
+    CompactTableLayout layout(renderer, 0, 3, 200, 10, 1, leftStyle());
+    ASSERT_TRUE(layout.beginRow());
+    ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+    const uint16_t map[] = {0, 1, 1, 2, 3};
+    ASSERT_TRUE(layout.appendWord("ASSB", EpdFontFamily::REGULAR, false, false, 0, {200, 204, 0, 2}, map, 5));
+    ASSERT_TRUE(layout.endCell({}));
+    if (flatten) layout.markUnsupported();
+    TableFragmentRow row;
+    std::vector<std::shared_ptr<TextBlock>> flatLines;
+    std::vector<FootnoteEntry> footnotes;
+    uint32_t offset = 0;
+    ASSERT_NE(layout.finishRow(row, flatLines, footnotes, offset), CompactTableLayout::RowResult::Abort);
+    const auto& lines = flatten ? flatLines : row.cells.front().lines;
+    // Flattening removes cell padding, so validate provenance for its wider chunks too.
+    ASSERT_FALSE(lines.empty());
+    size_t probeCount = 0;
+    size_t renderedCharacters = 0;
+    for (const auto& line : lines) {
+      EXPECT_EQ(line->anchor.sourceOffset, 200u);
+      EXPECT_EQ(line->anchor.characterOffset, map[renderedCharacters]);
+      for (const auto& word : line->words) renderedCharacters += word.size();
+      probeCount += line->probeMatched;
+    }
+    EXPECT_EQ(renderedCharacters, 4u);
+    EXPECT_EQ(probeCount, 1u);
+  }
+}
+
+TEST(CompactTableLayoutTest, RejectsTruncatedUtf8ViewsWithoutReadingPastTheView) {
+  GfxRenderer renderer;
+  CompactTableLayout layout(renderer, 0, 80, 200, 10, 1, leftStyle());
+  ASSERT_TRUE(layout.beginRow());
+  ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+  const uint16_t map[] = {0, 1};
+  for (size_t count = 1; count <= 3; ++count) {
+    auto bytes = std::make_unique<char[]>(count);
+    bytes[0] = '\xF0';
+    for (size_t i = 1; i < count; ++i) bytes[i] = '\x80';
+    EXPECT_FALSE(layout.appendWord(std::string_view(bytes.get(), count), EpdFontFamily::REGULAR, false, false, 0,
+                                   {100, 104, 0, UINT16_MAX}, map, 2));
+  }
+  ASSERT_TRUE(layout.appendWord("ok", EpdFontFamily::REGULAR, false, false, 0));
+}
+
+TEST(CompactTableLayoutTest, CellImagesFitNativeColumnsAndRetainRawSource) {
+  GfxRenderer renderer;
+  CompactTableLayout layout(renderer, 0, 204, 300, 10, 2, leftStyle());
+  ASSERT_TRUE(layout.beginRow());
+  ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+  auto original = std::make_shared<ImageBlock>("picture", "member", 800, 400);
+  ASSERT_TRUE(layout.setCellImage(original, 57));
+  EXPECT_TRUE(layout.hasCellImage());
+  EXPECT_FALSE(layout.setCellImage(original, 70));
+  ASSERT_TRUE(layout.appendWord("caption", EpdFontFamily::REGULAR, false, false, 0));
+  ASSERT_TRUE(layout.endCell({}));
+  ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+  ASSERT_TRUE(layout.appendWord("other", EpdFontFamily::REGULAR, false, false, 0));
+  ASSERT_TRUE(layout.endCell({}));
+  TableFragmentRow row;
+  std::vector<std::shared_ptr<TextBlock>> flat;
+  std::vector<FootnoteEntry> notes;
+  uint32_t offset = 0;
+  ASSERT_EQ(layout.finishRow(row, flat, notes, offset), CompactTableLayout::RowResult::Ok);
+  ASSERT_EQ(row.cells.size(), 2u);
+  ASSERT_TRUE(row.cells[0].image);
+  EXPECT_EQ(row.cells[0].image->getWidth(), 98);
+  EXPECT_EQ(row.cells[0].image->getHeight(), 49);
+  EXPECT_EQ(row.cells[0].imageSource, 57u);
+  EXPECT_GE(row.height, 63u);
+  EXPECT_EQ(original->getWidth(), 800);  // A fallback can still use the original dimensions.
+  ASSERT_TRUE(layout.beginRow());
+  ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+  EXPECT_FALSE(layout.hasCellImage());
+}
+
+TEST(CompactTableLayoutTest, FlattenKeepsEachCellImageAfterItsOwnTextWithoutDroppingSource) {
+  GfxRenderer renderer;
+  CompactTableLayout layout(renderer, 0, 200, 300, 10, 2, leftStyle());
+  ASSERT_TRUE(layout.beginRow());
+  for (unsigned i = 0; i < 2; ++i) {
+    ASSERT_TRUE(layout.beginCell(false, 1, 0, leftStyle()));
+    ASSERT_TRUE(layout.appendWord(i ? "second" : "first", EpdFontFamily::REGULAR, false, false, 0));
+    ASSERT_TRUE(layout.setCellImage(std::make_shared<ImageBlock>(std::to_string(i), "", 80, 60), 100 + i));
+    ASSERT_TRUE(layout.endCell({}));
+  }
+  layout.markUnsupported();
+  TableFragmentRow row;
+  std::vector<std::shared_ptr<TextBlock>> flat;
+  std::vector<FootnoteEntry> notes;
+  uint32_t offset = 0;
+  ASSERT_EQ(layout.finishRow(row, flat, notes, offset), CompactTableLayout::RowResult::Flatten);
+  ASSERT_EQ(row.cells.size(), 2u);
+  for (unsigned i = 0; i < 2; ++i) {
+    ASSERT_FALSE(row.cells[i].lines.empty());
+    ASSERT_TRUE(row.cells[i].image);
+    EXPECT_EQ(row.cells[i].image->getImagePath(), std::to_string(i));
+    EXPECT_EQ(row.cells[i].imageSource, 100u + i);
+  }
+}

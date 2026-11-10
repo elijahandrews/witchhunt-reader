@@ -1,5 +1,6 @@
 #pragma once
 #include "EpdFont.h"
+#include "FontTypography.h"
 
 class EpdFontFamily {
  public:
@@ -55,7 +56,9 @@ class EpdFontFamily {
   /// Returns true if the resolved style or shared fallback can render `cp`
   /// (interval coverage only — see EpdFont::hasCodepoint).
   bool hasCodepoint(uint32_t cp, Style style = REGULAR) const;
-  int8_t getKerning(uint32_t leftCp, uint32_t rightCp, Style style = REGULAR) const;
+  int16_t getKerning(uint32_t leftCp, uint32_t rightCp, Style style = REGULAR) const;
+  int32_t getKerningFP5(uint32_t leftCp, uint32_t rightCp, Style style = REGULAR) const;
+  uint32_t smallCapsCodepoint(uint32_t cp, Style style, bool all = false) const;
   uint32_t applyLigatures(uint32_t cp, const char*& text, Style style = REGULAR) const;
 
  private:

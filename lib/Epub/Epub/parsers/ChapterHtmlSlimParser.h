@@ -1,6 +1,7 @@
 #pragma once
 #include <Arena.h>
 #include <HalStorage.h>
+#include <SaxParser/SaxParser.h>
 #include <UniqueCodepointSet.h>
 #include <ZipFile.h>
 #include <expat.h>
@@ -10,6 +11,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +21,7 @@
 #include "Epub/Page.h"
 #include "Epub/ParsedText.h"
 #include "Epub/ReaderRenderSpec.h"
+#include "Epub/SourceTextTransform.h"
 #include "Epub/WordSpacing.h"
 #include "Epub/blocks/ImageBlock.h"
 #include "Epub/blocks/TextBlock.h"
@@ -28,6 +31,7 @@
 
 class GfxRenderer;
 class Epub;
+struct ImageDimensions;
 #define MAX_WORD_SIZE 200
 
 class ChapterHtmlSlimParser {
@@ -49,19 +53,30 @@ class ChapterHtmlSlimParser {
   std::function<void()> popupFn;  // Popup callback
   int depth = 0;
   int skipUntilDepth = INT_MAX;
+  int skipTextUntilDepth = INT_MAX;
+  int svgUntilDepth = INT_MAX;  // SVG wrappers admit image children only.
   int skipEndElementStateUntilDepth = INT_MAX;
   int boldUntilDepth = INT_MAX;
   int italicUntilDepth = INT_MAX;
   int underlineUntilDepth = INT_MAX;
   int strikethroughUntilDepth = INT_MAX;
+  int displayBlockSpanDepth_ = -1;
+  BlockStyle displayBlockParentStyle_;
+  CssStyle displayBlockParentCss_;
   int headingDepth = -1;
   bool headingOpenerActive = false;
   // buffer for building up words from characters, will auto break if longer than this
   // leave one char at end for null pointer
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
+  uint32_t partWordSources_[MAX_WORD_SIZE + 1] = {};
+  uint32_t characterOrigin(size_t index) const;
+  SourceWordSpan bufferedWordSource(const SourceMappedText& mapped) const;
   uint32_t partWordVisibleOffset = 0;
   uint32_t visibleTextOffset = 0;
+  uint32_t sourceTarget = UINT32_MAX;
+  uint16_t sourceTargetCharacter = 0;
+  std::optional<uint32_t> sourceTargetVisibleOffset;
   uint32_t partWordReferenceOffset = 0;
   int16_t partWordInlinePadding = 0;
   int16_t pendingInlinePadding = 0;
@@ -84,8 +99,22 @@ class ChapterHtmlSlimParser {
   uint32_t currentPageVisibleOffset = 0;
   uint32_t currentPageReferenceOffset = 0;
   bool currentPageVisibleOffsetSet = false;
+  // Keep at most one prior page while measuring a publisher keep-together group.
+  // Native line objects own their bytes, so no parser scratch arena is retained.
+  struct AvoidGroup {
+    int depth = -1;
+    std::unique_ptr<Page> previous;
+    int16_t y = 0;
+    uint16_t paragraph = 0, listItem = 0;
+    uint32_t visible = 0, reference = 0;
+    bool visibleSet = false;
+    size_t anchorStart = 0;
+  } avoidGroup_;
+  void beginAvoidGroup();
+  void finishAvoidGroup(bool forceBreak);
   int fontId;
   uint16_t rootFontScale = 256;
+  float rootFontScaleExact_ = 1.0f;
   std::array<int, MAX_BLOCK_STYLE_DEPTH> blockStyleDepths_{};
   int currentTextFontId() const;
   void applyBlockFontSize(const CssStyle& cssStyle, const char* tag, BlockStyle& style);
@@ -101,13 +130,19 @@ class ChapterHtmlSlimParser {
   uint8_t wordSpacing;
   int8_t characterSpacing;
   CssParser* cssParser;
+  std::unique_ptr<CssParser> documentCss_;
+  std::string documentCssPath_, documentFontScope_;
+  bool documentCssReady_ = true, documentCssRetry_ = false;
+  CssStyle resolveElementStyle(std::string_view tag, std::string_view classes, std::string_view id = {}) const;
+  CssStyle resolveInlineStyle(std::string_view text) const;
   bool embeddedStyle;
+  bool ignorePublisherPageMargins = false;
   PublisherFonts publisherFonts = PublisherFonts::Off;
   uint32_t effectiveFontFamily = 0;
   uint32_t bodyFontFamily = 0;
   bool detectBodyFont();
-  static bool scanBodyFont(XML_Parser parser, FsFile& file, const CssParser& css, uint32_t& family,
-                           bool preferParagraph);
+  static bool scanBodyFont(SaxParser& parser, FsFile& file, const CssParser& css, uint32_t& family,
+                           bool preferParagraph, const CssParser* overlay = nullptr);
   uint8_t imageRendering;
   std::string contentBase;
   std::string imageBasePath;
@@ -115,6 +150,7 @@ class ChapterHtmlSlimParser {
   struct PendingInlineImage {
     uint16_t id;
     std::unique_ptr<ImageBlock> block;
+    uint32_t sourceOffset = UINT32_MAX;
   };
   std::vector<PendingInlineImage> pendingInlineImages;
   uint16_t nextInlineImageId = 1;
@@ -133,7 +169,9 @@ class ChapterHtmlSlimParser {
   bool malformedMarkupTruncated = false;
   bool htmlEnded_ = false;
   bool syntheticCharacterData = false;
-  XML_Parser activeParser = nullptr;
+  bool literalEntitySource_ = false;
+  std::unique_ptr<SaxParser> activeParser;
+  std::unique_ptr<uint8_t[]> parseBuffer_;
   FsFile parseFile_;
   size_t parseFileOffset_ = 0;
   size_t parseFileSize_ = 0;
@@ -159,9 +197,17 @@ class ChapterHtmlSlimParser {
     bool hasSub = false, sub = false;
     bool hasSmallCaps = false, smallCaps = false;
     bool hasWhiteSpace = false, preserveWhitespace = false;
+    CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
     uint8_t fontSize = 0;
+    uint16_t points64 = 0;
+    bool hasTypography = false;
+    uint8_t typography = 0;
     bool hasFontFamily = false;
     uint32_t fontFamily = 0;
+    bool hasTextTransform = false;
+    CssTextTransform textTransform = CssTextTransform::None;
+    bool hasLetterSpacing = false;
+    int16_t letterSpacing = 0;
   };
   // Arena-backed style stacks. Initialized in parseAndBuildPages(); pointers are
   // null before and after each parse. StyleStackEntry and BlockStyle are trivially
@@ -171,6 +217,65 @@ class ChapterHtmlSlimParser {
   size_t inlineStyleCount_ = 0;
   BlockStyle* blockStyleBuf_ = nullptr;
   size_t blockStyleCount_ = 0;
+  struct LayoutProperties {
+    float lineHeight = 1.0f;
+    CssWhiteSpace whiteSpace = CssWhiteSpace::Normal;
+    CssHyphens hyphens = CssHyphens::Inherit;
+    uint8_t before = 2, after = 2, lines = 0;
+  } inheritedLayout_;
+  struct LayoutScope {
+    int depth;
+    LayoutProperties parent;
+  };
+  std::array<LayoutScope, 32> layoutScopes_{};
+  size_t layoutScopeCount_ = 0;
+  void inheritLayoutProperties(CssStyle& style, bool block);
+  struct FloatScope {
+    int depth;
+    bool right;
+  };
+  std::array<FloatScope, 4> floatScopes_{};
+  size_t floatScopeCount_ = 0;
+  int16_t activeFloatTop_ = 0, activeFloatBottom_ = 0, activeFloatWidth_ = 0;
+  bool activeFloatIsRight_ = false, pendingFloatIsRight_ = false;
+  std::unique_ptr<ImageBlock> pendingFloatImage_;
+  uint32_t pendingFloatSource_ = UINT32_MAX, pendingFloatVisible_ = 0, pendingFloatReference_ = 0;
+  uint16_t pendingFloatParagraph_ = 0, pendingFloatListItem_ = 0;
+  void noteFloatStyle(const CssStyle& style);
+  bool attachPendingFloatImage();
+  struct ContainerWidth {
+    int depth;
+    int16_t width, fixedWidth;
+    bool inlineBlock;
+  };
+  std::array<ContainerWidth, 32> containerWidths_{};
+  size_t containerWidthCount_ = 0;
+  void noteContainerWidth(const char* tag, const CssStyle& style);
+  struct BackgroundPicture {
+    int depth;
+    std::string path;
+    uint32_t source;
+    uint32_t visible = 0, reference = 0;
+    uint16_t paragraph = 0, listItem = 0;
+  };
+  std::deque<BackgroundPicture> backgroundPictures_;
+  void prepareBackgroundPicture(const char* tag, const CssStyle& style);
+  void finishBackgroundPicture(int depth);
+  bool probeImageDimensions(const std::string& member, const std::string& cachedPath, ImageDimensions& dimensions,
+                            std::string& sourcePath);
+  std::shared_ptr<ImageBlock> admitTableImage(const char* reference);
+  bool placeTableImage(const std::shared_ptr<ImageBlock>& image, uint32_t source);
+  struct GeneratedPseudo {
+    int depth = 0;
+    bool beforeEmitted = false;
+    std::string before, after;
+    CssStyle beforeStyle, afterStyle;
+  };
+  std::deque<std::unique_ptr<GeneratedPseudo>> generatedPseudos_;
+  bool emittingPseudo_ = false;
+  void prepareGeneratedPseudo(const char* tag, std::string_view classes, std::string_view id);
+  void emitGeneratedPseudo(std::string_view text, const CssStyle& style);
+  void emitPendingGeneratedBefore();
   CssStyle currentCssStyle;
   bool effectiveBold = false;
   bool effectiveItalic = false;
@@ -182,15 +287,29 @@ class ChapterHtmlSlimParser {
   bool effectiveSup = false;
   bool effectiveSub = false;
   bool effectiveSmallCaps = false;
+  CssTextTransform effectiveTextTransform = CssTextTransform::None;
+  int16_t effectiveLetterSpacing = 0;
   bool effectivePreserveWhitespace = false;
+  CssWhiteSpace effectiveWhiteSpace = CssWhiteSpace::Normal;
+  uint8_t preColumnMod8_ = 0;
+  bool previousPreCr_ = false, dropPreInitialNewline_ = false;
   uint8_t effectiveInlineFontSize = 0;
+  uint16_t effectiveInlinePoints64 = 0;
+  uint8_t effectiveTypography = 0;
+  void applyFirstLineStyle(BlockStyle& block, const char* tag, std::string_view classes, std::string_view id);
   void applyInlineFontSize(StyleStackEntry& entry, const CssStyle& css, const char* tag);
+  void applyScriptSizing(StyleStackEntry& entry, const CssStyle& css);
 
   struct BoxScope {
     int depth = 0;
     int16_t left = 0, right = 0, padTop = 0, padBottom = 0;
     CssBorderSide sides[4];
     bool shaded = false, continued = false;
+    uint8_t layer = 0;
+    uint16_t gray = 256;
+    int16_t minimum = 0;
+    int32_t start = 0;
+    bool hiddenContent = false;
     int16_t top = -1, bottom = -1;
   };
   static constexpr size_t MAX_BOX_SCOPES = 8;
@@ -204,14 +323,16 @@ class ChapterHtmlSlimParser {
   static constexpr size_t MAX_DROP_CAP_BYTES = 12;
   struct DropCapState {
     char text[MAX_DROP_CAP_BYTES + 1] = {};
+    uint32_t sources[MAX_DROP_CAP_BYTES] = {};
     uint8_t length = 0, codepoints = 0, lines = 0;
     bool bold = false, firstLetterPending = false;
     int spanDepth = -1;
     uint32_t visibleOffset = 0, referenceOffset = 0;
     uint32_t fontFamily = 0;
+    CssTextTransform transform = CssTextTransform::None;
   } dropCap;
   static uint8_t dropCapLines(const CssStyle& style);
-  bool captureDropCapCodepoint(const char* bytes, int length);
+  bool captureDropCapCodepoint(const char* bytes, int length, size_t callbackOffset);
   void cancelDropCapToWord();
   bool layoutText(bool includeLastLine);
 
@@ -221,6 +342,8 @@ class ChapterHtmlSlimParser {
     uint32_t visibleTextOffset = 0;
     bool isHeader = false;
     uint8_t colSpan = 1;
+    std::shared_ptr<ImageBlock> image;
+    uint32_t imageSource = UINT32_MAX;
   };
 
   struct BufferedTableRow {
@@ -264,6 +387,8 @@ class ChapterHtmlSlimParser {
   bool currentTableCellIsHeader = false;
   uint8_t currentTableCellColSpan = 1;
   uint32_t currentTableCellVisibleOffset = 0;
+  std::shared_ptr<ImageBlock> currentTableCellImage;
+  uint32_t currentTableCellImageSource = UINT32_MAX;
   std::unique_ptr<BufferedTable> currentTableBuffer = nullptr;
   std::unique_ptr<CompactTableLayout> currentCompactTable = nullptr;
   bool compactTableFlattened = false;
@@ -280,6 +405,14 @@ class ChapterHtmlSlimParser {
   // Grow anchors in small chunks instead of reallocating one chapter-sized block (#4040).
   int completedPageCount = 0;
   std::deque<std::pair<std::string, uint16_t>> anchorData;
+  struct PendingSourceAnchor {
+    std::string id;
+    uint32_t raw = UINT32_MAX, target = UINT32_MAX;
+  };
+  std::deque<PendingSourceAnchor> sourceAnchors_;
+  void bindSourceAnchors(uint32_t sourceStart);
+  void resolveSourceAnchors(uint32_t sourceFirst, uint32_t sourceEnd, bool final = false);
+  void noteTableSources(const std::vector<TableFragmentRow>& rows);
   std::string pendingAnchorId;  // deferred until after previous text block is flushed
   bool pendingAnchorFromInlineA = false;
   std::vector<std::string> tocAnchors;  // the list of anchors that are TOC chapter boundaries
@@ -298,12 +431,19 @@ class ChapterHtmlSlimParser {
   int currentFootnoteLinkTextLen = 0;
   std::vector<std::pair<int, FootnoteEntry>> pendingFootnotes;  // <wordIndex, entry>
   int wordsExtractedInBlock = 0;
+  std::unique_ptr<ParsedText> textFloatParent_;
+  int textFloatDepth_ = -1, textFloatParentWords_ = 0;
+  uint16_t textFloatParentRunBytes_ = 0, textFloatParagraph_ = 0, textFloatListItem_ = 0;
+  std::vector<std::pair<int, FootnoteEntry>> textFloatParentFootnotes_;
+  void startTextFloat(const CssStyle& css);
+  void finishTextFloat();
 
   struct PendingPublisherPageMarker {
     int wordIndex = 0;
     char label[16] = {};
   };
   std::vector<PendingPublisherPageMarker> pendingPublisherPageMarkers;
+  std::vector<PendingPublisherPageMarker> textFloatParentMarkers_;
 
   void updateEffectiveInlineStyle();
   uint32_t publisherFamily(uint32_t family) const;
@@ -339,7 +479,8 @@ class ChapterHtmlSlimParser {
   void pushCssAncestor(int depth, const char* tag, std::string_view classAttr, std::string_view idAttr = {});
   void pushBlockFontStyle(const CssStyle& cssStyle);
   static void applyDirectionToEntry(StyleStackEntry& entry, const CssStyle& css);
-  static void applySmallCapsToEntry(StyleStackEntry& entry, const CssStyle& css);
+  void applySmallCapsToEntry(StyleStackEntry& entry, const CssStyle& css);
+  int16_t resolveLetterSpacing(const CssLength& length, int textFontId) const;
   static void applyVerticalAlignToEntry(StyleStackEntry& entry, const CssStyle& css);
   void emitHorizontalRule(const BlockStyle& blockStyle, bool visible);
   void finalizeCurrentTableCell();
@@ -434,10 +575,28 @@ class ChapterHtmlSlimParser {
 
   ~ChapterHtmlSlimParser();
   uint32_t getVisibleTextLength() const { return visibleTextOffset; }
+  void setSourceTarget(uint32_t sourceByte, uint16_t character = 0) {
+    sourceTarget = sourceByte;
+    sourceTargetCharacter = character;
+    sourceTargetVisibleOffset.reset();
+  }
+  std::optional<uint32_t> getSourceTargetVisibleOffset() const { return sourceTargetVisibleOffset; }
   uint32_t getReferenceTextLength() const { return referenceTextOffset; }
   bool parseAndBuildPages();
-  static uint32_t publisherBodyFontFamily(const std::string& path, const CssParser& css);
+  static uint32_t publisherBodyFontFamily(const std::string& path, const CssParser& css,
+                                          const std::string& documentCache = {}, const std::string& scope = {});
+  void setDocumentStyleCache(std::string path, std::string scope, bool ready = true, bool retry = false) {
+    documentCssPath_ = std::move(path);
+    documentFontScope_ = std::move(scope);
+    documentCssReady_ = ready;
+    documentCssRetry_ = retry;
+  }
+  bool stylesNeedRetry() const {
+    return embeddedStyle && (documentCssRetry_ || (cssParser && cssParser->isCachePartial()) ||
+                             (documentCss_ && documentCss_->isCachePartial()));
+  }
   void setPublisherFonts(PublisherFonts mode) { publisherFonts = mode; }
+  void setIgnorePublisherPageMargins(bool ignore) { ignorePublisherPageMargins = ignore; }
   void setDeferAdvancePrewarm(bool defer) { deferAdvancePrewarm_ = defer; }
   bool prewarmSectionAdvanceStep();
   bool beginParse();

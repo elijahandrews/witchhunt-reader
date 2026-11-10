@@ -31,6 +31,7 @@ FIXTURES = r'''
 #include <algorithm>
 #include <new>
 #include "BuildScratch.h"
+#include "ReaderWordHold.h"
 #define LOG_ERR(...) assert(false)
 struct Esp { void restart() { assert(false); } } ESP;
 struct Display {
@@ -117,9 +118,13 @@ std::unique_ptr<T> makeUniqueNoThrow(Args&&... args) {
   return std::unique_ptr<T>(new (std::nothrow) T(std::forward<Args>(args)...));
 }
 struct Activity { virtual bool canSnapshotForSleepOverlay() const { return false; } };
+struct Input { void suppressCurrentTouchContact() {} operator int() const { return 0; } };
+struct Settings { uint8_t orientation = 0; } SETTINGS;
 struct EpubReaderActivity : Activity {
   GfxRenderer renderer;
-  int mappedInput = 0;
+  Input mappedInput;
+  int currentSpineIndex = 0;
+  uint32_t pageShownAtMs = 0;
   Popup quickActionsPopup;
   std::atomic<bool> pageBufferStale{false};
   bool pendingRenderModeToast = false, pendingSafeModeToast = false, pendingFontDamagedToast = false;
@@ -157,7 +162,7 @@ struct EpubReaderActivity : Activity {
     ++handoffs; dictionaryReusesPage = child->reuse;
   }
   SNAPSHOT_METHOD
-  void openWordSelect(bool, int, int, bool);
+  void openWordSelect(bool, int, int, bool, const ReaderWordHold::Page* = nullptr);
   void onInputLockChanged(bool);
   void restoreStalePageBufferForInputLock();
   void requestUpdate() { ++updates; }
@@ -256,6 +261,7 @@ with tempfile.TemporaryDirectory(prefix="crossink-image-loan-") as directory:
     binary = Path(directory) / "test"
     subprocess.run(["c++", "-std=c++20", "-Wall", "-Wextra", "-Werror", "-fsanitize=address,undefined",
                     "-fno-omit-frame-pointer", "-I" + str(ROOT / "lib/Memory"),
+                    "-I" + str(ROOT / "src/activities/reader"),
                     "-I" + str(ROOT / "test/chapter_html_slim_parser/stubs"), str(source),
                     str(ROOT / "lib/Memory/BuildScratch.cpp"), "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

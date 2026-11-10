@@ -44,8 +44,28 @@ inline bool allocateDeferredGrayscalePlanes(const GfxRenderer& renderer, Deferre
 // the caller takes its blocking path.
 template <typename PlaneFn>
 bool displayDeferredGrayscale(GfxRenderer& renderer, int& pagesUntilFullRefresh, DeferredGrayscalePlanes& planes,
-                              PlaneFn&& renderPlane) {
-  if (pagesUntilFullRefresh <= 1 || !renderer.supportsDeferredGrayscaleBase()) return false;
+                              PlaneFn&& renderPlane, const bool textOnly = false) {
+  if (pagesUntilFullRefresh <= 1) return false;
+  // Compose into retained PSRAM planes before touching the panel. The native BW
+  // framebuffer remains intact for all failures and for the normal image path.
+  if (textOnly && renderer.supportsTextAa() && allocateDeferredGrayscalePlanes(renderer, planes)) {
+    bool complete = true;
+    for (const auto mode : {GfxRenderer::GRAYSCALE_LSB, GfxRenderer::GRAYSCALE_MSB}) {
+      renderer.setRenderMode(mode);
+      renderer.beginStripTarget(mode == GfxRenderer::GRAYSCALE_LSB ? planes.lsb.get() : planes.msb.get(), 0,
+                                renderer.getDisplayHeight());
+      renderer.clearScreen(0x00);
+      complete = renderPlane();
+      renderer.endStripTarget();
+      if (!complete) break;
+    }
+    renderer.setRenderMode(GfxRenderer::BW);
+    if (complete && renderer.tryDisplayTextAa(planes.lsb.get(), planes.msb.get())) {
+      --pagesUntilFullRefresh;
+      return true;
+    }
+  }
+  if (!renderer.supportsDeferredGrayscaleBase()) return false;
   if (!allocateDeferredGrayscalePlanes(renderer, planes)) return false;
   auto& lsb = planes.lsb;
   auto& msb = planes.msb;

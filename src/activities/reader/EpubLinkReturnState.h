@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Epub/SourceAnchor.h>
+
 #include <optional>
 #include <string>
 
@@ -12,12 +14,17 @@ constexpr int MAX_DEPTH = 3;
 struct Position {
   int spineIndex;
   int pageNumber;
+  uint16_t pageCount = 0;
+  uint32_t visibleTextOffset = UINT32_MAX;
+  SourceAnchor sourceAnchor;
 };
 
 struct ReadingProgress {
   int spineIndex;
   int pageNumber;
   int pageCount;
+  uint32_t visibleTextOffset = UINT32_MAX;
+  SourceAnchor sourceAnchor;
 };
 
 // A full-section resume uses only a successfully rendered observation. A

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "../SourceAnchor.h"
 #include "Block.h"
 #include "BlockStyle.h"
 
@@ -15,8 +16,13 @@
 // pages are loaded and discarded repeatedly on the ESP32-C3.
 class TextBlock final : public Block {
  private:
-  int baselineOffset(int baseline, int ascender, EpdFontFamily::Style style) const;
+  int maxAscender(const GfxRenderer& renderer, int fontId, int baseAscender) const;
+  int baselineOffset(int baseline, int ascender, EpdFontFamily::Style style, int blockAscender) const;
   BlockStyle blockStyle;
+  // Layout-only provenance; Section persists the page summary, not per-word data.
+  SourceAnchor sourceAnchor_;
+  SourceRange sourceRange_;
+  bool sourceProbeMatched_ = false;
   int8_t characterSpacing = 0;
   uint16_t numWords = 0;
   uint16_t textBytes = 0;  // Total size of the text region, including NULs.
@@ -26,6 +32,9 @@ class TextBlock final : public Block {
   bool wordSpacesPresent = false;
   uint8_t initialLetterBytes = 0;  // logical prefix drawn separately as a drop cap
   std::unique_ptr<uint32_t[]> wordFamilies;
+  std::unique_ptr<int16_t[]> wordLetterSpacings;
+  std::unique_ptr<uint16_t[]> wordPoints64;
+  std::unique_ptr<uint8_t[]> wordTypographyFlags;
   bool wordSizesPresent = false;
   const uint8_t* wordSizesArr = nullptr;
   bool isValid = true;
@@ -62,11 +71,24 @@ class TextBlock final : public Block {
                      const std::vector<uint8_t>& wordFlags, const std::vector<bool>& wordHasSpaceBefore,
                      const BlockStyle& blockStyle = BlockStyle(), std::vector<std::string> rubyTexts = {},
                      const std::vector<uint8_t>& wordSizes = {}, const char* initialLetter = "",
-                     int8_t characterSpacing = 0, const std::vector<uint32_t>& fontFamilies = {});
+                     int8_t characterSpacing = 0, const std::vector<uint32_t>& fontFamilies = {},
+                     const std::vector<int16_t>& letterSpacings = {}, const std::vector<uint16_t>& points64 = {},
+                     const std::vector<uint8_t>& typography = {});
   ~TextBlock() override = default;
   TextBlock(const TextBlock&) = delete;
   TextBlock& operator=(const TextBlock&) = delete;
 
+  void noteSource(SourceWordSpan source) {
+    if (!source.valid()) return;
+    if (!sourceAnchor_.valid()) sourceAnchor_ = {source.start, source.characterOffset};
+    if (source.start < sourceRange_.first) sourceRange_.first = source.start;
+    if (source.end > sourceRange_.end) sourceRange_.end = source.end;
+    sourceProbeMatched_ |= source.probeByte != UINT16_MAX;
+  }
+  SourceAnchor sourceAnchor() const { return sourceAnchor_; }
+  uint32_t sourceMin() const { return sourceRange_.first; }
+  uint32_t sourceEnd() const { return sourceRange_.end; }
+  bool sourceProbeMatched() const { return sourceProbeMatched_; }
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   const BlockStyle& getBlockStyle() const { return blockStyle; }
   bool isEmpty() override { return numWords == 0; }
@@ -92,6 +114,12 @@ class TextBlock final : public Block {
   }
   bool wordEndsWithInsertedHyphen(const uint16_t i) const { return (wordFlags(i) & WORD_FLAG_INSERTED_HYPHEN) != 0; }
   int8_t getCharacterSpacing() const { return characterSpacing; }
+  int16_t wordLetterSpacing(uint16_t i) const { return wordLetterSpacings ? wordLetterSpacings[i] : 0; }
+  uint16_t wordFontSize64(uint16_t i) const {
+    return wordPoints64 && wordPoints64[i] ? wordPoints64[i] : uint16_t(wordFontSize(i)) * 64;
+  }
+  uint32_t wordFontFamily(uint16_t i) const { return wordFamilies ? wordFamilies[i] : 0; }
+  uint8_t wordTypography(uint16_t i) const { return wordTypographyFlags ? wordTypographyFlags[i] : 0; }
   bool hasRuby() const;
   int getRubyShift(int ascender) const { return hasRuby() ? (ascender / 2) : 0; }
   const std::vector<std::string>& getRubyTexts() const { return rubyTexts; }

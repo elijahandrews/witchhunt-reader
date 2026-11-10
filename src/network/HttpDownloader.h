@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -40,6 +41,21 @@ class HttpDownloader {
     WOLFSSL,
   };
 
+  // Optional same-origin private-CA session. Keeps the verified connection
+  // between files; errors discard it. Its lifetime must enclose each request.
+  class Session {
+   public:
+    Session();
+    ~Session();
+    Session(const Session&) = delete;
+    Session& operator=(const Session&) = delete;
+    struct Impl;
+    Impl* impl() const { return impl_.get(); }
+
+   private:
+    std::unique_ptr<Impl> impl_;
+  };
+
   struct DownloadOptions {
     explicit DownloadOptions(bool preservePartial = false, bool resumePartial = false,
                              CancelCallback shouldCancel = nullptr, size_t bufferSize = 0,
@@ -57,6 +73,10 @@ class HttpDownloader {
     CancelCallback shouldCancel;
     size_t bufferSize;
     Transport transport;
+    // Borrowed PEM for a strict private endpoint. Forces verified ESP HTTP,
+    // HTTPS-only and no redirects; never inherits browsing TLS exceptions.
+    const char* privateCa = nullptr;
+    Session* session = nullptr;
     // Borrowed only for this synchronous request. Basic credentials are sent
     // only to this origin; empty keeps the request URL as the credential origin.
     std::string_view authorizationOrigin;

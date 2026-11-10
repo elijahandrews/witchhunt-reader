@@ -5,11 +5,12 @@ target_link_libraries(MemoryPoolPolicyTest PRIVATE crosspoint_test_common GTest:
 gtest_discover_tests(MemoryPoolPolicyTest PROPERTIES ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1")
 
 add_executable(JpegDecoderPolicyTest JpegDecoderPolicyTest.cpp
+  ${REPO_ROOT}/lib/ProgressiveJpeg/ProgressiveJpeg.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/JpegToFramebufferConverter.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageToFramebufferDecoder.cpp)
 target_include_directories(JpegDecoderPolicyTest PRIVATE jpeg_decoder_stubs stubs
   ${REPO_ROOT}/lib/Epub/Epub/converters ${REPO_ROOT}/lib/Epub ${REPO_ROOT}/lib/Memory
-  ${REPO_ROOT}/lib/MemoryBudget)
+  ${REPO_ROOT}/lib/MemoryBudget ${REPO_ROOT}/lib/ProgressiveJpeg)
 target_compile_definitions(JpegDecoderPolicyTest PRIVATE ARDUINO_ARCH_ESP32=1 CROSSINK_MEMORY_TEST=1)
 target_link_libraries(JpegDecoderPolicyTest PRIVATE crosspoint_test_common GTest::gtest_main)
 gtest_discover_tests(JpegDecoderPolicyTest PROPERTIES ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1")
@@ -30,7 +31,8 @@ target_compile_definitions(SdFontBitmapStorageTest PRIVATE ARDUINO_ARCH_ESP32=1 
 target_link_libraries(SdFontBitmapStorageTest PRIVATE crosspoint_test_common GTest::gtest_main)
 gtest_discover_tests(SdFontBitmapStorageTest PROPERTIES ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1")
 
-add_executable(CssArenaBackingTest CssArenaBackingTest.cpp ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp)
+add_executable(CssArenaBackingTest CssArenaBackingTest.cpp ${REPO_ROOT}/lib/Epub/Epub/css/CssParser.cpp
+  ${REPO_ROOT}/lib/Epub/Epub/css/CssFontCatalog.cpp)
 target_include_directories(CssArenaBackingTest PRIVATE stubs ${REPO_ROOT}/lib/Memory ${REPO_ROOT}/lib/MemoryBudget ${REPO_ROOT}/lib/Epub/Epub/css)
 target_compile_definitions(CssArenaBackingTest PRIVATE ARDUINO_ARCH_ESP32=1 CROSSINK_MEMORY_TEST=1)
 target_link_libraries(CssArenaBackingTest PRIVATE crosspoint_test_common GTest::gtest_main)

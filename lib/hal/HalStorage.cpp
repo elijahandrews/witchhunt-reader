@@ -6,7 +6,14 @@
 #include <HalClock.h>
 #include <Logging.h>
 #include <SDCardManager.h>
+#include <esp_attr.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
+#include <strings.h>
+
+#include <cstring>
+
+#include "ContentHashCacheSeal.h"
 #if FREEINK_CAP_USB_MSC
 #include <UsbMassStorage.h>
 #endif
@@ -29,6 +36,8 @@ class HalStorage::UsbDriveContext {
 #endif
 
 namespace {
+RTC_NOINIT_ATTR ContentHashCacheSeal contentHashSeal;
+bool storageBootSeen = false;
 constexpr uint16_t kFallbackYear = 2024;
 constexpr uint8_t kFallbackMonth = 1;
 constexpr uint8_t kFallbackDay = 1;
@@ -133,12 +142,16 @@ HalStorage::~HalStorage() = default;
 
 bool HalStorage::begin() {
   HalSpiBus::Lock spiLock;
+  contentHashSeal.boot(!storageBootSeen && esp_reset_reason() == ESP_RST_SW);
+  storageBootSeen = true;
+  ++contentGeneration_;
   return SDCard.begin();
 }
 
 bool HalStorage::ready() const { return SDCard.ready(); }
 
 bool HalStorage::beginUsbDrive() {
+  invalidateContentHashTrust();
 #if FREEINK_CAP_USB_MSC && FREEINK_SD_SDMMC
   if (!usbDriveContext) {
     LOG_ERR("USB", "USB Drive context allocation failed");
@@ -181,6 +194,7 @@ bool HalStorage::usbDriveHostSuspended() const {
 }
 
 void HalStorage::endUsbDrive() {
+  invalidateContentHashTrust();
 #if FREEINK_CAP_USB_MSC
   if (usbDriveContext) usbDriveContext->massStorage.end();
 #endif
@@ -226,8 +240,47 @@ class HalStorage::StorageLock {
 
 void HalStorage::shutdown() {
   StorageLock lock;
+  noteContentChange(nullptr);
   SDCard.shutdown();
 }
+
+bool HalStorage::isPrivatePath(const char* path) {
+  if (!path || strstr(path, "/..") || strstr(path, "\\")) return false;
+  return strcasecmp(path, "/.crosspoint") == 0 || strncasecmp(path, "/.crosspoint/", 13) == 0;
+}
+void HalStorage::noteContentChange(const char* path) {
+  if (isPrivatePath(path)) return;
+  contentHashSeal.invalidate();
+  ++contentGeneration_;
+}
+void HalStorage::invalidateContentHashTrust() {
+  StorageLock lock;
+  noteContentChange(nullptr);
+}
+bool HalStorage::beginContentHashScan(uint32_t& generation) {
+  StorageLock lock;
+  if (contentWriters_) return false;
+  generation = contentGeneration();
+  return true;
+}
+bool HalStorage::loadContentHashSeal(uint8_t* digest, uint32_t& bytes) {
+  StorageLock lock;
+  if (contentWriters_ || !contentHashSeal.valid()) return false;
+  memcpy(digest, contentHashSeal.digest, 32);
+  bytes = contentHashSeal.bytes;
+  return true;
+}
+void HalStorage::saveContentHashSeal(uint32_t generation, const uint8_t* digest, uint32_t bytes) {
+  StorageLock lock;
+  if (contentWriters_ || contentGeneration() != generation) return;
+  contentHashSeal.set(digest, bytes);
+}
+void HalStorage::armContentHashRestart() {
+  StorageLock lock;
+  if (contentWriters_) contentHashSeal.invalidate();
+  contentHashSeal.armRestart();
+}
+uint64_t HalStorage::sdFreeBytes() { HAL_STORAGE_WRAPPED_CALL(sdFreeBytes, ); }
 
 uint64_t HalStorage::totalBytes() const { return SDCard.sdTotalBytes(); }
 
@@ -269,10 +322,16 @@ bool HalStorage::readFileToString(const char* moduleName, const std::string& pat
 }
 
 bool HalStorage::writeFile(const char* path, const String& content) {
-  HAL_STORAGE_WRAPPED_CALL(writeFile, path, content);
+  StorageLock lock;
+  noteContentChange(path);
+  return SDCard.writeFile(path, content);
 }
 
-bool HalStorage::ensureDirectoryExists(const char* path) { HAL_STORAGE_WRAPPED_CALL(ensureDirectoryExists, path); }
+bool HalStorage::ensureDirectoryExists(const char* path) {
+  StorageLock lock;
+  if (!SDCard.exists(path)) noteContentChange(path);
+  return SDCard.ensureDirectoryExists(path);
+}
 
 void HalStorage::installDateTimeCallback(const uint8_t* utcOffsetQuarterHoursBiased) {
   if (!halClock.isAvailable()) return;
@@ -285,6 +344,15 @@ class HalFile::Impl {
  public:
   Impl(FsFile&& fsFile) : file(std::move(fsFile)) {}
   FsFile file;
+  bool contentWriter = false;
+  bool writable = false;
+  void endWriter() {
+    if (writable) {
+      --Storage.contentWriters_;
+      writable = false;
+    }
+  }
+  ~Impl() { endWriter(); }
 };
 
 void HalFile::ImplDeleter::operator()(Impl* const impl) const {
@@ -321,11 +389,10 @@ HalFile& HalFile::operator=(HalFile&& other) {
 }
 
 HalFile HalStorage::open(const char* path, const oflag_t oflag) {
-  FsFile fsFile;
-  {
-    StorageLock lock;  // ensure thread safety for the duration of this function
-    fsFile = SDCard.open(path, oflag);
-  }
+  StorageLock lock;
+  const bool writable = (oflag & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC | O_APPEND)) != 0;
+  if (writable) noteContentChange(path);
+  FsFile fsFile = SDCard.open(path, oflag);
   if (!fsFile) {
     return HalFile();
   }
@@ -334,25 +401,41 @@ HalFile HalStorage::open(const char* path, const oflag_t oflag) {
   if (!impl) {
     LOG_ERR("SD", "OOM: HalFile wrapper for %s (%u free, %u max alloc)", path, ESP.getFreeHeap(),
             ESP.getMaxAllocHeap());
-    StorageLock lock;
     fsFile.close();
     HalFile failed;
     failed.allocationFailed_ = true;
     return failed;
   }
+  impl->writable = writable;
+  impl->contentWriter = writable && !isPrivatePath(path);
+  if (writable) ++contentWriters_;
   return HalFile(std::move(impl));
 }
 
-bool HalStorage::mkdir(const char* path, const bool pFlag) { HAL_STORAGE_WRAPPED_CALL(mkdir, path, pFlag); }
+bool HalStorage::mkdir(const char* path, const bool pFlag) {
+  StorageLock lock;
+  noteContentChange(path);
+  return SDCard.mkdir(path, pFlag);
+}
 
 bool HalStorage::exists(const char* path) { HAL_STORAGE_WRAPPED_CALL(exists, path); }
 
-bool HalStorage::remove(const char* path) { HAL_STORAGE_WRAPPED_CALL(remove, path); }
+bool HalStorage::remove(const char* path) {
+  StorageLock lock;
+  noteContentChange(path);
+  return SDCard.remove(path);
+}
 bool HalStorage::rename(const char* oldPath, const char* newPath) {
-  HAL_STORAGE_WRAPPED_CALL(rename, oldPath, newPath);
+  StorageLock lock;
+  noteContentChange(isPrivatePath(oldPath) && isPrivatePath(newPath) ? oldPath : nullptr);
+  return SDCard.rename(oldPath, newPath);
 }
 
-bool HalStorage::rmdir(const char* path) { HAL_STORAGE_WRAPPED_CALL(rmdir, path); }
+bool HalStorage::rmdir(const char* path) {
+  StorageLock lock;
+  noteContentChange(path);
+  return SDCard.rmdir(path);
+}
 
 bool HalStorage::openFileForRead(const char* moduleName, const char* path, HalFile& file) {
   file.close();
@@ -387,27 +470,18 @@ bool HalStorage::openFileForRead(const char* moduleName, const String& path, Hal
 }
 
 bool HalStorage::openFileForWrite(const char* moduleName, const char* path, HalFile& file) {
-  file.close();
-  FsFile fsFile;
-  bool ok = false;
-  {
-    StorageLock lock;  // ensure thread safety for the duration of this function
-    ok = SDCard.openFileForWrite(moduleName, path, fsFile);
-  }
-  if (!ok) {
-    return false;
-  }
-  void* const storage = HalFile::allocateImplStorage();
-  HalFile::ImplPtr impl(storage ? ::new (storage) HalFile::Impl(std::move(fsFile)) : nullptr);
-  if (!impl) {
-    LOG_ERR(moduleName, "OOM: HalFile write wrapper for %s (%u free, %u max alloc)", path, ESP.getFreeHeap(),
-            ESP.getMaxAllocHeap());
-    StorageLock lock;
-    fsFile.close();
-    return false;
-  }
-  file = HalFile(std::move(impl));
-  return true;
+  (void)moduleName;
+  if (!file.close()) return false;
+  // Preserve the SDK helper's read/write contract: incremental EPUB layout
+  // reads completed pages back through this handle while the build continues.
+  file = open(path, O_RDWR | O_CREAT | O_TRUNC);
+  return bool(file);
+}
+bool HalStorage::openFileForUpdate(const char* moduleName, const char* path, HalFile& file) {
+  (void)moduleName;
+  if (!file.close()) return false;
+  file = open(path, O_RDWR);
+  return bool(file);
 }
 
 bool HalStorage::openFileForWrite(const char* moduleName, const std::string& path, HalFile& file) {
@@ -500,10 +574,29 @@ int HalFile::available() const { HAL_FILE_WRAPPED_CALL(available, ); }
 size_t HalFile::position() const { HAL_FILE_WRAPPED_CALL(position, ); }
 int HalFile::read(void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(read, buf, count); }
 int HalFile::read() { HAL_FILE_WRAPPED_CALL(read, ); }
-size_t HalFile::write(const void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(write, buf, count); }
-size_t HalFile::write(uint8_t b) { HAL_FILE_WRAPPED_CALL(write, b); }
+size_t HalFile::write(const void* buf, size_t count) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  if (impl->contentWriter) Storage.noteContentChange(nullptr);
+  return impl->file.write(buf, count);
+}
+size_t HalFile::write(uint8_t b) { return write(&b, 1); }
 bool HalFile::sync() { HAL_FILE_WRAPPED_CALL(sync, ); }
-bool HalFile::rename(const char* newPath) { HAL_FILE_WRAPPED_CALL(rename, newPath); }
+bool HalFile::rename(const char* newPath) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  // The old path is unavailable. Conservatively invalidate even private renames.
+  Storage.noteContentChange(nullptr);
+  const bool ok = impl->file.rename(newPath);
+  if (ok) {
+    impl->contentWriter = true;
+    if (!impl->writable) {
+      impl->writable = true;
+      ++Storage.contentWriters_;
+    }
+  }
+  return ok;
+}
 bool HalFile::isDirectory() const { HAL_FILE_FORWARD_CALL(isDirectory, ); }  // already thread-safe, no need to wrap
 void HalFile::rewindDirectory() {
   HalStorage::StorageLock lock;
@@ -518,6 +611,7 @@ bool HalFile::close() {
   if (!impl) return true;
   HalStorage::StorageLock lock;
   const bool ok = impl->file.close();
+  if (!ok) Storage.noteContentChange(nullptr);
   impl.reset();
   allocationFailed_ = false;
   iterationFailed_ = false;

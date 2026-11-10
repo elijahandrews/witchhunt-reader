@@ -1,9 +1,15 @@
 # File Formats
 
-These formats describe the SD-card cache files under `/.crosspoint/epub_<hash>/`.
+These formats describe the SD-card cache files under `/.crosspoint/crossink_epub_<hash>/`.
 All POD fields are written in the ESP32 little-endian representation used by
 `Serialization.h`; strings are length-prefixed UTF-8 unless a format notes a
 fixed-size char buffer.
+
+This fork isolates new EPUB/TXT/XTC caches and recent-book state from Witch Hunt.
+Its old caches remain read-only import sources. See
+[reader migration and added formats](cross-ink-fork-reader.md) for the progress
+decoder, source-coordinate adapter, reader-settings v14 and precise `links.bin`
+record. No old layout cache is renamed into the new namespace.
 
 ## Server reading streak
 
@@ -885,6 +891,22 @@ back or the clipping store is migrated.
 
 ## EPUB `progress.bin` and alternating save slots
 
+The local fork additionally writes a 26-byte `0xC6` record when an original-source
+anchor is available. Bytes 0–15 retain the native position/flags/sequence fields;
+bytes 16–19 hold the raw XHTML word offset and 20–21 the original decoded
+character offset. Bytes 22–25 contain CRC32 over bytes 0–21. The decoder still
+accepts the native 20-byte `0xC5` and legacy 4/6/10-byte records. Both versions
+participate in the same sequence ordering and alternating-slot failure recovery.
+Saves without source provenance retain the 20-byte format. Firmware predating
+this extension cannot read a 26-byte slot.
+
+Link-return stacks now use `LR3`: the four-byte header is followed by up to three
+16-byte entries (spine, page and page count: `u16` each; visible-text offset and
+raw-source offset: `u32` each; source-character offset: `u16`). `LR2` ten-byte
+entries and legacy page-only entries remain readable. Preview checkpoints carry
+the reading origin's source anchor, never the preview's own coordinate.
+
+
 EPUB progress uses `progress.bin` and `progress.bin.bak` as alternating slots.
 The newest valid sequence wins. A save overwrites only the other slot, without
 truncating an existing same-size file or rotating directory entries. A short
@@ -1021,6 +1043,55 @@ Binary layout:
 - `[69-72]` `estimatedTimeLeftSeconds` (`uint32_t` LE, `0` means unavailable)
 
 ## `section.bin`
+
+### Version 110
+
+Complete caches use `110`; suspended partial caches use `0xDF`. Each TextBlock
+appends a float publisher `lineHeightMultiplier` after its u16 pixel line height.
+Zero means the default multiplier; other values must be finite and within
+`[0.7, 2]`, matching the CSS parser. This preserves publisher spacing in reader
+previews after loading cached pages. Pagination and preview also share percentage
+rounding. Older layouts rebuild automatically; saved reading positions remain.
+
+### Version 109
+
+Complete caches use `109`; suspended partial caches use `0xDE`. Each table cell
+appends a `u8 hasImage` flag (0 or 1) after its existing header/colspan/line-count
+fields and serialized text lines. When present, `u32` records the original XHTML
+image-tag byte offset (`UINT32_MAX` means unknown), followed by the existing
+ImageBlock path, source-member path and signed 16-bit width/height payload.
+Readers reject pictures outside their cell or row. Old complete and partial
+layouts rebuild automatically; saved positions remain intact.
+
+### Version 108
+
+Section version `108` (partial `0xDD`) adds a u16 publisher background gray value
+(0–255; 256 means transparent) and u8 box nesting layer (0–7) after each
+`PageBorderBox` shaded flag. Explicit white masks a parent background. Borders
+retain CrossInk's native per-side styles. Text antialiasing uses a bounded 128-byte
+row mask to preserve solid background ink without a second framebuffer.
+
+A section sidecar `<section>.layout-retry` marks a cache built with a transient
+font failure or incomplete publisher CSS. Its current builder can keep showing
+readable pages, but a new loader rejects it. A stable replacement removes the
+marker only after atomic promotion. Failed marker writes never promote the
+fallback cache. Books and saved progress are not deleted.
+
+
+### Version 107
+
+Complete caches use `107`; suspended partial caches use `0xDC`. Publisher face
+request and admitted-face masks are now 64-bit so the bounded 64-face catalog
+can restore its upper entries without truncation. The fingerprint remains
+32-bit. Existing complete and suspended caches are rebuilt automatically.
+After the reference-text length, each page adds a 14-byte source record:
+`u32` raw XHTML word byte offset, `u16` original decoded character offset,
+`u32` first source byte and `u32` exclusive end source byte. Invalid anchors use
+`UINT32_MAX` and an empty range. Suspended-build watermarks follow these records.
+Ambiguous overlapping ranges require a bounded parser probe instead of guessing.
+The live page index grows from 16 to 32 bytes per page in 2 KiB chunks; persisted
+pages do not carry per-word provenance. Typography payload updates share this
+coordinated version bump.
 
 ### Version 104
 

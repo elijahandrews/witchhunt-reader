@@ -512,7 +512,7 @@ void EpubReaderDrawerActivity::onEnter() {
 
   const ReaderDrawerCatalog catalog = makeReaderDrawerCatalog(
       {hasFootnotes, hasDictionary, hasBookmarks, hasClippings, showReadingPaceReset, stablePageCount > 0,
-       !mappedInput.hasTouchHardware(), globalStatsEnabled, bookStatsEnabled});
+       !mappedInput.hasTouchHardware(), globalStatsEnabled, bookStatsEnabled, canGoBack});
   for (size_t tab = 0; tab < rootRows.size(); ++tab) {
     rootRows[tab].reserve(catalog[tab].count);
     rootRows[tab].assign(catalog[tab].items.begin(), catalog[tab].items.begin() + catalog[tab].count);
@@ -714,6 +714,7 @@ ReaderSettingsDraft EpubReaderDrawerActivity::captureSettings() {
   value.extraParagraphSpacing = SETTINGS.extraParagraphSpacing;
   value.forceParagraphIndents = SETTINGS.forceParagraphIndents;
   value.embeddedStyle = SETTINGS.embeddedStyle;
+  value.ignorePublisherPageMargins = SETTINGS.ignorePublisherPageMargins;
   value.publisherFonts = SETTINGS.publisherFonts;
   value.imageRendering = SETTINGS.imageRendering;
   value.imageGrayscale = SETTINGS.imageGrayscale;
@@ -742,6 +743,7 @@ void EpubReaderDrawerActivity::applySettings(const ReaderSettingsDraft& value) {
   SETTINGS.extraParagraphSpacing = value.extraParagraphSpacing;
   SETTINGS.forceParagraphIndents = value.forceParagraphIndents;
   SETTINGS.embeddedStyle = value.embeddedStyle;
+  SETTINGS.ignorePublisherPageMargins = value.ignorePublisherPageMargins;
   SETTINGS.publisherFonts = value.publisherFonts;
   SETTINGS.imageRendering = value.imageRendering;
   SETTINGS.imageGrayscale = value.imageGrayscale;
@@ -1837,6 +1839,12 @@ void EpubReaderDrawerActivity::activateRow(const RowId row) {
     case RowId::Margins:
       openPane(ReaderDrawerPane::Margins);
       return;
+    case RowId::GoBack:
+      closeAndReturn(false, EpubReaderMenuAction::GO_BACK);
+      return;
+    case RowId::SearchBook:
+      closeAndReturn(false, EpubReaderMenuAction::SEARCH_BOOK);
+      return;
     case RowId::SelectChapter:
       closeAndReturn(false, EpubReaderMenuAction::SELECT_CHAPTER, !mappedInput.hasTouchHardware());
       return;
@@ -1900,6 +1908,7 @@ void EpubReaderDrawerActivity::activateRow(const RowId row) {
     case RowId::ExtraSpacing:
     case RowId::ForceIndents:
     case RowId::EmbeddedStyle:
+    case RowId::IgnorePublisherMargins:
       toggleSetting(row);
       return;
     case RowId::BookmarkToggle:
@@ -1998,6 +2007,9 @@ void EpubReaderDrawerActivity::toggleSetting(const RowId row) {
       break;
     case RowId::EmbeddedStyle:
       draft.embeddedStyle = !draft.embeddedStyle;
+      break;
+    case RowId::IgnorePublisherMargins:
+      draft.ignorePublisherPageMargins = !draft.ignorePublisherPageMargins;
       break;
     default:
       return;
@@ -3176,10 +3188,16 @@ const char* EpubReaderDrawerActivity::rowLabel(const RowId row) const {
       return tr(STR_PUBLISHER_FONTS);
     case RowId::EmbeddedStyle:
       return tr(STR_EMBEDDED_STYLE);
+    case RowId::IgnorePublisherMargins:
+      return tr(STR_IGNORE_PUBLISHER_PAGE_MARGINS);
     case RowId::Images:
       return tr(STR_IMAGES);
     case RowId::SelectChapter:
       return tr(STR_SELECT_CHAPTER);
+    case RowId::GoBack:
+      return tr(STR_GO_BACK);
+    case RowId::SearchBook:
+      return tr(STR_SEARCH_BOOK);
     case RowId::GoToPercent:
       return tr(STR_GO_TO_PERCENT);
     case RowId::GoToStablePage:
@@ -3384,6 +3402,7 @@ bool EpubReaderDrawerActivity::rowIsToggle(const RowId row) const {
     case RowId::ExtraSpacing:
     case RowId::ForceIndents:
     case RowId::EmbeddedStyle:
+    case RowId::IgnorePublisherMargins:
 #if CROSSINK_SCALABLE_FONTS
     case RowId::TtfStemDarkening:
 #endif
@@ -3442,6 +3461,8 @@ bool EpubReaderDrawerActivity::rowToggleValue(const RowId row) const {
 #endif
     case RowId::EmbeddedStyle:
       return draft.embeddedStyle;
+    case RowId::IgnorePublisherMargins:
+      return draft.ignorePublisherPageMargins;
     default:
       return false;
   }

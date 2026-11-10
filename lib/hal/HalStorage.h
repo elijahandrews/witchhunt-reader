@@ -4,6 +4,7 @@
 #include <common/FsApiConstants.h>  // for oflag_t
 #include <freertos/semphr.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -69,12 +70,27 @@ class HalStorage {
   bool openFileForWrite(const char* moduleName, const std::string& path, HalFile& file);
   bool openFileForWrite(const char* moduleName, const String& path, HalFile& file);
   bool removeDir(const char* path);
+  bool openFileForUpdate(const char* moduleName, const char* path, HalFile& file);
+  uint64_t sdFreeBytes();
+  // Trust only complete indexes made while public content has no open writer.
+  uint32_t contentGeneration() const { return contentGeneration_.load(); }
+  bool beginContentHashScan(uint32_t& generation);
+  bool loadContentHashSeal(uint8_t* digest, uint32_t& bytes);
+  void saveContentHashSeal(uint32_t generation, const uint8_t* digest, uint32_t bytes);
+  void armContentHashRestart();
 
   static HalStorage& getInstance() { return instance; }
 
   class StorageLock;  // private class, used internally
 
  private:
+  friend class HalFile;
+  // Called only while StorageLock is held; mutations and seal checks share the lock.
+  void noteContentChange(const char* path);
+  void invalidateContentHashTrust();
+  static bool isPrivatePath(const char* path);
+  std::atomic<uint32_t> contentGeneration_{0};
+  uint32_t contentWriters_ = 0;
 #if FREEINK_CAP_USB_MSC
   class UsbDriveContext;
 #endif

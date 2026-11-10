@@ -7,6 +7,23 @@
 #include <cstdint>
 
 namespace EpubLinkReturnState {
+namespace {
+constexpr size_t ENTRY_BYTES = 16;
+constexpr size_t PREVIOUS_ENTRY_BYTES = 10;
+constexpr size_t HEADER_BYTES = 4;
+void write16(uint8_t* p, uint16_t value) {
+  p[0] = value & 0xff;
+  p[1] = value >> 8;
+}
+uint16_t read16(const uint8_t* p) { return static_cast<uint16_t>(p[0] | (p[1] << 8)); }
+void write32(uint8_t* p, uint32_t value) {
+  write16(p, value);
+  write16(p + 2, value >> 16);
+}
+uint32_t read32(const uint8_t* p) {
+  return static_cast<uint32_t>(read16(p)) | (static_cast<uint32_t>(read16(p + 2)) << 16);
+}
+}  // namespace
 std::optional<ReadingProgress> readingProgress(const Position (&positions)[MAX_DEPTH], const int depth,
                                                const bool transientPreview, const ReaderProgressSaveDebouncer& progress,
                                                const int lastSavedSpineIndex, const int lastSavedPageCount) {
@@ -17,7 +34,8 @@ std::optional<ReadingProgress> readingProgress(const Position (&positions)[MAX_D
     const int pageCount = progress.lastObservedPosition() == originKey
                               ? static_cast<int>(progress.lastObservedMetadata())
                               : (lastSavedSpineIndex == origin.spineIndex ? std::max(0, lastSavedPageCount) : 0);
-    return ReadingProgress{origin.spineIndex, origin.pageNumber, pageCount};
+    return ReadingProgress{origin.spineIndex, origin.pageNumber, origin.pageCount ? origin.pageCount : pageCount,
+                           origin.visibleTextOffset, origin.sourceAnchor};
   }
   if (!progress.hasPending()) return std::nullopt;
   const uint32_t position = progress.lastObservedPosition();
@@ -44,23 +62,24 @@ bool save(const std::string& cachePath, const Position (&positions)[MAX_DEPTH], 
   if (savedDepth == 0) return !Storage.exists(path.c_str()) || Storage.remove(path.c_str());
   if (savedDepth < 0 || savedDepth > MAX_DEPTH) return false;
 
-  uint8_t data[1 + MAX_DEPTH * 4];
-  data[0] = static_cast<uint8_t>(savedDepth);
+  uint8_t data[HEADER_BYTES + MAX_DEPTH * ENTRY_BYTES] = {'L', 'R', 3, static_cast<uint8_t>(savedDepth)};
   for (int i = 0; i < savedDepth; ++i) {
     const auto& pos = positions[i];
     if (pos.spineIndex < 0 || pos.spineIndex > UINT16_MAX || pos.pageNumber < 0 || pos.pageNumber > UINT16_MAX) {
       LOG_ERR("ERS", "Link return position out of range");
       return false;
     }
-    uint8_t* p = data + 1 + i * 4;
-    p[0] = pos.spineIndex & 0xff;
-    p[1] = (pos.spineIndex >> 8) & 0xff;
-    p[2] = pos.pageNumber & 0xff;
-    p[3] = (pos.pageNumber >> 8) & 0xff;
+    uint8_t* p = data + HEADER_BYTES + i * ENTRY_BYTES;
+    write16(p, pos.spineIndex);
+    write16(p + 2, pos.pageNumber);
+    write16(p + 4, pos.pageCount);
+    write32(p + 6, pos.visibleTextOffset);
+    write32(p + 10, pos.sourceAnchor.sourceOffset);
+    write16(p + 14, pos.sourceAnchor.characterOffset);
   }
   FsFile file;
   if (!Storage.openFileForWrite("ERS", path, file)) return false;
-  const size_t size = 1 + savedDepth * 4;
+  const size_t size = HEADER_BYTES + savedDepth * ENTRY_BYTES;
   bool saved = file.write(data, size) == size;
   if (saved) saved = file.sync();
   const bool closed = file.close();
@@ -76,18 +95,23 @@ bool load(const std::string& cachePath, Position (&positions)[MAX_DEPTH], int& d
   depth = 0;
   const std::string path = cachePath + "/links.bin";
   if (!Storage.exists(path.c_str())) return true;
-  uint8_t data[1 + MAX_DEPTH * 4];
+  uint8_t data[HEADER_BYTES + MAX_DEPTH * ENTRY_BYTES];
   FsFile file;
   bool valid = false;
   int loadedDepth = 0;
+  size_t headerBytes = 1;
+  size_t entryBytes = 4;
   if (Storage.openFileForRead("ERS", path, file)) {
     const size_t size = file.size();
     if (size >= 5 && size <= sizeof(data) && file.read(data, size) == static_cast<int>(size)) {
-      loadedDepth = data[0];
-      valid = loadedDepth >= 1 && loadedDepth <= MAX_DEPTH && size == static_cast<size_t>(1 + loadedDepth * 4);
+      const bool versioned = data[0] == 'L' && data[1] == 'R' && (data[2] == 2 || data[2] == 3);
+      headerBytes = versioned ? HEADER_BYTES : 1;
+      entryBytes = versioned ? (data[2] == 3 ? ENTRY_BYTES : PREVIOUS_ENTRY_BYTES) : 4;
+      loadedDepth = versioned ? data[3] : data[0];
+      valid = loadedDepth >= 1 && loadedDepth <= MAX_DEPTH && size == headerBytes + loadedDepth * entryBytes;
       for (int i = 0; valid && i < loadedDepth; ++i) {
-        const uint8_t* p = data + 1 + i * 4;
-        valid = (p[0] | (p[1] << 8)) < spineCount;
+        const uint8_t* p = data + headerBytes + i * entryBytes;
+        valid = read16(p) < spineCount;
       }
     }
     if (!file.close()) valid = false;
@@ -103,8 +127,13 @@ bool load(const std::string& cachePath, Position (&positions)[MAX_DEPTH], int& d
     return false;
   }
   for (int i = 0; i < loadedDepth; ++i) {
-    const uint8_t* p = data + 1 + i * 4;
-    positions[i] = {p[0] | (p[1] << 8), p[2] | (p[3] << 8)};
+    const uint8_t* p = data + headerBytes + i * entryBytes;
+    positions[i] = {read16(p), read16(p + 2)};
+    if (entryBytes >= PREVIOUS_ENTRY_BYTES) {
+      positions[i].pageCount = read16(p + 4);
+      positions[i].visibleTextOffset = read32(p + 6);
+      if (entryBytes == ENTRY_BYTES) positions[i].sourceAnchor = {read32(p + 10), read16(p + 14)};
+    }
   }
   depth = loadedDepth;
   LOG_DBG("ERS", "Loaded link stack, depth %d", depth);
