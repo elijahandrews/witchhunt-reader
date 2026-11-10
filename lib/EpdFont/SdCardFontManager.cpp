@@ -71,7 +71,8 @@ static bool cachedFontMatches(const SdCardFontFamilyInfo& family, const SdCardFo
 // If the total size exceeds the available space, falls back to writing only
 // the single requested file. Returns true if at least the requested size
 // was written successfully.
-static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPointSize) {
+static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPointSize,
+                        const std::function<void()>& onColdLoad) {
   // Collect available sizes and sort ascending so we write small→large.
   std::vector<uint8_t> sizes = family.availableSizes();
   std::sort(sizes.begin(), sizes.end());
@@ -110,6 +111,7 @@ static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPoi
 
     if (allFit && sizes.size() > 1) {
       // Write the whole family.
+      if (onColdLoad) onColdLoad();
       if (!FlashFontPartition::beginWrite(family.name.c_str())) return false;
       bool requestedWritten = false;
       for (uint8_t sz : sizes) {
@@ -140,7 +142,12 @@ static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPoi
   const size_t bytes = source.fileSize();
   source.close();
   const size_t capacity = FlashFontPartition::fontUsableSize();
-  if (capacity <= FlashFontPartition::HEADER_BYTES || bytes > capacity - FlashFontPartition::HEADER_BYTES) return false;
+  if (capacity <= FlashFontPartition::HEADER_BYTES ||
+      bytes > ((capacity - FlashFontPartition::HEADER_BYTES) & ~size_t(3)))
+    return false;
+  // Announce only an actual write attempt. Oversized fonts are always SD-backed,
+  // so showing this before the capacity check flashes a popup on every wake/open.
+  if (onColdLoad) onColdLoad();
   if (!FlashFontPartition::beginWrite(family.name.c_str())) return false;
   if (!FlashFontPartition::appendFile(fi->path.c_str(), family.name.c_str(), requestedPointSize)) {
     FlashFontPartition::finaliseWrite();
@@ -149,6 +156,17 @@ static bool writeFamily(const SdCardFontFamilyInfo& family, uint8_t requestedPoi
   if (!FlashFontPartition::finaliseWrite()) return false;
   LOG_INF("SDMGR", "Cached single file %s@%u to flash", family.name.c_str(), requestedPointSize);
   return true;
+}
+
+// The in-memory family is lost on deep sleep and on reader exit. Use the durable
+// index as well, so opening another book at a different size does not evict the
+// size we kept during a resize. An existing but stale entry must still refresh.
+static bool hasOtherCachedSize(const SdCardFontFamilyInfo& family, uint8_t pointSize) {
+  if (FlashFontPartition::hasEntry(family.name.c_str(), pointSize)) return false;
+  for (const auto& file : family.files) {
+    if (file.pointSize != pointSize && FlashFontPartition::hasEntry(family.name.c_str(), file.pointSize)) return true;
+  }
+  return false;
 }
 
 bool SdCardFontManager::loadTtfFamily(const SdCardFontFamilyInfo& family, GfxRenderer& renderer,
@@ -352,21 +370,21 @@ bool SdCardFontManager::loadFamily(const SdCardFontFamilyInfo& family, GfxRender
     const bool alreadyCached = cachedFontMatches(family, *selected);
 
     bool readyToMmap = alreadyCached;
-    if (!alreadyCached && (policy == FlashCachePolicy::ReadOnly ||
-                           (previousPointSize != 0 && previousPointSize != selected->pointSize))) {
+    if (!alreadyCached &&
+        (policy == FlashCachePolicy::ReadOnly || (previousPointSize != 0 && previousPointSize != selected->pointSize) ||
+         hasOtherCachedSize(family, selected->pointSize))) {
       // Transient load (font preview): beginWrite() erases the whole partition
       // and writeFamily() copies every size back from SD, so caching a font the
       // reader may never use would cost seconds and a flash erase cycle each
       // time. The same applies to size changes within a loaded family: a family
       // that only fits one size would otherwise erase/rewrite on every resize.
-      // Keep its cached size available and load an uncached size from SD.
+      // Keep its cached size available and load an uncached size from SD, including
+      // after reader exit or deep sleep has cleared the in-memory family/size.
       LOG_DBG("SDMGR", "Flash cache miss for %s@%u; loading from SD without rewriting", family.name.c_str(),
               selected->pointSize);
     } else if (!alreadyCached) {
-      // Genuine first load: writing the family into the flash partition takes
-      // a noticeable moment — let the caller advertise it before we start.
-      if (onColdLoad) onColdLoad();
-      readyToMmap = writeFamily(family, selected->pointSize);
+      // Capacity checks happen before advertising a slow flash write.
+      readyToMmap = writeFamily(family, selected->pointSize, onColdLoad);
       if (!readyToMmap) {
         LOG_ERR("SDMGR", "Flash write failed for %s, falling back to SD load", family.name.c_str());
       }

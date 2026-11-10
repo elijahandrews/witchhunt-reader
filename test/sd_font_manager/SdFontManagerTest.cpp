@@ -215,11 +215,13 @@ TEST_F(SdFontManager, OversizeSourceDoesNotEraseExistingCache) {
   const auto source = fixture(true, 0x44, 1024);
   flash_double::capacity = FlashFontPartition::HEADER_BYTES + source.size() - 1;
   SdCardFontManager manager;
-  ASSERT_TRUE(manager.loadFamily(write(source), renderer, 14));
+  int coldLoads = 0;
+  ASSERT_TRUE(manager.loadFamily(write(source), renderer, 14, [&] { ++coldLoads; }));
   expectNative(manager, .5f, 0x44);
   EXPECT_EQ(flash_double::erases, 0);
   EXPECT_EQ(flash_double::appends, 0);
   EXPECT_EQ(flash_double::commits, 0);
+  EXPECT_EQ(coldLoads, 0);
   EXPECT_EQ(flash_double::entries.at({"Existing", 12}), prior);
 }
 
@@ -253,13 +255,75 @@ TEST_F(SdFontManager, ResizeLargeFamilyAvoidsFlashWrites) {
     EXPECT_EQ(flash_double::entries.size(), 1u);
     EXPECT_EQ(flash_double::entries.at({"Synthetic", 14}), original);
   }
-  // Ending the loaded-family session still allows the next open to cache its size.
+  // Reopening another book at an uncached size preserves the same decision.
   manager.unloadAll(renderer);
   ASSERT_TRUE(manager.loadFamily(family, renderer, 12, onColdLoad));
   expectSize(manager, 12, .5f, 0x44);
+  EXPECT_FALSE(FlashFontPartition::isMapped());
+  EXPECT_EQ(flash_double::erases, 1);
+  EXPECT_EQ(coldLoads, 1);
+}
+
+TEST_F(SdFontManager, WakeAndBookSwitchesReusePersistentFamilyCache) {
+  const auto family = writeTwoSizes();
+  flash_double::capacity = FlashFontPartition::HEADER_BYTES + 172;
+  int coldLoads = 0;
+  const auto onColdLoad = [&] { ++coldLoads; };
+  {
+    SdCardFontManager manager;
+    ASSERT_TRUE(manager.loadFamily(family, renderer, 14, onColdLoad));
+  }
+  const auto original = flash_double::entries.at({"Synthetic", 14});
+  // Deep sleep loses every manager field. Only the flash index survives.
+  for (uint8_t size : {12, 14, 12, 14}) {
+    SdCardFontManager manager;
+    ASSERT_TRUE(manager.loadFamily(family, renderer, size, onColdLoad));
+    expectSize(manager, size, .5f, size == 14 ? 0x88 : 0x44);
+    EXPECT_EQ(FlashFontPartition::isMapped(), size == 14);
+    EXPECT_EQ(flash_double::erases, 1);
+    EXPECT_EQ(flash_double::appends, 1);
+    EXPECT_EQ(flash_double::commits, 1);
+    EXPECT_EQ(coldLoads, 1);
+    EXPECT_EQ(flash_double::entries.at({"Synthetic", 14}), original);
+  }
+}
+
+TEST_F(SdFontManager, StaleCachedSizeRefreshesEvenWithOtherSizePresent) {
+  const auto family = writeTwoSizes();
+  {
+    SdCardFontManager manager;
+    ASSERT_TRUE(manager.loadFamily(family, renderer, 14));
+  }
+  ASSERT_EQ(flash_double::entries.size(), 2u);
+  write(fixture(true, 0x66, 16));
+  SdCardFontManager manager;
+  int coldLoads = 0;
+  ASSERT_TRUE(manager.loadFamily(family, renderer, 14, [&] { ++coldLoads; }));
+  expectNative(manager, .5f, 0x66);
   EXPECT_TRUE(FlashFontPartition::isMapped());
   EXPECT_EQ(flash_double::erases, 2);
-  EXPECT_EQ(coldLoads, 2);
+  EXPECT_EQ(coldLoads, 1);
+}
+
+TEST_F(SdFontManager, RepeatedUncacheableLoadsNeverAnnounceFlashWrite) {
+  const auto family = write(fixture(true));
+  // Missing partition, metadata-only capacity, and a file that fits before
+  // alignment but exceeds the actual four-byte-aligned storage budget.
+  for (size_t capacity :
+       {size_t(0), FlashFontPartition::HEADER_BYTES, FlashFontPartition::HEADER_BYTES + fixture(true).size()}) {
+    flash_double::capacity = capacity;
+    for (unsigned attempt = 0; attempt < 2; ++attempt) {
+      SdCardFontManager manager;
+      int coldLoads = 0;
+      ASSERT_TRUE(manager.loadFamily(family, renderer, 14, [&] { ++coldLoads; }));
+      expectNative(manager, .5f, 0x88);
+      EXPECT_EQ(coldLoads, 0);
+      EXPECT_EQ(flash_double::erases, 0);
+      EXPECT_EQ(flash_double::appends, 0);
+      EXPECT_EQ(flash_double::commits, 0);
+      EXPECT_FALSE(FlashFontPartition::isMapped());
+    }
+  }
 }
 
 TEST_F(SdFontManager, ResizeWithinCachedFamilyStillUsesMappedFont) {

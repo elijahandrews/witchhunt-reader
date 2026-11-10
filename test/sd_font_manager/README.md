@@ -20,8 +20,11 @@ registration cleanup. All fixture text and family names are synthetic.
 Resize regressions use a family whose sizes fit individually but not together.
 Repeated size changes preserve the initial flash entry, load an uncached size
 from SD, and reuse the mapped entry when returning to it without additional flash
-writes. Fully cached families still map both sizes, and changing family or
-reopening after unloading still permits installation. A large synthetic V5 font
+writes, including after unloading or destroying/recreating the manager to model
+book switches and deep sleep. Fully cached families still map both sizes, and
+changing family or replacing a stale cached file still permits installation.
+Oversized files, missing partitions, and insufficient alignment space do not
+announce or attempt flash writes. A large synthetic V5 font
 bounds checksum SD reads and verifies both SD and mapped loads reject corruption.
 
 The native TTF case builds an original geometric font in memory, runs the real
