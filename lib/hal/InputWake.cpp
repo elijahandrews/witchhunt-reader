@@ -187,7 +187,11 @@ bool InputWake::begin() {
       return false;
     }
   }
-  if (board.touch.controller == BoardConfig::TouchController::Gt911 && !addWakePin(board.touch.irq)) {
+  // Both controllers leave IRQ ownership to the host and poll data on the main
+  // task. Wake that task before its idle timeout, including for Picco touch.
+  const bool hostOwnedTouchIrq = board.touch.controller == BoardConfig::TouchController::Gt911 ||
+                                 board.touch.controller == BoardConfig::TouchController::Tma525c;
+  if (hostOwnedTouchIrq && !addWakePin(board.touch.irq)) {
     removeWakePins();
     return false;
   }

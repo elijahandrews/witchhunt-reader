@@ -14,6 +14,9 @@ for device in X4PRO X4CLASSIC STICKY X4 X3; do
     "$BUILD_DIR/test_$device" "$scenario"
   done
 done
+"$BUILD_DIR/test_X4PRO" picco-touch
+"$BUILD_DIR/test_X4PRO" picco-touch-captured
+"$BUILD_DIR/test_X4PRO" picco-touch-attach-failure
 for mode in native esp32; do
   flags="-DESP_PLATFORM=1"
   scenario="native-fallback"

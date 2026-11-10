@@ -57,6 +57,9 @@
 
 ### Fixed
 
+- Wake the BOOX Picco input loop on touch reports instead of waiting for its idle polling timeout.
+- Retain more scalable-font glyphs across page and antialiasing passes, avoiding repeated outline rendering without changing text quality.
+
 - Keep the EPUB line-spacing preview consistent with the page after closing the reader menu, including publisher CSS, cached pages and percentage rounding.
 
 - Keep EPUB searches responsive when a chapter contains many repeated matches, so cancellation can be handled between small batches.

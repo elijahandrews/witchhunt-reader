@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "ScalableFontPhaseCacheRegression.h"
+
 using FileMode = HalScalableFont::FileMode;
 
 static size_t tableCount(const char* path) {
@@ -33,6 +35,7 @@ int main(int argc, char** argv) {
     assert(builtin[i].openMemory(bytes[i].data(), bytes[i].size()));
     assert(builtin[i].probeGlyph('T', 12));
   }
+  verifyWarmPhaseCache(builtin[4], bytes[4]);
   // Compare every final-grid phase against SDK alpha8 outlines, before their
   // one quantization. Interleave phases and glyphs to exercise cache identity
   // and verify phased transforms never contaminate ordinary raster requests.

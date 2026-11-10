@@ -29,8 +29,12 @@ constexpr auto Pool = MemoryPool::Psram;
 // 1 MiB in a warm preview; retain smaller arenas for fragmented PSRAM heaps.
 constexpr size_t WorkspaceOptions[] = {1280 * 1024, 1024 * 1024, 768 * 1024};
 constexpr size_t PixelBytes = 512 * 1024;
-constexpr size_t PixelCacheSlots = 512;
-constexpr size_t MetricCacheSlots = 512;
+// Final-grid rendering has sixteen phase variants per glyph. Keep them across
+// BW/gray passes instead of repeatedly loading and hinting the same outlines.
+// These tables share the existing persistent PSRAM allocation (not C3 DRAM).
+constexpr size_t PixelCacheSlots = 2048;
+constexpr size_t MetricCacheSlots = 2048;
+constexpr size_t GlyphCacheWays = 4;
 constexpr size_t KerningCacheSlots = 512;
 constexpr uint32_t AdapterRevision = 12;
 constexpr uint32_t SfntChecksumMagic = 0xB1B0AFBAu;
@@ -121,7 +125,10 @@ struct KerningEntry {
 constexpr size_t PixelTableBytes = alignSize(sizeof(PixelEntry) * PixelCacheSlots, alignof(std::max_align_t));
 constexpr size_t MetricTableBytes = alignSize(sizeof(MetricEntry) * MetricCacheSlots, alignof(std::max_align_t));
 constexpr size_t KerningTableBytes = alignSize(sizeof(KerningEntry) * KerningCacheSlots, alignof(std::max_align_t));
-constexpr size_t CacheTableBytes = PixelTableBytes + MetricTableBytes + KerningTableBytes;
+constexpr size_t PixelVictimBytes = PixelCacheSlots / GlyphCacheWays;
+constexpr size_t MetricVictimBytes = MetricCacheSlots / GlyphCacheWays;
+constexpr size_t CacheTableBytes =
+    PixelTableBytes + MetricTableBytes + KerningTableBytes + PixelVictimBytes + MetricVictimBytes;
 constexpr size_t PixelArenaBytes = CacheTableBytes + PixelBytes;
 struct Runtime;
 Runtime* liveRuntime = nullptr;
@@ -135,6 +142,8 @@ struct Runtime {
   PixelEntry* pixelEntries = nullptr;
   MetricEntry* metricEntries = nullptr;
   KerningEntry* kerningEntries = nullptr;
+  uint8_t* pixelVictims = nullptr;
+  uint8_t* metricVictims = nullptr;
   uint8_t* pixelData = nullptr;
   size_t pixelUsed = 0;
   uint32_t nextCacheId = 1;
@@ -147,20 +156,42 @@ struct Runtime {
     return (uint64_t(cacheId) << 32) | glyphOrCodepoint;
   }
 
-  static size_t cacheIndex(const uint32_t cacheId, const uint32_t glyphOrCodepoint, const uint16_t points,
-                           const size_t slots) {
-    return (glyphOrCodepoint * 31u + points * 7u + cacheId) % slots;
+  // Instantiated only for the metric and pixel tables here. Four candidates
+  // prevent phase/style collisions from evicting a glyph on every page pass;
+  // one round-robin byte per set bounds replacement work without timestamps.
+  template <typename Entry, size_t Slots>
+  static Entry& cacheEntry(Entry* entries, uint8_t* victims, const uint32_t cacheId, const uint32_t glyphOrCodepoint,
+                           const uint16_t points, const int8_t phase, const uint8_t scale64) {
+    static_assert(Slots % GlyphCacheWays == 0 && (Slots & (Slots - 1)) == 0);
+    uint32_t hash = (glyphOrCodepoint * 0x9e3779b1u) ^ (uint8_t(phase) * 0x85ebca6bu) ^ (cacheId * 0xc2b2ae35u) ^
+                    (points * 0x27d4eb2du) ^ scale64;
+    hash ^= hash >> 16;
+    const size_t start = (hash & (Slots - 1)) & ~(GlyphCacheWays - 1);
+    const uint64_t key = cacheKey(cacheId, glyphOrCodepoint, points);
+    Entry* empty = nullptr;
+    for (size_t way = 0; way < GlyphCacheWays; ++way) {
+      auto& entry = entries[start + way];
+      if (entry.key == key && entry.points == points && entry.phase == phase && entry.scale64 == scale64) return entry;
+      if (!entry.key) empty = &entry;
+    }
+    if (empty) return *empty;
+    auto& victim = victims[start / GlyphCacheWays];
+    auto& entry = entries[start + victim];
+    victim = (victim + 1) % GlyphCacheWays;
+    return entry;
   }
 
   void clearPixels() {
     pixelUsed = 0;
     if (pixelEntries)
       for (size_t i = 0; i < PixelCacheSlots; ++i) pixelEntries[i] = PixelEntry{};
+    if (pixelVictims) std::memset(pixelVictims, 0, PixelVictimBytes);
   }
 
   void clearMetrics() {
     if (metricEntries)
       for (size_t i = 0; i < MetricCacheSlots; ++i) metricEntries[i] = MetricEntry{};
+    if (metricVictims) std::memset(metricVictims, 0, MetricVictimBytes);
     if (kerningEntries)
       for (size_t i = 0; i < KerningCacheSlots; ++i) kerningEntries[i] = KerningEntry{};
   }
@@ -173,8 +204,8 @@ struct Runtime {
   bool glyphMetrics(freeink::font::FtFont& font, const uint32_t cacheId, const uint32_t glyphOrCodepoint,
                     const uint16_t points, EpdGlyph& glyph, const int8_t phase = 0, const uint8_t scale64 = 64) {
     const uint64_t key = cacheKey(cacheId, glyphOrCodepoint, points);
-    auto& entry = metricEntries[cacheIndex(cacheId, glyphOrCodepoint, points, MetricCacheSlots) ^
-                                (uint8_t(phase) % MetricCacheSlots)];
+    auto& entry = cacheEntry<MetricEntry, MetricCacheSlots>(metricEntries, metricVictims, cacheId, glyphOrCodepoint,
+                                                            points, phase, scale64);
     if (entry.key == key && entry.phase == phase && entry.points == points && entry.scale64 == scale64) {
       glyph = entry.glyph;
       return true;
@@ -222,8 +253,8 @@ struct Runtime {
   const uint8_t* packedBitmap(freeink::font::FtFont& font, const uint32_t cacheId, uint32_t glyphOrCodepoint,
                               uint16_t points, uint8_t width, uint8_t height, int8_t phase = 0, uint8_t scale64 = 64) {
     const uint64_t key = cacheKey(cacheId, glyphOrCodepoint, points);
-    auto& entry = pixelEntries[cacheIndex(cacheId, glyphOrCodepoint, points, PixelCacheSlots) ^
-                               (uint8_t(phase) % PixelCacheSlots)];
+    auto& entry = cacheEntry<PixelEntry, PixelCacheSlots>(pixelEntries, pixelVictims, cacheId, glyphOrCodepoint, points,
+                                                          phase, scale64);
     if (entry.key == key && entry.phase == phase && entry.points == points && entry.scale64 == scale64)
       return pixelData + entry.offset;
 
@@ -297,6 +328,8 @@ struct Runtime {
     pixelEntries = reinterpret_cast<PixelEntry*>(pixels.get());
     metricEntries = reinterpret_cast<MetricEntry*>(pixels.get() + PixelTableBytes);
     kerningEntries = reinterpret_cast<KerningEntry*>(pixels.get() + PixelTableBytes + MetricTableBytes);
+    pixelVictims = pixels.get() + PixelTableBytes + MetricTableBytes + KerningTableBytes;
+    metricVictims = pixelVictims + PixelVictimBytes;
     pixelData = pixels.get() + CacheTableBytes;
     clearCaches();
     return true;

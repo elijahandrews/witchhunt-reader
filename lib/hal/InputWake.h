@@ -12,8 +12,8 @@ class InputManager;
 // The signal and handlers live for the lifetime of the firmware.
 class InputWake {
  public:
-  // Digital and shared buttons, plus toggle switches. GT911's IRQ wakes touch; other
-  // touch backends retain their existing IRQ ownership and periodic polling.
+  // Digital and shared buttons, plus toggle switches. GT911/TMA525C IRQs wake touch;
+  // other touch backends retain their existing IRQ ownership and periodic polling.
   // Failure leaves wait() using its timed polling fallback.
   static bool begin();
 

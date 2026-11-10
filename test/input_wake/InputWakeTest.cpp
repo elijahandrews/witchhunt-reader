@@ -11,7 +11,15 @@
 int main(int argc, char** argv) {
   assert(argc == 2);
   const char* scenario = argv[1];
+  // The wake adapter uses the active board profile. Keep the SDK touch decoder
+  // disabled in this interrupt-only harness; its Picco protocol has SDK tests.
+  if (std::strncmp(scenario, "picco-", 6) == 0) {
+    BoardConfig::ACTIVE = BoardConfig::PICCO;
+    assert(BoardConfig::ACTIVE.touch.controller == BoardConfig::TouchController::Tma525c);
+  }
   const auto& board = BoardConfig::ACTIVE;
+  const bool hostOwnedTouchIrq = board.touch.controller == BoardConfig::TouchController::Gt911 ||
+                                 board.touch.controller == BoardConfig::TouchController::Tma525c;
   std::fill(std::begin(gpioLevels), std::end(gpioLevels), HIGH);
   std::fill(std::begin(adcLevels), std::end(adcLevels), 4095);
   if (strcmp(scenario, "timeout-wrap") == 0) fakeNow = UINT32_MAX - 20UL;
@@ -38,8 +46,8 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (strcmp(scenario, "toggle") == 0) BoardConfig::ACTIVE.input.toggleSwitch = 30;
-  if (strcmp(scenario, "touch-attach-failure") == 0) {
-    if (board.touch.controller != BoardConfig::TouchController::Gt911) return 0;
+  if (strcmp(scenario, "touch-attach-failure") == 0 || strcmp(scenario, "picco-touch-attach-failure") == 0) {
+    if (!hostOwnedTouchIrq) return 0;
     failAttachPin = board.touch.irq;
   }
   if (strcmp(scenario, "other-touch-controller") == 0) {
@@ -133,9 +141,20 @@ int main(int argc, char** argv) {
     duringWait = nullptr;
     adcLevels[InputManager::BUTTON_ADC_PIN_2] = 4095;
   }
-  if (board.touch.controller == BoardConfig::TouchController::Gt911) {
+  if (hostOwnedTouchIrq && strcmp(scenario, "other-touch-controller") != 0) {
+    if (strcmp(scenario, "picco-touch-captured") == 0) assert(InputWake::startCapture());
     edge(board.touch.irq);
+    const auto start = fakeNow;
     assert(wait(50));
+    assert(fakeNow == start);  // A report queued before wait must wake immediately.
+    duringWait = [] { edge(BoardConfig::ACTIVE.touch.irq); };
+    assert(wait(50));
+    assert(fakeNow == start);  // A report arriving during idle must also wake.
+    duringWait = nullptr;
+    edge(board.touch.irq);
+    assert(gpioLevels[board.touch.irq] == LOW && wait(50));
+    assert(!wait(50));  // No repeated wake merely because IRQ remains asserted.
+    assert(fakeNow - start == 50);
   }
   if (board.input.toggleSwitch >= 0) {
     edge(board.input.toggleSwitch);
