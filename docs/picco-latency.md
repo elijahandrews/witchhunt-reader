@@ -58,12 +58,27 @@ tests pass under ASan/UBSan. Independent reviews of both changes are clean.
 
 Both PlatformIO builds pass: Picco's application image is 6,009,504 bytes, with
 122,612 bytes of static RAM; the C3 application image is 6,526,688 bytes, with
-74,520 bytes of static RAM. These are build results, not installed-firmware or
-hardware-performance results.
+74,520 bytes of static RAM. These build figures do not measure hardware speed.
+
+## Installation (2026-11-09)
+
+The Picco application was installed after a fresh, hash-verified backup of its
+273 card files (92,936,157 bytes), device identity and partition checks, and
+verification of the rollback image. The application write took 46 seconds.
+Independent verification passed for the installed application and both protected
+flash regions. The reader booted successfully, and two subsequent Picco status
+responses confirmed normal operation without crash markers. An independent
+post-flash review was clean.
+
+The card was not rewritten; the Picco's own books, settings and reading progress
+were preserved. Installation records, rollback firmware and the current-install
+pointer are in the primary checkout's ignored device workspace. The owner
+reports a modest responsiveness improvement, with individual line-spacing menu
+adjustments still slow. No matched hardware timing comparison has been measured.
 
 ## Hardware verification
 
-After an explicitly requested installation with a fresh device backup:
+On the flashed Picco:
 
 1. Wait several seconds, then tap a settings tab and swipe through reader menus.
    The first touch should be recognized without waiting for the idle poll.
